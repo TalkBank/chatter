@@ -21,12 +21,14 @@ use super::ChatFile;
 /// thing that decides "at most one `@Media`": a caller that wants only the
 /// first says `.next()` and says so.
 fn media_headers<'a>(
-    headers: &'a [(&'a Header, crate::Span)],
-) -> impl Iterator<Item = (&'a crate::model::MediaHeader, crate::Span)> + 'a {
-    headers.iter().filter_map(|(header, span)| match header {
-        Header::Media(media_header) => Some((media_header, *span)),
-        _ => None,
-    })
+    headers: &'a [(&'a Header, crate::Location)],
+) -> impl Iterator<Item = (&'a crate::model::MediaHeader, crate::Location)> + 'a {
+    headers
+        .iter()
+        .filter_map(|(header, location)| match header {
+            Header::Media(media_header) => Some((media_header, *location)),
+            _ => None,
+        })
 }
 
 /// First actual `%wor` word-timing bullet in file order.
@@ -96,10 +98,10 @@ pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
 ///
 /// Spec: `spec/errors/E544.md`.
 pub(super) fn check_media_linkage_has_timing(
-    headers: &[(&Header, crate::Span)],
+    headers: &[(&Header, crate::Location)],
     file: &ChatFile,
     first_main_bullet: Option<&crate::model::Bullet>,
-) -> Option<crate::Span> {
+) -> Option<crate::Location> {
     // Find the first expected recording with no status. A missing medium
     // declares absence, not linkage, even without a separate status token.
     // Multiple @Media headers
@@ -109,24 +111,27 @@ pub(super) fn check_media_linkage_has_timing(
         media.status.is_none()
             && media.declared_recording() == crate::model::header::DeclaredRecording::Expected
     });
-    let Some((_media, span)) = unqualified_media else {
+    let Some((_media, location)) = unqualified_media else {
         // No @Media, or @Media has a status, check does not apply.
         return None;
     };
 
     match observe_transcript_timing(file, first_main_bullet) {
         TranscriptTimingEvidence::Recorded(_) => None,
-        TranscriptTimingEvidence::Absent => Some(span),
+        TranscriptTimingEvidence::Absent => Some(location),
     }
 }
 
-pub(super) fn report_missing_media_timing(span: crate::Span, errors: &impl crate::ErrorSink) {
-    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+pub(super) fn report_missing_media_timing(
+    location: crate::Location,
+    errors: &impl crate::ErrorSink,
+) {
+    use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
     errors.report(ParseError::new(
         ErrorCode::MediaLinkageWithoutTiming,
         Severity::Error,
-        SourceLocation::at_offset(span.start as usize),
-        ErrorContext::new("", 0..0, "media_linkage"),
+        DiagnosticLocation::from(location.start_point()),
+        ErrorContext::new("", crate::Span::new(0, 0), "media_linkage"),
         "@Media header declares linkage but transcript has no timing evidence (no main-tier bullets, no %wor timing); add `, unlinked` / `, missing` / `, notrans` status, or add timing bullets",
     ));
 }
@@ -152,12 +157,12 @@ pub(super) fn report_missing_media_timing(span: crate::Span, errors: &impl crate
 ///
 /// Spec: `spec/errors/E752.md`.
 pub(super) fn check_timing_has_media(
-    headers: &[(&Header, crate::Span)],
+    headers: &[(&Header, crate::Location)],
     file: &ChatFile,
     main_bullets: &[&crate::model::Bullet],
     errors: &impl crate::ErrorSink,
 ) {
-    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+    use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
     let has_media_header = media_headers(headers).next().is_some();
     if has_media_header {
@@ -166,13 +171,15 @@ pub(super) fn check_timing_has_media(
         return;
     }
 
-    // Locate the first timing surface so the diagnostic points at real
-    // evidence: a main-tier bullet if any, else an actual %wor bullet.
-    let first_timing_offset = main_bullets
+    // The first timing surface, a main-tier bullet if any, else an actual
+    // %wor bullet, is the evidence. Whether it exists decides the rule; where
+    // it is only decides where the diagnostic points, so a bullet a parser
+    // left unlocated still triggers the rule and the diagnostic says so.
+    let first_timing = main_bullets
         .first()
-        .map(|bullet| bullet.span.start as usize)
-        .or_else(|| first_wor_timing(file).map(|recorded| recorded.bullet().span.start as usize));
-    let Some(offset) = first_timing_offset else {
+        .map(|bullet| bullet.location)
+        .or_else(|| first_wor_timing(file).map(|recorded| recorded.bullet().location));
+    let Some(location) = first_timing else {
         // No timing evidence anywhere: nothing requires @Media.
         return;
     };
@@ -180,8 +187,8 @@ pub(super) fn check_timing_has_media(
     errors.report(ParseError::new(
         ErrorCode::TimingWithoutMedia,
         Severity::Error,
-        SourceLocation::at_offset(offset),
-        ErrorContext::new("", 0..0, "media_linkage"),
+        DiagnosticLocation::from(location.start_point()),
+        ErrorContext::new("", crate::Span::new(0, 0), "media_linkage"),
         "transcript has timing bullets but no @Media header declares the media they index; add an @Media header (or remove the timing bullets)",
     ));
 }
@@ -199,7 +206,7 @@ pub(super) fn check_timing_has_media(
 ///
 /// Spec: `spec/errors/E755.md`.
 pub(super) fn check_utterance_language_declared(file: &ChatFile, errors: &impl crate::ErrorSink) {
-    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+    use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
     let declared = file.languages.as_slice();
     if declared.is_empty() {
@@ -209,21 +216,21 @@ pub(super) fn check_utterance_language_declared(file: &ChatFile, errors: &impl c
         let Some(code) = &utterance.main.content.language_code else {
             continue;
         };
-        if declared.iter().any(|d| d == code) {
+        if declared.iter().any(|d| d == &code.code) {
             continue;
         }
         errors.report(
             ParseError::new(
                 ErrorCode::UndeclaredUtteranceLanguage,
                 Severity::Error,
-                SourceLocation::at_offset(utterance.main.span.start as usize),
-                ErrorContext::new("", 0..0, "utterance_language"),
+                DiagnosticLocation::from(utterance.main.location.start_point()),
+                ErrorContext::new("", crate::Span::new(0, 0), "utterance_language"),
                 format!(
                     "utterance language '{}' is not declared in @Languages; an utterance-level switch is substantial language presence and belongs in the header",
-                    code.as_str()
+                    code.code.as_str()
                 ),
             )
-            .with_suggestion(format!("add '{}' to the @Languages header", code.as_str())),
+            .with_suggestion(format!("add '{}' to the @Languages header", code.code.as_str())),
         );
     }
 }
@@ -242,25 +249,23 @@ pub(super) fn check_utterance_language_declared(file: &ChatFile, errors: &impl c
 /// [`crate::model::Line::Header`] for header lines. A separator with no
 /// trailing space is clean and contributes nothing; one with a trailing
 /// space reports E758 at that exact span. This is uniform across all
-/// three line kinds, unlike the superseded main-tier-only
-/// `first_element_start` reconstruction: the re2c oracle's parser
-/// produces clean separators everywhere, so it simply reports no E758.
+/// three line kinds and both parser backends, unlike the superseded
+/// main-tier-only `first_element_start` reconstruction.
 pub(super) fn check_separator_trailing_space(file: &ChatFile, errors: &impl crate::ErrorSink) {
-    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation, Span};
+    use crate::{ErrorCode, ParseError, Span};
 
     /// Reports one E758 at the illegal trailing-space `span`.
     fn report_trailing_space(span: Span, errors: &impl crate::ErrorSink) {
         errors.report(
-            ParseError::new(
-                ErrorCode::LeadingSpaceOnMainTier,
-                Severity::Error,
-                SourceLocation::new(span),
-                ErrorContext::new(" ", span, " "),
-                "Extra whitespace between the tab and tier content in a non-CA file",
-            )
-            .with_suggestion(
+            // The model retains source coordinates, not the original text.
+            // SourceDiagnostic attaches checked context at the display boundary.
+            ParseError::build(ErrorCode::LeadingSpaceOnMainTier)
+            .at_span(span)
+            .message("Extra whitespace between the tab and tier content in a non-CA file")
+            .suggestion(
                 "Remove the leading space, or declare '@Options: CA' if this is a CA transcript",
-            ),
+            )
+            .finish(),
         );
     }
 
@@ -296,21 +301,21 @@ pub(super) fn check_separator_trailing_space(file: &ChatFile, errors: &impl crat
 /// Corresponds to CLAN CHECK error 124 ("remove \"unlinked\" from @Media
 /// header").
 pub(super) fn check_media_unlinked_has_no_timing(
-    headers: &[(&Header, crate::Span)],
+    headers: &[(&Header, crate::Location)],
     file: &ChatFile,
     main_bullets: &[&crate::model::Bullet],
     errors: &impl crate::ErrorSink,
 ) {
     use crate::model::MediaStatus;
-    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+    use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
     // Find the first @Media header whose status is `unlinked`. A file has at
     // most one @Media in practice; if any is `unlinked`, the check fires at
     // that header's span.
-    let unlinked_span = media_headers(headers)
+    let unlinked_location = media_headers(headers)
         .find(|(media, _)| matches!(media.status, Some(MediaStatus::Unlinked)))
-        .map(|(_, span)| span);
-    let Some(span) = unlinked_span else {
+        .map(|(_, location)| location);
+    let Some(location) = unlinked_location else {
         // No @Media, or its status is not `unlinked`: check does not apply.
         return;
     };
@@ -343,8 +348,8 @@ pub(super) fn check_media_unlinked_has_no_timing(
     errors.report(ParseError::new(
         ErrorCode::MediaUnlinkedWithTiming,
         Severity::Error,
-        SourceLocation::at_offset(span.start as usize),
-        ErrorContext::new("", 0..0, "media_linkage"),
+        DiagnosticLocation::from(location.start_point()),
+        ErrorContext::new("", crate::Span::new(0, 0), "media_linkage"),
         message,
     ));
 }
@@ -430,7 +435,7 @@ impl MediaNameComparison {
 /// E531 / W109 / W110: validate `@Media` filename against the caller-provided
 /// file basename.
 pub(super) fn check_media_filename_match(
-    headers: &[(&Header, crate::Span)],
+    headers: &[(&Header, crate::Location)],
     file_name: &str,
     errors: &impl crate::ErrorSink,
 ) {
@@ -453,7 +458,7 @@ pub(super) fn check_media_filename_match(
     let media = MediaNameSite {
         name: media_header.filename.as_str(),
         media_type: media_header.media_type.as_str(),
-        span,
+        location: span,
     };
     match MediaNameComparison::compare(media.name, file_name) {
         MediaNameComparison::Mismatch => errors.report(
@@ -492,7 +497,7 @@ pub(super) fn check_media_filename_match(
 struct MediaNameSite<'a> {
     name: &'a str,
     media_type: &'a str,
-    span: crate::Span,
+    location: crate::Location,
 }
 
 impl MediaNameSite<'_> {
@@ -502,17 +507,19 @@ impl MediaNameSite<'_> {
         severity: crate::Severity,
         message: String,
     ) -> crate::ParseError {
-        use crate::{ErrorContext, ParseError, SourceLocation};
+        use crate::{DiagnosticLocation, ErrorContext, ParseError};
 
-        let mut diagnostic = ParseError::new(
+        ParseError::new(
             code,
             severity,
-            SourceLocation::at_offset(self.span.start as usize),
-            ErrorContext::new(self.name, 0..self.name.len(), "media_filename"),
+            DiagnosticLocation::from(self.location),
+            ErrorContext::new(
+                self.name,
+                crate::Span::new(0, self.name.len()),
+                "media_filename",
+            ),
             message,
-        );
-        diagnostic.location.span = self.span;
-        diagnostic
+        )
     }
 
     /// W110: the names differ only in ASCII letter case. The suggestion uses
@@ -572,11 +579,11 @@ impl MediaNameSite<'_> {
 /// - CHECK 142: Role on @ID differs from @Participants
 pub(super) fn check_cross_header_consistency(
     file: &ChatFile,
-    headers: &[(&Header, crate::Span)],
+    headers: &[(&Header, crate::Location)],
     errors: &impl crate::ErrorSink,
 ) {
     use crate::model::LanguageCode;
-    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+    use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
     // Collect declared languages from @Languages header
     let declared_languages: HashSet<&LanguageCode> = file.languages.as_slice().iter().collect();
@@ -587,11 +594,15 @@ pub(super) fn check_cross_header_consistency(
             for id_lang in id_header.language.as_slice() {
                 if !declared_languages.is_empty() && !declared_languages.contains(id_lang) {
                     let lang_str = id_lang.as_str();
-                    let mut err = ParseError::new(
+                    let err = ParseError::new(
                         ErrorCode::InvalidLanguageCode,
                         Severity::Error,
-                        SourceLocation::at_offset(span.start as usize),
-                        ErrorContext::new(lang_str, 0..lang_str.len(), "id_language"),
+                        DiagnosticLocation::from(*span),
+                        ErrorContext::new(
+                            lang_str,
+                            crate::Span::new(0, lang_str.len()),
+                            "id_language",
+                        ),
                         format!(
                             "Language '{}' on @ID tier is not defined on @Languages header",
                             lang_str
@@ -601,7 +612,6 @@ pub(super) fn check_cross_header_consistency(
                         "Add '{}' to @Languages header or fix the @ID language field",
                         lang_str
                     ));
-                    err.location.span = *span;
                     errors.report(err);
                 }
             }
@@ -617,18 +627,17 @@ pub(super) fn check_cross_header_consistency(
             {
                 let participant_role = participant.role.as_str();
                 if !participant_role.is_empty() && participant_role != id_role {
-                    let mut err = ParseError::new(
+                    let err = ParseError::new(
                         ErrorCode::InvalidParticipantRole,
                         Severity::Error,
-                        SourceLocation::at_offset(span.start as usize),
-                        ErrorContext::new(id_role, 0..id_role.len(), "id_role"),
+                        DiagnosticLocation::from(*span),
+                        ErrorContext::new(id_role, crate::Span::new(0, id_role.len()), "id_role"),
                         format!(
                             "Speaker '{}' has role '{}' on @ID but '{}' on @Participants",
                             id_speaker, id_role, participant_role
                         ),
                     )
                     .with_suggestion("Ensure @ID role matches @Participants role for each speaker");
-                    err.location.span = *span;
                     errors.report(err);
                 }
             }

@@ -2,7 +2,7 @@
   "$comment": "AUTO-GENERATED - Do not edit manually! This schema is automatically generated from Rust types using schemars. To update: modify the Rust model and run `just schema-gen`",
   "$defs": {
     "ActTier": {
-      "description": "Action description tier (%act).\n\nDescribes physical actions, gestures, and non-verbal behaviors that occur\nduring or around speech. Actions can be timed to specific words using\ntiming markers, and may contain inline media bullets.\n\n# Timing Conventions\n\n- **`<1w>`**: Action occurs during word 1\n- **`<1w-3w>`**: Action spans from word 1 to word 3\n- **`<aft>`**: Action occurs after the utterance\n- **`<bef>`**: Action occurs before the utterance\n- **Inline bullets**: `\\u0015START_END\\u0015` for precise media timing\n\n# Common Uses\n\n- Documenting manipulative actions (picking up, holding, giving objects)\n- Recording body movements and positioning\n- Noting facial expressions and eye gaze\n- Timing actions relative to speech\n- Multimodal interaction analysis\n\n# CHAT Manual Reference\n\n- [Actions Coding](https://talkbank.org/0info/manuals/CHAT.html#Actions)\n\n# Examples\n\n```\nuse talkbank_model::model::{ActTier, BulletContent};\n\nlet act = ActTier::new(BulletContent::from_text(\"<1w-2w> reaches toward shelf\"));\nassert_eq!(act.to_chat(), \"%act:\\t<1w-2w> reaches toward shelf\");\n```\n\n**CHAT format:**\n```text\n*CHI: I want that .\n%act: <3w> points at cookie jar\n```",
+      "description": "Action description tier (%act).\n\nDescribes physical actions, gestures, and non-verbal behaviors that occur\nduring or around speech. Actions can be timed to specific words using\ntiming markers, and may contain inline media bullets.\n\n# Timing Conventions\n\n- **`<1w>`**: Action occurs during word 1\n- **`<1w-3w>`**: Action spans from word 1 to word 3\n- **`<aft>`**: Action occurs after the utterance\n- **`<bef>`**: Action occurs before the utterance\n- **Inline bullets**: `\\u0015START_END\\u0015` for precise media timing\n\n# Common Uses\n\n- Documenting manipulative actions (picking up, holding, giving objects)\n- Recording body movements and positioning\n- Noting facial expressions and eye gaze\n- Timing actions relative to speech\n- Multimodal interaction analysis\n\n# CHAT Manual Reference\n\n- [Actions Coding](https://talkbank.org/0info/manuals/CHAT.html#Actions)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{ActTier, BulletContent};\n\nlet act = ActTier::new(Location::Unlocated, BulletContent::from_text(\"<1w-2w> reaches toward shelf\"));\nassert_eq!(act.to_chat(), \"%act:\\t<1w-2w> reaches toward shelf\");\n```\n\n**CHAT format:**\n```text\n*CHI: I want that .\n%act: <3w> points at cookie jar\n```",
       "properties": {
         "content": {
           "$ref": "#/$defs/BulletContent",
@@ -273,17 +273,6 @@
           "format": "uint",
           "minimum": 0,
           "type": "integer"
-        },
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Source span for this unit (if available)."
         }
       },
       "required": [
@@ -1155,22 +1144,11 @@
       "type": "object"
     },
     "CADelimiter": {
-      "description": "One CA delimiter token used to bound a prosodic region.\n\n# Structure\n\nA CA delimiter consists of:\n- **type**: The kind of prosodic modification (rate, volume, voice quality)\n- **span**: Optional source location information\n\n# CHAT Format Examples\n\n```text\n*CHI: I want ∆that∆ .                  # Faster speech\n*MOT: °okay° .                         # Softer speech\n*CHI: ∬thank you∬ .                    # Smile voice\n*INV: ∇very slow∇ .                    # Slower speech\n```\n\n# Delimiter Pairing\n\nCA delimiters should be balanced within an utterance:\n```text\n∆fast∆             # ✅ Balanced\n∆fast              # ❌ Unbalanced - validation error E230\n°soft∆             # ❌ Mismatched - validation error E230\n```\n\n# Usage\n\n```rust\nuse talkbank_model::{CADelimiter, CADelimiterType};\n\nlet faster = CADelimiter::new(CADelimiterType::Faster);\nlet softer = CADelimiter::new(CADelimiterType::Softer);\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
+      "description": "One CA delimiter token used to bound a prosodic region.\n\n# Structure\n\nA CA delimiter consists of:\n- **type**: The kind of prosodic modification (rate, volume, voice quality)\n- **span**: Optional source location information\n\n# CHAT Format Examples\n\n```text\n*CHI: I want ∆that∆ .                  # Faster speech\n*MOT: °okay° .                         # Softer speech\n*CHI: ∬thank you∬ .                    # Smile voice\n*INV: ∇very slow∇ .                    # Slower speech\n```\n\n# Delimiter Pairing\n\nCA delimiters should be balanced within an utterance:\n```text\n∆fast∆             # ✅ Balanced\n∆fast              # ❌ Unbalanced - validation error E230\n°soft∆             # ❌ Mismatched - validation error E230\n```\n\n# Usage\n\n```rust\nuse talkbank_model::{CADelimiter, CADelimiterType, Location};\n\nlet faster = CADelimiter::new(Location::Unlocated, CADelimiterType::Faster);\nlet softer = CADelimiter::new(Location::Unlocated, CADelimiterType::Softer);\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
       "properties": {
         "delimiter_type": {
           "$ref": "#/$defs/CADelimiterType",
           "description": "Delimiter variant."
-        },
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Optional source location metadata."
         }
       },
       "required": [
@@ -1259,22 +1237,11 @@
       ]
     },
     "CAElement": {
-      "description": "One marker token that attaches to a word rather than bracketing a stretch.\n\n# Structure\n\nA CA element consists of:\n- **type**: which marker, from [`CAElementType`]\n- **span**: Optional source location information\n\n# Not all of these are Conversation Analysis notation\n\nThe category name describes the PARSE ROLE (attaches to a word) and not\nthe provenance. `BlockedSegments` (`≠`) is a disfluency mark from the CHAT\nmanual's Disfluency Transcription chapter, a word attack rather than a\nprosodic feature, and CLAN names it `NOTCA_CROSSED_EQUAL` for that reason.\nIt lives here because it attaches to a word exactly as `↑` does.\n\n# CHAT Format Examples\n\nEvery example here is a variant of [`CAElementType`]. The stress markers\n`ˈ` and `ˌ` are NOT (they are `WordContent::StressMarker`), so an example\nusing one cannot be built as a `CAElement`.\n\n```text\n*CHI: ↑hello .                         # Shift to high pitch\n*CHI: I ↓know .                        # Shift to low pitch\n*INV: ≠wait .                          # Blocking, a disfluency word attack\n*PAR: swi≠mming .                      # Blocking inside a word\n```\n\n# Usage\n\n```rust\nuse talkbank_model::{CAElement, CAElementType};\n\nlet pitch_up = CAElement::new(CAElementType::PitchUp);\nlet pitch = CAElement::new(CAElementType::PitchUp);\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
+      "description": "One marker token that attaches to a word rather than bracketing a stretch.\n\n# Structure\n\nA CA element consists of:\n- **type**: which marker, from [`CAElementType`]\n- **span**: Optional source location information\n\n# Not all of these are Conversation Analysis notation\n\nThe category name describes the PARSE ROLE (attaches to a word) and not\nthe provenance. `BlockedSegments` (`≠`) is a disfluency mark from the CHAT\nmanual's Disfluency Transcription chapter, a word attack rather than a\nprosodic feature, and CLAN names it `NOTCA_CROSSED_EQUAL` for that reason.\nIt lives here because it attaches to a word exactly as `↑` does.\n\n# CHAT Format Examples\n\nEvery example here is a variant of [`CAElementType`]. The stress markers\n`ˈ` and `ˌ` are NOT (they are `WordContent::StressMarker`), so an example\nusing one cannot be built as a `CAElement`.\n\n```text\n*CHI: ↑hello .                         # Shift to high pitch\n*CHI: I ↓know .                        # Shift to low pitch\n*INV: ≠wait .                          # Blocking, a disfluency word attack\n*PAR: swi≠mming .                      # Blocking inside a word\n```\n\n# Usage\n\n```rust\nuse talkbank_model::{CAElement, CAElementType, Location};\n\nlet pitch_up = CAElement::new(Location::Unlocated, CAElementType::PitchUp);\nlet pitch = CAElement::new(Location::Unlocated, CAElementType::PitchUp);\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
       "properties": {
         "element_type": {
           "$ref": "#/$defs/CAElementType",
           "description": "Marker variant."
-        },
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Optional source location metadata."
         }
       },
       "required": [
@@ -1358,7 +1325,7 @@
       "type": "array"
     },
     "CodTier": {
-      "description": "Coding tier (%cod).\n\nGeneral-purpose coding tier for research-specific annotation schemes.\nCodes can target specific words using indices or apply to the whole utterance.\nMay contain inline media bullets.\n\n# Word Indexing\n\nCodes can be associated with specific words using angle-bracket indices:\n- `<1>` - Single word (word 1)\n- `<1+2>` - Adjacent words combined\n- `<1,3>` - Multiple non-contiguous words\n- `<1-3>` - Word range\n\nWord indices refer to positions in the main tier (excluding retraces/events).\n\n# Common Uses\n\n- Semantic role labeling\n- Thematic coding\n- Discourse function coding\n- Error type classification\n- Custom research categories\n- Lexical category annotations\n\n# CHAT Manual Reference\n\n- [Coding Categories](https://talkbank.org/0info/manuals/CHAT.html#Coding)\n\n# Examples\n\n```\nuse talkbank_model::model::{CodTier, BulletContent};\n\n// Word-specific coding\nlet cod = CodTier::new(BulletContent::from_text(\"<1> DETERMINER <2> NOUN\"));\n\n// Utterance-level coding\nlet cod2 = CodTier::from_text(\"QUESTION_TAG\");\n```\n\n**CHAT format:**\n```text\n*CHI: I want cookie .\n%cod: <1> PRONOUN <2> MODAL <3> FOOD_ITEM\n\n*MOT: good job !\n%cod: PRAISE\n```",
+      "description": "Coding tier (%cod).\n\nGeneral-purpose coding tier for research-specific annotation schemes.\nCodes can target specific words using indices or apply to the whole utterance.\nMay contain inline media bullets.\n\n# Word Indexing\n\nCodes can be associated with specific words using angle-bracket indices:\n- `<1>` - Single word (word 1)\n- `<1+2>` - Adjacent words combined\n- `<1,3>` - Multiple non-contiguous words\n- `<1-3>` - Word range\n\nWord indices refer to positions in the main tier (excluding retraces/events).\n\n# Common Uses\n\n- Semantic role labeling\n- Thematic coding\n- Discourse function coding\n- Error type classification\n- Custom research categories\n- Lexical category annotations\n\n# CHAT Manual Reference\n\n- [Coding Categories](https://talkbank.org/0info/manuals/CHAT.html#Coding)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{CodTier, BulletContent};\n\n// Word-specific coding\nlet cod = CodTier::new(Location::Unlocated, BulletContent::from_text(\"<1> DETERMINER <2> NOUN\"));\n\n// Utterance-level coding\nlet cod2 = CodTier::from_text(Location::Unlocated, \"QUESTION_TAG\");\n```\n\n**CHAT format:**\n```text\n*CHI: I want cookie .\n%cod: <1> PRONOUN <2> MODAL <3> FOOD_ITEM\n\n*MOT: good job !\n%cod: PRAISE\n```",
       "properties": {
         "content": {
           "$ref": "#/$defs/BulletContent",
@@ -2164,6 +2131,69 @@
     },
     "DesignType": {
       "type": "string"
+    },
+    "DiagnosticLocation": {
+      "description": "Where a diagnostic points: a byte span in the source (with its line and\ncolumn when they have been computed), or nowhere.\n\n`Unlocated` is the honest answer for a diagnostic about a value that has\nno source position, such as a node built programmatically or read back\nfrom AST JSON. It is a variant, never a `0..0` span, because `0..0` is also\nthe real zero-width position at the start of a file.\n\nThe wire form is tagged: `{\"kind\":\"known\",\"start\":..,\"end\":..}` (plus\n`line` and `column` together when known) or `{\"kind\":\"unlocated\"}`.",
+      "oneOf": [
+        {
+          "description": "The diagnostic points at a byte span of the source.",
+          "properties": {
+            "column": {
+              "description": "Byte column of `start` within its line (1-indexed); present\nexactly when `line` is.",
+              "format": "uint",
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "end": {
+              "description": "End byte offset (0-indexed, exclusive); `start <= end`.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "known",
+              "type": "string"
+            },
+            "line": {
+              "description": "Line of `start` (1-indexed); present exactly when `column` is.",
+              "format": "uint",
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "start": {
+              "description": "Start byte offset (0-indexed, inclusive).",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The diagnostic concerns a value with no source position.",
+          "properties": {
+            "kind": {
+              "const": "unlocated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "EducationDescription": {
       "description": "Education description from `@ID` (field 9).\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Education_Field>",
@@ -3314,7 +3344,7 @@
       "properties": {
         "end": {
           "description": "End byte offset (0-indexed, exclusive)",
-          "format": "uint32",
+          "format": "uint",
           "minimum": 0,
           "type": "integer"
         },
@@ -3344,7 +3374,7 @@
         },
         "start": {
           "description": "Start byte offset (0-indexed, inclusive)",
-          "format": "uint32",
+          "format": "uint",
           "minimum": 0,
           "type": "integer"
         }
@@ -3362,7 +3392,7 @@
       "properties": {
         "end": {
           "description": "End byte offset (0-indexed, exclusive)",
-          "format": "uint32",
+          "format": "uint",
           "minimum": 0,
           "type": "integer"
         },
@@ -3372,7 +3402,7 @@
         },
         "start": {
           "description": "Start byte offset (0-indexed, inclusive)",
-          "format": "uint32",
+          "format": "uint",
           "minimum": 0,
           "type": "integer"
         }
@@ -3650,7 +3680,7 @@
       "type": "array"
     },
     "GraTier": {
-      "description": "Grammatical relations tier (%gra).\n\nContains dependency syntax annotations using Universal Dependencies relations.\nEach relation specifies how morphological chunks in the %mor tier relate syntactically.\n\n# Alignment with %mor\n\nThe %gra tier aligns with **morphological chunks**, not individual %mor items:\n- Clitics in %mor (e.g., `pro|it~v|be`) produce **two** %gra relations\n- Non-clitic words produce **one** %gra relation each\n- Terminators get their own %gra relation (typically PUNCT)\n\n# Dependency Relations\n\nUses Universal Dependencies relation types including:\n- **ROOT**: Main predicate of sentence (head = 0)\n- **NSUBJ**: Nominal subject\n- **OBJ**: Direct object\n- **IOBJ**: Indirect object\n- **DET**: Determiner\n- **AMOD**: Adjectival modifier\n- **ADVMOD**: Adverbial modifier\n- **PUNCT**: Punctuation\n\nA label is a UD universal relation, optionally followed by a\nlanguage-specific subtype (`NMOD-POSS`, `ACL-RELCL`). The head is a\nclosed set of 37 and is enforced by validation (`E761`); subtypes are\nopen by UD's own design and are not checked.\n\n# CHAT Manual Reference\n\n- [Grammatical Relations Tier](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)\n- [Universal Dependencies](https://universaldependencies.org/)\n\nNote: The legacy CLAN MOR manual has been removed from the TalkBank\nwebsite. GRA now follows UD-oriented conventions documented in the\nCHAT manual.\n\n# Example\n\n```\nuse talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation};\n\n// Create a %gra tier\nlet gra = GraTier::new_gra(vec![\n    GrammaticalRelation::new(1, 2, \"NSUBJ\"),   // Word 1 is subject of word 2\n    GrammaticalRelation::new(2, 0, \"ROOT\"),   // Word 2 is root\n    GrammaticalRelation::new(3, 2, \"OBJ\"),    // Word 3 is object of word 2\n    GrammaticalRelation::new(4, 2, \"PUNCT\"),  // Terminator\n]);\n```",
+      "description": "Grammatical relations tier (%gra).\n\nContains dependency syntax annotations using Universal Dependencies relations.\nEach relation specifies how morphological chunks in the %mor tier relate syntactically.\n\n# Alignment with %mor\n\nThe %gra tier aligns with **morphological chunks**, not individual %mor items:\n- Clitics in %mor (e.g., `pro|it~v|be`) produce **two** %gra relations\n- Non-clitic words produce **one** %gra relation each\n- Terminators get their own %gra relation (typically PUNCT)\n\n# Dependency Relations\n\nUses Universal Dependencies relation types including:\n- **ROOT**: Main predicate of sentence (head = 0)\n- **NSUBJ**: Nominal subject\n- **OBJ**: Direct object\n- **IOBJ**: Indirect object\n- **DET**: Determiner\n- **AMOD**: Adjectival modifier\n- **ADVMOD**: Adverbial modifier\n- **PUNCT**: Punctuation\n\nA label is a UD universal relation, optionally followed by a\nlanguage-specific subtype (`NMOD-POSS`, `ACL-RELCL`). The head is a\nclosed set of 37 and is enforced by validation (`E761`); subtypes are\nopen by UD's own design and are not checked.\n\n# CHAT Manual Reference\n\n- [Grammatical Relations Tier](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)\n- [Universal Dependencies](https://universaldependencies.org/)\n\nNote: The legacy CLAN MOR manual has been removed from the TalkBank\nwebsite. GRA now follows UD-oriented conventions documented in the\nCHAT manual.\n\n# Example\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation};\n\n// Create a %gra tier\nlet gra = GraTier::new_gra(Location::Unlocated, vec![\n    GrammaticalRelation::new(1, 2, \"NSUBJ\"),   // Word 1 is subject of word 2\n    GrammaticalRelation::new(2, 0, \"ROOT\"),   // Word 2 is root\n    GrammaticalRelation::new(3, 2, \"OBJ\"),    // Word 3 is object of word 2\n    GrammaticalRelation::new(4, 2, \"PUNCT\"),  // Terminator\n]);\n```",
       "properties": {
         "relations": {
           "$ref": "#/$defs/GraRelations",
@@ -4612,6 +4642,10 @@
       ],
       "type": "object"
     },
+    "LanguagePrecode": {
+      "$ref": "#/$defs/LanguageCode",
+      "description": "The `[- code]` utterance-language precode: a real leading source token\nwhose classification is a shared [`LanguageCode`] (also used by the\n`@Languages` and `@ID` headers, where a position is meaningless), so the\nPOSITION lives here, beside it. `location` covers the token from its\nopening `[`. Serializes as the bare code, so the wire format is unchanged.\nUsed by source-spacing validation (E758) to treat the precode as a first\nreal element."
+    },
     "LanguageSource": {
       "description": "Source of language resolution for a word.\n\nEach variant documents the mechanism it comes from. This doc used to repeat\nthem as a bullet list and the list went stale in the very commit that added\n`SpanShortcut` and `SpanExplicit`, having also shipped that way into the\ngenerated JSON schema description, so the mirror is gone.\n\nKeeping provenance separate from `WordLanguages` lets downstream tools\ndistinguish \"same resolved code, different source semantics\" cases, which\nmatters for corpus QA and language-switching diagnostics.\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)",
       "oneOf": [
@@ -4653,7 +4687,7 @@
       ]
     },
     "Line": {
-      "description": "One line-level unit in a CHAT transcript.\n\nA value is either:\n- `Header`: metadata beginning with `@`\n- `Utterance`: speaker turn (`*...`) with its dependent tiers\n\nThe enum is intentionally minimal: it captures file ordering and delegates\nline-type-specific behavior to `Header`/`Utterance`.\n\n# CHAT Format Examples\n\nA typical CHAT file interleaves headers and utterances:\n\n```text\n@UTF8\n@Begin\n@Languages: eng\n@Participants: CHI Child, MOT Mother\n@ID: eng|corpus|CHI|2;06.00|male|||Child|||\n*CHI: I want cookie .\n%mor: pro:sub|I v|want n|cookie .\n@Comment: Child reaching for cookie jar\n*MOT: you can have one .\n%mor: pro:per|you mod|can v|have det:num|one .\n@End\n```\n\nEach line is parsed as a `Line::Header` or `Line::Utterance`:\n\n```\nuse talkbank_model::model::{Line, Header, Utterance, MainTier, BulletContent};\n\nlet lines = vec![\n    Line::header(Header::Utf8),\n    Line::header(Header::Begin),\n    // Languages header\n    // Participants header\n    // Utterance: *CHI: I want cookie .\n    // Dependent tier: %mor\n    Line::header(Header::Comment { content: BulletContent::from_text(\"Between utterances\") }),\n    // Utterance: *MOT: you can have one .\n    // Dependent tier: %mor\n    Line::header(Header::End),\n];\n```\n\n# Ordering Guarantee\n\nComments and other headers can appear between utterances; preserving that\norder is required for semantic roundtrips. Without `Line`, this structure\nis lost:\n\n```text\n*CHI: hello .\n@Comment: First greeting\n*MOT: hi there .\n@Comment: Mother responds\n*CHI: bye .\n```\n\nThe `Line` enum preserves that `@Comment` appears after specific utterances.\n\n# References\n\n- [File Format](https://talkbank.org/0info/manuals/CHAT.html#File_Format)\n- [Main Line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [File Headers](https://talkbank.org/0info/manuals/CHAT.html#File_Headers)",
+      "description": "One line-level unit in a CHAT transcript.\n\nA value is either:\n- `Header`: metadata beginning with `@`\n- `Utterance`: speaker turn (`*...`) with its dependent tiers\n\nThe enum is intentionally minimal: it captures file ordering and delegates\nline-type-specific behavior to `Header`/`Utterance`.\n\n# CHAT Format Examples\n\nA typical CHAT file interleaves headers and utterances:\n\n```text\n@UTF8\n@Begin\n@Languages: eng\n@Participants: CHI Child, MOT Mother\n@ID: eng|corpus|CHI|2;06.00|male|||Child|||\n*CHI: I want cookie .\n%mor: pro:sub|I v|want n|cookie .\n@Comment: Child reaching for cookie jar\n*MOT: you can have one .\n%mor: pro:per|you mod|can v|have det:num|one .\n@End\n```\n\nEach line is parsed as a `Line::Header` or `Line::Utterance`:\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Line, Header, Utterance, MainTier, BulletContent};\n\nlet lines = vec![\n    Line::header(Location::Unlocated, Header::Utf8),\n    Line::header(Location::Unlocated, Header::Begin),\n    // Languages header\n    // Participants header\n    // Utterance: *CHI: I want cookie .\n    // Dependent tier: %mor\n    Line::header(Location::Unlocated, Header::Comment { content: BulletContent::from_text(\"Between utterances\") }),\n    // Utterance: *MOT: you can have one .\n    // Dependent tier: %mor\n    Line::header(Location::Unlocated, Header::End),\n];\n```\n\n# Ordering Guarantee\n\nComments and other headers can appear between utterances; preserving that\norder is required for semantic roundtrips. Without `Line`, this structure\nis lost:\n\n```text\n*CHI: hello .\n@Comment: First greeting\n*MOT: hi there .\n@Comment: Mother responds\n*CHI: bye .\n```\n\nThe `Line` enum preserves that `@Comment` appears after specific utterances.\n\n# References\n\n- [File Format](https://talkbank.org/0info/manuals/CHAT.html#File_Format)\n- [Main Line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [File Headers](https://talkbank.org/0info/manuals/CHAT.html#File_Headers)",
       "oneOf": [
         {
           "description": "Header line (starts with `@`).",
@@ -5142,7 +5176,7 @@
       "type": "object"
     },
     "OverlapPointKind": {
-      "description": "Kinds of CA overlap-point boundary markers.\n\nTop and bottom forms are used in paired lines to delimit concurrent speech.\n\n# Terminology Note\n\nThis type represents **overlap points** (also called \"CA overlaps\"), NOT **overlap markers**.\n- **Overlap points**: ⌈⌉⌊⌋ brackets marking speech boundaries (this type)\n- **Overlap markers**: `[>]` and `[<]` postcodes indicating speaker order (different type)\n\n# Point Types\n\n- **TopOverlapBegin** (⌈): Start of top speaker's overlap\n- **TopOverlapEnd** (⌉): End of top speaker's overlap\n- **BottomOverlapBegin** (⌊): Start of bottom speaker's overlap\n- **BottomOverlapEnd** (⌋): End of bottom speaker's overlap\n\n# Simple Example\n\n```\nuse talkbank_model::model::{OverlapIndex, OverlapPoint, OverlapPointKind};\n\n// Mother's overlap points (top)\nlet begin = OverlapPoint::new(OverlapPointKind::TopOverlapBegin, None);\nlet end = OverlapPoint::new(OverlapPointKind::TopOverlapEnd, None);\nassert_eq!(begin.to_string(), \"⌈\");\nassert_eq!(end.to_string(), \"⌉\");\n\n// Child's overlap points (bottom)\nlet begin = OverlapPoint::new(OverlapPointKind::BottomOverlapBegin, None);\nlet end = OverlapPoint::new(OverlapPointKind::BottomOverlapEnd, None);\nassert_eq!(begin.to_string(), \"⌊\");\nassert_eq!(end.to_string(), \"⌋\");\n```\n\n# Indexed Example\n\n```\nuse talkbank_model::model::{OverlapIndex, OverlapPoint, OverlapPointKind};\n\n// Multiple overlaps require single-digit indices (2-9)\nlet overlap1_begin = OverlapPoint::new(OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(2)));\nlet overlap2_begin = OverlapPoint::new(OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(3)));\nassert_eq!(overlap1_begin.to_string(), \"⌈2\");\nassert_eq!(overlap2_begin.to_string(), \"⌈3\");\n```\n\n# CHAT Transcript Example\n\n```text\n*MOT: look at ⌈ the dog ⌉ over there .\n*CHI:         ⌊ woof    ⌋ !\n```\n\n# CHAT Manual Reference\n\n- [CA Overlaps](https://talkbank.org/0info/manuals/CHAT.html#CA_Overlaps)",
+      "description": "Kinds of CA overlap-point boundary markers.\n\nTop and bottom forms are used in paired lines to delimit concurrent speech.\n\n# Terminology Note\n\nThis type represents **overlap points** (also called \"CA overlaps\"), NOT **overlap markers**.\n- **Overlap points**: ⌈⌉⌊⌋ brackets marking speech boundaries (this type)\n- **Overlap markers**: `[>]` and `[<]` postcodes indicating speaker order (different type)\n\n# Point Types\n\n- **TopOverlapBegin** (⌈): Start of top speaker's overlap\n- **TopOverlapEnd** (⌉): End of top speaker's overlap\n- **BottomOverlapBegin** (⌊): Start of bottom speaker's overlap\n- **BottomOverlapEnd** (⌋): End of bottom speaker's overlap\n\n# Simple Example\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{OverlapIndex, OverlapPoint, OverlapPointKind};\n\n// Mother's overlap points (top)\nlet begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapBegin, None);\nlet end = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapEnd, None);\nassert_eq!(begin.to_string(), \"⌈\");\nassert_eq!(end.to_string(), \"⌉\");\n\n// Child's overlap points (bottom)\nlet begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::BottomOverlapBegin, None);\nlet end = OverlapPoint::new(Location::Unlocated, OverlapPointKind::BottomOverlapEnd, None);\nassert_eq!(begin.to_string(), \"⌊\");\nassert_eq!(end.to_string(), \"⌋\");\n```\n\n# Indexed Example\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{OverlapIndex, OverlapPoint, OverlapPointKind};\n\n// Multiple overlaps require single-digit indices (2-9)\nlet overlap1_begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(2)));\nlet overlap2_begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(3)));\nassert_eq!(overlap1_begin.to_string(), \"⌈2\");\nassert_eq!(overlap2_begin.to_string(), \"⌈3\");\n```\n\n# CHAT Transcript Example\n\n```text\n*MOT: look at ⌈ the dog ⌉ over there .\n*CHI:         ⌊ woof    ⌋ !\n```\n\n# CHAT Manual Reference\n\n- [CA Overlaps](https://talkbank.org/0info/manuals/CHAT.html#CA_Overlaps)",
       "oneOf": [
         {
           "const": "top_overlap_begin",
@@ -5203,7 +5237,7 @@
           "type": "array"
         },
         "location": {
-          "$ref": "#/$defs/SourceLocation",
+          "$ref": "#/$defs/DiagnosticLocation",
           "description": "Source location"
         },
         "message": {
@@ -5320,7 +5354,7 @@
       "type": "string"
     },
     "Pause": {
-      "description": "Pause marker serialized as `(payload)`.\n\n# Duration Types\n\n- **Short** (`.`): Brief pause\n- **Medium** (`..`): Moderate pause\n- **Long** (`...`): Extended pause\n- **Timed** (`1.5`, `2.0`, etc.): Pause duration in seconds\n\n# CHAT Manual Reference\n\n- [Pause Markers](https://talkbank.org/0info/manuals/CHAT.html#Pauses)\n\n# Examples\n\n```\nuse talkbank_model::model::{Pause, PauseDuration, PauseTimedDuration};\n\n// Short pause\nlet pause = Pause::new(PauseDuration::Short);\nassert_eq!(pause.to_string(), \"(.)\");\n\n// Medium pause\nlet pause = Pause::new(PauseDuration::Medium);\nassert_eq!(pause.to_string(), \"(..)\");\n\n// Long pause\nlet pause = Pause::new(PauseDuration::Long);\nassert_eq!(pause.to_string(), \"(...)\");\n\n// Timed pause (2.5 seconds)\nlet pause = Pause::new(PauseDuration::Timed(PauseTimedDuration::new(\"2.5\")));\nassert_eq!(pause.to_string(), \"(2.5)\");\n```",
+      "description": "Pause marker serialized as `(payload)`.\n\n# Duration Types\n\n- **Short** (`.`): Brief pause\n- **Medium** (`..`): Moderate pause\n- **Long** (`...`): Extended pause\n- **Timed** (`1.5`, `2.0`, etc.): Pause duration in seconds\n\n# CHAT Manual Reference\n\n- [Pause Markers](https://talkbank.org/0info/manuals/CHAT.html#Pauses)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Pause, PauseDuration, PauseTimedDuration};\n\n// Short pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Short);\nassert_eq!(pause.to_string(), \"(.)\");\n\n// Medium pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Medium);\nassert_eq!(pause.to_string(), \"(..)\");\n\n// Long pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Long);\nassert_eq!(pause.to_string(), \"(...)\");\n\n// Timed pause (2.5 seconds)\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Timed(PauseTimedDuration::new(\"2.5\")));\nassert_eq!(pause.to_string(), \"(2.5)\");\n```",
       "properties": {
         "duration": {
           "$ref": "#/$defs/PauseDuration",
@@ -5472,7 +5506,7 @@
       "type": "array"
     },
     "PhoTier": {
-      "description": "Phonological transcription tier (%pho, %mod, or %upho).\n\nContains phonetic transcription of how words are pronounced, using notation\nsystems like IPA (International Phonetic Alphabet) or UNIBET. Tokens align\n1-to-1 with alignable main tier content.\n\n# Alignment\n\nPhonological tokens align with main tier words:\n- One token per word (excluding retraces, pauses, events)\n- Terminator gets its own token (typically `.`)\n- Token order matches main tier word order\n\n# Notation Systems\n\nCommon phonetic notation systems:\n- **IPA**: International Phonetic Alphabet (Unicode)\n- **UNIBET**: ASCII-based phonetic notation\n- **X-SAMPA**: Extended SAMPA ASCII notation\n- **Custom**: Researcher-defined systems for %upho\n\n# %pho vs %mod\n\n- **%pho**: What was actually said (observed pronunciation)\n- **%mod**: What should have been said (target/standard pronunciation)\n\nUse %mod when the speaker's pronunciation differs from the standard form,\nsuch as in child language acquisition or speech disorders.\n\n# CHAT Manual Reference\n\n- [Phonology Tier](https://talkbank.org/0info/manuals/CHAT.html#Phonology)\n- [Model Phonology](https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology)\n\n# Examples\n\n```\nuse talkbank_model::model::{PhoItem, PhoTier, PhoTierType, PhoWord};\n\n// Child says \"fwi\" for \"three\"\nlet pho = PhoTier::new_pho(vec![PhoItem::Word(PhoWord::new(\"fwi\"))]);\nlet mod_tier = PhoTier::new_mod(vec![PhoItem::Word(PhoWord::new(\"θri\"))]);\n\n// Should align 1-to-1\nassert_eq!(pho.len(), mod_tier.len());\n```\n\n**CHAT format:**\n```text\n*CHI: three .\n%pho: fwi .\n%mod: θri .\n```",
+      "description": "Phonological transcription tier (%pho, %mod, or %upho).\n\nContains phonetic transcription of how words are pronounced, using notation\nsystems like IPA (International Phonetic Alphabet) or UNIBET. Tokens align\n1-to-1 with alignable main tier content.\n\n# Alignment\n\nPhonological tokens align with main tier words:\n- One token per word (excluding retraces, pauses, events)\n- Terminator gets its own token (typically `.`)\n- Token order matches main tier word order\n\n# Notation Systems\n\nCommon phonetic notation systems:\n- **IPA**: International Phonetic Alphabet (Unicode)\n- **UNIBET**: ASCII-based phonetic notation\n- **X-SAMPA**: Extended SAMPA ASCII notation\n- **Custom**: Researcher-defined systems for %upho\n\n# %pho vs %mod\n\n- **%pho**: What was actually said (observed pronunciation)\n- **%mod**: What should have been said (target/standard pronunciation)\n\nUse %mod when the speaker's pronunciation differs from the standard form,\nsuch as in child language acquisition or speech disorders.\n\n# CHAT Manual Reference\n\n- [Phonology Tier](https://talkbank.org/0info/manuals/CHAT.html#Phonology)\n- [Model Phonology](https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{PhoItem, PhoTier, PhoTierType, PhoWord};\n\n// Child says \"fwi\" for \"three\"\nlet pho = PhoTier::new_pho(Location::Unlocated, vec![PhoItem::Word(PhoWord::new(\"fwi\"))]);\nlet mod_tier = PhoTier::new_mod(Location::Unlocated, vec![PhoItem::Word(PhoWord::new(\"θri\"))]);\n\n// Should align 1-to-1\nassert_eq!(pho.len(), mod_tier.len());\n```\n\n**CHAT format:**\n```text\n*CHI: three .\n%pho: fwi .\n%mod: θri .\n```",
       "properties": {
         "items": {
           "$ref": "#/$defs/PhoItems",
@@ -5580,7 +5614,7 @@
       "type": "string"
     },
     "ReplacedWord": {
-      "description": "A spoken word paired with CHAT replacement metadata.\n\n`ReplacedWord` models the local structure:\n`spoken [: intended] [scoped-annotations...]`.\n\n# Format in CHAT\n\n```text\nactual_word [: replacement] [* error_code] [= explanation]\n```\n\n# Structure\n\n- **word**: What was actually said\n- **replacement**: What should have been said (one or more words)\n- **scoped_annotations**: Optional error codes, explanations, etc.\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n- [Error Coding with Replacements](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)\n\n# Examples\n\n```\nuse talkbank_model::model::{ReplacedWord, Replacement, ContentAnnotation, ScopedError, Word};\n\n// Simple replacement\nlet replaced = ReplacedWord::new(\n    Word::simple(\"doggie\"),\n    Replacement::from_word(Word::simple(\"dog\"))\n);\n\n// With error annotation\nlet replaced = ReplacedWord::new(\n    Word::simple(\"goed\"),\n    Replacement::from_word(Word::simple(\"went\"))\n).with_scoped_annotations(vec![\n    ContentAnnotation::Error(ScopedError { code: Some(\"grammar\".into()) })\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: I doggie [: dog] .\n*CHI: he goed [: went] [* grammar] home .\n```",
+      "description": "A spoken word paired with CHAT replacement metadata.\n\n`ReplacedWord` models the local structure:\n`spoken [: intended] [scoped-annotations...]`.\n\n# Format in CHAT\n\n```text\nactual_word [: replacement] [* error_code] [= explanation]\n```\n\n# Structure\n\n- **word**: What was actually said\n- **replacement**: What should have been said (one or more words)\n- **scoped_annotations**: Optional error codes, explanations, etc.\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n- [Error Coding with Replacements](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{ReplacedWord, Replacement, ContentAnnotation, ScopedError, Word};\n\n// Simple replacement\nlet replaced = ReplacedWord::new(\n    Location::Unlocated,\n    Word::simple(Location::Unlocated, \"doggie\"),\n    Replacement::from_word(Word::simple(Location::Unlocated, \"dog\"))\n);\n\n// With error annotation\nlet replaced = ReplacedWord::new(\n    Location::Unlocated,\n    Word::simple(Location::Unlocated, \"goed\"),\n    Replacement::from_word(Word::simple(Location::Unlocated, \"went\"))\n).with_scoped_annotations(vec![\n    ContentAnnotation::Error(ScopedError { code: Some(\"grammar\".into()) })\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: I doggie [: dog] .\n*CHI: he goed [: went] [* grammar] home .\n```",
       "properties": {
         "replacement": {
           "$ref": "#/$defs/Replacement",
@@ -5609,7 +5643,7 @@
       "type": "array"
     },
     "Replacement": {
-      "description": "Replacement specification indicating the intended word(s).\n\nA replacement shows what should have been said instead of what was actually uttered.\nIn CHAT format, this is written as `[: intended_word]` after the actual word.\n\n# Structure\n\n- Can contain one or more words (though single word is most common)\n- Must be non-empty (validated during parsing)\n- Words in replacement follow normal word structure (can have form types, etc.)\n\n# Common Usage\n\nReplacements are typically used for:\n- **Phonological errors**: Sound substitutions or mispronunciations\n- **Morphological errors**: Incorrect inflections (e.g., \"goed\" → \"went\")\n- **Lexical errors**: Wrong word selection\n- **Target forms**: What the child was attempting to say\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n\n# Examples\n\n```\nuse talkbank_model::model::{Replacement, Word};\n\n// Single word replacement\nlet replacement = Replacement::from_word(\n    Word::simple(\"dog\")\n);\n\n// Multi-word replacement\nlet replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![\n    Word::simple(\"went\"),\n    Word::simple(\"home\"),\n]).expect(\"nonempty words\"));\n```",
+      "description": "Replacement specification indicating the intended word(s).\n\nA replacement shows what should have been said instead of what was actually uttered.\nIn CHAT format, this is written as `[: intended_word]` after the actual word.\n\n# Structure\n\n- Can contain one or more words (though single word is most common)\n- Must be non-empty (validated during parsing)\n- Words in replacement follow normal word structure (can have form types, etc.)\n\n# Common Usage\n\nReplacements are typically used for:\n- **Phonological errors**: Sound substitutions or mispronunciations\n- **Morphological errors**: Incorrect inflections (e.g., \"goed\" → \"went\")\n- **Lexical errors**: Wrong word selection\n- **Target forms**: What the child was attempting to say\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Replacement, Word};\n\n// Single word replacement\nlet replacement = Replacement::from_word(\n    Word::simple(Location::Unlocated, \"dog\")\n);\n\n// Multi-word replacement\nlet replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![\n    Word::simple(Location::Unlocated, \"went\"),\n    Word::simple(Location::Unlocated, \"home\"),\n]).expect(\"nonempty words\"));\n```",
       "properties": {
         "words": {
           "$ref": "#/$defs/ReplacementWords",
@@ -6115,7 +6149,7 @@
       "type": "array"
     },
     "SinTier": {
-      "description": "Gesture and sign annotation tier (%sin).\n\nRecords gestures, pointing, and sign language that accompany speech.\nEach token corresponds to one word in the main tier, capturing the\nnon-verbal communication that occurs simultaneously with speech.\n\n# Alignment\n\nThe %sin tier aligns 1-to-1 with alignable main tier content:\n- One token per word (excluding retraces, pauses, events)\n- Use `0` for words without gestures\n- Terminator gets its own token (typically `.` or `0`)\n\n# Token Format\n\nGesture codes follow the pattern `g:referent:type`:\n- **g**: Gesture marker\n- **referent**: Object/person the gesture refers to (e.g., \"ball\", \"mom\", \"toy\")\n- **type**: Gesture type (e.g., \"dpoint\" for deictic point, \"hold\", \"give\")\n\nMultiple gestures for one word use special brackets: `〔g:x g:y〕`\n\n# Research Applications\n\n- **Child development**: Track gesture-speech integration\n- **Communication disorders**: Document gestural compensation\n- **Sign language**: Record sign-speech bilingualism\n- **Multimodal analysis**: Study gesture-speech timing and meaning\n\n# CHAT Manual Reference\n\n- [Gesture Coding](https://talkbank.org/0info/manuals/CHAT.html#Gestures)\n\n# Examples\n\n```\nuse talkbank_model::model::{SinItem, SinTier, SinToken};\n\n// Child points to ball while saying \"ball\"\nlet sin = SinTier::new(vec![\n    SinItem::Token(SinToken::new(\"g:ball:dpoint\").expect(\"nonempty gesture token\")),\n    SinItem::Token(SinToken::new(\"0\").expect(\"nonempty gesture token\"))  // No gesture on terminator\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: ball .\n%sin: g:ball:dpoint 0\n```",
+      "description": "Gesture and sign annotation tier (%sin).\n\nRecords gestures, pointing, and sign language that accompany speech.\nEach token corresponds to one word in the main tier, capturing the\nnon-verbal communication that occurs simultaneously with speech.\n\n# Alignment\n\nThe %sin tier aligns 1-to-1 with alignable main tier content:\n- One token per word (excluding retraces, pauses, events)\n- Use `0` for words without gestures\n- Terminator gets its own token (typically `.` or `0`)\n\n# Token Format\n\nGesture codes follow the pattern `g:referent:type`:\n- **g**: Gesture marker\n- **referent**: Object/person the gesture refers to (e.g., \"ball\", \"mom\", \"toy\")\n- **type**: Gesture type (e.g., \"dpoint\" for deictic point, \"hold\", \"give\")\n\nMultiple gestures for one word use special brackets: `〔g:x g:y〕`\n\n# Research Applications\n\n- **Child development**: Track gesture-speech integration\n- **Communication disorders**: Document gestural compensation\n- **Sign language**: Record sign-speech bilingualism\n- **Multimodal analysis**: Study gesture-speech timing and meaning\n\n# CHAT Manual Reference\n\n- [Gesture Coding](https://talkbank.org/0info/manuals/CHAT.html#Gestures)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{SinItem, SinTier, SinToken};\n\n// Child points to ball while saying \"ball\"\nlet sin = SinTier::new(Location::Unlocated, vec![\n    SinItem::Token(SinToken::new(\"g:ball:dpoint\").expect(\"nonempty gesture token\")),\n    SinItem::Token(SinToken::new(\"0\").expect(\"nonempty gesture token\"))  // No gesture on terminator\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: ball .\n%sin: g:ball:dpoint 0\n```",
       "properties": {
         "items": {
           "$ref": "#/$defs/SinItems",
@@ -6148,46 +6182,6 @@
       "description": "Description attached to `@Situation`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Situation_Header>",
       "type": "string"
     },
-    "SourceLocation": {
-      "description": "Source code location in error diagnostics.",
-      "properties": {
-        "column": {
-          "description": "Column number in the line (1-indexed, optional)",
-          "format": "uint",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "end": {
-          "description": "End byte offset (0-indexed, exclusive)",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "line": {
-          "description": "Line number in the source file (1-indexed, optional)",
-          "format": "uint",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "start": {
-          "description": "Start byte offset (0-indexed, inclusive)",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "start",
-        "end"
-      ],
-      "type": "object"
-    },
     "SpaTier": {
       "description": "Speech act tier (%spa).\n\nCodes the communicative function or speech act of the utterance\n(e.g., request, assertion, question, directive).\n\n# CHAT Format Example\n\n```text\n*CHI: cookie ?\n%spa: $REQ:OBJ\n```\n\n# References\n\n- [Speech Act Tier](https://talkbank.org/0info/manuals/CHAT.html#SpeechAct_Tier)",
       "properties": {
@@ -6198,28 +6192,6 @@
       },
       "required": [
         "content"
-      ],
-      "type": "object"
-    },
-    "Span": {
-      "description": "Compact source span representing a byte range in source text.\n\nThis is a thin wrapper around [`text_size::TextRange`] that preserves\nour existing API while gaining the type-safe offset arithmetic from\nthe `text-size` ecosystem (used by rust-analyzer, rowan, etc.).",
-      "properties": {
-        "end": {
-          "description": "End byte offset (0-indexed, exclusive)",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "start": {
-          "description": "Start byte offset (0-indexed, inclusive)",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "start",
-        "end"
       ],
       "type": "object"
     },
@@ -6477,13 +6449,13 @@
         "language_code": {
           "anyOf": [
             {
-              "$ref": "#/$defs/LanguageCode"
+              "$ref": "#/$defs/LanguagePrecode"
             },
             {
               "type": "null"
             }
           ],
-          "description": "Optional utterance-scoped language code (`[- code]`)."
+          "description": "Optional utterance-scoped language precode (`[- code]`), with its\nsource location."
         },
         "linkers": {
           "$ref": "#/$defs/TierLinkers",
@@ -6626,7 +6598,7 @@
       "type": "object"
     },
     "Utterance": {
-      "description": "A complete utterance with one main tier and zero or more dependent tiers.\n\nIn CHAT transcripts, each utterance is a speaker turn anchored by a required\nmain line (`*SPEAKER:`). Dependent tiers attach analysis layers (`%mor`,\n`%gra`, `%pho`, `%wor`, text commentary tiers, etc.) in source order.\n\n# Structure\n\n- **Main tier**: required, stores speaker code + utterance content.\n- **Dependent tiers**: optional, preserves original per-utterance tier order.\n- **Runtime metadata**: alignment/parse-health/language state derived during validation.\n\n# Tier Types\n\n- **%mor**: Morphological analysis (parts of speech, lemmas, affixes)\n- **%gra**: Grammatical relations (dependency structure for %mor)\n- **%pho**: Phonological transcription (actual pronunciation)\n- **%mod**: target/model phonological form\n- **%sin**: Gesture/sign annotations\n- **%com**: Comments about the utterance\n- **%exp**: Explanations or expansions\n- **%act**: Actions performed during utterance\n- **%cod**: Coding categories for analysis\n\n# CHAT Manual Reference\n\n- [Main Line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)\n- [Morphology (%mor)](https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier)\n- [Grammar (%gra)](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)\n\n# Example\n\n```\nuse talkbank_model::model::{Utterance, MainTier, Terminator};\nuse talkbank_model::Span;\n\nlet utterance = Utterance::new(\n    MainTier::new(\n        \"CHI\",\n        vec![/* words */],\n        Terminator::Period { span: Span::DUMMY },\n    )\n);\n// Dependent tiers can be added via builder methods\n```",
+      "description": "A complete utterance with one main tier and zero or more dependent tiers.\n\nIn CHAT transcripts, each utterance is a speaker turn anchored by a required\nmain line (`*SPEAKER:`). Dependent tiers attach analysis layers (`%mor`,\n`%gra`, `%pho`, `%wor`, text commentary tiers, etc.) in source order.\n\n# Structure\n\n- **Main tier**: required, stores speaker code + utterance content.\n- **Dependent tiers**: optional, preserves original per-utterance tier order.\n- **Runtime metadata**: alignment/parse-health/language state derived during validation.\n\n# Tier Types\n\n- **%mor**: Morphological analysis (parts of speech, lemmas, affixes)\n- **%gra**: Grammatical relations (dependency structure for %mor)\n- **%pho**: Phonological transcription (actual pronunciation)\n- **%mod**: target/model phonological form\n- **%sin**: Gesture/sign annotations\n- **%com**: Comments about the utterance\n- **%exp**: Explanations or expansions\n- **%act**: Actions performed during utterance\n- **%cod**: Coding categories for analysis\n\n# CHAT Manual Reference\n\n- [Main Line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)\n- [Morphology (%mor)](https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier)\n- [Grammar (%gra)](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)\n\n# Example\n\n```\nuse talkbank_model::model::{MainTier, MainTierLocations, Terminator, Utterance};\n\nlet utterance = Utterance::new(\n    MainTier::new(\n        MainTierLocations::UNLOCATED,\n        \"CHI\",\n        vec![/* words */],\n        Terminator::Period { location: talkbank_model::Location::Unlocated },\n    )\n);\n// Dependent tiers can be added via builder methods\n```",
       "properties": {
         "alignments": {
           "anyOf": [
@@ -7450,36 +7422,10 @@
     },
     "WordCliticBoundary": {
       "description": "Clitic boundary marker (`~`).\n\nMarks morphological clitic attachment within a word on the main tier.\nCommon in Arabic (`le~ha`, `bba~hum`), Spanish (`nin~o`), and other languages.\nNOT included in `cleaned_text`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Clitics>",
-      "properties": {
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Source span for error reporting."
-        }
-      },
       "type": "object"
     },
     "WordCompoundMarker": {
       "description": "Compound marker (+) indicating word-internal compound boundary.\n\nThis marker separates components within a compound word (e.g., `ice+cream`, `wai4+yu3`).\nIt is metadata about word structure and is NOT included in `cleaned_text`.\n\n# CHAT Format Reference\n\n- [Compounds](https://talkbank.org/0info/manuals/CHAT.html#Compounds)",
-      "properties": {
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Source span for error reporting."
-        }
-      },
       "type": "object"
     },
     "WordContent": {
@@ -7878,17 +7824,6 @@
           "format": "uint",
           "minimum": 1,
           "type": "integer"
-        },
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Source span for error reporting."
         }
       },
       "type": "object"
@@ -7907,17 +7842,6 @@
         "marker_type": {
           "$ref": "#/$defs/WordStressMarkerType",
           "description": "The kind of stress (primary or secondary)."
-        },
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Source span for error reporting."
         }
       },
       "required": [
@@ -7942,19 +7866,6 @@
     },
     "WordSyllablePause": {
       "description": "Pause between syllables (`^`) within a word.\n\nIndicates a noticeable pause between syllables (e.g., `o^ver`).\nNot included in cleaned text.\n\n# Reference\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)",
-      "properties": {
-        "span": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Span"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Source span for error reporting."
-        }
-      },
       "type": "object"
     },
     "WordText": {

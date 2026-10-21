@@ -9,13 +9,14 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Comment_Scope>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, BaseAnnotationChoiceBoundView, BaseAnnotationsChild0Child1ChoiceBoundView,
     BaseAnnotationsChild1Child1ChoiceBoundView, CodeSwitchAnnotationNode, SourceBound,
     SourceBoundKind, SourceSlotView,
 };
 use crate::model::ContentAnnotation;
+use crate::parser::node_span::span_of;
 use crate::parser::typed_cst::read_source_field;
 use crate::tokens;
 use talkbank_model::LanguageCode;
@@ -27,8 +28,13 @@ use talkbank_model::model::RetraceKind;
 /// Result of parsing a single annotation token: either a content annotation
 /// or a retrace marker.
 pub(crate) enum ParsedAnnotation {
-    /// A non-retrace content annotation (`[*]`, `[= text]`, `[!]`, etc.)
-    Content(ContentAnnotation),
+    /// A non-retrace content annotation (`[*]`, `[= text]`, `[!]`, etc.),
+    /// with the annotation node's own bytes: the wrapper that receives it
+    /// ends where this annotation ends, not where the whole chain ends.
+    Content {
+        annotation: ContentAnnotation,
+        span: Span,
+    },
     /// A retrace marker (`[/]`, `[//]`, `[///]`, `[/-]`), with the marker
     /// token's own bytes, which the retrace it builds records as
     /// `marker_span` so a diagnostic about the marker can point at it. The
@@ -39,7 +45,7 @@ pub(crate) enum ParsedAnnotation {
 /// The byte span of a CST node.
 fn node_span<'tree, T: SourceBoundKind<'tree>>(node: SourceBound<'tree, '_, T>) -> Span {
     let node = node.raw_node();
-    Span::from_usize(node.start_byte(), node.end_byte())
+    span_of(node)
 }
 
 /// The one annotation set, whichever list position it came through.
@@ -193,14 +199,23 @@ pub(crate) fn parse_single_annotation(
         BaseAnnotationChoiceBoundView::IndexedOverlapFollows(node) => {
             parse_content_token(node, tokens::parse_overlap_follows_token, errors)
         }
-        BaseAnnotationChoiceBoundView::ScopedStressing(_) => {
-            ParseOutcome::parsed(ParsedAnnotation::Content(ContentAnnotation::Stressing))
+        BaseAnnotationChoiceBoundView::ScopedStressing(node) => {
+            ParseOutcome::parsed(ParsedAnnotation::Content {
+                annotation: ContentAnnotation::Stressing,
+                span: node_span(node),
+            })
         }
-        BaseAnnotationChoiceBoundView::ScopedContrastiveStressing(_) => ParseOutcome::parsed(
-            ParsedAnnotation::Content(ContentAnnotation::ContrastiveStressing),
-        ),
-        BaseAnnotationChoiceBoundView::ScopedUncertain(_) => {
-            ParseOutcome::parsed(ParsedAnnotation::Content(ContentAnnotation::Uncertain))
+        BaseAnnotationChoiceBoundView::ScopedContrastiveStressing(node) => {
+            ParseOutcome::parsed(ParsedAnnotation::Content {
+                annotation: ContentAnnotation::ContrastiveStressing,
+                span: node_span(node),
+            })
+        }
+        BaseAnnotationChoiceBoundView::ScopedUncertain(node) => {
+            ParseOutcome::parsed(ParsedAnnotation::Content {
+                annotation: ContentAnnotation::Uncertain,
+                span: node_span(node),
+            })
         }
         BaseAnnotationChoiceBoundView::RetraceComplete(node) => {
             ParseOutcome::parsed(ParsedAnnotation::Retrace {
@@ -226,8 +241,11 @@ pub(crate) fn parse_single_annotation(
                 span: node_span(node),
             })
         }
-        BaseAnnotationChoiceBoundView::ExcludeMarker(_) => {
-            ParseOutcome::parsed(ParsedAnnotation::Content(ContentAnnotation::Exclude))
+        BaseAnnotationChoiceBoundView::ExcludeMarker(node) => {
+            ParseOutcome::parsed(ParsedAnnotation::Content {
+                annotation: ContentAnnotation::Exclude,
+                span: node_span(node),
+            })
         }
         BaseAnnotationChoiceBoundView::CodeSwitchAnnotation(node) => {
             parse_code_switch(node, errors)
@@ -282,14 +300,17 @@ fn delegate_content_or_error<'tree, T: SourceBoundKind<'tree>>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<ParsedAnnotation> {
     match result {
-        Some(annotation) => ParseOutcome::parsed(ParsedAnnotation::Content(annotation)),
+        Some(annotation) => ParseOutcome::parsed(ParsedAnnotation::Content {
+            annotation,
+            span: span_of(token.raw_node()),
+        }),
         None => {
             let node = token.raw_node();
             errors.report(ParseError::new(
                 ErrorCode::ContentAnnotationParseError,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(token.source(), node.start_byte()..node.end_byte(), ""),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(token.source(), span_of(node), ""),
                 format!("Failed to parse {} token: '{}'", node.kind(), token.text()),
             ));
             ParseOutcome::rejected()

@@ -31,13 +31,6 @@ pub(crate) fn lex_to_tokens(input: &str, start_condition: usize) -> Vec<Token<'_
 }
 
 /// Return temporary tokens together with their original borrowed source.
-pub(crate) fn lex_to_tokens_and_source(
-    input: &str,
-    start_condition: usize,
-) -> (Vec<Token<'_>>, &str) {
-    (lex_to_tokens(input, start_condition), input)
-}
-
 /// Source, tokens and lexer spans admitted together by one lexer run.
 /// No caller can pair the token stream with a different source or span table.
 pub(crate) use located::LexedSource;

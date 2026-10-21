@@ -4,9 +4,9 @@
 //! - [CA Subwords](https://talkbank.org/0info/manuals/CHAT.html#CA_Subwords)
 //! - [CA Delimiters](https://talkbank.org/0info/manuals/CHAT.html#CA_Delimiters)
 
+use crate::ErrorSink;
 use crate::model::WriteChat;
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorSink, Span};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -47,10 +47,10 @@ pub use crate::generated::ca_symbols::{CAElementType, NotationFamily};
 /// # Usage
 ///
 /// ```rust
-/// use talkbank_model::{CAElement, CAElementType};
+/// use talkbank_model::{CAElement, CAElementType, Location};
 ///
-/// let pitch_up = CAElement::new(CAElementType::PitchUp);
-/// let pitch = CAElement::new(CAElementType::PitchUp);
+/// let pitch_up = CAElement::new(Location::Unlocated, CAElementType::PitchUp);
+/// let pitch = CAElement::new(Location::Unlocated, CAElementType::PitchUp);
 /// ```
 ///
 /// # References
@@ -74,9 +74,10 @@ pub struct CAElement {
     /// Marker variant.
     pub element_type: CAElementType,
     /// Optional source location metadata.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[semantic_eq(skip)]
-    pub span: Option<Span>,
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 impl CAElement {
@@ -84,19 +85,11 @@ impl CAElement {
     ///
     /// Parser paths generally call this first and attach spans later if source
     /// tracking is available.
-    pub fn new(element_type: CAElementType) -> Self {
+    pub fn new(location: impl Into<crate::Location>, element_type: CAElementType) -> Self {
         Self {
             element_type,
-            span: None,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata.
-    ///
-    /// Spans are optional and only affect diagnostics, never semantic equality.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = Some(span);
-        self
     }
 }
 

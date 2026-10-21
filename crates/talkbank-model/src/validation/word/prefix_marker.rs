@@ -43,7 +43,7 @@
 
 use crate::model::Word;
 use crate::model::content::word::WordCategory;
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 use super::language::LanguageResolution;
 use super::language::mixed_language_allows_prefix_marker;
@@ -135,11 +135,10 @@ pub(crate) fn check_prefix_marker_position(word: &Word, errors: &impl ErrorSink)
     };
 
     errors.report(
-        ParseError::new(
+        ParseError::at_location(
             ErrorCode::PrefixMarkerIllegalPosition,
             Severity::Error,
-            SourceLocation::new(word.span),
-            ErrorContext::new(cleaned, word.span, cleaned),
+            word.location,
             format!(
                 "\"{cleaned}\" is not a legal word: the prefix marker {}",
                 position.describe_illegal()
@@ -188,11 +187,10 @@ pub(crate) fn check_prefix_marker_language(
     };
 
     errors.report(
-        ParseError::new(
+        ParseError::at_location(
             ErrorCode::PrefixMarkerLanguageNotAllowed,
             Severity::Error,
-            SourceLocation::new(word.span),
-            ErrorContext::new(cleaned, word.span, cleaned),
+            word.location,
             format!(
                 "\"{cleaned}\" is not a legal word in language(s) \"{}\": the \
                  prefix marker is not used in that language",

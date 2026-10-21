@@ -55,7 +55,10 @@ fn test_pho_item_group_write_chat() {
 /// The test covers constructor wiring used by parser output.
 #[test]
 fn test_pho_tier_new() {
-    let tier = PhoTier::new_pho(vec![PhoItem::Word(PhoWord::new("həˈloʊ"))]);
+    let tier = PhoTier::new_pho(
+        crate::Location::Unlocated,
+        vec![PhoItem::Word(PhoWord::new("həˈloʊ"))],
+    );
 
     assert_eq!(tier.tier_type, PhoTierType::Pho);
     assert_eq!(tier.items.len(), 1);
@@ -68,10 +71,13 @@ fn test_pho_tier_new() {
 /// This guards the common writer path used in roundtrip tests.
 #[test]
 fn test_pho_tier_write_chat() {
-    let tier = PhoTier::new_pho(vec![
-        PhoItem::Word(PhoWord::new("həˈloʊ")),
-        PhoItem::Word(PhoWord::new("wɜrld")),
-    ]);
+    let tier = PhoTier::new_pho(
+        crate::Location::Unlocated,
+        vec![
+            PhoItem::Word(PhoWord::new("həˈloʊ")),
+            PhoItem::Word(PhoWord::new("wɜrld")),
+        ],
+    );
 
     assert_eq!(tier.to_chat_string(), "%pho:\thəˈloʊ wɜrld");
 }
@@ -83,8 +89,14 @@ fn test_pho_tier_write_chat() {
 fn test_pho_mod_alignment_example() -> Result<(), String> {
     // Example showing typical %pho/%mod alignment
     // Child says "fwee" for "three"
-    let pho = PhoTier::new_pho(vec![PhoItem::Word(PhoWord::new("fwi"))]);
-    let mod_tier = PhoTier::new_mod(vec![PhoItem::Word(PhoWord::new("θri"))]);
+    let pho = PhoTier::new_pho(
+        crate::Location::Unlocated,
+        vec![PhoItem::Word(PhoWord::new("fwi"))],
+    );
+    let mod_tier = PhoTier::new_mod(
+        crate::Location::Unlocated,
+        vec![PhoItem::Word(PhoWord::new("θri"))],
+    );
 
     assert_eq!(pho.len(), mod_tier.len()); // Should align 1-1
 

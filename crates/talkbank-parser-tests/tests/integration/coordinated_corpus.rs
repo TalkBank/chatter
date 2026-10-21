@@ -97,7 +97,8 @@ fn feature_specs_preserve_main_and_clitic_values_and_independent_diagnostics() {
         assert!(
             diagnostics
                 .iter()
-                .all(|error| error.location.span == mor.span)
+                .all(|error| error.location.span().expect("located diagnostic")
+                    == mor.location.span().expect("located"))
         );
         let wire = serde_json::to_string(mor).expect("serialize morphology");
         let decoded: MorTier = serde_json::from_str(&wire).expect("decode morphology");
@@ -168,7 +169,10 @@ fn clitic_json_imports_report_empty_lemma_and_pos_without_repair() {
             let findings = errors.into_vec();
             assert_eq!(findings.len(), 1, "{field}: {findings:?}");
             assert_eq!(findings[0].code, ErrorCode::MorEmptyContent);
-            assert_eq!(findings[0].location.span, original.span);
+            assert_eq!(
+                findings[0].location.span().expect("located diagnostic"),
+                original.location.span().expect("located")
+            );
             assert!(findings[0].message.contains(message));
             assert_eq!(
                 serde_json::to_value(&imported).expect("validated import"),
@@ -394,15 +398,15 @@ impl<'a> AlignedReferencePair<'a> {
                 self.mor.items().to_vec(),
                 relations,
                 terminal.clone(),
-                self.mor.span,
+                self.mor.location,
             )
         };
         let (mor, gra) = construct(item_relations.to_vec()).expect("admitted reference pair");
         assert!(mor.semantic_eq(self.mor));
         assert!(gra.semantic_eq(self.gra));
-        assert_eq!(mor.span, self.mor.span);
+        assert_eq!(mor.location, self.mor.location);
         assert_eq!(
-            gra.span, self.mor.span,
+            gra.location, self.mor.location,
             "constructor assigns the supplied shared span"
         );
         assert!(

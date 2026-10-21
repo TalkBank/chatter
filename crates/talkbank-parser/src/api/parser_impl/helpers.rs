@@ -9,16 +9,35 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::api::fragment::WrappedFragment;
+use crate::api::fragment::{Synthetic, WrappedFragment};
 use talkbank_model::ParseOutcome;
 use talkbank_model::dependent_tier::DependentTier;
 use talkbank_model::model::Line;
 use talkbank_model::{
-    ErrorCode, ErrorCollector, ErrorSink, ParseError, Severity, Span, TeeErrorSink,
+    ErrorCode, ErrorCollector, ErrorSink, FragmentSource, ParseError, Severity, TeeErrorSink,
 };
 
 use crate::parser::TreeSitterParser;
 use crate::parser::chat_file_parser::{MINIMAL_CHAT_PREFIX, MINIMAL_CHAT_SUFFIX};
+
+/// The one way a wrapper fails to assemble: the synthetic document would
+/// exceed the 32-bit byte space the tree-sitter grammar addresses. Reported
+/// through the caller's sink and refused; unreachable with any input a
+/// transcript could hold, kept so the bound is a diagnostic rather than a
+/// panic in the grammar. One owner for the three fragment paths that build
+/// a wrapper.
+pub(crate) fn admit_wrapper<'input>(
+    wrapper: Result<WrappedFragment<'input>, talkbank_model::ParseErrors>,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<WrappedFragment<'input>> {
+    match wrapper {
+        Ok(fragment) => ParseOutcome::Parsed(fragment),
+        Err(errors_found) => {
+            errors.report_vec(errors_found.into_error_vec());
+            ParseOutcome::Rejected
+        }
+    }
+}
 
 // =========================================================================
 // Wrapper Parsing Infrastructure
@@ -54,9 +73,10 @@ const MAIN_TIER_LINE: &str = "*CHI:\thello .\n";
 ///
 /// # Span Adjustment
 ///
-/// Parsed objects have spans relative to the wrapper. We adjust them:
-/// 1. Subtract wrapper prefix length → input-relative spans (0-based)
-/// 2. Add user offset → document-absolute spans
+/// Parsed objects have spans relative to the wrapper and are typed as such
+/// (`Synthetic<_>`); `WrappedFragment::rebase_tier` is the one exit, moving
+/// them into the caller's document coordinates after clamping the tier's own
+/// extent to the caller's input.
 ///
 /// # Type Parameters
 ///
@@ -82,32 +102,52 @@ pub(crate) fn wrapper_parse_tier<T, F>(
 where
     F: FnOnce(DependentTier) -> Option<T>,
 {
-    // Caller line endings are source evidence too. Supply a wrapper newline
-    // only if the original input did not supply one; never shorten the owner's
-    // admitted range merely to avoid an artificial blank line.
-    let ParseOutcome::Parsed(source) = talkbank_model::FragmentSource::admit(input, offset, errors)
-    else {
+    let ParseOutcome::Parsed(source) = FragmentSource::admit(input, offset, errors) else {
         return ParseOutcome::rejected();
     };
-    let suffix = tier_suffix(source.input());
+    wrapper_parse_tier_with_suffix(parser, tier_header, source, "", errors, extractor)
+}
+
+/// [`wrapper_parse_tier`] over an already admitted source, with synthetic
+/// text the wrapper appends to the caller's input on the same tier line
+/// (`" ."` gives a lone `%mor` word its companion terminator). The appended
+/// text is wrapper-owned: it lies outside the caller's input like the tier
+/// label does, so the tier's clamped extent and every diagnostic exclude it.
+pub(crate) fn wrapper_parse_tier_with_suffix<T, F>(
+    parser: &TreeSitterParser,
+    tier_header: &str,
+    source: FragmentSource<'_>,
+    input_suffix: &str,
+    errors: &impl ErrorSink,
+    extractor: F,
+) -> ParseOutcome<T>
+where
+    F: FnOnce(DependentTier) -> Option<T>,
+{
+    // Caller line endings are source evidence too. Supply a wrapper newline
+    // only if the original input did not supply one; never shorten the owner's
+    // admitted range merely to avoid an artificial blank line. Appended tier
+    // text always needs the newline after it.
+    let suffix = if input_suffix.is_empty() {
+        tier_suffix(source.input())
+    } else {
+        std::borrow::Cow::Owned(format!("{input_suffix}\n{MINIMAL_CHAT_SUFFIX}"))
+    };
 
     // Build the minimal CHAT wrapper
-    let fragment = WrappedFragment::new(
-        &[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, tier_header],
-        source.input(),
-        &suffix,
-        offset,
-    );
-    let fragment = match fragment {
-        Ok(fragment) => fragment,
-        Err(errors_found) => {
-            errors.report_vec(errors_found.into_error_vec());
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(fragment) = admit_wrapper(
+        WrappedFragment::new(
+            &[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, tier_header],
+            source,
+            &suffix,
+        ),
+        errors,
+    ) else {
+        return ParseOutcome::rejected();
     };
 
     match CompleteTierFragment::parse(parser, &fragment, errors) {
-        ParseOutcome::Parsed(tier) => tier.project(extractor),
+        ParseOutcome::Parsed(tier) => tier.project(extractor, errors),
         ParseOutcome::Rejected => ParseOutcome::Rejected,
     }
 }
@@ -132,22 +172,15 @@ pub(crate) fn wrapper_parse_generic_tier(
     let suffix = tier_suffix(source.input());
 
     // Build wrapper (input already has tier header)
-    let fragment = WrappedFragment::new(
-        &[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE],
-        source.input(),
-        &suffix,
-        offset,
-    );
-    let fragment = match fragment {
-        Ok(fragment) => fragment,
-        Err(errors_found) => {
-            errors.report_vec(errors_found.into_error_vec());
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(fragment) = admit_wrapper(
+        WrappedFragment::new(&[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE], source, &suffix),
+        errors,
+    ) else {
+        return ParseOutcome::rejected();
     };
 
     match CompleteTierFragment::parse(parser, &fragment, errors) {
-        ParseOutcome::Parsed(tier) => tier.project(Some),
+        ParseOutcome::Parsed(tier) => tier.project(Some, errors),
         ParseOutcome::Rejected => ParseOutcome::Rejected,
     }
 }
@@ -166,7 +199,7 @@ fn tier_suffix(input: &str) -> std::borrow::Cow<'static, str> {
 /// Parsing constructs the source/model association; projection cannot replace it.
 struct CompleteTierFragment<'fragment, 'input> {
     fragment: &'fragment WrappedFragment<'input>,
-    tier: DependentTier,
+    tier: Synthetic<DependentTier>,
 }
 
 impl<'fragment, 'input> CompleteTierFragment<'fragment, 'input> {
@@ -175,52 +208,75 @@ impl<'fragment, 'input> CompleteTierFragment<'fragment, 'input> {
         fragment: &'fragment WrappedFragment<'input>,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Self> {
+        // `parse_file` translates every diagnostic into the caller's
+        // coordinates before it reaches the tee, so both sinks see the same
+        // placed diagnostics; the collector only decides success.
         let collected = ErrorCollector::new();
-        let adjusting = fragment.error_sink(errors);
-        let tee = TeeErrorSink::new(&adjusting, &collected);
-        let file = parser.parse_chat_file_streaming(fragment.source(), &tee);
+        let tee = TeeErrorSink::new(errors, &collected);
+        let file = fragment.parse_file(parser, &tee);
         if !collected.is_empty() {
             return ParseOutcome::Rejected;
         }
-        let mut tiers = file
-            .lines
-            .into_iter()
-            .filter_map(|line| match line {
-                Line::Utterance(utterance) => Some(utterance.dependent_tiers),
-                Line::Header { .. } => None,
-            })
-            .flatten();
-        let Some(entry) = tiers.next() else {
-            return Self::refuse(fragment, &adjusting);
+        let entries = file.map(|file| {
+            file.lines
+                .into_iter()
+                .filter_map(|line| match line {
+                    Line::Utterance(utterance) => Some(utterance.dependent_tiers),
+                    Line::Header { .. } => None,
+                })
+                .flatten()
+                .collect::<Vec<_>>()
+        });
+        // Exactly one tier, located, covering the whole caller input.
+        let Ok(entry) = entries.try_map(|entries| <[_; 1]>::try_from(entries).map(|[entry]| entry))
+        else {
+            return Self::refuse(fragment, errors);
         };
-        let span = entry.span();
-        if tiers.next().is_some()
-            || fragment
-                .require_complete_tier_input(span.start as usize..span.end as usize)
-                .is_err()
-        {
-            return Self::refuse(fragment, &adjusting);
+        let Some(span) = entry.project(|entry| entry.location().span()).transpose() else {
+            return Self::refuse(fragment, errors);
+        };
+        if fragment.require_complete_labelled_input(span).is_err() {
+            return Self::refuse(fragment, errors);
         }
         ParseOutcome::Parsed(Self {
             fragment,
-            tier: entry.tier,
+            tier: entry.map(|entry| entry.tier),
         })
     }
 
+    /// The refusal points at the caller's whole input, in the caller's
+    /// coordinates, through the caller's own sink.
     fn refuse(fragment: &WrappedFragment<'_>, errors: &impl ErrorSink) -> ParseOutcome<Self> {
         errors.report(ParseError::at_span(
             ErrorCode::ParseFailed,
             Severity::Error,
-            Span::from_usize(0, fragment.source().len()),
+            fragment.input_document_span(),
             "Expected exactly one dependent tier covering the complete fragment",
         ));
         ParseOutcome::Rejected
     }
 
-    fn project<T>(self, extractor: impl FnOnce(DependentTier) -> Option<T>) -> ParseOutcome<T> {
+    /// Hand the lowered tier to the caller's extractor. The wrapper's label
+    /// selected the body grammar, so the tier IS the kind the extractor asks
+    /// for; an extractor that still declines has met a wrapper that lowered
+    /// another kind under that label, which is this crate's fault, reported
+    /// once here as an internal error rather than left to seven silent arms.
+    fn project<T>(
+        self,
+        extractor: impl FnOnce(DependentTier) -> Option<T>,
+        errors: &impl ErrorSink,
+    ) -> ParseOutcome<T> {
         match extractor(self.fragment.rebase_tier(self.tier)) {
             Some(tier) => ParseOutcome::Parsed(tier),
-            None => ParseOutcome::Rejected,
+            None => {
+                errors.report(ParseError::at_span(
+                    ErrorCode::InternalError,
+                    Severity::Error,
+                    self.fragment.input_document_span(),
+                    "The tier wrapper lowered a dependent tier of a different kind than its label selects",
+                ));
+                ParseOutcome::Rejected
+            }
         }
     }
 }

@@ -38,6 +38,7 @@ mod json_roundtrip_edges;
 mod json_tests;
 mod media_timing;
 mod num_words;
+mod pipeline_failure_adapter;
 mod pipeline_tests;
 mod render_parity;
 mod sanitize_tests;

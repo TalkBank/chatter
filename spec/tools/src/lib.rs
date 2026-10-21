@@ -19,8 +19,8 @@
 //! tiers) into complete CHAT files so tree-sitter can parse them.
 //!
 //! Corpus candidate selection and live parser/model validation live in the
-//! sibling `spec/runtime-tools` crate so ordinary generation does not pull Rust
-//! parser/model crates into the default spec workflow.
+//! sibling `spec/runtime-tools` crate. Package-selected source generation does
+//! not link Rust parser/model crates; the full workspace enables the runtime adapter.
 //!
 //! # Running the generators
 //!
@@ -31,8 +31,9 @@
 //! just spec-check    # report staleness, writing nothing
 //! ```
 //!
-//! Both drive [`artifacts::ARTIFACTS`] (plus the half in `spec/runtime-tools`
-//! that needs the live `ErrorCode` enum). Every destination is a constant in
+//! The write recipe first runs [`artifacts::BOOTSTRAP_ARTIFACTS`] without the
+//! model, then rebuilds the runtime writer for [`artifacts::ARTIFACTS`] and
+//! runtime observations. The check covers both phases. Every destination is a constant in
 //! that registry, so there is no `--output-dir` to get wrong, and the checker
 //! compares without writing because each [`artifacts::Artifact`] RETURNS its
 //! files rather than emitting them.
@@ -45,8 +46,8 @@
 //! | [`output`] | Formatters that turn parsed specs into generated artifacts |
 //! | [`templates`] | Tera template engine for wrapping CHAT fragments into complete files |
 //! Corpus candidate selection and live parser/model validation live in
-//! `spec/runtime-tools`. The bootstrap machinery this line used to name was
-//! removed 2026-03-22.
+//! `spec/runtime-tools`. Model-source bootstrap is separate from the older
+//! corpus-mining/bootstrap machinery removed in 2026.
 //!
 //! ## Binary entry points
 //!

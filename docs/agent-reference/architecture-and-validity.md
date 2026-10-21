@@ -10,10 +10,10 @@ repository paths are relative to the repository root unless stated otherwise.
 
 ## Repo positioning
 
-This repository is the canonical home of the TalkBank CHAT format authority
-and the `chatter` tool family, and the source of truth for the `chatter`
-binary. The CHAT core is self-contained: it builds and runs with no external
-repository, and downstream consumers depend on its crates directly.
+This repository owns the CHAT implementation and the `chatter` tool family.
+Runtime consumers use its crates; contributor regeneration also has documented
+generator prerequisites. See the contributor setup and generation instructions
+rather than inferring build or public-package availability from a source checkout.
 
 **Scope: general-purpose CHAT tooling only.** Nothing specific to one corpus,
 one data provider or one workflow. Where a general capability needs
@@ -28,58 +28,58 @@ the maintainer's sign-off. `CONTRIBUTING.md` covers content hygiene.
 
 ## CHAT-validity authority
 
-**`chatter validate` is the authority on whether a byte sequence is valid
-CHAT.** When it rejects a file, the file is invalid and the response is to
-clean the data, not weaken the parser.
+`chatter validate` implements the maintained validity rules; its observed
+behavior is not an independent definition of CHAT. Before changing data,
+adjudicate each diagnostic against the specifications and recorded semantic
+rulings: a rejection may expose a tool defect rather than invalid input.
+Unsupported messages, unexplained specs and misleading source locations need
+investigation, not automatic transcript edits or weakened checks.
 
-**That is a conclusion, never a default action, and chatter is never assumed
-correct.** Before any data is touched, every diagnostic is adjudicated: is
-this a chatter defect or a data defect? The working assumption is that
-chatter is wrong unless the data is certainly at fault. The test is whether
-the rejected construct actually fails to make sense. Signs the fault is
-chatter's: a message that does not match its input; a generic "unparsable"
-code standing in for a specific rule; an auto-generated error spec with no
-description; behaviour no spec justifies.
-
-**Authority ordering:** the CHAT manual is dated background. When it and this
-project diverge, trust `spec/`, the grammar, and above all real corpus data.
-Never reintroduce a legacy construct that has been removed from the data and
-from chatter, whatever the manual or CLAN still say. **A permissive grammar
-is not a validity claim**: this grammar deliberately admits invalid
-constructs so the model can name them precisely, so grammar tolerance is
-weaker evidence of legality than CLAN CHECK's silence, not stronger.
+Use `spec/`, the CHAT documentation, source examples and recorded rulings
+together to resolve intended behavior. Corpus occurrence is evidence, not
+proof of legality. Do not revive a deliberately retired construct from an
+older manual or another validator's behavior alone. A permissive recovery
+grammar is not a validity claim, and CLAN CHECK's silence is not one either.
+Ask when these sources leave the semantic decision unresolved.
 
 **A word may carry at most one `@` suffix** (maintainer ruling; a documented
 divergence from CLAN CHECK, recorded in `spec/errors/E203.md`).
 
 ## Architecture (index)
 
-Data flows: **spec** (source of truth) → **grammar** → **crates** (parsers,
-model, transform, cli, lsp).
+Authored specs record constructs and expected behavior; the grammar has its own
+maintained source and generated artifacts. Registry generators share vocabulary
+with consumers. Do not infer that every grammar rule is generated from a spec
+example, or that parser acceptance establishes model validity. The parser/model
+boundary and downstream validation have distinct contracts.
 
 | Crate | Purpose |
 |-------|---------|
 | `talkbank-model` | Typed CHAT AST, WriteChat, validation, alignment, `walk_words`, `ChatParser` trait |
 | `talkbank-derive` | SemanticEq / SpanShift / error-code proc macros |
+| `talkbank-build` | Build-time fingerprints of selected packaged source trees |
 | `talkbank-cache` | SQLite validation/roundtrip cache |
 | `talkbank-parser` | Canonical tree-sitter parser |
-| `talkbank-parser-re2c` | Independent re2c parser: spec oracle and wasm-clean backend |
+| `talkbank-parser-re2c` | Independent re2c backend; shared compatibility contract and wasm compilation checks |
 | `talkbank-parser-tests` | Equivalence, roundtrip, golden, property tests |
 | `talkbank-transform` | Pipelines, CHAT↔JSON, normalize, merge |
-| `chatter` | The CLI |
+| `talkbank-llm` | HTTP judgment-provider implementation for explicitly requested model-assisted work |
+| `talkbank-chatter` | The CLI package, in `crates/chatter`, producing `chatter` |
 | `talkbank-lsp` | LSP server (tree-sitter only) |
 | `send2clan` | CLAN app bridge bindings |
 | `chatter-desktop` | Tauri v2 desktop app |
 
-Two Cargo workspaces: the root, and `spec/` (`spec/tools`,
-`spec/runtime-tools`). Parser-backend selection and the oracle workflow:
+Two Cargo workspaces: the root, and `spec/` (`spec/tools`, the core
+generators independent of the live model; `spec/runtime-tools`, generators and
+censuses that need the live model and parsers; `spec/vocabulary`, the shared
+authored schemas and diagnostic vocabulary). Parser-backend selection and comparison contracts:
 `book/src/architecture/parser-backends.md`,
 `crates/talkbank-parser-re2c/AGENTS.md`.
 
 **"Parity" names two unrelated programmes; always say which.** **CHECK
 adjudication** asks, per CLAN CHECK code, whether the rejected construct
 fails to make sense, and records a divergence or closes the gap; it is about
-CHAT validity and every entry in `tests/check_parity/manifest.json` carries a
+CHAT validity and every entry in `crates/talkbank-parser-tests/tests/check_parity/manifest.json` carries a
 terminal verdict. **Backend comparison** measures our implementations under the
 [compatibility contract](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate):
 supported valid input needs semantic agreement, and every tree-sitter error
@@ -88,32 +88,31 @@ code-set measurements do not define CHAT policy or waive missed errors.
 
 **The reference corpus** (`corpus/reference/`) is a regression signal, not a
 validity authority: when a change rejects a reference file, adjudicate the
-file against the real authorities and fix the data (or move it to
-`spec/errors/`) rather than weaken the parser.
+file against the specifications and rulings. Fix a demonstrated implementation
+defect, or correct/reclassify an invalid fixture with evidence. Do not weaken
+rules or alter fixtures merely to obtain a passing test.
 
 ## Cache policy
 
 The validation cache lives in the OS cache directory; `--force` refreshes
 specific paths; `TALKBANK_CHAT_CACHE_DIR` relocates the root. Integration
 tests isolate the cache through `CliHarness`, never `HOME` tricks.
-Initialization is concurrency-safe across threads and processes. Never delete
-a user's cache without an explicit request.
+Treat cross-thread/process initialization, contention and cleanup as explicit
+test obligations; one successful cache open is not a concurrency proof. Never
+delete a user's cache without an explicit request.
 
 ## LSP reliability
 
-Backend init failures surface as diagnostics, not panics; handlers degrade
-gracefully; diagnostics align with parse-health semantics.
+Backend init failures must surface as diagnostics, not panics; handlers must
+preserve typed failure outcomes and diagnostics must respect parse health.
+These are boundary obligations, not a claim that every failure path has been
+qualified on every platform. See
 `crates/talkbank-lsp/AGENTS.md`.
 
 ## Sub-project AGENTS.md files
 
-| File | Scope |
-|------|-------|
-| `grammar/AGENTS.md` | Grammar design, verification sequence, strict+catch-all |
-| `spec/AGENTS.md` + `spec/tools/AGENTS.md` | Spec structure, generators, regeneration |
-| `crates/talkbank-lsp/AGENTS.md` | LSP: model-owned alignment; index spaces; reliability |
-| `crates/talkbank-parser-re2c/AGENTS.md` | Re2c parser and oracle workflow |
-| `apps/chatter-desktop/AGENTS.md` | Desktop app; TUI parity mandate |
+The root [AGENTS.md](../../AGENTS.md#nested-guidance) owns the one table of
+nested guidance files and what each adds; it is not duplicated here.
 
 ## Relationship to batchalign
 

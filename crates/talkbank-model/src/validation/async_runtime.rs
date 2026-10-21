@@ -163,15 +163,14 @@ where
 mod tests {
     use super::*;
     use crate::ErrorCollector;
-    use crate::Span;
     use crate::model::{Header, Line};
 
     /// Builds a minimal syntactically valid test file.
     fn make_test_file() -> ChatFile {
         ChatFile::new(vec![
-            Line::header_with_span(Header::Utf8, Span::DUMMY),
-            Line::header_with_span(Header::Begin, Span::DUMMY),
-            Line::header_with_span(Header::End, Span::DUMMY),
+            Line::header(crate::Location::Unlocated, Header::Utf8),
+            Line::header(crate::Location::Unlocated, Header::Begin),
+            Line::header(crate::Location::Unlocated, Header::End),
         ])
     }
 

@@ -4,7 +4,6 @@
 //! - [Gestures](https://talkbank.org/0info/manuals/CHAT.html#Gestures)
 //! - [Sign language coding](https://talkbank.org/0info/manuals/CHAT.html#SignLanguage)
 
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
@@ -50,10 +49,11 @@ use super::{SinItem, SinToken};
 /// # Examples
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{SinItem, SinTier, SinToken};
 ///
 /// // Child points to ball while saying "ball"
-/// let sin = SinTier::new(vec![
+/// let sin = SinTier::new(Location::Unlocated, vec![
 ///     SinItem::Token(SinToken::new("g:ball:dpoint").expect("nonempty gesture token")),
 ///     SinItem::Token(SinToken::new("0").expect("nonempty gesture token"))  // No gesture on terminator
 /// ]);
@@ -76,24 +76,18 @@ pub struct SinTier {
     pub items: SinItems,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl SinTier {
     /// Constructs a `%sin` tier from parsed gesture/sign items.
-    pub fn new(items: Vec<SinItem>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, items: Vec<SinItem>) -> Self {
         Self {
             items: items.into(),
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata used in diagnostics.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Legacy convenience constructor from plain `%sin` token strings.
@@ -101,12 +95,15 @@ impl SinTier {
     /// Each token becomes `SinItem::Token`. Prefer [`Self::new`] when callers
     /// already parsed grouped or structured `%sin` forms. Empty text returns
     /// `EmptyText` instead of panicking or constructing an invalid token.
-    pub fn from_tokens(tokens: Vec<String>) -> Result<Self, crate::model::EmptyText> {
+    pub fn from_tokens(
+        location: impl Into<crate::Location>,
+        tokens: Vec<String>,
+    ) -> Result<Self, crate::model::EmptyText> {
         let items = tokens
             .into_iter()
             .map(|text| SinToken::new(text).map(SinItem::Token))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self::new(items))
+        Ok(Self::new(location, items))
     }
 
     /// Number of alignment slots represented in this tier.
@@ -195,6 +192,6 @@ impl crate::validation::Validate for SinTier {
         errors: &impl crate::ErrorSink,
     ) {
         self.items
-            .validate(&context.clone().with_field_span(self.span), errors);
+            .validate(&context.clone().with_field_location(self.location), errors);
     }
 }

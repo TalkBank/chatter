@@ -1,6 +1,6 @@
 //! Source-bound diagnostic and model rebasing contracts shared by corpus families.
 
-use talkbank_model::{ErrorCollector, ParseOutcome, SpanShift};
+use talkbank_model::{DiagnosticLocation, ErrorCollector, ParseOutcome, SpanShift};
 
 pub(super) fn assert_fragment_rebases<T: SpanShift + PartialEq + std::fmt::Debug>(
     path: &std::path::Path,
@@ -27,16 +27,16 @@ pub(super) fn assert_fragment_rebases<T: SpanShift + PartialEq + std::fmt::Debug
     }
     let mut expected_errors = local_errors.to_vec();
     for error in &mut expected_errors {
-        let span = error.location.span;
+        let span = error.location.span().expect("located diagnostic");
         assert!(
-            input.get(span.start as usize..span.end as usize).is_some(),
+            input.get(span.start()..span.end()).is_some(),
             "diagnostic must address caller bytes: {} {input:?} {error:?}",
             path.display()
         );
         for label in &mut error.labels {
             let span = label.span;
             assert!(
-                input.get(span.start as usize..span.end as usize).is_some(),
+                input.get(span.start()..span.end()).is_some(),
                 "label must address caller bytes: {} {input:?} {label:?}",
                 path.display()
             );
@@ -45,9 +45,9 @@ pub(super) fn assert_fragment_rebases<T: SpanShift + PartialEq + std::fmt::Debug
         if input.is_empty() {
             // The sole point of an admitted empty caller is known; do not
             // reinterpret it as legacy unlocated model metadata.
-            error.location.span = talkbank_model::Span::from_usize(17, 17);
+            error.location = DiagnosticLocation::new(talkbank_model::Span::new(17, 17));
             for label in &mut error.labels {
-                label.span = talkbank_model::Span::from_usize(17, 17);
+                label.span = talkbank_model::Span::new(17, 17);
             }
         } else {
             error.shift_spans_after(0, 17);

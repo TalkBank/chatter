@@ -11,7 +11,7 @@
 
 use crate::alignment::helpers::{ContentItem, walk_content};
 use crate::model::{Separator, Utterance, Word};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// Returns `true` if the word is a real spoken word (not a filler, nonword,
 /// omission, phonological fragment, or untranscribed marker).
@@ -76,15 +76,14 @@ pub(crate) fn check_comma_after_non_spoken(utterance: &Utterance, errors: &impl 
             return;
         }
 
-        if let ContentItem::Separator(Separator::Comma { span }) = item
+        if let ContentItem::Separator(Separator::Comma { location }) = item
             && matches!(context, CommaContext::AwaitingContent)
         {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::CommaAfterNonSpokenContent,
                     Severity::Error,
-                    SourceLocation::new(*span),
-                    ErrorContext::new(",", *span, ","),
+                    *location,
                     "Comma without any prior spoken word in the utterance",
                 )
                 .with_suggestion("Remove the comma or add a spoken word earlier in the utterance"),
@@ -113,19 +112,18 @@ pub(crate) fn check_comma_glued_to_next(utterance: &Utterance, errors: &impl Err
         utterance.main.content.content.as_slice(),
         None,
         &mut |item| {
-            // No `!= Span::DUMMY` guard: `comma_span()` already refuses a
-            // position-less comma, so the two comma checks cannot disagree
-            // about it the way they used to.
+            // No unlocated guard here: `comma_span()` already answers `None`
+            // for a position-less comma, so the two comma checks cannot
+            // disagree about it the way they used to.
             if let Some(comma_span) = prev_comma_span
-                && let Some(start) = item.word_span().map(|span| span.start)
-                && start == comma_span.end
+                && let Some(start) = item.word_span().map(|span| span.start())
+                && start == comma_span.end()
             {
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_span(
                         ErrorCode::CommaGluedToNextWord,
                         Severity::Error,
-                        SourceLocation::new(comma_span),
-                        ErrorContext::new(",", comma_span, ","),
+                        comma_span,
                         "Comma must be followed by a space or end-of-line",
                     )
                     .with_suggestion("Add a space after the comma"),
@@ -154,11 +152,10 @@ pub(crate) fn check_consecutive_commas(utterance: &Utterance, errors: &impl Erro
             if let Some(span) = item.comma_span() {
                 if prev_comma_span.is_some() {
                     errors.report(
-                        ParseError::new(
+                        ParseError::at_span(
                             ErrorCode::ConsecutiveCommas,
                             Severity::Error,
-                            SourceLocation::new(span),
-                            ErrorContext::new(",,", span, ","),
+                            span,
                             "Consecutive commas in utterance",
                         )
                         .with_suggestion(

@@ -4,33 +4,17 @@
 
 ## Development setup
 
-A fresh clone needs:
+Start with [Contributor Setup](book/src/contributing/setup.md), which owns the
+toolchain, native dependencies and package-specific first checks. A full
+workspace build includes the desktop app and its platform prerequisites;
+it is not the minimum setup for every parser or documentation change.
 
-- **Rust**, the current stable release (`rust-toolchain.toml` selects the
-  stable channel and its components). `rustup` installs it automatically on
-  first `cargo` invocation.
-- **mdBook + mdbook-mermaid + lychee** for building and link-checking the
-  docs (link-checking runs on the built HTML via lychee, not the
-  mdbook-linkcheck2 renderer):
-
-  ```sh
-  just book-install-tools
-  ```
-
-- **Node.js 20+** for the desktop app (`apps/chatter-desktop`).
-  `nvm use 20` or whatever your version-manager equivalent is.
-- **SQLite dev headers** for `talkbank-cache`. macOS bundles them.
-  Linux contributors install `libsqlite3-dev` (Debian/Ubuntu) or the
-  equivalent for their distro.
-
-Standard build commands:
-
-```sh
-cargo build --workspace --all-targets --locked
-cargo test --workspace --locked
-just book
-cd apps/chatter-desktop && npm install   # desktop app dependencies
-```
+[Developer Verification Checks](book/src/contributing/dev-checks.md) explains
+the focused development loop, generation, documentation checks and final
+publication gate. Use those maintained recipes rather than a second checklist
+here. For a first library change, the
+[tested library examples](book/src/chatter/integrating/library-usage.md) show
+parsing, validation, model access and serialization separately.
 
 ## Avoid committing private or internal content (mandatory)
 
@@ -57,10 +41,9 @@ workspace-level `[workspace.lints.clippy]` table in `Cargo.toml`.
 High-friction rules to know up front:
 
 - **No panics in long-lived logic.** `unwrap_used`, `expect_used`,
-  `panic`, `todo`, `unimplemented` are `warn` at the workspace level
-  and `deny` per-crate where the panic-site audit has completed (see
-  the `[lints.clippy]` table in each crate's `Cargo.toml`). Use
-  `thiserror`-based domain errors instead.
+  `panic`, `todo` and `unimplemented` are denied by the workspace Clippy
+  policy. Crates inherit that policy; test code may explicitly relax it for
+  assertions. Use typed, `thiserror`-based domain errors instead.
 - **Types are the primary documentation.** Newtype every stable
   domain boundary; never raw `String`/`&str`/`bool` at a seam.
 - **Specs are the source of truth for CHAT format behavior.** Edit
@@ -69,11 +52,12 @@ High-friction rules to know up front:
 
 ## CI
 
-GitHub Actions runs `cargo fmt --check`, `cargo build`, `cargo test
---workspace`, `mdbook build`, and `npm run compile` on every push and PR.
-See `.github/workflows/ci.yml`. Clippy and the feature-off build are
-release-time, in `.github/workflows/release-lint.yml`; `just release-lint`
-runs the same set locally.
+The [CI and Release guide](book/src/contributing/ci-and-release.md) describes
+the workflow roles. `just gate` is the local counterpart of per-push CI,
+including doctests, both Rust workspaces, generated-artifact checks and the
+book. Clippy and the feature-off build belong to `just release-lint`, not an
+extra gate on every edit. The workflow files and `justfile` own the exact
+command set; a local pass does not certify every supported platform.
 
 Before pushing, run `just gate` on the final source, then commit those same
 bytes. Its receipt survives staging and committing, but any content edit
@@ -90,3 +74,8 @@ protocol regression is `just gate-receipts-test` and also runs in CI.
 ## Reporting issues
 
 GitHub Issues: <https://github.com/TalkBank/chatter/issues>
+
+Use a minimal synthetic example and include the affected version, command and
+expected versus actual result. Do not attach private transcripts or credentials.
+For security problems, follow [the private reporting policy](SECURITY.md)
+instead of opening a public issue.

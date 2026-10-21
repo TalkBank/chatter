@@ -56,10 +56,18 @@ fn reference_merge_timing_edits_preserve_original_and_latest_evidence() {
     for i in [1, 0] {
         let timing = originals[i].timing;
         edited
-            .set_terminal_bullet(i, Bullet::new(timing.start_ms, timing.end_ms + 10))
+            .set_terminal_bullet(
+                i,
+                Bullet::new(
+                    talkbank_model::Location::Unlocated,
+                    timing.start_ms,
+                    timing.end_ms + 10,
+                ),
+            )
             .expect("replace existing timing");
     }
     let latest = Bullet::new(
+        talkbank_model::Location::Unlocated,
         originals[0].timing.start_ms,
         originals[0].timing.end_ms + 20,
     );
@@ -116,6 +124,7 @@ fn reference_merge_timing_edits_preserve_original_and_latest_evidence() {
         .set_terminal_bullet(
             0,
             Bullet::new(
+                talkbank_model::Location::Unlocated,
                 originals[0].timing.start_ms,
                 originals[0].timing.end_ms + 10,
             ),

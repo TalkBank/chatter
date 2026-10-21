@@ -7,8 +7,8 @@
 
 use super::super::utils::LineIndex;
 use super::related_info::compute_related_information;
-use talkbank_model::ParseError;
 use talkbank_model::model::ChatFile;
+use talkbank_model::{DiagnosticLocation, ParseError};
 use tower_lsp::lsp_types::*;
 
 /// Convert a `ParseError` to an LSP `Diagnostic`, using a prebuilt line index.
@@ -19,8 +19,15 @@ fn to_diagnostic_indexed(
     uri: Option<&Url>,
     chat_file: Option<&ChatFile>,
 ) -> Diagnostic {
-    let start_pos = index.offset_to_position(error.location.span.start);
-    let end_pos = index.offset_to_position(error.location.span.end);
+    let (start_pos, end_pos) = match error.location {
+        DiagnosticLocation::Known { span, .. } => (
+            index.offset_to_position(span.start()),
+            index.offset_to_position(span.end()),
+        ),
+        // LSP has no unlocated diagnostic; a file-level diagnostic sits at the
+        // document start by convention, and the message still says what it is.
+        DiagnosticLocation::Unlocated => (Position::new(0, 0), Position::new(0, 0)),
+    };
     build_diagnostic(error, text, start_pos, end_pos, uri, chat_file)
 }
 
@@ -118,8 +125,13 @@ mod tests {
     use super::*;
     use talkbank_model::{ErrorCode, Severity, Span};
 
-    fn make_error(code: ErrorCode, severity: Severity, start: u32, end: u32) -> ParseError {
-        ParseError::at_span(code, severity, Span { start, end }, format!("Test: {code}"))
+    fn make_error(code: ErrorCode, severity: Severity, start: usize, end: usize) -> ParseError {
+        ParseError::at_span(
+            code,
+            severity,
+            Span::new(start, end),
+            format!("Test: {code}"),
+        )
     }
 
     #[test]

@@ -2,12 +2,14 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{Absence, Never, NodeSlot};
 use crate::generated_traversal::{
-    AsRawNode, BulletNode, ContinuationNode, InlinePicNode, Positioned, SourceBound,
-    SourceBoundKind, SourceField, SourceRecovery, SourceSlotView, SpaceNode, TextSegmentNode,
-    TextWithBulletsAndPicsChild0Choice, TextWithBulletsAndPicsChild0ChoiceSourceView,
+    AsRawNode, BulletNode, InlinePicNode, Positioned, SourceBound, SourceBoundKind, SourceField,
+    SourceRecovery, SourceSlotView, SpaceNode, TextSegmentNode, TextWithBulletsAndPicsChild0Choice,
+    TextWithBulletsAndPicsChild0ChoiceSourceView, TextWithBulletsAndPicsChild0MissingSourceView,
     TextWithBulletsAndPicsChild1Choice, TextWithBulletsAndPicsChild1ChoiceSourceView,
-    TextWithBulletsChild0Choice, TextWithBulletsChild0ChoiceSourceView,
+    TextWithBulletsAndPicsChild1MissingSourceView, TextWithBulletsChild0Choice,
+    TextWithBulletsChild0ChoiceSourceView, TextWithBulletsChild0MissingSourceView,
     TextWithBulletsChild1Choice, TextWithBulletsChild1ChoiceSourceView,
+    TextWithBulletsChild1MissingSourceView,
 };
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
@@ -51,6 +53,72 @@ pub fn parse_bullet_content(
         }
     }
     Ok(BulletContent::new(sink.segments.into_vec()))
+}
+
+/// A bullet-text position's MISSING placeholder, by kind. tree-sitter inserts
+/// a MISSING node only for a terminal, and a choice owns a MISSING head only
+/// of a single-node alternative's kind; for all four bullet-text positions the
+/// generator found exactly these two. Until 2026-10-20 the placeholder was a
+/// raw node re-read as text, bullet, picture, continuation or space, with an
+/// "unexpected node" fallback; a MISSING picture or space is now matched at
+/// its own alternative's position instead, and a bullet is a rule tree-sitter
+/// never inserts MISSING.
+enum Placeholder<'value, 'tree, 'source> {
+    /// A MISSING text segment: its text is empty.
+    TextSegment(SourceField<'value, 'tree, 'source, TextSegmentNode<'tree>>),
+    /// A MISSING continuation.
+    Continuation,
+}
+
+/// A bullet-text position's generated missing view, read as a [`Placeholder`].
+/// One exhaustive conversion per position, so a kind added to a position's
+/// heads by a grammar change fails to compile here.
+trait IntoPlaceholder<'value, 'tree, 'source> {
+    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source>;
+}
+
+impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
+    for TextWithBulletsChild0MissingSourceView<'value, 'tree, 'source>
+{
+    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
+        match self {
+            Self::TextSegment(text) => Placeholder::TextSegment(text),
+            Self::Continuation(_) => Placeholder::Continuation,
+        }
+    }
+}
+
+impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
+    for TextWithBulletsChild1MissingSourceView<'value, 'tree, 'source>
+{
+    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
+        match self {
+            Self::TextSegment(text) => Placeholder::TextSegment(text),
+            Self::Continuation(_) => Placeholder::Continuation,
+        }
+    }
+}
+
+impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
+    for TextWithBulletsAndPicsChild0MissingSourceView<'value, 'tree, 'source>
+{
+    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
+        match self {
+            Self::TextSegment(text) => Placeholder::TextSegment(text),
+            Self::Continuation(_) => Placeholder::Continuation,
+        }
+    }
+}
+
+impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
+    for TextWithBulletsAndPicsChild1MissingSourceView<'value, 'tree, 'source>
+{
+    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
+        match self {
+            Self::TextSegment(text) => Placeholder::TextSegment(text),
+            Self::Continuation(_) => Placeholder::Continuation,
+        }
+    }
 }
 
 /// Owns the source-order segment accumulation; no intermediate flattened AST.
@@ -103,38 +171,38 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
         }
     }
 
-    /// Missing leaves retain their expected kind. Preserve the old lowering of
-    /// these placeholders; the whole-tree backstop still diagnoses recovery.
-    fn placeholder<'tree>(
+    /// A MISSING placeholder keeps its kind: an empty text segment (which
+    /// pushes nothing) or a continuation. The whole-tree backstop diagnoses
+    /// the recovery node. The continuation still becomes a model segment, as
+    /// it always did; `@Comment:\t` with an empty body reaches it. That is a
+    /// model value built for a recovery node, recorded with the coverage
+    /// drive to be decided from a spec example, not changed here.
+    fn placeholder(
         &mut self,
-        field: SourceField<'_, 'tree, '_, Node<'tree>>,
+        placeholder: Placeholder<'_, '_, '_>,
     ) -> Result<(), crate::CstFailure> {
-        let node = field.read_raw()?;
-        if let Some(text) = node.typed::<TextSegmentNode>() {
-            self.text(text);
-        } else if let Some(bullet) = node.typed::<BulletNode>() {
-            self.bullet(bullet)?;
-        } else if let Some(picture) = node.typed::<InlinePicNode>() {
-            self.picture(picture);
-        } else if node.typed::<ContinuationNode>().is_some() {
-            self.segments.push(BulletContentSegment::continuation());
-        } else if node.typed::<SpaceNode>().is_none() {
-            self.unexpected(field);
+        match placeholder {
+            Placeholder::TextSegment(text) => self.text(text.read()?),
+            Placeholder::Continuation => self.segments.push(BulletContentSegment::continuation()),
         }
         Ok(())
     }
 
-    fn choice<'value, 'tree: 'value, 'source, T: 'value, A: Absence>(
+    fn choice<'value, 'tree: 'value, 'source, T: 'value, M, A: Absence>(
         &mut self,
-        slot: SourceField<'value, 'tree, 'source, NodeSlot<'tree, T, Node<'tree>, Never, A>>,
+        slot: SourceField<'value, 'tree, 'source, NodeSlot<T, M, Node<'tree>, Never, A>>,
         push: impl FnOnce(
             SourceField<'value, 'tree, 'source, T>,
             &mut Self,
         ) -> Result<(), crate::CstFailure>,
-    ) -> Result<(), crate::CstFailure> {
+    ) -> Result<(), crate::CstFailure>
+    where
+        M: SourceRecovery<'value, 'tree, 'source>,
+        M::View: IntoPlaceholder<'value, 'tree, 'source>,
+    {
         match slot.view() {
             SourceSlotView::Present(choice) => push(choice, self)?,
-            SourceSlotView::Missing(node) => self.placeholder(node)?,
+            SourceSlotView::Missing(view) => self.placeholder(view.into_placeholder())?,
             SourceSlotView::Error(node) => self.unexpected(node),
             SourceSlotView::Unexpected(never) => match never {},
             SourceSlotView::Absent(_) => {}
@@ -147,13 +215,19 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
     /// payload, bounded by exactly that reading: a placeholder whose source
     /// view is a field of `T`, which a plain kind slot and a narrowed one read
     /// under the broad kind proof both provide.
-    fn leaf<'value, 'tree: 'value, 'source, T: SourceBoundKind<'tree>, M>(
+    fn leaf<'value, 'tree: 'value, 'source, T: SourceBoundKind<'tree>, M, Recovery>(
         &mut self,
-        slot: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, T, M>>,
+        slot: SourceField<'value, 'tree, 'source, AnyKindSlot<T, M, Recovery>>,
         push: impl FnOnce(&mut Self, SourceBound<'tree, 'source, T>) -> Result<(), crate::CstFailure>,
     ) -> Result<(), crate::CstFailure>
     where
         M: SourceRecovery<'value, 'tree, 'source, View = SourceField<'value, 'tree, 'source, T>>,
+        Recovery: SourceRecovery<
+                'value,
+                'tree,
+                'source,
+                View = SourceField<'value, 'tree, 'source, tree_sitter::Node<'tree>>,
+            >,
     {
         match slot.view() {
             SourceSlotView::Present(node) | SourceSlotView::Missing(node) => {

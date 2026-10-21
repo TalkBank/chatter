@@ -1,7 +1,20 @@
 # The CHAT recovery and leniency boundary: where "parse, don't validate" sits
 
-**Status:** Reference
-**Last modified:** 2026-07-18 22:12 EDT
+**Status:** Historical rationale; current recovery contracts are maintained in the book
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/design/2026-07-18-recovery-and-leniency-boundary.md)
+
+Use [Parser Leniency Policy](../../book/src/architecture/leniency-policy.md),
+[Parser/Model Contracts](../../book/src/architecture/parser-model-contracts.md)
+and [Backend Compatibility](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate)
+for current work. The narrative below records the earlier grouping rationale,
+not a current source inventory or permission to discard recovery content.
+
+Its absolute claims that certain malformed structures never occur in corpora,
+that every malformed line is faithfully preserved, or that validation alone
+decides legality are not established guarantees. Parsing can reject syntax;
+recovered content and diagnostics must remain distinct from valid admission.
+Historical frequency assumptions cannot discharge source-preservation or
+recovery obligations, and a roundtrip does not prove that no content was lost.
 
 This is a decision record for a boundary that has governed the parser and
 model since the beginning but was never written down: **how lenient is the

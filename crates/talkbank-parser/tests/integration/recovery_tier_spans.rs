@@ -62,32 +62,30 @@ fn recovered_mor_tier_span(source: &str) -> Span {
     for utterance in &utterances {
         for entry in &utterance.dependent_tiers {
             if let DependentTier::Mor(tier) = &entry.tier {
-                return tier.span;
+                return tier
+                    .location
+                    .span()
+                    .expect("recovered %mor tier still carries no source location");
             }
         }
     }
     panic!("the malformed tier must be preserved in place, not dropped");
 }
 
-/// A recovered `%mor` placeholder carries the tier's real span, not `DUMMY`.
+/// A recovered `%mor` placeholder carries the tier's real location.
 #[test]
 fn recovered_mor_tier_keeps_its_source_span() {
     let start = MALFORMED_MOR
         .find(MALFORMED_MOR_TIER)
-        .expect("fixture must contain the malformed tier line") as u32;
-    let end = start + MALFORMED_MOR_TIER.len() as u32;
+        .expect("fixture must contain the malformed tier line");
+    let end = start + MALFORMED_MOR_TIER.len();
 
     let span = recovered_mor_tier_span(MALFORMED_MOR);
 
-    assert_ne!(
-        span,
-        Span::DUMMY,
-        "recovered %mor tier still carries a fabricated DUMMY span"
-    );
     // The tier node may extend one byte past the visible text to take in its
     // terminating newline, so the upper bound allows for it.
     assert!(
-        span.start >= start && span.end <= end + 1,
+        span.start() >= start && span.end() <= end + 1,
         "recovered %mor span {span:?} should cover the tier's bytes {start}..{end}"
     );
 }

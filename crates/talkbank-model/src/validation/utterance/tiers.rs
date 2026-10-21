@@ -22,10 +22,10 @@ pub(crate) fn check_no_duplicate_dependent_tiers(utterance: &Utterance, errors: 
         if !seen_tiers.insert(kind) {
             // Duplicate tier found, report at the tier's own span
             errors.report(
-                ParseError::at_span(
+                ParseError::at_location(
                     ErrorCode::DuplicateDependentTier,
                     Severity::Error,
-                    tier.span(),
+                    tier.location(),
                     format!(
                         "Duplicate dependent tier: %{} appears more than once for this utterance",
                         kind

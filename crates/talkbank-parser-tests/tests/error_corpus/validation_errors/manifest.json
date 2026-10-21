@@ -1963,6 +1963,22 @@
       "source_spec": "spec/errors/E255.md"
     },
     {
+      "fixture": "E255_10.cha",
+      "transcript_name": "anonymous",
+      "code": "E255",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E255.md"
+    },
+    {
+      "fixture": "E255_11.cha",
+      "transcript_name": "anonymous",
+      "code": "E255",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E255.md"
+    },
+    {
       "fixture": "E255_2.cha",
       "transcript_name": "anonymous",
       "code": "E255",
@@ -2004,6 +2020,22 @@
     },
     {
       "fixture": "E255_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E255",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E255.md"
+    },
+    {
+      "fixture": "E255_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E255",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E255.md"
+    },
+    {
+      "fixture": "E255_9.cha",
       "transcript_name": "anonymous",
       "code": "E255",
       "claim": "legal",
@@ -3849,6 +3881,14 @@
       "source_spec": "spec/errors/E324.md"
     },
     {
+      "fixture": "E324_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E324",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E324.md"
+    },
+    {
       "fixture": "E325_1.cha",
       "transcript_name": "anonymous",
       "code": "E325",
@@ -4762,6 +4802,62 @@
       "transcript_name": "anonymous",
       "code": "E360",
       "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_12.cha",
+      "transcript_name": "anonymous",
+      "code": "E360",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_13.cha",
+      "transcript_name": "anonymous",
+      "code": "E360",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_14.cha",
+      "transcript_name": "anonymous",
+      "code": "E360",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_15.cha",
+      "transcript_name": "anonymous",
+      "code": "E360",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_16.cha",
+      "transcript_name": "anonymous",
+      "code": "E360",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_17.cha",
+      "transcript_name": "anonymous",
+      "code": "E360",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_18.cha",
+      "transcript_name": "anonymous",
+      "code": "E360",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E360.md"
     },
@@ -5805,6 +5901,14 @@
       "source_spec": "spec/errors/E377.md"
     },
     {
+      "fixture": "E377_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E377",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E377.md"
+    },
+    {
       "fixture": "E378_1.cha",
       "transcript_name": "anonymous",
       "code": "E378",
@@ -5822,6 +5926,22 @@
     },
     {
       "fixture": "E378_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E378",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E378.md"
+    },
+    {
+      "fixture": "E378_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E378",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E378.md"
+    },
+    {
+      "fixture": "E378_5.cha",
       "transcript_name": "anonymous",
       "code": "E378",
       "claim": "violates",

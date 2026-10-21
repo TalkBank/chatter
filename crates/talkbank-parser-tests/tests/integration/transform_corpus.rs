@@ -271,8 +271,8 @@ fn participant_specs_preserve_names_and_retain_valid_siblings() {
                         .collect::<Vec<_>>(),
                     vec![code, ErrorCode::OrphanIDHeader]
                 );
-                let span = diagnostics[0].location.span;
-                assert_eq!(&source[span.start as usize..span.end as usize], "MOT");
+                let span = diagnostics[0].location.span().expect("located diagnostic");
+                assert_eq!(&source[span.start()..span.end()], "MOT");
                 // Recovery preserves the first entry without granting proof
                 // that this rejected source was a valid transcript.
             }
@@ -544,7 +544,7 @@ fn timed_media_spec_mutations_refuse_ambiguous_or_unsupported_declarations() {
 fn spec_validation_preserves_admission_and_streamed_evidence() {
     use talkbank_model::model::TranscriptName;
     use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
-    use talkbank_model::{ErrorCollector, RuleSelection};
+    use talkbank_model::{CheckLevel, ErrorCollector, RuleSelection, WriteChat};
     use talkbank_parser_tests::repo_paths::workspace_root;
     use talkbank_transform::{PipelineError, ValidatedParseError};
 
@@ -554,6 +554,7 @@ fn spec_validation_preserves_admission_and_streamed_evidence() {
     )
     .expect("canonical spec fixtures");
     let mut outcomes = [0; 3];
+    let mut model_outcomes = [0; 2];
     for fixture in corpus.fixtures() {
         for alignment in [
             AlignmentValidation::Structure,
@@ -566,6 +567,11 @@ fn spec_validation_preserves_admission_and_streamed_evidence() {
                     ParseValidateOptions::default().with_alignment()
                 }
             };
+            assert_eq!(options.level(), CheckLevel::Validate(alignment));
+            let explicit = ParseValidateOptions::default()
+                .with_level(CheckLevel::Validate(alignment))
+                .with_validation();
+            assert_eq!(explicit.validation_policy(), Some(policy));
             let admitted_errors = ErrorCollector::new();
             let admitted = talkbank_transform::parse_validated_with_parser(
                 &parser,
@@ -587,6 +593,51 @@ fn spec_validation_preserves_admission_and_streamed_evidence() {
                 "streamed evidence: {} {alignment:?}",
                 fixture.path().display()
             );
+            // The model-only entry point accepts an existing document, not
+            // parser admission. Compare its complete output with an explicit
+            // policy on that same document, including recovered documents.
+            let document = match &admitted {
+                Ok(accepted) => Some(accepted.document()),
+                Err(ValidatedParseError::Validation(failure)) => Some(failure.document()),
+                Err(ValidatedParseError::Parse(_))
+                | Err(ValidatedParseError::InternalFailure { .. }) => None,
+            };
+            if let Some(document) = document {
+                let before = document.to_chat_string();
+                let mut direct = document.clone();
+                let expected = ErrorCollector::new();
+                direct.validate_at(policy, &expected, TranscriptName::Anonymous);
+                let expected = expected.into_vec();
+                model_outcomes[usize::from(!expected.is_empty())] += 1;
+                let mut via_options = document.clone();
+                let actual =
+                    talkbank_model::validate_chat_file_with_options(&mut via_options, &explicit);
+                assert_eq!(
+                    actual,
+                    if expected.is_empty() {
+                        Ok(())
+                    } else {
+                        Err(expected)
+                    },
+                    "model-only dispatch: {} {alignment:?}",
+                    fixture.path().display(),
+                );
+                assert_eq!(via_options.to_chat_string(), before);
+
+                // Strict rule selection alone must not enable validation;
+                // explicitly downgrading an aligned request must also skip it.
+                for skipped in [
+                    ParseValidateOptions::default().with_strict_linkers(),
+                    explicit.with_level(CheckLevel::ParseOnly),
+                ] {
+                    assert_eq!(skipped.level(), CheckLevel::ParseOnly);
+                    assert_eq!(
+                        talkbank_model::validate_chat_file_with_options(&mut via_options, &skipped),
+                        Ok(()),
+                    );
+                    assert_eq!(via_options.to_chat_string(), before);
+                }
+            }
             if let (Err(admission), Err(pipeline)) = (&admitted, &streamed) {
                 use talkbank_transform::speaker_id::{
                     RecordedSpeakerIdentificationAttempt, RecordedSpeakerIdentificationInput,
@@ -677,6 +728,10 @@ fn spec_validation_preserves_admission_and_streamed_evidence() {
     assert!(
         outcomes.iter().all(|count| *count > 0),
         "spec corpus must witness acceptance and both rejection phases: {outcomes:?}"
+    );
+    assert!(
+        model_outcomes.iter().all(|count| *count > 0),
+        "model-only dispatch needs clean and diagnostic outcomes: {model_outcomes:?}",
     );
 }
 

@@ -8,41 +8,53 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, ContentsChildren, ContentsNode, KindSlot, NoChild, SourceChildren, SourceField,
-    SourceSlotView,
+    AsRawNode, ContentsChildren, ContentsNode, KindAdmitted, KindMissing, NarrowedMissing, Never,
+    PresenceError, RequiredPresence, SourceChildren, SourceField, SourceSlotView,
 };
 use crate::model::{BracketedItem, UtteranceContent};
-use tree_sitter::Node;
+use crate::parser::typed_cst::ExtractCanonical;
 
 use crate::parser::tree_parsing::main_tier::structure::contents::parse_contents;
 
 /// The extracted children of a construct's `contents` slot, or nothing.
 ///
-/// Present is extracted. Missing composite contents and lexical recovery
-/// remain distinct. An ERROR or displaced node at the
-/// position is the construct losing its shape there, which `on_bad` reports
-/// in the construct's own words, and Absent means the construct has no
-/// contents at all; both yield nothing, and the caller rejects an empty
-/// construct.
-pub(crate) fn contents_of<'tree, 'source>(
-    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, ContentsNode<'tree>>>,
+/// The admitted wrapper's contents are present. Source readability and lexical
+/// recovery inside those contents remain independent obligations.
+type RequiredContentsField<'value, 'tree, 'source> = SourceField<
+    'value,
+    'tree,
+    'source,
+    crate::parser::typed_cst::AnyKindSlot<
+        ContentsNode<'tree>,
+        NarrowedMissing<KindAdmitted, KindMissing<ContentsNode<'tree>>>,
+        PresenceError<RequiredPresence, tree_sitter::Node<'tree>>,
+        Never,
+    >,
+>;
+
+/// Extract a bracketed construct's `contents` under the admitted proof.
+///
+/// `None` always means the fault was already reported: a source read that
+/// failed, a grammar-binding fault or the proof's refusal of a contradicting
+/// tree. Callers yield no items and add no second diagnostic.
+pub(crate) fn contents_of<'value, 'tree: 'value, 'source>(
+    slot: RequiredContentsField<'value, 'tree, 'source>,
     errors: &impl ErrorSink,
-    on_bad: impl FnOnce(Node<'tree>),
-) -> Option<SourceChildren<'tree, 'source, ContentsChildren<'tree>>> {
+) -> Option<SourceChildren<'tree, 'source, ContentsChildren<'tree, KindAdmitted>>> {
     match slot.view() {
         SourceSlotView::Present(contents) => {
             let bound = crate::parser::typed_cst::read_source_field(contents, errors)?;
-            Some(bound.extract())
+            // Admitted, like the tier body's `contents`, so the walker below
+            // receives the proof that empties its rule-kind MISSING arms.
+            let extraction = bound.extract_canonical();
+            crate::parser::typed_cst::report_admission(
+                extraction,
+                bound.raw_node(),
+                bound.source(),
+                errors,
+            )
+            .ok()
         }
-        SourceSlotView::Missing(bad) => {
-            on_bad(bad.raw_node());
-            None
-        }
-        SourceSlotView::Error(bad) => {
-            on_bad(bad.raw_node());
-            None
-        }
-        SourceSlotView::Absent(NoChild) => None,
     }
 }
 
@@ -56,7 +68,7 @@ pub(crate) fn contents_of<'tree, 'source>(
 /// of a `node.kind()` match and a shared second dispatcher
 /// (`group/nested.rs`) beneath it.
 pub(crate) fn parse_group_contents<'tree>(
-    contents: &SourceChildren<'tree, '_, ContentsChildren<'tree>>,
+    contents: &SourceChildren<'tree, '_, ContentsChildren<'tree, KindAdmitted>>,
     errors: &impl ErrorSink,
 ) -> Vec<BracketedItem> {
     parse_contents(contents, errors)

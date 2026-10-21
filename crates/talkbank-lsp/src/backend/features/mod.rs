@@ -27,7 +27,7 @@ pub mod rename;
 mod selection_range;
 mod workspace_symbol;
 
-pub use code_action::code_action;
+pub(crate) use code_action::prepare_code_actions;
 pub use completion::completion;
 pub use document_link::document_links;
 pub use document_symbol::document_symbol;

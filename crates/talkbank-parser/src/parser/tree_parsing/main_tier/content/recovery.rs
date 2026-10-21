@@ -1,7 +1,7 @@
 //! Carrier-owned recovery reporting for main-tier body regions.
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::NamedKind;
+use crate::generated_traversal::{KindProof, NamedKind, PresenceProof, Raw};
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use tree_sitter::Node;
 
@@ -19,11 +19,12 @@ mod sealed {
     pub trait Sealed {}
 }
 
-macro_rules! body_carriers {
+// Only the sink is observed, so the same reporter supports both kind readings.
+macro_rules! narrowed_body_carriers {
     ($($carrier:ident => $owner:ident),* $(,)?) => {
         $(
-            impl sealed::Sealed for crate::generated_traversal::$carrier<'_> {}
-            impl<'tree> MainTierBodyCarrier<'tree> for crate::generated_traversal::$carrier<'tree> {
+            impl<K: KindProof> sealed::Sealed for crate::generated_traversal::$carrier<'_, K> {}
+            impl<'tree, K: KindProof> MainTierBodyCarrier<'tree> for crate::generated_traversal::$carrier<'tree, K> {
                 type Owner = crate::generated_traversal::$owner<'tree>;
                 fn unexpected(&self) -> &[Node<'tree>] { &self.unexpected }
             }
@@ -31,12 +32,9 @@ macro_rules! body_carriers {
     };
 }
 
-body_carriers! {
+narrowed_body_carriers! {
     ContentsChildren => ContentsNode,
     ContentItemChildren => ContentItemNode,
-    GroupWithAnnotationsChildren => GroupWithAnnotationsNode,
-    MainPhoGroupChildren => MainPhoGroupNode,
-    MainSinGroupChildren => MainSinGroupNode,
     TierBodyChildren => TierBodyNode,
     TierBodyLanguageCodeChildren => TierBodyNode,
     UtteranceEndChildren => UtteranceEndNode,
@@ -44,6 +42,25 @@ body_carriers! {
     FinalCodesChildren => FinalCodesNode,
     FinalCodesChild0Children => FinalCodesNode,
     FinalCodesChild1Children => FinalCodesNode,
+}
+
+macro_rules! presence_body_carriers {
+    ($($carrier:ident => $owner:ident),* $(,)?) => {$(
+        impl<K: KindProof, P: PresenceProof> sealed::Sealed
+            for crate::generated_traversal::$carrier<'_, K, Raw, P> {}
+        impl<'tree, K: KindProof, P: PresenceProof> MainTierBodyCarrier<'tree>
+            for crate::generated_traversal::$carrier<'tree, K, Raw, P>
+        {
+            type Owner = crate::generated_traversal::$owner<'tree>;
+            fn unexpected(&self) -> &[Node<'tree>] { &self.unexpected }
+        }
+    )*};
+}
+
+presence_body_carriers! {
+    GroupWithAnnotationsChildren => GroupWithAnnotationsNode,
+    MainPhoGroupChildren => MainPhoGroupNode,
+    MainSinGroupChildren => MainSinGroupNode,
 }
 
 /// Classify every displaced body child with its carrier's own context.

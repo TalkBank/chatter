@@ -27,7 +27,11 @@ fn test_gra_tier_construction() {
         GrammaticalRelation::new(2, 0, "ROOT"),
         GrammaticalRelation::new(3, 2, "OBJ"),
     ];
-    let tier = GraTier::new(GraTierType::Gra, relations);
+    let tier = GraTier::new(
+        talkbank_model::Location::Unlocated,
+        GraTierType::Gra,
+        relations,
+    );
     assert_eq!(tier.relations().len(), 3);
     assert!(tier.is_gra());
 

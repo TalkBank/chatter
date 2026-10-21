@@ -92,27 +92,26 @@ fn graph_needs_a_gra_tier() -> Result<(), String> {
     Ok(())
 }
 
-/// On `ParseState::StaleBaseline`, the DOT header gains a muted
-/// top-left `stale baseline` label so the viewer can tell the
-/// dependency graph was computed against the last successful parse
-/// (KIB-013). On `ParseState::Clean` the same label must be absent.
+/// The caution describes cached analysis, not an older-source graph.
+/// On `ParseState::Clean` the same label must be absent.
 #[test]
-fn stale_baseline_emits_muted_label_attrs() -> Result<(), String> {
+fn analysis_caution_emits_muted_label_attrs() -> Result<(), String> {
     let utterance = aligned(CAT)?;
 
     let clean =
         generate_dot_graph(&utterance, ParseState::Clean).map_err(|err| format!("clean: {err}"))?;
     assert!(
-        !clean.contains("stale baseline"),
-        "Clean parse state must not emit the stale-baseline marker"
+        !clean.contains("analysis pending or recovered"),
+        "Clean parse state must not emit the analysis caution"
     );
 
-    let stale = generate_dot_graph(&utterance, ParseState::StaleBaseline)
+    let stale = generate_dot_graph(&utterance, ParseState::PendingOrRecovered)
         .map_err(|err| format!("stale: {err}"))?;
     assert!(
-        stale.contains("label=\"stale baseline\""),
-        "StaleBaseline must emit the marker label; got:\n{stale}"
+        stale.contains("label=\"analysis pending or recovered\""),
+        "PendingOrRecovered must emit the marker label; got:\n{stale}"
     );
+    assert!(!stale.contains("stale baseline"));
     assert!(
         stale.contains("fontcolor=\"#888888\""),
         "marker must use the muted fontcolor"

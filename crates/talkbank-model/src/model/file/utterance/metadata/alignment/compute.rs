@@ -1,13 +1,14 @@
 use super::count_based::build_tier_to_tier_alignment;
-use super::diagnostics::{known_span, skipped_alignment_warning, unknown_alignment_warning};
+use super::diagnostics::skipped_alignment_warning;
+use crate::alignment::unknown_alignment_warning;
 use crate::model::{AlignmentSet, AlignmentUnits, ParseHealthState, ParseHealthTier};
 use crate::validation::ValidationContext;
-use crate::{ErrorCode, ParseError, Span, Utterance};
+use crate::{ErrorCode, ParseError, Utterance};
 
 /// One side of a tier alignment relationship (label, span, tier identity).
 struct TierSide<'a> {
     label: &'a str,
-    span: Span,
+    location: crate::Location,
     tier: ParseHealthTier,
 }
 
@@ -21,50 +22,50 @@ fn alignment_blocked_warning(
         ParseHealthState::Unknown => unknown_alignment_warning(
             alignment_name,
             left.label,
-            left.span,
+            left.location,
             right.label,
-            Some(right.span),
+            Some(right.location),
         ),
         _ => skipped_alignment_warning(
             alignment_name,
             left.label,
             health.is_tier_clean(left.tier),
-            left.span,
+            left.location,
             right.label,
             health.is_tier_clean(right.tier),
-            Some(right.span),
+            Some(right.location),
         ),
     }
 }
 
 /// The blocked warning for an alignment whose partner is a GROUP of tiers
-/// (`%xphoaln` against `%mod` and `%pho`): `right_span` is the first partner
-/// present with a known location, or `None` when there is none, in which
-/// case the partner side gets no label.
+/// (`%xphoaln` against `%mod` and `%pho`): `right_location` is the first partner
+/// present, located or not, or `None` when there is none; the partner side
+/// gets a label only when it is located.
 fn grouped_alignment_blocked_warning(
     health: ParseHealthState,
     alignment_name: &str,
     left: TierSide<'_>,
     right_label: &str,
-    right_span: Option<Span>,
+    right_location: Option<crate::Location>,
     right_clean: bool,
 ) -> ParseError {
     match health {
         ParseHealthState::Unknown => unknown_alignment_warning(
             alignment_name,
             left.label,
-            left.span,
+            left.location,
             right_label,
-            right_span,
+            right_location,
         ),
         _ => skipped_alignment_warning(
             alignment_name,
             left.label,
             health.is_tier_clean(left.tier),
-            left.span,
+            left.location,
             right_label,
             right_clean,
-            right_span,
+            right_location,
         ),
     }
 }
@@ -88,12 +89,12 @@ impl Utterance {
                         "main↔%mor",
                         TierSide {
                             label: "main tier",
-                            span: self.main.span,
+                            location: self.main.location,
                             tier: ParseHealthTier::Main,
                         },
                         TierSide {
                             label: "%mor tier",
-                            span: mor.span,
+                            location: mor.location,
                             tier: ParseHealthTier::Mor,
                         },
                     ),
@@ -111,12 +112,12 @@ impl Utterance {
                         "%mor↔%gra",
                         TierSide {
                             label: "%mor tier",
-                            span: mor.span,
+                            location: mor.location,
                             tier: ParseHealthTier::Mor,
                         },
                         TierSide {
                             label: "%gra tier",
-                            span: gra.span,
+                            location: gra.location,
                             tier: ParseHealthTier::Gra,
                         },
                     ),
@@ -125,7 +126,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.pho_tier() {
-            let pho_span = tier.span;
+            let pho_location = tier.location;
             if health.can_align_main_to_pho() {
                 metadata.pho = Some(crate::alignment::align_main_to_pho(&self.main, tier));
             } else {
@@ -135,12 +136,12 @@ impl Utterance {
                         "main↔%pho",
                         TierSide {
                             label: "main tier",
-                            span: self.main.span,
+                            location: self.main.location,
                             tier: ParseHealthTier::Main,
                         },
                         TierSide {
                             label: "%pho tier",
-                            span: pho_span,
+                            location: pho_location,
                             tier: ParseHealthTier::Pho,
                         },
                     ),
@@ -163,7 +164,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.mod_tier() {
-            let mod_span = tier.span;
+            let mod_location = tier.location;
             if health.can_align_main_to_mod() {
                 metadata.mod_ = Some(crate::alignment::align_main_to_pho(&self.main, tier));
             } else {
@@ -173,12 +174,12 @@ impl Utterance {
                         "main↔%mod",
                         TierSide {
                             label: "main tier",
-                            span: self.main.span,
+                            location: self.main.location,
                             tier: ParseHealthTier::Main,
                         },
                         TierSide {
                             label: "%mod tier",
-                            span: mod_span,
+                            location: mod_location,
                             tier: ParseHealthTier::Mod,
                         },
                     ),
@@ -187,7 +188,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.sin_tier() {
-            let sin_span = tier.span;
+            let sin_location = tier.location;
             if health.can_align_main_to_sin() {
                 metadata.sin = Some(crate::alignment::align_main_to_sin(&self.main, tier));
             } else {
@@ -197,12 +198,12 @@ impl Utterance {
                         "main↔%sin",
                         TierSide {
                             label: "main tier",
-                            span: self.main.span,
+                            location: self.main.location,
                             tier: ParseHealthTier::Main,
                         },
                         TierSide {
                             label: "%sin tier",
-                            span: sin_span,
+                            location: sin_location,
                             tier: ParseHealthTier::Sin,
                         },
                     ),
@@ -211,14 +212,14 @@ impl Utterance {
         }
 
         if let (Some(modsyl), Some(mod_tier)) = (self.modsyl_tier(), self.mod_tier()) {
-            let (modsyl_span, mod_span) = (modsyl.span, mod_tier.span);
+            let (modsyl_location, mod_location) = (modsyl.location, mod_tier.location);
             if health.can_align_modsyl_to_mod() {
                 metadata.modsyl = Some(build_tier_to_tier_alignment(
                     modsyl.word_count(),
-                    modsyl_span,
+                    modsyl_location,
                     "%modsyl",
                     mod_tier.items.len(),
-                    mod_span,
+                    mod_location,
                     "%mod",
                     ErrorCode::ModsylModCountMismatch,
                 ));
@@ -229,12 +230,12 @@ impl Utterance {
                         "%modsyl↔%mod",
                         TierSide {
                             label: "%modsyl tier",
-                            span: modsyl_span,
+                            location: modsyl_location,
                             tier: ParseHealthTier::Modsyl,
                         },
                         TierSide {
                             label: "%mod tier",
-                            span: mod_span,
+                            location: mod_location,
                             tier: ParseHealthTier::Mod,
                         },
                     ),
@@ -243,14 +244,14 @@ impl Utterance {
         }
 
         if let (Some(phosyl), Some(pho_tier)) = (self.phosyl_tier(), self.pho_tier()) {
-            let (phosyl_span, pho_span) = (phosyl.span, pho_tier.span);
+            let (phosyl_location, pho_location) = (phosyl.location, pho_tier.location);
             if health.can_align_phosyl_to_pho() {
                 metadata.phosyl = Some(build_tier_to_tier_alignment(
                     phosyl.word_count(),
-                    phosyl_span,
+                    phosyl_location,
                     "%phosyl",
                     pho_tier.items.len(),
-                    pho_span,
+                    pho_location,
                     "%pho",
                     ErrorCode::PhosylPhoCountMismatch,
                 ));
@@ -261,12 +262,12 @@ impl Utterance {
                         "%phosyl↔%pho",
                         TierSide {
                             label: "%phosyl tier",
-                            span: phosyl_span,
+                            location: phosyl_location,
                             tier: ParseHealthTier::Phosyl,
                         },
                         TierSide {
                             label: "%pho tier",
-                            span: pho_span,
+                            location: pho_location,
                             tier: ParseHealthTier::Pho,
                         },
                     ),
@@ -275,7 +276,7 @@ impl Utterance {
         }
 
         if let Some(phoaln) = self.phoaln_tier() {
-            let phoaln_span = phoaln.span;
+            let phoaln_location = phoaln.location;
             let phoaln_wc = phoaln.word_count();
             if health.can_align_phoaln() {
                 let mut alignment = crate::alignment::PhoAlignment::new();
@@ -302,7 +303,7 @@ impl Utterance {
                         super::diagnostics::build_phoaln_count_mismatch_error(
                             phoaln_wc,
                             expected_mod,
-                            phoaln_span,
+                            phoaln_location,
                             mc,
                             "%mod",
                             ErrorCode::PhoalnModCountMismatch,
@@ -316,7 +317,7 @@ impl Utterance {
                         super::diagnostics::build_phoaln_count_mismatch_error(
                             phoaln_wc,
                             expected_pho,
-                            phoaln_span,
+                            phoaln_location,
                             pc,
                             "%pho",
                             ErrorCode::PhoalnPhoCountMismatch,
@@ -333,13 +334,15 @@ impl Utterance {
                             "%phoaln↔%mod/%pho",
                             TierSide {
                                 label: "%phoaln tier",
-                                span: phoaln_span,
+                                location: phoaln_location,
                                 tier: ParseHealthTier::Phoaln,
                             },
                             "%mod/%pho tiers",
+                            // The partner side is `None` only when no partner
+                            // tier exists; an unlocated partner is still one.
                             self.mod_tier()
-                                .and_then(|t| known_span(t.span))
-                                .or_else(|| self.pho_tier().and_then(|t| known_span(t.span))),
+                                .map(|t| t.location)
+                                .or_else(|| self.pho_tier().map(|t| t.location)),
                             health.is_tier_clean(ParseHealthTier::Mod)
                                 && health.is_tier_clean(ParseHealthTier::Pho),
                         ),

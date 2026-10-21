@@ -1,409 +1,126 @@
 # Merge Override File Format
 
+**Status:** Current
 **Last modified:** {{git-dates:page}}
 
-**Status:** Draft
-
-The merge override file is the typed, human-readable record of
-operator decisions in the `chatter speaker-id` → structural assembly
-pipeline. It serves three purposes:
-
-1. **Persistence**: operator adjudications made for one batch can
-   be replayed on later runs without re-prompting (`chatter
-   speaker-id --override-file <FILE> --session-id <ID>`).
-2. **Audit trail**: each entry records who decided what, when,
-   and on the basis of which Jaccard scores. Years later, a
-   researcher can answer "why was PAR0 labeled INV in this
-   session?" by reading the file.
-3. **Interchange**: an adjudication UI (CLI, future web app) and the
-   batch pipeline share the same file format; UI tools can be added
-   or replaced without changing the on-disk contract.
-
-This page is the authoritative reference for the file's schema.
-For the *usage* contract (which commands read/write it, when, why),
-see [`chatter speaker-id`](../user-guide/speaker-id.md).
-
-## File location and naming
-
-The file's location is **caller-chosen**. The convention is one
-file per donor batch, named for the batch:
-
-```text
-batch-2026-05-27-childes-eng.overrides.toml
-batch-2026-06-15-fluency-pilot.overrides.toml
-batch-2026-08-22-aphasiabank-bilingual.overrides.toml
-```
-
-Pipeline operators pass the path explicitly via `--override-file`;
-no implicit search of a default location.
+Override files are caller-selected UTF-8 TOML documents used by
+[`speaker-id`](../user-guide/speaker-id.md) and
+[adjudication](../../architecture/adjudication-workflow.md).
+They preserve selected decision fields, not an append-only history or a complete
+copy of the pending evidence. The Rust owner is
+`crates/talkbank-transform/src/speaker_id/override_file.rs`.
 
 ## File format
 
-UTF-8 TOML. The file has exactly one top-level key,
-`schema_version`, followed by zero or more session entries, each
-keyed by a session ID.
+The document contains `schema_version = 2` and session-keyed tables.
+Session IDs are strings, not bound recording identities. Quote a TOML key
+when it contains characters requiring quoting.
+
+This complete synthetic example demonstrates the wire shape, not an actual
+speaker decision:
 
 ```toml
 schema_version = 2
 
-[<session_id_1>]
-mode = "auto"
-# ... fields per entry ...
-
-[<session_id_2>]
+[session-demo]
 mode = "explicit"
-# ... fields per entry ...
+adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
+mapping = { PAR0 = "drop", PAR1 = "rename" }
+operator = "operator"
+decided_at = "2026-01-01T12:00:00-05:00"
+note = "Synthetic example only"
 ```
-
-The session ID is the table name. It is a free-form stable string,
-typically the basename stem of the CHAT file the entry applies to
-(`s12-t1`, `Corpus2024-session-07`, etc.). The TOML parser treats it
-as a key; CHAT-conformant identifiers fit the unquoted-key grammar
-and need no escaping, but any string is permitted if it conforms
-to TOML key syntax (use quoted keys like `"unusual_session-id"`
-if the ID contains non-bare-key characters).
-
-## Top-level fields
-
-| Field | Type | Required | Meaning |
-|---|---|---|---|
-| `schema_version` | unsigned integer | yes | The schema version this file conforms to. Currently `2`. Readers refuse files with any other value. |
-
-The reader **refuses** files with `schema_version` absent or
-unknown, returning a typed error
-(`OverrideFileError::UnsupportedSchemaVersion`). There is no
-implicit version, no fallback, no auto-migration. Operators of a
-file written by a newer version of `chatter` must upgrade their
-binary; operators of a file written by an older version that the
-current binary no longer supports must re-adjudicate. This policy
-is documented in
-[`architecture/merge-domain-types.md` §6](../../architecture/merge-domain-types.md#6-schema-versioning-policy-strict-refuse-with-clear-error);
-its rationale is to keep the schema honest and avoid premature
-migration code that might silently misinterpret old data.
 
 ## Per-session entry fields
 
-Each `[<session_id>]` table contains the fields below. Required
-fields must be present and well-typed; optional fields may be
-omitted; unknown fields cause a parse error.
+| Field | Representation and boundary |
+| --- | --- |
+| `mode` | Required: `auto`, `explicit` or `override`; informational when applying a mapping |
+| `adult_roles` | Required map keyed by donor code; each role has string `code`, `tag`, optional `specific_role` |
+| `mapping` | Required map from donor code to `rename` or `drop` |
+| `operator` | Required free-form string, not authenticated identity |
+| `decided_at` | Required offset-bearing RFC 3339 timestamp; writer uses quoted New York time at whole seconds |
+| `scores` | Optional scalar score map; empty by default |
+| `margin` | Optional numeric value; numeric infinity can represent positive winner/zero runner-up |
+| `note` | Optional string; absent and explicitly empty remain distinct |
+| `flags` | String array, empty by default; not a typed flag enum |
+| `engine` | Defaults to `deterministic`; alternative `llm` |
+| `judgment` | Optional judgment provenance; engine/provenance coupling is not type-enforced here |
 
-### Required fields
+Score and margin fields are raw wire numbers, not the checked lexical-evidence
+types. The margin reader does not accept a string `"unbounded"`.
+The typed JSON match report uses different tagged margin states; see
+[Speaker-ID](../user-guide/speaker-id.md#match-evidence-report).
 
-| Field | Type | Meaning |
-|---|---|---|
-| `mode` | string enum | One of `"auto"`, `"explicit"`, `"override"`. How the decision was made; see "Mode semantics" below. |
-| `adult_roles` | table of donor code → inline table | The CHAT identity assigned to each speaker whose `mapping` action is `"rename"`, keyed by that speaker's donor code. Every `"rename"` key in `mapping` must have a matching key here. Each inline table has fields: `code` (string, CHAT speaker code), `tag` (string, CHAT role-tag), `specific_role` (string, optional, CHAT specific-role label such as `First_Investigator`, set only when two adults in the entry share `tag`). |
-| `mapping` | inline table | Map from input speaker codes to actions. Keys are speaker codes; values are `"rename"` or `"drop"`. Every speaker that exists in the input CHAT file must appear in `mapping`. |
-| `operator` | string | Free-form identifier of the person who created the entry (username, initials, email prefix). Recorded as audit trail. |
-| `decided_at` | RFC 3339 datetime | When the decision was made. chatter writes a quoted string in New York time, whole seconds, with its offset (`"2026-05-27T08:41:00-04:00"`). It reads any RFC 3339 time with an offset (`Z`, `+00:00`, `-04:00`, any fraction), quoted or as a native TOML datetime; a time without an offset is refused. |
-
-### Optional fields
-
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `scores` | inline table | `{}` | Per-speaker Jaccard scores recorded at decision time. Keys are speaker codes; values are floats in `[0.0, 1.0]`. Populated when the decision was based on a reference-mode auto attempt (even if the final mode is `"explicit"` because the operator overrode a low-confidence result). |
-| `margin` | float | absent | The decisive margin (winner-score / loser-score). Finite values serialize as TOML floats; the winner-takes-all case (loser score = 0, winner > 0) serializes as the TOML float `inf`; when no margin is meaningful (both scores 0) the field is omitted. (The shipped on-disk form is numeric; see `override_file.rs` and the `merge-domain-types` architecture page. Whether to switch the unbounded case to a string sentinel is an open contract question, not current behavior.) |
-| `note` | string | `""` | Free-text operator note. **Strongly recommended** for `"explicit"` and `"override"` modes, captures *why* the operator made the call. |
-| `flags` | array of strings | `[]` | Operator-supplied flags marking unusual situations. Known values listed in "Flag vocabulary" below; unknown strings are preserved verbatim (treated as `Custom`). |
-| `engine` | string enum | `"deterministic"` | Which engine produced the decision. Always written on new entries; absent only in pre-provenance files, which read as `"deterministic"`. One of `"deterministic"` (Jaccard reference-mode, spreadsheet, or operator adjudication) or `"llm"` (language-model judgment). |
-| `judgment` | inline table | absent | LLM audit trail. Present only when `engine = "llm"`; omitted for deterministic decisions. Sub-fields documented below. |
-
-#### `judgment` sub-table fields
-
-The `judgment` inline table records the audit trail for LLM-produced
-decisions. It is present if and only if `engine = "llm"`.
-
-| Field | Type | Required | Meaning |
-|---|---|---|---|
-| `model` | string | yes | Model identifier used for the judgment (e.g. `"deepseek-v4-flash"`). |
-| `endpoint` | string | yes | OpenAI-compatible base URL the judgment was made against. |
-| `prompt_version` | string | yes | Prompt-template version tag (e.g. `"v2"`, the current template). Bumping this marks older entries as produced by a prior template. |
-| `confidence` | inline table | no (omitted when empty) | Per-field model confidence in `[0.0, 1.0]`. Keys are decision field names (e.g. `"mapping"`, `"roles"`, `"merge_applicable"`). Omitted entirely when no confidence values were reported. |
-| `reasoning` | string | yes | One or two sentence model rationale for the decision. |
-
-## Mode semantics
-
-The `mode` field records how the decision was made and is
-informational only at read time, every mode applies the same
-`mapping` deterministically. Distinguishing modes matters for
-audit purposes.
-
-| Mode | Set when | Operator confidence |
-|---|---|---|
-| `"auto"` | `chatter speaker-id` ran in reference mode, Jaccard margin was at or above `--confidence-threshold`, and the operator did not intervene. | High; the algorithm picked. |
-| `"explicit"` | The operator supplied `--mapping` directly, typically after a prior reference-mode attempt failed at the confidence threshold. | Operator made the call; confidence depends on what evidence they used (listening to audio, contributor data sheet, prior knowledge). |
-| `"override"` | The entry was created by reading a prior override file (replay). | Inherited from whichever prior decision the entry was first stamped with. The `mode` is updated to `"override"` whenever a replay re-writes the entry. |
-
-The reader does not enforce mode → field correlations (e.g., it
-does not require `scores` to be present when `mode = "auto"`). The
-writer follows these conventions:
-
-- `"auto"` entries always include `scores` and `margin`.
-- `"explicit"` entries include `scores` and `margin` IFF a prior
-  reference-mode attempt produced them; otherwise they are absent.
-- `"override"` entries preserve whatever `scores`, `margin`, and
-  `note` were in the source file.
+A role's `specific_role` supplies the participant name/specific-role field
+during mapping. It is optional; the wire type does not enforce a particular
+multi-adult naming convention.
 
 ## Mapping semantics
 
-Each entry in `mapping` is one of:
+Conversion through `MergeOverride::to_mapping_spec` requires role data for
+every rename. Applying that mapping removes dropped speakers' utterances and
+participant/ID entries, and rewrites renamed speakers and corresponding headers.
 
-- `"rename"`: the speaker is renamed per its own entry in
-  `adult_roles` (looked up by the speaker's donor code), to
-  `adult_roles[<donor_code>].code` with role tag
-  `adult_roles[<donor_code>].tag`, and specific-role label
-  `adult_roles[<donor_code>].specific_role` if present, in the
-  output CHAT file. Every utterance for this speaker has its
-  `*CODE:` prefix rewritten; the `@Participants` entry for this
-  speaker has its code + role-tag (+ specific-role label, if set)
-  rewritten; the `@ID` row's code (field 3) and role (field 8) are
-  rewritten.
-- `"drop"`: the speaker's utterances are removed from the
-  output entirely. The speaker's `@Participants` entry and `@ID`
-  row are also removed.
+Unmapped speakers currently pass through unchanged. Neither the file reader
+nor mapping application proves that every input speaker is covered, that every
+mapping key occurs in the input, or that targets are unique. The transformed
+model is serialized without a new output-validity proof. Validate and review
+the result before further use; lexical admission is not identity adjudication.
 
-**Precondition.** Every speaker that appears in the input CHAT
-file must appear in `mapping`. There is no defaulting; omission
-is rejected with
-`SpeakerIdError::SpeakerNotInMapping { speaker }`. This is by
-design: every decision must be explicit, so a future reader
-knows that no speaker was silently passed through.
-
-The reader rejects:
-
-- Mapping entries whose key is not a speaker present in the input
-  (`SpeakerIdError::MappingSpeakerNotInInput`).
-- Mapping values other than `"rename"` or `"drop"` (TOML parse
-  error from the typed deserializer).
-
-## Flag vocabulary
-
-The `flags` array contains zero or more string values. The
-following are recognized vocabulary; consumers MAY treat them
-specially:
-
-| Flag | Meaning |
-|---|---|
-| `"diarization-mixed"` | The ASR diarization label being renamed actually contains multiple real-world speakers (e.g., clinician + parent collapsed). The rename is the best available approximation; downstream consumers should know the output is imperfect. |
-| `"best-guess"` | The operator could not confidently determine which speaker is which (e.g., from audio alone). The mapping is recorded as best-guess and merits review by a domain expert before publication. |
-
-Any other string is preserved verbatim as a contributor-specific
-flag (`Custom(String)` in the Rust type). Consumers SHOULD NOT
-crash on unknown flags but MAY surface them in audit-trail
-displays.
-
-The order of flags within an entry is not semantically meaningful;
-duplicates are tolerated but considered noise. Tooling that
-modifies the list SHOULD deduplicate.
+Flags are preserved as strings. Labels such as `diarization-mixed` or
+`best-guess` do not invoke a built-in safety policy or authorize publication.
 
 ## Reader semantics
 
-`OverrideFile::read_or_default(path)` is the canonical reader (the
-only public reader; used by `chatter speaker-id --write-override`). Its
-behavior:
+`OverrideFile::read_or_default` returns an empty default only when the path
+is missing. Existing unreadable/malformed files fail. A missing version is a
+TOML deserialization error; an unsupported numeric version yields
+`UnsupportedSchemaVersion`. There is no automatic migration.
 
-1. If `path` does not exist, return `OverrideFile::default()` (empty,
-   current schema version). Otherwise:
-2. Open `path` UTF-8.
-3. Parse via `toml`.
-4. Refuse if `schema_version` is absent or not equal to the
-   binary's `CURRENT_SCHEMA_VERSION` (currently `2`). Error:
-   `OverrideFileError::UnsupportedSchemaVersion { found, supported }`.
-5. Parse all `[<session_id>]` tables into `MergeOverride` values;
-   reject unknown fields.
-6. Return `OverrideFile { schema_version, entries }`.
+Unknown fields in session records are not globally rejected. Do not rely on
+successful reading to detect misspelled optional fields or to enforce
+mode/score and engine/judgment relationships. Conversion to a mapping is a
+separate boundary after reading.
 
-`OverrideFile::get(&session_id)` retrieves a single entry;
-returns `None` if absent.
+In CLI replay, a missing file produces an empty document and therefore a
+missing-session refusal; it does not produce a usable default mapping.
 
 ## Writer semantics
 
-`OverrideFile::write(path)` serializes the file deterministically:
+The writer serializes session entries in `BTreeMap` order, writes to
+`path.with_extension("toml.tmp")`, then renames over the destination.
+This is replacement, not append-only storage, a multi-file transaction,
+concurrent-writer protection or a crash-durability guarantee.
+Read/modify/write does not preserve TOML comments or original formatting.
 
-- Top-level field order: `schema_version` first.
-- Entries ordered by session ID alphabetically (`BTreeMap`
-  default).
-- Per-entry field order: `mode`, `adult_roles`, `mapping`,
-  `scores`, `margin`, `operator`, `decided_at`, `note`, `flags`,
-  `engine`, `judgment`.
-- Optional fields omitted when empty / absent.
-- Atomic replace: writes to `<path>.tmp` then renames over
-  `<path>` to avoid leaving a partial file on crash.
+`upsert` replaces an existing session entry. Reference-mode
+`speaker-id --write-override` derives the key from the input basename stem,
+records the environment's operator name (or `unknown`), and writes before
+the relabeled CHAT output is written. A later output failure can therefore
+leave the decision file changed.
 
-`chatter speaker-id --write-override <path>` appends a single
-entry: it reads the file (or starts empty), inserts/updates the
-entry for the current session, and writes back. The session ID
-defaults to the input CHAT file's basename stem unless
-overridden via `--session-id`.
+Explicit mapping rejects `--write-override`. Use adjudication to record an
+operator decision. Override replay reads and applies an entry; it does not
+rewrite its mode or timestamp merely because it was replayed.
 
-## Example: minimal auto-mode entry
-
-```toml
-schema_version = 2
-
-[session-101-t1]
-mode = "auto"
-adult_roles = { PAR0 = { code = "INV", tag = "Investigator" } }
-mapping = { PAR0 = "rename", PAR1 = "drop" }
-scores = { PAR0 = 0.1931, PAR1 = 0.7347 }
-margin = 3.81
-operator = "alice"
-decided_at = "2026-05-27T08:41:00-04:00"
-```
-
-The reader reconstructs: child speaker was `PAR1` (high Jaccard
-match with reference's `CHI`); auto-decide succeeded with margin
-3.81×; `PAR0` becomes `INV:Investigator` in the output.
-
-## Example: operator-adjudicated entry
-
-After a low-confidence refusal, the operator listened to the
-audio, confirmed the call, and re-ran with `--mapping`:
-
-```toml
-[session-102-t1]
-mode = "explicit"
-adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
-mapping = { PAR0 = "drop", PAR1 = "rename" }
-scores = { PAR0 = 0.6286, PAR1 = 0.3457 }
-margin = 1.82
-operator = "alice"
-decided_at = "2026-05-27T11:15:00-04:00"
-note = "Auto refused at 2.0× threshold. Listened to first 60 seconds; PAR0 produces child-content matching the hand transcript. PAR1 introduces herself as the clinician."
-```
-
-The scores from the prior auto attempt are preserved; the note
-captures *why* the operator was confident in the call despite
-the close margin. Years later, a researcher can verify by
-listening to the same 60 seconds and confirming the operator's
-observation, the audit trail is reproducible.
-
-## Example: diarization-mixed parent sample
-
-```toml
-[session-103-t1-parent]
-mode = "explicit"
-adult_roles = { PAR0 = { code = "MOT", tag = "Mother" } }
-mapping = { PAR0 = "rename", PAR1 = "drop" }
-scores = { PAR0 = 0.3727, PAR1 = 0.6940 }
-margin = 1.86
-operator = "alice"
-decided_at = "2026-05-27T11:22:00-04:00"
-note = "Parent sample. Per contributor data sheet: mother. PAR0 contains clinician intro + parent mixed (Batchalign diarization limitation)."
-flags = ["diarization-mixed"]
-```
-
-The `flags = ["diarization-mixed"]` warns downstream consumers
-that the renamed `MOT` speaker is not a clean parent-only stream
-the first ~15 seconds were the clinician giving setup
-instructions before leaving the room. The `note` captures the
-specifics for future review.
-
-## Example: replayed entry
-
-The same file run on a different day from the override file:
-
-```toml
-[session-102-t1]
-mode = "override"
-adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } }
-mapping = { PAR0 = "drop", PAR1 = "rename" }
-scores = { PAR0 = 0.6286, PAR1 = 0.3457 }
-margin = 1.82
-operator = "alice"
-decided_at = "2026-05-27T11:15:00-04:00"
-note = "Auto refused at 2.0× threshold. Listened to first 60 seconds; PAR0 produces child-content matching the hand transcript. PAR1 introduces herself as the clinician."
-```
-
-`mode` becomes `"override"` whenever the entry is re-applied by
-reading the file. The other fields (including the original
-`operator` and `decided_at`) are preserved, the override file
-is the audit trail of the *original* decision, not of the
-replay.
-
-## TOML grammar reference
-
-For consumers writing the file by hand or generating it from
-other tools, the grammar is standard TOML 1.0
-([toml.io](https://toml.io/en/v1.0.0)) with the following
-domain-specific conventions:
-
-- Datetimes use RFC 3339 with explicit time zone. UTC offset
-  `Z` and offsets like `-04:00` are both accepted.
-- Floats: standard TOML float syntax. The `margin` field accepts
-  either a float or the string `"unbounded"`.
-- Tables vs inline tables: top-level `[<session_id>]` tables
-  may use either standard or inline syntax; the writer emits
-  standard tables for readability.
-- Comments: TOML `#` line comments are permitted anywhere; the
-  reader ignores them. The writer does not preserve comments
-  across read-modify-write cycles (`toml`, not `toml_edit`);
-  hand-edited comments may be lost on subsequent
-  `--write-override` runs. If preserving comments becomes
-  important, the writer can be swapped for `toml_edit` in a
-  future release.
+Adjudication records explicit operator decisions and retains selected lexical
+scores/margin and the chosen note. It does not retain every pending field,
+original suggestion, scan reason or judgment provenance. Preserve the pending
+input separately when that evidence is needed.
 
 ## Future schema changes
 
-Schema version increments appear here under "Migration" with the
-version-to-version diff and migration instructions. The policy is
-strict refuse-with-clear-error on any `schema_version` value this
-binary does not recognize; there is no auto-migration.
+Version one is unsupported; version two uses per-speaker `adult_roles`.
+Do not automatically convert older decisions by inventing role assignments.
+Retain the original and arrange an explicit migration or fresh review appropriate
+to its evidence.
 
-### Migration: schema_version 1 -> 2 (`adult_roles` map, 2026-07)
+Backward-compatible defaults do not establish universal cross-version
+compatibility. Verify each reader/writer pair before claiming it. The override
+type does not currently export a generated JSON Schema; the CHAT model's
+[JSON Schema](json-schema.md) is not an override-file validator.
 
-`schema_version` bumped from `1` to `2` when the single per-entry
-`inserted_role` field was replaced by `adult_roles`, a map from
-donor speaker code to `InsertedRoleSpec`. The old field could only
-name one CHAT identity per entry, so a session with two distinct
-adult speakers (two different roles, or two speakers sharing one
-role) had no way to record more than one of them. `adult_roles`
-keys each `InsertedRoleSpec` by the donor code it applies to, so
-every `"rename"` speaker in `mapping` gets its own role assignment;
-`InsertedRoleSpec` also gained an optional `specific_role` field for
-the CHAT manual's `First_Investigator`/`Second_Investigator`-style
-disambiguation when two adults in one entry share a role.
-
-This is a **breaking, non-migrating** version bump: a
-`schema_version = 1` file is refused with
-`OverrideFileError::UnsupportedSchemaVersion`, not auto-converted.
-Operators holding a pre-bump override file must re-adjudicate those
-sessions. The `pending-adjudications.toml` format bumped its own
-schema version in lockstep for the same reason; see
-[Adjudication Workflow](../../architecture/adjudication-workflow.md#the-pending-adjudications-artifact).
-
-### 2026-06 additive fields: `engine` and `judgment` (no version bump)
-
-The `engine` and `judgment` fields were added in 2026-06 to record
-decision provenance (deterministic vs LLM). This addition did NOT
-increment `schema_version` because both fields are backward
-compatible in both directions:
-
-- **Old reader, new file:** TOML `deny_unknown_fields` is not set
-  globally; older binaries that parse a file containing `engine` and
-  `judgment` will silently ignore the unknown keys. The decision
-  itself (mode, mapping, adult_roles) is unaffected.
-- **New reader, old file:** `engine` has `#[serde(default)]` and
-  defaults to `"deterministic"`; `judgment` has
-  `skip_serializing_if = "Option::is_none"` and is absent, which
-  deserializes as `None`. Pre-provenance files are therefore readable
-  without error and are treated as deterministic decisions.
-
-A future version bump would be warranted only if a change makes old
-files unreadable or misinterpretable, neither of which applies here.
-
-## Relationship to JSON Schema
-
-The Rust `OverrideFile` type is implemented (in
-`talkbank-transform`, `src/speaker_id/override_file.rs`) and drives
-the override-file replay workflow today. What is not yet built is its
-JSON Schema export: `OverrideFile` does not yet derive
-`schemars::JsonSchema`, so no schema is generated, and the canonical
-URL `https://talkbank.org/schemas/v0.1/merge-overrides.json` is
-reserved but not yet published. Exposing it follows the same
-`schemars`-based generator pattern documented in
-[JSON Schema](./json-schema.md).
-
-The TOML form is the on-disk format; JSON Schema is the
-machine-readable spec for external tooling. Both describe the
-same `OverrideFile` Rust type.
+The pending format has its own versioned reader. The scripted decision reader
+has a different limitation; see
+[Adjudication Workflow](../../architecture/adjudication-workflow.md#the-scripted-mode).

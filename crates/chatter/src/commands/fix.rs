@@ -442,7 +442,8 @@ mod tests {
             .find(|d| d.code == ErrorCode::IllegalUntranscribed)
             .expect("authored E241")
             .location
-            .span;
+            .span()
+            .expect("located diagnostic");
         let edit = SpliceEdit::new(
             EditTarget::Replace(span),
             Replacement::new(&source[span.to_range()]),
@@ -495,7 +496,8 @@ mod tests {
             .find(|d| d.code == ErrorCode::IllegalUntranscribed)
             .expect("actual E241")
             .location
-            .span;
+            .span()
+            .expect("located diagnostic");
         assert_eq!(&source[word_span.to_range()], "xx");
         let admitted = vec![SpliceEdit::new(
             EditTarget::Replace(word_span),
@@ -552,10 +554,11 @@ mod tests {
             .find(|d| d.code == ErrorCode::IllegalUntranscribed)
             .expect("actual E241")
             .location
-            .span;
+            .span()
+            .expect("located diagnostic");
         assert_eq!(&source[word_span.to_range()], "xx");
         let admitted = vec![SpliceEdit::new(
-            EditTarget::InsertAt(word_span.start),
+            EditTarget::InsertAt(word_span.start()),
             Replacement::new(", "),
             EditProvenance::Transform(TransformName::new("test")),
         )];

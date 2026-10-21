@@ -275,7 +275,7 @@ mod tests {
     #[test]
     fn test_plain_text_signature() {
         // A word with only text content should be plain text
-        let word = Word::simple("hello");
+        let word = Word::simple(talkbank_model::Location::Unlocated, "hello");
 
         let sig = WordFeatureSignature::from_word(&word);
         assert!(sig.is_plain_text());

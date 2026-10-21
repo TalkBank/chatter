@@ -1,13 +1,12 @@
 # Error Diagnostics UX Standard
 
 **Status:** Current
-**Last modified:** 2026-05-30 07:08 EDT
+**Last modified:** {{git-dates:page}}
 
 Workspace-wide standard for diagnostic shape, severity, recovery
 behavior, span correctness, and integrator output formats. Applies
-to the [CHAT-core error system](chat-core-errors.md). Upstream
-batchalign-runtime errors follow the same shape and are documented
-separately in the `batchalign3` project.
+to the [CHAT-core error system](chat-core-errors.md). External application
+errors belong to their owning projects; this page does not define their schema.
 
 ## Objective
 
@@ -22,20 +21,25 @@ readability for downstream tools.
   different times and converge unevenly on the message-quality
   guidance below.
 
-## Canonical Diagnostic Schema
+## Core evidence and output contracts
 
-```text
-Diagnostic {
-  code: String,
-  severity: Error | Warning | Info,
-  category: Parse | Validation | Alignment | Header | Tier | Internal,
-  location: SourceLocation,
-  context: ErrorContext,
-  message: String,
-  suggestion: Option<String>,
-  related: Vec<RelatedLocation>
-}
-```
+`ParseError` is the core evidence type. It carries a typed code, severity,
+source location, optional context, secondary labels, message, optional
+suggestion and optional help URL. See the [core types](chat-core-errors.md#core-types)
+for the actual fields; there is no core `Info` severity or `category` field.
+
+Original source evidence and checked display context are distinct types.
+Raw miette rendering borrows the diagnostic's current `ErrorContext`. Editing
+or replacing that public context therefore changes the next render; there is no
+independent cached source copy to invalidate. Snippet line-offset overflow is a
+rendering error, not a wrapped or fabricated line number. This does not admit
+the context as original-source evidence: checked `SourceDiagnostic` attachment
+still owns full-source presentation and its separate immutable projection.
+
+Consumer projections are not identical serializations of `ParseError`:
+CLI NDJSON, audit records and LSP diagnostics have their own shapes and
+coordinate conventions. The [diagnostic contract](../../chatter/integrating/diagnostic-contract.md)
+owns the CLI wire format and source-presentation boundary.
 
 ## Message Quality Standard
 
@@ -50,9 +54,11 @@ Avoid internal jargon unless accompanied by user-facing explanation.
 
 ## Severity Policy
 
-- `Error`: blocks parse/validation outcome.
-- `Warning`: content is usable but has quality/compliance concerns.
-- `Info`: optional guidance and migration hints.
+- `Error`: a CHAT finding blocks complete admission under the selected policy.
+  It need not prevent recovery from producing a model. An internal failure
+  determines neither validity nor invalidity of the input.
+- `Warning`: a reportable finding that does not itself block admission;
+  it does not prove that the rest of the content is valid or usable.
 
 Severity must not be overloaded for tooling convenience.
 
@@ -76,7 +82,8 @@ plumbing must be:
 
 - non-semantic (not exposed as real model content),
 - marked internal-only,
-- excluded from user-facing diagnostics and serialization.
+- excluded from serialized semantic content and never presented as real
+  source evidence. Report the underlying internal failure honestly.
 
 ### Sentinel vs error-variant rule
 
@@ -105,19 +112,28 @@ miette rendering.
 
 ## Error Code Governance
 
-- Central registry under `talkbank-model` (errors module).
-- One authoritative description and example per code.
-- Deprecated codes remain mapped with explicit migration notes.
-- CI check forbids duplicate code definitions or orphaned docs.
+- `spec/codes/error-codes.toml` owns identifiers, descriptions, diagnostic
+  kinds, implementation status and retired numbers.
+- `spec/errors/` owns examples and claims; a code can need multiple examples,
+  including legal controls and interactions with other findings.
+- Generated Rust definitions and error pages are outputs, not editing targets.
+- Follow [Spec Workflow](../../contributing/spec-workflow.md) for regeneration
+  and focused verification. Generated currency does not prove rule correctness.
 
 ## Span and Location Correctness
 
-- All diagnostics use consistent line/column and byte-offset
-  definitions.
-- Golden tests cover:
+- Keep original document byte ranges distinct from snippet-relative display
+  spans. Use the producing source snapshot, not a later reread.
+- Source-location line/column metadata is one-based and currently counts
+  bytes; LSP uses zero-based UTF-16 positions. Use the owning conversions.
+- Reject invalid display ranges rather than clamping them or inventing a
+  location. Missing context is an explicit presentation outcome, not a new
+  validity verdict. Bounds checks alone cannot prove source identity.
+- Review boundary tests for:
   - single-byte and multi-byte UTF-8 content,
   - embedded content offsets,
   - continuation lines and tabs.
+  - zero-width EOF, unavailable context and invalid UTF-8 boundaries.
 
 ## Integrator Output Formats
 
@@ -125,13 +141,18 @@ miette rendering.
 - Machine-readable JSON diagnostics.
 - LSP diagnostic mapping.
 
-All formats share the same underlying diagnostic schema.
+All consume core findings, but their wire representations differ. Do not
+assume CLI NDJSON carries every core field or copy byte columns into LSP ranges.
 
-## Acceptance Criteria
+## Review criteria
 
-- Every emitted diagnostic includes code, severity, location, and
-  suggestion policy.
+These are obligations for a diagnostic change, not a claim that every code
+and consumer has already passed an exhaustive review:
+
+- Preserve code, severity and original evidence; make unavailable source
+  context explicit and offer a suggestion only when supported.
 - Error code documentation and runtime definitions are synchronized
   automatically.
-- Span correctness is covered by dedicated tests.
-- CLI and JSON outputs are contract-tested for schema compliance.
+- Verify affected span, recovery and presentation boundaries with dedicated tests.
+- Verify affected consumer output against its own contract, including failure
+  and unavailable-context cases, rather than a fictional universal schema.

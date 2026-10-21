@@ -64,11 +64,11 @@ fn reference_unknown_annotation_imports_fail_admission_without_repair() {
                 let (annotations, span) = match item {
                     UtteranceContent::AnnotatedWord(word) => {
                         word_hosts += 1;
-                        (&mut word.scoped_annotations, word.span)
+                        (&mut word.scoped_annotations, word.location)
                     }
                     UtteranceContent::AnnotatedGroup(group) => {
                         group_hosts += 1;
-                        (&mut group.scoped_annotations, group.span)
+                        (&mut group.scoped_annotations, group.location)
                     }
                     _ => continue,
                 };
@@ -100,7 +100,10 @@ fn reference_unknown_annotation_imports_fail_admission_without_repair() {
             "could not read [qq imported detail] as a scoped annotation"
         };
         for (finding, span) in unknown.into_iter().zip(expected_spans) {
-            assert_eq!(finding.location.span, span);
+            assert_eq!(
+                finding.location.span().expect("located diagnostic"),
+                span.span().expect("located")
+            );
             assert_eq!(finding.message, message);
         }
         assert_eq!(
@@ -388,7 +391,7 @@ fn reference_lexical_text_imports_require_nonempty_validation() {
     use talkbank_model::alignment::helpers::{WordItem, walk_words};
     use talkbank_model::model::{NonEmptyString, WordContents};
     use talkbank_model::validation::{Validate, ValidationContext};
-    use talkbank_model::{ErrorCode, ErrorCollector, Span};
+    use talkbank_model::{DiagnosticLocation, ErrorCode, ErrorCollector};
 
     let source = std::fs::read_to_string(
         workspace_root().join("corpus/reference/core/basic-conversation.cha"),
@@ -423,14 +426,16 @@ fn reference_lexical_text_imports_require_nonempty_validation() {
     items.clear();
     let imported_content: WordContents = serde_json::from_value(content_wire.clone())
         .expect("content imports retain draft state until validation");
-    for (context, span) in [
-        (ValidationContext::default(), Span::from_usize(0, 0)),
+    // Without a field span the finding has no source position, and says so
+    // rather than claiming the start of the file.
+    for (context, location) in [
+        (ValidationContext::default(), DiagnosticLocation::Unlocated),
         (
             ValidationContext::default()
-                .with_field_span(word.span)
+                .with_field_location(word.location)
                 .with_field_text(word.raw_text())
                 .with_field_label("word content"),
-            word.span,
+            DiagnosticLocation::from(word.location),
         ),
     ] {
         let errors = ErrorCollector::new();
@@ -438,7 +443,7 @@ fn reference_lexical_text_imports_require_nonempty_validation() {
         let findings = errors.into_vec();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].code, ErrorCode::EmptyWordContent);
-        assert_eq!(findings[0].location.span, span);
+        assert_eq!(findings[0].location, location);
         assert_eq!(
             serde_json::to_value(&imported_content).expect("unchanged rejected draft"),
             content_wire
@@ -463,15 +468,15 @@ fn reference_lexical_text_imports_require_nonempty_validation() {
     );
     let imported: NonEmptyString = serde_json::from_value(wire.clone())
         .expect("current wire policy retains emptiness for validation");
-    for (context, span) in [
-        (ValidationContext::default(), Span::from_usize(0, 0)),
+    for (context, location) in [
+        (ValidationContext::default(), DiagnosticLocation::Unlocated),
         (
             ValidationContext::default()
-                .with_field_span(word.span)
+                .with_field_location(word.location)
                 .with_field_text(word.raw_text())
                 .with_field_label("word text")
                 .with_field_error_code(ErrorCode::EmptyString),
-            word.span,
+            DiagnosticLocation::from(word.location),
         ),
     ] {
         let errors = ErrorCollector::new();
@@ -479,7 +484,7 @@ fn reference_lexical_text_imports_require_nonempty_validation() {
         let findings = errors.into_vec();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].code, ErrorCode::EmptyString);
-        assert_eq!(findings[0].location.span, span);
+        assert_eq!(findings[0].location, location);
         assert_eq!(
             serde_json::to_value(&imported).expect("preserved refusal payload"),
             wire
@@ -649,7 +654,12 @@ fn underline_specs_keep_semantics_without_fabricating_wire_locations() {
         for (file, located) in [(&original, true), (&restored, false)] {
             let mut markers = 0;
             let mut inspect = |marker: &UnderlineMarker| {
-                assert_eq!(marker.span().is_some(), located, "{}", entry.fixture);
+                assert_eq!(
+                    marker.location().span().is_some(),
+                    located,
+                    "{}",
+                    entry.fixture
+                );
                 markers += 1;
             };
             for utterance in file.utterances() {

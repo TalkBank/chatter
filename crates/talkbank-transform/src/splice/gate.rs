@@ -113,7 +113,7 @@ pub enum GateError {
     )]
     UnexpectedChangeOutsideSpans {
         /// Byte offset of the first unexpected difference.
-        offset: u32,
+        offset: usize,
     },
     /// Re-applying the recorded edits did not reproduce the spliced text at
     /// all: the engine itself refused the edit set.
@@ -159,8 +159,8 @@ fn verify_splice_mapped(plan: &MappedPlan<'_>, spliced: &str) -> Result<(), Gate
     let original_bytes = original.as_bytes();
     let spliced_bytes = spliced.as_bytes();
 
-    let mut original_cursor: u32 = 0;
-    let mut spliced_cursor: u32 = 0;
+    let mut original_cursor = 0usize;
+    let mut spliced_cursor = 0usize;
 
     for edit in mapped {
         // The untouched gap since the previous edit (or the start of the
@@ -168,37 +168,35 @@ fn verify_splice_mapped(plan: &MappedPlan<'_>, spliced: &str) -> Result<(), Gate
         // (its bounds were already validated against these exact offsets by
         // `mapped_edit_sites`), so this slice never panics; `spliced` is
         // not, so the comparison below indexes it with bounds checks.
-        let gap = &original_bytes[original_cursor as usize..edit.original().start as usize];
-        if let Some(offset) = first_mismatch(gap, spliced_bytes, spliced_cursor as usize) {
+        let gap = &original_bytes[original_cursor..edit.original().start()];
+        if let Some(offset) = first_mismatch(gap, spliced_bytes, spliced_cursor) {
             return Err(GateError::UnexpectedChangeOutsideSpans { offset });
         }
 
         // The edit's own region: must read back exactly the replacement
         // text that was asked for.
         let replacement = edit.replacement().as_str().as_bytes();
-        if let Some(offset) =
-            first_mismatch(replacement, spliced_bytes, edit.spliced().start as usize)
-        {
+        if let Some(offset) = first_mismatch(replacement, spliced_bytes, edit.spliced().start()) {
             return Err(GateError::UnexpectedChangeOutsideSpans { offset });
         }
 
-        original_cursor = edit.original().end;
-        spliced_cursor = edit.spliced().end;
+        original_cursor = edit.original().end();
+        spliced_cursor = edit.spliced().end();
     }
 
     // The tail after the last edit (or the whole file, if there were none).
-    let tail = &original_bytes[original_cursor as usize..];
-    if let Some(offset) = first_mismatch(tail, spliced_bytes, spliced_cursor as usize) {
+    let tail = &original_bytes[original_cursor..];
+    if let Some(offset) = first_mismatch(tail, spliced_bytes, spliced_cursor) {
         return Err(GateError::UnexpectedChangeOutsideSpans { offset });
     }
 
     // `first_mismatch` only walks the bytes `spliced` was expected to have;
     // it cannot see a spurious tail `spliced` has beyond that. Catch that
     // case with an explicit length check.
-    let expected_len = spliced_cursor as usize + tail.len();
+    let expected_len = spliced_cursor + tail.len();
     if spliced_bytes.len() != expected_len {
         return Err(GateError::UnexpectedChangeOutsideSpans {
-            offset: expected_len as u32,
+            offset: expected_len,
         });
     }
 
@@ -227,11 +225,11 @@ pub fn apply_edits_verified(source: &str, edits: &[SpliceEdit]) -> Result<String
 /// directly. `spliced` is untrusted (it may be truncated or tampered), so
 /// it is read through `[u8]::get` rather than sliced, and running out of
 /// bytes counts as a mismatch at the point it ran out rather than a panic.
-fn first_mismatch(expected: &[u8], spliced: &[u8], spliced_at: usize) -> Option<u32> {
+fn first_mismatch(expected: &[u8], spliced: &[u8], spliced_at: usize) -> Option<usize> {
     for (i, &want) in expected.iter().enumerate() {
         match spliced.get(spliced_at + i) {
             Some(&got) if got == want => continue,
-            _ => return Some((spliced_at + i) as u32),
+            _ => return Some(spliced_at + i),
         }
     }
     None

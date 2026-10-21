@@ -8,7 +8,7 @@
 use crate::model::Word;
 use crate::model::content::word::WordCategory;
 use crate::validation::context::contains_digits;
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 use super::helpers::mixed_language_allows_numbers;
 use super::resolve::LanguageResolution;
@@ -84,11 +84,10 @@ pub(crate) fn check_word_digits_multi(
 
     if !allows_digits {
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::IllegalDigits,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
+                word.location,
                 format!(
                     "\"{}\" is not a legal word in language(s) \"{}\": {}",
                     word.cleaned_text(),

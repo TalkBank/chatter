@@ -1,7 +1,20 @@
-# Pre-Release Audit Backlog
+# Historical Pre-Release Audit Backlog
 
-**Status:** Current
-**Last updated:** 2026-09-05 22:56 EDT
+**Status:** Historical triage; not a current dependency assessment
+**Last updated:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/strategy/audit-backlog.md)
+
+The findings and dispositions below belong to their dated dependency snapshots.
+They do not establish today's advisory status, available fixes, shipped-platform
+exposure or permission to suppress an alert. Re-triage a current candidate using
+its actual lockfiles, target graph and advisory evidence; do not copy a historical
+acceptance into a new release. Keep build/development exposure distinct from
+shipped runtime exposure; neither is automatically harmless.
+
+Use the [current readiness contract](../../book/src/contributing/one-zero-readiness.md)
+and [release procedure](../../book/src/contributing/ci-and-release.md) for candidate
+work, and [SECURITY.md](../../SECURITY.md) for vulnerability reporting. This
+record neither configures a scanner nor authorizes a dependency override,
+forced upgrade, ignore list or external publication.
 
 P2 (non-release-blocking) findings deferred from the v0.1.0 audit
 passes, plus the security-advisory triage. P0/P1 items are fixed in
@@ -117,7 +130,7 @@ npm explain extract-zip --prefix apps/chatter-desktop
 gh api repos/TalkBank/chatter/dependabot/alerts
 ```
 
-### Note for the cutover
+### Historical cutover proposal (not adopted by this record)
 
 The public repo will still show the accepted/deferred advisories in its
 Dependabot tab. Before or shortly after the flip, decide whether to

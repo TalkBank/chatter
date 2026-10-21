@@ -45,7 +45,7 @@ pub mod text;
 // Re-export all tier parsing functions at the tiers level
 pub use action::{parse_act_tier, parse_cod_tier, parse_sin_tier};
 pub use grammar::parse_gra_tier;
-pub use morphology::parse_mor_tier;
+pub use morphology::{HealthyTier, TierAdmission, TierRecovery, parse_mor_tier};
 pub use phonology::parse_pho_tier;
 pub use text::{
     parse_add_tier, parse_com_tier, parse_exp_tier, parse_gpx_tier, parse_int_tier, parse_sit_tier,

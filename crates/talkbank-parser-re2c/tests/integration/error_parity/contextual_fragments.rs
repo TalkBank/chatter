@@ -74,7 +74,7 @@ fn observe(sink: ErrorCollector) -> BackendReport {
 
 fn diagnostic_rebasing(base: &BackendReport, placed: &BackendReport) -> bool {
     let move_span = |span: talkbank_model::Span| {
-        talkbank_model::Span::new(span.start + ORIGIN as u32, span.end + ORIGIN as u32)
+        talkbank_model::Span::new(span.start() + ORIGIN, span.end() + ORIGIN)
     };
     let base = base.diagnostics().collect::<Vec<_>>();
     let placed = placed.diagnostics().collect::<Vec<_>>();
@@ -82,7 +82,8 @@ fn diagnostic_rebasing(base: &BackendReport, placed: &BackendReport) -> bool {
         && base.iter().zip(placed).all(|(base, placed)| {
             base.code == placed.code
                 && base.severity == placed.severity
-                && move_span(base.location.span) == placed.location.span
+                && move_span(base.location.span().expect("located diagnostic"))
+                    == placed.location.span().expect("located diagnostic")
                 && base.context == placed.context
                 && base.labels.len() == placed.labels.len()
                 && base
@@ -204,11 +205,10 @@ fn source_findings(label: &str, input: &str, sample: &Sample, failures: &mut Vec
     for (backend, report) in ["tree-sitter", "re2c"].into_iter().zip(&sample.reports) {
         for finding in report.diagnostics() {
             let owns = |span: talkbank_model::Span| {
-                (span.start as usize) >= sample.origin
-                    && (span.end as usize) <= sample.origin + input.len()
-                    && span.start <= span.end
+                span.start() >= sample.origin && span.end() <= sample.origin + input.len()
             };
-            if !owns(finding.location.span) || finding.labels.iter().any(|label| !owns(label.span))
+            if !owns(finding.location.span().expect("located diagnostic"))
+                || finding.labels.iter().any(|label| !owns(label.span))
             {
                 failures.push(format!(
                     "{label} at {}: {backend} diagnostic/label outside caller: {finding:?}",
@@ -217,12 +217,8 @@ fn source_findings(label: &str, input: &str, sample: &Sample, failures: &mut Vec
             }
             if let Some(context) = &finding.context
                 && (!input.contains(context.source_text.as_str())
-                    || !context
-                        .source_text
-                        .is_char_boundary(context.span.start as usize)
-                    || !context
-                        .source_text
-                        .is_char_boundary(context.span.end as usize))
+                    || !context.source_text.is_char_boundary(context.span.start())
+                    || !context.source_text.is_char_boundary(context.span.end()))
             {
                 failures.push(format!(
                     "{label} at {}: {backend} diagnostic context is not caller-owned: {finding:?}",

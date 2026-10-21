@@ -34,7 +34,7 @@ pub fn run_sanity_scan(
     merged_dir: &Path,
     override_path: &Path,
     anchor: &str,
-    threshold: f64,
+    threshold: SanityScanThreshold,
     write_pending_path: &Path,
 ) {
     let _span = span!(
@@ -63,7 +63,6 @@ pub fn run_sanity_scan(
     };
 
     let anchor_code = SpeakerCode::new(anchor);
-    let scan_threshold = SanityScanThreshold(threshold);
     let options = ParseValidateOptions::default();
 
     let mut flagged: u32 = 0;
@@ -119,7 +118,7 @@ pub fn run_sanity_scan(
                 std::process::exit(EXIT_INPUT_ERROR);
             }
         };
-        if let Some(flag) = scan_session(&merged_chat, entry, &anchor_code, scan_threshold) {
+        if let Some(flag) = scan_session(&merged_chat, entry, &anchor_code, threshold) {
             info!("⚠ flagged: {} ({})", session_id, flag.reason);
             pending.entries.push(PendingEntry {
                 session_id: session_id.to_string(),
@@ -135,7 +134,7 @@ pub fn run_sanity_scan(
                 // intentionally empty/None.
                 scores: std::collections::BTreeMap::new(),
                 margin: None,
-                threshold_used: Some(threshold),
+                threshold_used: Some(threshold.value()),
                 engine: talkbank_transform::speaker_id::DecisionEngine::Deterministic,
                 judgment: None,
             });

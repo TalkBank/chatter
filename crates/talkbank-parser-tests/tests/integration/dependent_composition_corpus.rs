@@ -110,8 +110,7 @@ fn native_contract(
         .descendants()
         .map(|node| node.expect("bound descendant"))
         .find(|node| {
-            node.raw_node().start_byte() == span.start as usize
-                && node.raw_node().end_byte() == span.end as usize
+            node.raw_node().start_byte() == span.start() && node.raw_node().end_byte() == span.end()
         })
         .expect("selected native tier has its own range");
     let raw = selected.raw_node();
@@ -126,23 +125,17 @@ fn native_contract(
             let node = selected
                 .typed::<MorDependentTierNode>()
                 .expect("native MOR identity");
-            let outcome = talkbank_parser::api::tiers::parse_mor_tier(node, &errors);
-            if !matches!(outcome, ParseOutcome::Parsed(ref tier) if tier.is_empty()) {
-                failures.push(format!("native MOR retains its independent terminator, not ERROR-owned lexical material: {outcome:?}"));
-            }
-            if let ParseOutcome::Parsed(tier) = outcome {
-                let terminator = tier.terminator.span();
-                if tier.span != candidate.span()
-                    || candidate
-                        .source()
-                        .get(terminator.start as usize..terminator.end as usize)
-                        != Some(".")
-                {
-                    failures.push("native MOR terminator lost its actual source identity".into());
-                }
-            }
-            if carrier != Carrier::Recovery {
-                failures.push("MOR mutation lost its native recovery carrier".into());
+            // A recovery carrier never enters the typed MOR parser: admission
+            // refuses it by type, so ERROR-owned lexical material cannot become
+            // an item. Admission is the one observation here (it reads the
+            // same flag `carrier` did); the document path reports the tier
+            // and substitutes the placeholder, which the whole-file checks
+            // below observe.
+            if !matches!(
+                talkbank_parser::api::tiers::TierAdmission::admit(node),
+                talkbank_parser::api::tiers::TierAdmission::Recovery(_)
+            ) {
+                failures.push("MOR mutation must be refused by tier admission".into());
             }
         }
         Tier::Gra => {
@@ -158,7 +151,7 @@ fn native_contract(
                 .nth(MIDDLE)
                 .expect("control middle");
             let expected = &control.gra_tier().expect("control GRA").relations()[1];
-            if actual.span != candidate.span()
+            if actual.location != talkbank_model::Location::Located(candidate.span())
                 || !actual
                     .relations()
                     .first()
@@ -236,13 +229,12 @@ fn native_contract(
     }
     // Every unchanged main tier has an independent healthy native owner.
     for expected in candidate.control().file().utterances() {
-        let expected_span = candidate.translated(expected.main.span);
+        let expected_span = candidate.translated(expected.main.location);
         if !root.descendants().any(|node| {
             let node = node.expect("main descendant");
             node.typed::<MainTierNode>().is_some_and(|main| {
                 !main.raw_node().has_error()
-                    && main.raw_node().byte_range()
-                        == (expected_span.start as usize..expected_span.end as usize)
+                    && main.raw_node().byte_range() == (expected_span.start()..expected_span.end())
             })
         }) {
             failures.push(format!(
@@ -261,7 +253,7 @@ fn native_contract(
                     || node.typed::<ComDependentTierNode>().is_some()
                     || node.typed::<EngDependentTierNode>().is_some()
                     || node.typed::<XDependentTierNode>().is_some()))
-            .then(|| Span::from_usize(raw.start_byte(), raw.end_byte()))
+            .then(|| Span::new(raw.start_byte(), raw.end_byte()))
         })
         .collect();
     NativeObservation {
@@ -293,8 +285,10 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
     if let Some(code) = expected_code {
         if !diagnostics.iter().any(|error| {
             error.code == code
-                && error.location.span.start >= candidate.span().start
-                && error.location.span.end <= candidate.span().end
+                && error.location.span().expect("located diagnostic").start()
+                    >= candidate.span().start()
+                && error.location.span().expect("located diagnostic").end()
+                    <= candidate.span().end()
         }) {
             failures.push(format!(
                 "missing fault-local parse {code:?}: {diagnostics:?}"
@@ -304,21 +298,13 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
         failures.push(format!("unexpected parse diagnostic: {diagnostics:?}"));
     }
     for error in diagnostics.iter().chain(&findings) {
-        let span = error.location.span;
-        if candidate
-            .source()
-            .get(span.start as usize..span.end as usize)
-            .is_none()
-        {
+        let span = error.location.span().expect("located diagnostic");
+        if candidate.source().get(span.start()..span.end()).is_none() {
             failures.push(format!("diagnostic escapes caller UTF-8 source: {error:?}"));
         }
         for label in &error.labels {
             let span = label.span;
-            if candidate
-                .source()
-                .get(span.start as usize..span.end as usize)
-                .is_none()
-            {
+            if candidate.source().get(span.start()..span.end()).is_none() {
                 failures.push(format!("label escapes caller UTF-8 source: {label:?}"));
             }
         }
@@ -327,11 +313,10 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
         failures.push("changed utterance count".into());
     }
     for (index, expected) in control.file().utterances().enumerate() {
-        let main_span = candidate.translated(expected.main.span);
-        let Some(actual) = file
-            .utterances()
-            .find(|utterance| utterance.main.span == main_span)
-        else {
+        let main_span = candidate.translated(expected.main.location);
+        let Some(actual) = file.utterances().find(|utterance| {
+            utterance.main.location == talkbank_model::Location::Located(main_span)
+        }) else {
             failures.push(format!(
                 "lost healthy source-owned main tier {index}: {main_span:?}"
             ));
@@ -340,11 +325,10 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
         if !actual.main.semantic_eq(&expected.main) {
             failures.push(format!("changed main tier {index}"));
         }
-        if actual
-            .dependent_tiers
-            .windows(2)
-            .any(|pair| pair[0].span().end > pair[1].span().start)
-        {
+        if actual.dependent_tiers.windows(2).any(|pair| {
+            pair[0].location().span().expect("located").end()
+                > pair[1].location().span().expect("located").start()
+        }) {
             failures.push(format!(
                 "dependent attachment lost native source order in utterance {index}"
             ));
@@ -359,14 +343,14 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
             if index == MIDDLE && case.tier.matches(expected_entry) {
                 continue;
             }
-            let span = candidate.translated(expected_entry.span());
+            let span = candidate.translated(expected_entry.location());
             if !native.healthy_tiers.contains(&span) {
                 failures.push(format!("independent native tier is not healthy: {span:?}"));
             }
             let Some(retained) = actual
                 .dependent_tiers
                 .iter()
-                .find(|tier| tier.span() == span)
+                .find(|tier| tier.location() == talkbank_model::Location::Located(span))
             else {
                 failures.push(format!(
                     "lost independent tier {}: {span:?}",
@@ -458,7 +442,9 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
             let retained = entry(middle, case.tier);
             match case.tier {
                 Tier::Com => {
-                    if !retained.is_some_and(|tier| tier.span() == candidate.span()) {
+                    if !retained.is_some_and(|tier| {
+                        tier.location() == talkbank_model::Location::Located(candidate.span())
+                    }) {
                         failures.push("comment recovery lost its real placeholder slot".into());
                     }
                 }
@@ -476,15 +462,19 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
         }
         Policy::EmptyText => {
             let retained = entry(middle, candidate.tier()).expect("empty text tier is retained");
-            if retained.span() != candidate.span() || !health.is_clean() {
+            if retained.location() != talkbank_model::Location::Located(candidate.span())
+                || !health.is_clean()
+            {
                 failures.push(
                     "empty optional content lost its slot or manufactured parse recovery".into(),
                 );
             }
             if !findings.iter().any(|error| {
                 error.code == ErrorCode::EmptyDependentTier
-                    && error.location.span.start >= candidate.span().start
-                    && error.location.span.end <= candidate.span().end
+                    && error.location.span().expect("located diagnostic").start()
+                        >= candidate.span().start()
+                    && error.location.span().expect("located diagnostic").end()
+                        <= candidate.span().end()
             }) {
                 failures.push(format!(
                     "missing fault-local empty-content validation: {findings:?}"
@@ -502,7 +492,9 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
             case.tier,
         )
         .expect("control tier");
-        if retained.span() != candidate.span() || retained.separator != original.separator {
+        if retained.location() != talkbank_model::Location::Located(candidate.span())
+            || retained.separator != original.separator
+        {
             failures.push("edited tier lost its slot/separator provenance".into());
         }
     }
@@ -542,7 +534,7 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
         let fragment = ChatParser::parse_dependent_tier(
             &parser,
             input,
-            candidate.span().start as usize,
+            candidate.span().start(),
             &fragment_errors,
         );
         let reject = expected_code.is_some() || carrier == Carrier::Recovery;
@@ -551,11 +543,13 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
         }
         if let ParseOutcome::Parsed(actual) = fragment {
             let retained = entry(middle, case.tier).expect("accepted fragment's document tier");
-            let supplied = Span::from_usize(
-                candidate.span().start as usize,
-                candidate.span().start as usize + input.len(),
+            let supplied = Span::new(
+                candidate.span().start(),
+                candidate.span().start() + input.len(),
             );
-            if !actual.semantic_eq(&retained.tier) || actual.span() != supplied {
+            if !actual.semantic_eq(&retained.tier)
+                || actual.location() != talkbank_model::Location::Located(supplied)
+            {
                 failures.push("accepted fragment changed the validation-only tier".into());
             }
         }

@@ -29,7 +29,7 @@
 //! different: the uniform ten, the two syllable tiers, and the two tiers whose
 //! content parser can fail.
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AltDependentTierNode, AsRawNode, CohDependentTierNode, DefDependentTierNode,
     EngDependentTierNode, ErrDependentTierNode, FacDependentTierNode, FloDependentTierNode,
@@ -56,8 +56,14 @@ use super::helpers::{
 /// Only the generated kind/range-admitted carrier implements this reader shape.
 macro_rules! optional_body_carrier {
     ($children:ident) => {
-        impl<'tree, 'source> OptionalTierBody<'tree, 'source>
-            for crate::generated_traversal::$children<'tree, Ranged<'source>>
+        impl<'tree, 'source, P: crate::generated_traversal::PresenceProof>
+            OptionalTierBody<'tree, 'source>
+            for crate::generated_traversal::$children<
+                'tree,
+                crate::generated_traversal::KindAdmitted,
+                Ranged<'source>,
+                P,
+            >
         {
             fn body(&self) -> &OptionalTierBodySlot<'tree, 'source> {
                 &self.child_2.slot
@@ -99,24 +105,26 @@ macro_rules! plain_text_tier_appliers {
                 let raw = node.raw_node();
                 let input = node.source();
                 let span = span_of(raw);
-                let extraction = crate::parser::typed_cst::canonical_grammar()
-                    .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+                let extraction = crate::parser::typed_cst::extract_envelope(node);
                 let Ok(selected) = crate::parser::typed_cst::report_admission(
                     extraction, raw, input, errors,
                 ) else { return; };
-                let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+                let Ok(separator) = crate::parser::typed_cst::report_admission(
+                    super::helpers::dependent_tier_separator(selected.children().child_1.slot()), raw, input, errors,
+                ) else { return; };
                 surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
                 let Ok(children) = crate::parser::typed_cst::report_admission(
                     selected.admit_ranges().map_err(Into::into), raw, input, errors,
                 ) else { return; };
                 if let ParseOutcome::Parsed(tier) = read_optional_tier_body_text(
+                    span,
                     &children,
                     errors,
                 ) {
                     utterance
                         .dependent_tiers
                         .push(DependentTierEntry::with_separator(
-                            DependentTier::$variant(tier.with_span(span)),
+                            DependentTier::$variant(tier),
                             separator,
                         ));
                 }
@@ -159,12 +167,13 @@ macro_rules! syl_tier_appliers {
                 let raw = node.raw_node();
                 let input = node.source();
                 let span = span_of(raw);
-                let extraction = crate::parser::typed_cst::canonical_grammar()
-                    .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+                let extraction = crate::parser::typed_cst::extract_envelope(node);
                 let Ok(selected) = crate::parser::typed_cst::report_admission(
                     extraction, raw, input, errors,
                 ) else { return; };
-                let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+                let Ok(separator) = crate::parser::typed_cst::report_admission(
+                    super::helpers::dependent_tier_separator(selected.children().child_1.slot()), raw, input, errors,
+                ) else { return; };
                 surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
                 let Ok(children) = crate::parser::typed_cst::report_admission(
                     selected.admit_ranges().map_err(Into::into), raw, input, errors,
@@ -181,7 +190,7 @@ macro_rules! syl_tier_appliers {
                         .dependent_tiers
                         .push(DependentTierEntry::with_separator(
                             DependentTier::$variant(
-                                SylTier::new(SylTierType::$syl_type, words).with_span(span),
+                                SylTier::new(span, SylTierType::$syl_type, words),
                             ),
                             separator,
                         ));
@@ -219,12 +228,13 @@ macro_rules! fallible_content_tier_appliers {
                 let raw = node.raw_node();
                 let input = node.source();
                 let span = span_of(raw);
-                let extraction = crate::parser::typed_cst::canonical_grammar()
-                    .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+                let extraction = crate::parser::typed_cst::extract_envelope(node);
                 let Ok(selected) = crate::parser::typed_cst::report_admission(
                     extraction, raw, input, errors,
                 ) else { return; };
-                let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+                let Ok(separator) = crate::parser::typed_cst::report_admission(
+                    super::helpers::dependent_tier_separator(selected.children().child_1.slot()), raw, input, errors,
+                ) else { return; };
                 surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
                 let Ok(children) = crate::parser::typed_cst::report_admission(
                     selected.admit_ranges().map_err(Into::into), raw, input, errors,
@@ -242,7 +252,7 @@ macro_rules! fallible_content_tier_appliers {
                             utterance
                                 .dependent_tiers
                                 .push(DependentTierEntry::with_separator(
-                                    DependentTier::$variant($tier::new(items).with_span(span)),
+                                    DependentTier::$variant($tier::new(span, items)),
                                     separator,
                                 ));
                         }
@@ -250,10 +260,10 @@ macro_rules! fallible_content_tier_appliers {
                             errors.report(ParseError::new(
                                 ErrorCode::InvalidDependentTier,
                                 Severity::Error,
-                                SourceLocation::from_offsets(raw.start_byte(), raw.end_byte()),
+                                DiagnosticLocation::new(span_of(raw)),
                                 ErrorContext::new(
                                     input,
-                                    raw.start_byte()..raw.end_byte(),
+                                    span_of(raw),
                                     $label,
                                 ),
                                 format!("malformed {} content: {}", $label, e),
@@ -289,13 +299,19 @@ pub(super) fn apply_tim<'tree>(
     let raw = node.raw_node();
     let input = node.source();
     let span = span_of(raw);
-    let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+    let extraction = crate::parser::typed_cst::extract_envelope(node);
     let Ok(selected) = crate::parser::typed_cst::report_admission(extraction, raw, input, errors)
     else {
         return;
     };
-    let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(selected.children().child_1.slot()),
+        raw,
+        input,
+        errors,
+    ) else {
+        return;
+    };
     surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
     let Ok(children) = crate::parser::typed_cst::report_admission(
         selected.admit_ranges().map_err(Into::into),
@@ -307,13 +323,13 @@ pub(super) fn apply_tim<'tree>(
     };
     if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(&children, errors) {
         let tier = match content {
-            Some(text) => crate::model::dependent_tier::TimTier::from_text(text),
-            None => crate::model::dependent_tier::TimTier::empty(),
+            Some(text) => crate::model::dependent_tier::TimTier::from_text(span, text),
+            None => crate::model::dependent_tier::TimTier::empty(span),
         };
         utterance
             .dependent_tiers
             .push(DependentTierEntry::with_separator(
-                DependentTier::Tim(tier.with_span(span)),
+                DependentTier::Tim(tier),
                 separator,
             ));
     }

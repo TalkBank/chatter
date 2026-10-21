@@ -7,12 +7,34 @@ export interface Span {
   end: number;
 }
 
-/** Mirrors Rust `SourceLocation` */
-export interface SourceLocation {
+/**
+ * Mirrors Rust `DiagnosticLocation` (its tagged wire form). A known location
+ * carries its line and column together or not at all; an unlocated diagnostic
+ * concerns a value with no source position and has no offsets to show.
+ */
+export type DiagnosticLocation =
+  | ({ kind: "known"; start: number; end: number } & (
+      | { line: number; column: number }
+      | { line?: never; column?: never }
+    ))
+  | { kind: "unlocated" };
+
+/** Mirrors Rust `FrontendSourceLocation`: an admitted presentation's position. */
+export interface SourceContextLocation {
   start: number;
   end: number;
-  line?: number;
-  column?: number;
+  line: number;
+  column: number;
+}
+
+/** A stable key fragment for a diagnostic location. */
+export function locationKey(location: DiagnosticLocation): string {
+  switch (location.kind) {
+    case "known":
+      return `${location.start}`;
+    case "unlocated":
+      return "unlocated";
+  }
 }
 
 /** Mirrors Rust `ErrorLabel` */
@@ -26,7 +48,7 @@ export interface ErrorLabel {
 export interface ParseError {
   code: string;
   severity: Severity;
-  location: SourceLocation;
+  location: DiagnosticLocation;
   labels: ErrorLabel[];
   message: string;
   suggestion?: string;
@@ -57,7 +79,7 @@ export interface ValidationStats {
 
 /** A parse diagnostic paired with pre-rendered miette HTML from Rust */
 export type DiagnosticSourceContext =
-  | { kind: "available"; location: SourceLocation & { line: number; column: number } }
+  | { kind: "available"; location: SourceContextLocation }
   | { kind: "unavailable"; reason: string };
 
 export interface RenderedDiagnostic {

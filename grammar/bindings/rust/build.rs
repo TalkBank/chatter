@@ -175,6 +175,22 @@ fn main() {
         "TSGU_METADATA_SYMBOL",
         "tree_sitter_talkbank_nonmissing_kind_v15",
     );
+    c_config.define(
+        "TSGU_REQUIRED_GRAPH_NEW",
+        "tree_sitter_talkbank_required_graph_new_v15",
+    );
+    c_config.define(
+        "TSGU_REQUIRED_GRAPH_DROP",
+        "tree_sitter_talkbank_required_graph_drop_v15",
+    );
+    c_config.define(
+        "TSGU_REQUIRED_RULE",
+        "tree_sitter_talkbank_required_rule_v15",
+    );
+    c_config.define(
+        "TSGU_REQUIRED_PREFIX",
+        "tree_sitter_talkbank_required_prefix_v15",
+    );
     println!("cargo:rerun-if-changed={metadata_path}");
     // No `cargo:rerun-if-changed` print here: `generate_grammar_fingerprint`
     // already emits it for the same relative path ("src/parser.c").

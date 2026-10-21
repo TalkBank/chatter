@@ -161,10 +161,10 @@ impl<'a> RetraceRef<'a> {
     /// Where this retrace is, INCLUDING its annotations when it has them.
     #[inline]
     #[must_use]
-    pub fn span(self) -> crate::Span {
+    pub fn location(self) -> crate::Location {
         match self {
-            Self::Bare(retrace) => retrace.span,
-            Self::Annotated(annotated) => annotated.span,
+            Self::Bare(retrace) => retrace.location,
+            Self::Annotated(annotated) => annotated.location,
         }
     }
 }
@@ -209,7 +209,7 @@ pub struct QuotationRef<'a> {
     /// `GroupRef::span` drew that distinction by hand before this type existed,
     /// so folding the spellings without carrying it would have narrowed every
     /// annotated quotation's reported location, silently.
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl<'a> QuotationRef<'a> {
@@ -219,7 +219,7 @@ impl<'a> QuotationRef<'a> {
         Self {
             quotation,
             annotations: &[],
-            span: quotation.span,
+            location: quotation.location,
         }
     }
 
@@ -229,7 +229,7 @@ impl<'a> QuotationRef<'a> {
         Self {
             quotation: &annotated.inner,
             annotations: annotated.scoped_annotations(),
-            span: annotated.span,
+            location: annotated.location,
         }
     }
 }
@@ -246,7 +246,7 @@ pub struct AngleRef<'a> {
     /// The annotations scoped to it, empty when it carries none.
     pub annotations: &'a [ContentAnnotation],
     /// Where the construct is, INCLUDING its annotations when it has them.
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl<'a> AngleRef<'a> {
@@ -256,7 +256,7 @@ impl<'a> AngleRef<'a> {
         Self {
             group,
             annotations: &[],
-            span: group.span,
+            location: group.location,
         }
     }
 
@@ -266,7 +266,7 @@ impl<'a> AngleRef<'a> {
         Self {
             group: &annotated.inner,
             annotations: annotated.scoped_annotations(),
-            span: annotated.span,
+            location: annotated.location,
         }
     }
 }
@@ -285,9 +285,9 @@ pub enum LeafContent {
     /// utterance rather than speech in it.
     Notation,
     /// Underline opening marker, with a location when source-derived.
-    UnderlineBegin(Option<crate::Span>),
+    UnderlineBegin(crate::Location),
     /// Underline closing marker, with a location when source-derived.
-    UnderlineEnd(Option<crate::Span>),
+    UnderlineEnd(crate::Location),
 }
 
 /// A leaf: content that encloses nothing further.
@@ -352,11 +352,11 @@ impl WordRef<'_> {
     /// disagree where nothing would notice.
     #[inline]
     #[must_use]
-    pub fn span(self) -> crate::Span {
+    pub fn location(self) -> crate::Location {
         match self {
-            Self::Bare(word) => word.span,
-            Self::Annotated(annotated) => annotated.span,
-            Self::Replaced(replaced) => replaced.span,
+            Self::Bare(word) => word.location,
+            Self::Annotated(annotated) => annotated.location,
+            Self::Replaced(replaced) => replaced.location,
         }
     }
 }
@@ -521,16 +521,16 @@ impl<'a> ContentStructure<'a> {
     /// Where this item is, when it carries a span of its own.
     ///
     /// `None` only for a leaf: events, pauses, actions, CA markers, bullets and
-    /// the delimiters record no span of their own, so a caller wanting to
-    /// report about one falls back to the tier's span and should say so.
+    /// the delimiters record no location of their own, so a caller wanting to
+    /// report about one falls back to the tier's location and should say so.
     /// Every other ref type answers infallibly.
     #[inline]
     #[must_use]
-    pub fn span(self) -> Option<crate::Span> {
+    pub fn location(self) -> Option<crate::Location> {
         match self {
-            Self::Word(word) => Some(word.span()),
-            Self::Retrace(retrace) => Some(retrace.span()),
-            Self::Group(group) => group.span(),
+            Self::Word(word) => Some(word.location()),
+            Self::Retrace(retrace) => Some(retrace.location()),
+            Self::Group(group) => group.location(),
             Self::Leaf(_) => None,
         }
     }
@@ -644,11 +644,11 @@ impl UtteranceContent {
             Self::Quotation(quotation) => {
                 ContentStructure::Group(GroupRef::Quotation(QuotationRef::bare(quotation)))
             }
-            Self::UnderlineBegin(marker) => {
-                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineBegin(marker.span())))
-            }
+            Self::UnderlineBegin(marker) => ContentStructure::Leaf(LeafRef::bare(
+                LeafContent::UnderlineBegin(marker.location()),
+            )),
             Self::UnderlineEnd(marker) => {
-                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineEnd(marker.span())))
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineEnd(marker.location())))
             }
             Self::PhoGroup(group) => ContentStructure::Group(GroupRef::Pho(group)),
             Self::SinGroup(group) => ContentStructure::Group(GroupRef::Sin(group)),
@@ -695,11 +695,11 @@ impl BracketedItem {
             Self::Quotation(quotation) => {
                 ContentStructure::Group(GroupRef::Quotation(QuotationRef::bare(quotation)))
             }
-            Self::UnderlineBegin(marker) => {
-                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineBegin(marker.span())))
-            }
+            Self::UnderlineBegin(marker) => ContentStructure::Leaf(LeafRef::bare(
+                LeafContent::UnderlineBegin(marker.location()),
+            )),
             Self::UnderlineEnd(marker) => {
-                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineEnd(marker.span())))
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineEnd(marker.location())))
             }
             Self::PhoGroup(group) => ContentStructure::Group(GroupRef::Pho(group)),
             Self::SinGroup(group) => ContentStructure::Group(GroupRef::Sin(group)),
@@ -760,10 +760,10 @@ impl GroupRef<'_> {
     /// decision and should say so on `kind()`.
     #[inline]
     #[must_use]
-    pub fn span(self) -> Option<crate::Span> {
+    pub fn location(self) -> Option<crate::Location> {
         match self {
-            Self::Angle(group) => Some(group.span),
-            Self::Quotation(quotation) => Some(quotation.span),
+            Self::Angle(group) => Some(group.location),
+            Self::Quotation(quotation) => Some(quotation.location),
             Self::Pho(_) | Self::Sin(_) => None,
         }
     }
@@ -998,7 +998,10 @@ mod container_mut_tests {
     /// cannot state it: `&'a [ContentAnnotation]` admits both empty and not.
     #[test]
     fn unannotated_containers_carry_no_annotations() {
-        let mut bare_group = UtteranceContent::Group(Group::new(BracketedContent::new(Vec::new())));
+        let mut bare_group = UtteranceContent::Group(Group::new(
+            crate::Location::Unlocated,
+            BracketedContent::new(Vec::new()),
+        ));
         let Some(ContainerMut::Group(group)) = bare_group.container_mut() else {
             panic!("a bare group is a container");
         };
@@ -1006,8 +1009,10 @@ mod container_mut_tests {
         assert_eq!(kind, GroupKind::Angle);
         assert!(annotations.is_empty(), "a bare group gates on nothing");
 
-        let mut bare_quotation =
-            UtteranceContent::Quotation(Quotation::new(BracketedContent::new(Vec::new())));
+        let mut bare_quotation = UtteranceContent::Quotation(Quotation::new(
+            crate::Location::Unlocated,
+            BracketedContent::new(Vec::new()),
+        ));
         let Some(ContainerMut::Group(group)) = bare_quotation.container_mut() else {
             panic!("a bare quotation is a container");
         };
@@ -1023,8 +1028,10 @@ mod container_mut_tests {
     /// A leaf is not a container, so a walker cannot descend into one.
     #[test]
     fn a_leaf_has_no_container() {
-        let mut pause =
-            UtteranceContent::Pause(crate::model::Pause::new(crate::model::PauseDuration::Short));
+        let mut pause = UtteranceContent::Pause(crate::model::Pause::new(
+            crate::Location::Unlocated,
+            crate::model::PauseDuration::Short,
+        ));
         assert!(pause.container_mut().is_none());
     }
 }

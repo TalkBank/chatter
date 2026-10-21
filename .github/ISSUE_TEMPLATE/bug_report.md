@@ -21,8 +21,10 @@ Your OS and platform (macOS Apple Silicon / Intel, Linux, Windows). -->
 
 ## Steps to reproduce
 
-<!-- A minimal example. If a CHAT file is involved, attach the smallest
-.cha that reproduces it (or `chatter trim` it down). -->
+<!-- Include the exact command or API call and a minimal synthetic example.
+Do not attach private transcripts, identifying metadata, credentials or logs
+containing them. Trimming a transcript does not anonymize it.
+For security vulnerabilities, follow SECURITY.md rather than filing publicly. -->
 
 1.
 2.

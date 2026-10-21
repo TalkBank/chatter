@@ -10,7 +10,7 @@
 
 use super::UtterancePosition;
 use super::helpers::has_quoted_linker;
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ParseError, Severity};
 
 /// Validates `+".` quotation-precedes terminators against prior `+"` linkers.
 ///
@@ -28,15 +28,10 @@ pub(super) fn check_quotation_precedes(position: &UtterancePosition<'_, '_>) -> 
         .find(|previous| previous.main.speaker.as_str() == speaker);
     if !preceding.is_some_and(has_quoted_linker) {
         errors.push(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::InvalidContentAnnotationNesting,
                 Severity::Error,
-                SourceLocation::new(utterance.main.span),
-                ErrorContext::new(
-                    format!("*{}: ... +\". ", speaker),
-                    utterance.main.span,
-                    "quotation precedes terminator",
-                ),
+                utterance.main.location,
                 format!(
                     "Quotation precedes terminator (+\". ) without preceding quoted utterances (+\") from same speaker ({})",
                     speaker

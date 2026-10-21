@@ -1,7 +1,7 @@
 # Utterances
 
 **Status:** Reference
-**Last updated:** 2026-05-11 23:22 EDT
+**Last updated:** {{git-dates:page}}
 
 An utterance is the fundamental unit of a CHAT transcript. It consists of a main tier (the transcribed speech) followed by zero or more dependent tiers (annotations).
 
@@ -25,7 +25,12 @@ Speaker codes are short identifiers (up to seven characters from `A-Z`, `0-9`, `
 
 ### Terminators
 
-Every utterance must end with a terminator:
+Ordinary utterances require a terminator. The legacy
+[`@Options: CA`](options.md) declaration waives the missing-terminator check;
+intonation arrows themselves are not ordinary terminators. Do not add CA merely
+to silence a diagnostic: it also changes parenthetical interpretation.
+
+Common terminators include:
 
 | Terminator | Meaning |
 |------------|---------|
@@ -102,6 +107,12 @@ The numbers represent start and end times in milliseconds. The bullets
 delimiting the pair render as `•` in most editors; on disk they are
 the NAK control character (`U+0015`). See `grammar/grammar.js` rule
 `bullet`.
+
+The visible `•` characters above illustrate the delimiters; typing U+2022
+bullets does not create the on-disk U+0015 timing markers. Use a CHAT-aware
+editor or a tool that writes the actual delimiters. Format validation checks
+their structure and applicable timing rules, not whether the interval matches
+the speech in the recording.
 
 ## Dependent Tiers
 

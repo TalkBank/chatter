@@ -58,7 +58,7 @@ pub mod commands {
         pub file: String,
         pub line: i32,
         pub col: i32,
-        pub byte_offset: u32,
+        pub byte_offset: usize,
         pub msg: String,
     }
 

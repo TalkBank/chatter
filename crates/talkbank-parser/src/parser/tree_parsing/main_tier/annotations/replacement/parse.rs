@@ -4,15 +4,17 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, ReplacementNode, SourceBound, SourceField, SourceSlotView,
-    StandaloneWordNode,
+    AsRawNode, NoChild, NonMissingKindSlot, ReplacementNode, SourceBound, SourceField,
+    SourceSlotView, StandaloneWordNode,
 };
 use crate::model::{Replacement, Word};
 use crate::parser::ChildCapacity;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::word::convert_word_node;
 use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -35,8 +37,7 @@ pub(crate) fn parse_replacement<'tree>(
 ) -> ParseOutcome<Replacement> {
     let source = typed.source();
     let node = typed.node().raw_node();
-    let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into));
+    let extraction = typed.extract_canonical();
     let Ok(associated) =
         crate::parser::typed_cst::report_admission(extraction, node, source, errors)
     else {
@@ -96,7 +97,7 @@ pub(crate) fn parse_replacement<'tree>(
 /// Convert an admitted composite word slot, preserving zero-width refusal,
 /// source-read failures and the existing Error/Absent recovery policy.
 fn push_word<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, StandaloneWordNode<'tree>>>,
+    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, StandaloneWordNode<'tree>>>,
     words: &mut Vec<Word>,
     errors: &impl ErrorSink,
 ) {
@@ -114,14 +115,6 @@ fn push_word<'tree>(
                 words.push(word);
             }
         }
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                source,
-                errors,
-                "replacement",
-            );
-        }
         // An ERROR at the word position is the whole-tree pass's to name.
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {}
     }
@@ -132,8 +125,8 @@ fn report(node: Node, source: &str, errors: &impl ErrorSink, message: String) {
     errors.report(ParseError::new(
         ErrorCode::ReplacementParseError,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), ""),
         message,
     ));
 }

@@ -14,111 +14,149 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#User_Defined_Tiers>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, Ranged, ReadableSlot, SourceBound, SourceBoundKind, SourceSlice,
-    UnsupportedDependentTierNode, XDependentTierNode,
+    AsRawNode, Never, NoChild, ReadableRecovery, ReadableSlot, SlotView, SourceBound,
+    SourceBoundKind, SourceSlice, UnsupportedDependentTierNode, UnsupportedTierPrefixNode,
+    XDependentTierNode, XTierPrefixNode,
 };
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::model::{NonEmptyString, Utterance};
-use crate::node_types::{UNSUPPORTED_TIER_PREFIX, X_TIER_PREFIX};
+use crate::node_types::{
+    UNSUPPORTED_DEPENDENT_TIER, UNSUPPORTED_TIER_PREFIX, X_DEPENDENT_TIER, X_TIER_PREFIX,
+};
+use crate::parser::typed_cst::ExtractCanonical;
 
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{
     analyze_dependent_tier_error, check_not_missing, surface_displaced,
 };
+use crate::parser::typed_cst::{CstFailure, GeneratedPosition, report_cst_failure};
 use tree_sitter::Node;
 
-/// Which tier prefix a dispatcher reads, and the words its diagnostics use.
-struct PrefixKind {
+/// A tier prefix token: one of the two generated lexical kinds whose text
+/// names a tier, with the words the reports about it use. Implemented on the
+/// node kinds themselves, so a prefix is always read with its own marker; the
+/// old pair of `const` records could be handed to either reader.
+trait PrefixToken {
     /// The marker the token begins with, stripped to leave the name.
-    marker: &'static str,
+    const MARKER: &'static str;
     /// The tier rule, named in the recovery reports.
-    context: &'static str,
+    const RULE: &'static str;
     /// The prefix, as the reports about the token itself call it.
-    what: &'static str,
-    /// The tier, as the report of an absent prefix calls it.
-    tier: &'static str,
+    const WHAT: &'static str;
     /// The prefix node's kind, for the report's context.
-    node_kind: &'static str,
+    const NODE_KIND: &'static str;
 }
 
-/// The `%x` prefix of a user-defined tier.
-const X_PREFIX: PrefixKind = PrefixKind {
-    marker: "%x",
-    context: "x_dependent_tier",
-    what: "User-defined tier prefix",
-    tier: "user-defined tier",
-    node_kind: X_TIER_PREFIX,
-};
+impl PrefixToken for XTierPrefixNode<'_> {
+    const MARKER: &'static str = "%x";
+    const RULE: &'static str = X_DEPENDENT_TIER;
+    const WHAT: &'static str = "User-defined tier prefix";
+    const NODE_KIND: &'static str = X_TIER_PREFIX;
+}
 
-/// The `%` prefix of a tier no rule names.
-const UNSUPPORTED_PREFIX: PrefixKind = PrefixKind {
-    marker: "%",
-    context: "unsupported_dependent_tier",
-    what: "Unsupported tier prefix",
-    tier: "unsupported dependent tier",
-    node_kind: UNSUPPORTED_TIER_PREFIX,
-};
+impl PrefixToken for UnsupportedTierPrefixNode<'_> {
+    const MARKER: &'static str = "%";
+    const RULE: &'static str = UNSUPPORTED_DEPENDENT_TIER;
+    const WHAT: &'static str = "Unsupported tier prefix";
+    const NODE_KIND: &'static str = UNSUPPORTED_TIER_PREFIX;
+}
 
-/// The name a tier prefix declares: the text of the PRESENT prefix token
-/// past its marker, non-empty by the grammar's own token (`/%x[a-zA-Z].../`
-/// and `/%[a-zA-Z].../`). Every other state is reported and yields no name,
-/// so no tier is built from a prefix that is not there: a MISSING
-/// placeholder (E342) or an ERROR through the associated slot; a position
-/// holding nothing, as the old walk reported it; a Present token that is
-/// does not fit its declared marker, or names nothing after it, is reported
-/// rather than assumed. Selected ranges are already checked; a failed range
-/// admission refuses the owner before this helper runs. Both dispatchers once read
-/// the MISSING placeholder's empty text and built the tier, through an
-/// unchecked constructor, with a label the program had invented (`x`, or
-/// nothing at all). Recovery is not validity, and the recovery node stays
-/// reported; but a tier without a label has no honest model value (the
+/// The name an unsupported tier's prefix declares: the text of the PRESENT
+/// prefix token past its marker, non-empty by the grammar's own token
+/// (`/%[a-zA-Z].../`). Every other state is reported and yields no name, so
+/// no tier is built from a prefix that is not there: a MISSING placeholder
+/// (E342) or an ERROR through the associated slot; a Present token that does
+/// not fit its marker, or names nothing after it, is reported rather than
+/// assumed; and a required position holding nothing is the walk's fault
+/// (`CstFailure::AbsentRequiredPosition`), since the grammar has no
+/// fail-closed partials, not a tier without a prefix. Selected ranges are
+/// already checked; a failed range admission refuses the owner before this
+/// helper runs. This reader once read the MISSING placeholder's empty text
+/// and built the tier, through an unchecked constructor, with a label the
+/// program had invented. Recovery is not validity, and the recovery node
+/// stays reported; but a tier without a label has no honest model value (the
 /// model's tier requires one), so the line lowers to nothing here rather
 /// than to a tier the parser named. Should the state ever be reached, the
 /// change is a label-less tier variant in the model, not a default here.
-fn tier_name<'tree, 'source, T: SourceBoundKind<'tree>>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, T>, Ranged<'source>>,
-    kind: &PrefixKind,
+///
+/// Only the unsupported tier reads its prefix through this: its `child_0`
+/// is a plain kind slot that admits every state. The `%x` tier's prefix
+/// position is closed by required-presence admission (`extract_envelope`),
+/// so `apply_x_tier` matches Present and Missing only. Reachability
+/// (coverage drive batch 3, 2026-10-19): the unsupported tier takes no
+/// whole-tier admission, so these arms are reachable in principle; in a
+/// sweep of 1,345 single-edit mutations of an unsupported tier line the
+/// prefix position was only ever `Present`. The `Missing` and `Error` arms
+/// stay and report the node they are given; no authored file reaches them.
+fn tier_name<'tree, 'source, E: ReadableRecovery<View = SourceSlice<'tree, 'source>>>(
+    slot: &ReadableSlot<
+        SourceBound<'tree, 'source, UnsupportedTierPrefixNode<'tree>>,
+        SourceBound<'tree, 'source, UnsupportedTierPrefixNode<'tree>>,
+        E,
+        Never,
+        NoChild,
+    >,
     tier: SourceSlice<'tree, 'source>,
     errors: &impl ErrorSink,
 ) -> Option<NonEmptyString> {
     let input = tier.source();
     let tier_node = tier.raw_node();
-    let prefix = match slot {
-        ReadableSlot::Present(prefix) => *prefix,
-        ReadableSlot::Absent(NoChild) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
-                format!("Missing tier prefix in {}", kind.tier),
-            ));
+    let prefix = match slot.view() {
+        SlotView::Present(prefix) => *prefix,
+        SlotView::Absent(NoChild) => {
+            report_cst_failure(
+                tier_node,
+                input,
+                CstFailure::AbsentRequiredPosition {
+                    rule: UNSUPPORTED_DEPENDENT_TIER,
+                    position: GeneratedPosition::new("UnsupportedDependentTierChildren.child_0"),
+                },
+                errors,
+            );
             return None;
         }
-        ReadableSlot::Missing(missing) => {
-            check_not_missing(missing.raw_node(), missing.source(), errors, kind.context);
+        SlotView::Missing(missing) => {
+            check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                UnsupportedTierPrefixNode::RULE,
+            );
             return None;
         }
-        ReadableSlot::Error(bad) => {
+        SlotView::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
                 bad.source(),
-                kind.context,
+                UnsupportedTierPrefixNode::RULE,
             ));
             return None;
         }
-        ReadableSlot::Unexpected(never) => match *never {},
     };
-    let Some(name) = prefix.text().strip_prefix(kind.marker) else {
+    prefix_name(prefix, errors)
+}
+
+/// Decode a present lexical prefix without erasing its source owner. Both
+/// refusals below guard what the grammar's own token regexes
+/// (`/%x[a-zA-Z][a-zA-Z0-9]*/`, `/%[a-zA-Z][a-zA-Z0-9]*/`) already exclude,
+/// and are reached by no file; they stay because the slot's text type does
+/// not carry the regex.
+fn prefix_name<'tree, T: SourceBoundKind<'tree> + PrefixToken>(
+    prefix: SourceBound<'tree, '_, T>,
+    errors: &impl ErrorSink,
+) -> Option<NonEmptyString> {
+    let input = prefix.source();
+    let Some(name) = prefix.text().strip_prefix(T::MARKER) else {
         let raw = prefix.raw_node();
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
-            SourceLocation::from_offsets(raw.start_byte(), raw.end_byte()),
-            ErrorContext::new(prefix.source(), raw.byte_range(), kind.node_kind),
-            format!("{} does not begin with '{}'", kind.what, kind.marker),
+            DiagnosticLocation::new(span_of(raw)),
+            ErrorContext::new(prefix.source(), span_of(raw), T::NODE_KIND),
+            format!("{} does not begin with '{}'", T::WHAT, T::MARKER),
         ));
         return None;
     };
@@ -129,13 +167,9 @@ fn tier_name<'tree, 'source, T: SourceBoundKind<'tree>>(
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
-                SourceLocation::from_offsets(prefix.start_byte(), prefix.end_byte()),
-                ErrorContext::new(
-                    input,
-                    prefix.start_byte()..prefix.end_byte(),
-                    kind.node_kind,
-                ),
-                format!("{} declares no name after '{}'", kind.what, kind.marker),
+                DiagnosticLocation::new(span_of(prefix)),
+                ErrorContext::new(input, span_of(prefix), T::NODE_KIND),
+                format!("{} declares no name after '{}'", T::WHAT, T::MARKER),
             ));
             None
         }
@@ -167,8 +201,7 @@ pub(super) fn apply_x_tier<'tree>(
     // the compiled grammar proves is never MISSING, so its slot has no
     // `Missing` state to read below.
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into)),
+        crate::parser::typed_cst::extract_envelope(node),
         tier_node,
         input,
         errors,
@@ -176,7 +209,14 @@ pub(super) fn apply_x_tier<'tree>(
         return;
     };
     let children = associated.children();
-    let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(children.child_1.slot()),
+        tier_node,
+        input,
+        errors,
+    ) else {
+        return;
+    };
     surface_displaced(&children.unexpected, "x_dependent_tier", input, errors);
     let Ok(associated) = crate::parser::typed_cst::report_admission(
         associated.admit_ranges().map_err(Into::into),
@@ -188,12 +228,19 @@ pub(super) fn apply_x_tier<'tree>(
     };
     let children = associated.children();
 
-    let Some(name) = tier_name(
-        &children.child_0.slot,
-        &X_PREFIX,
-        associated.parent(),
-        errors,
-    ) else {
+    let prefix = match children.child_0.slot.view() {
+        SlotView::Present(prefix) => *prefix,
+        SlotView::Missing(missing) => {
+            check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                XTierPrefixNode::RULE,
+            );
+            return;
+        }
+    };
+    let Some(name) = prefix_name(prefix, errors) else {
         return;
     };
     let tier_label = name.as_str();
@@ -219,17 +266,16 @@ pub(super) fn apply_x_tier<'tree>(
     // report came from parsing rather than validation, `chatter normalize`
     // treated the file as unparseable and emitted NOTHING AT ALL. Recovery is
     // not validity: the parser says what the file contains, and
-    // `DependentTier::empty_content_span` hands it to E756 exactly as it does
+    // `DependentTier::empty_content_location` hands it to E756 exactly as it does
     // for every other tier kind.
     let body_slot = match &children.child_2.slot {
         Some(slot) => slot,
         None => {
-            let span =
-                crate::error::Span::new(tier_node.start_byte() as u32, tier_node.end_byte() as u32);
+            let span = span_of(tier_node);
             let tier = DependentTier::UserDefined(crate::model::UserDefinedDependentTier {
                 label: stored_label,
                 content: None,
-                span,
+                location: span.into(),
             });
             utterance
                 .dependent_tiers
@@ -251,41 +297,34 @@ pub(super) fn apply_x_tier<'tree>(
             report_missing_x_content(tier_node, tier_label, input, errors);
             return;
         }
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "x_dependent_tier",
-            );
-            report_missing_x_content(tier_node, tier_label, input, errors);
-            return;
-        }
+        ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     };
     let content_text = body.text();
 
-    // Content must be non-empty
+    // Content must be non-empty. The grammar's `text_with_bullets` is never
+    // empty (its first child is required), so this refusal is reached by no
+    // file and stays because the slot's text type does not say so.
     let content = match NonEmptyString::new(content_text) {
         Ok(c) => c,
         Err(_) => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
-                SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
+                DiagnosticLocation::new(span_of(tier_node)),
+                ErrorContext::new(input, span_of(tier_node), ""),
                 format!("Empty content in user-defined tier %x{}", tier_label),
             ));
             return;
         }
     };
 
-    let span = crate::error::Span::new(tier_node.start_byte() as u32, tier_node.end_byte() as u32);
+    let span = span_of(tier_node);
 
     let tier = DependentTier::UserDefined(crate::model::UserDefinedDependentTier {
         label: stored_label,
         content: Some(content),
-        span,
+        location: span.into(),
     });
 
     utterance
@@ -303,8 +342,8 @@ fn report_missing_x_content(
     errors.report(ParseError::new(
         ErrorCode::TreeParsingError,
         Severity::Error,
-        SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-        ErrorContext::new(input, tier_node.start_byte()..tier_node.end_byte(), ""),
+        DiagnosticLocation::new(span_of(tier_node)),
+        ErrorContext::new(input, span_of(tier_node), ""),
         format!("Missing content in user-defined tier %x{tier_label}"),
     ));
 }
@@ -328,15 +367,21 @@ pub(super) fn apply_unsupported_tier<'tree>(
 ) {
     let tier_node = node.raw_node();
     let input = node.source();
-    let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+    let extraction = node.extract_canonical();
     let Ok(associated) =
         crate::parser::typed_cst::report_admission(extraction, tier_node, input, errors)
     else {
         return;
     };
     let children = associated.children();
-    let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(children.child_1.slot()),
+        tier_node,
+        input,
+        errors,
+    ) else {
+        return;
+    };
     surface_displaced(
         &children.unexpected,
         "unsupported_dependent_tier",
@@ -353,12 +398,7 @@ pub(super) fn apply_unsupported_tier<'tree>(
     };
     let children = associated.children();
 
-    let Some(label) = tier_name(
-        &children.child_0.slot,
-        &UNSUPPORTED_PREFIX,
-        associated.parent(),
-        errors,
-    ) else {
+    let Some(label) = tier_name(&children.child_0.slot, associated.parent(), errors) else {
         return;
     };
 
@@ -384,11 +424,11 @@ pub(super) fn apply_unsupported_tier<'tree>(
     // label, and left this parser disagreeing with the re2c one, which kept a
     // fabricated tier instead.
     let content = NonEmptyString::new(body.trim()).ok();
-    let span = crate::error::Span::new(tier_node.start_byte() as u32, tier_node.end_byte() as u32);
+    let span = span_of(tier_node);
     let tier = DependentTier::Unsupported(crate::model::UserDefinedDependentTier {
         label,
         content,
-        span,
+        location: span.into(),
     });
 
     utterance

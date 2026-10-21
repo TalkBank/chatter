@@ -9,8 +9,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
-use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, SourceSlice};
+use crate::parser::node_span::span_of;
 use tree_sitter::Node;
 
 /// A node range admitted against its retained source. This proves readable
@@ -56,8 +57,12 @@ impl<'tree, 'source> ReadableRecovery<'tree, 'source> {
         ParseError::new(
             code,
             Severity::Error,
-            SourceLocation::from_offsets(self.node.start_byte(), self.node.end_byte()),
-            ErrorContext::new(self.text, 0..self.text.len(), self.text),
+            DiagnosticLocation::from_offsets(self.node.start_byte(), self.node.end_byte()),
+            ErrorContext::new(
+                self.text,
+                talkbank_model::Span::new(0, self.text.len()),
+                self.text,
+            ),
             message,
         )
     }
@@ -93,8 +98,8 @@ fn analyze_readable_error(recovery: ReadableRecovery<'_, '_>, context: &str) -> 
         return ParseError::new(
             ErrorCode::UnexpectedSyntax,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), ""),
             format!("Unexpected syntax in {}", context),
         )
         .with_suggestion("Check for missing or malformed elements");
@@ -136,8 +141,8 @@ pub(crate) fn unexpected_node_error(node: Node, source: &str, context: &str) -> 
     ParseError::new(
         ErrorCode::UnexpectedNodeInContext,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), node.kind()),
         format!("Unexpected '{}' in {}", node.kind(), context),
     )
     .with_suggestion("This element is not valid in this context")
@@ -169,8 +174,8 @@ mod tests {
                 let diagnostic = analyze_error_node(node, source, "parse tree");
                 assert_eq!(diagnostic.code, ErrorCode::UnparsableContent);
                 assert_eq!(
-                    diagnostic.location.span,
-                    crate::error::Span::from_usize(node.start_byte(), node.end_byte())
+                    diagnostic.location.span().expect("located diagnostic"),
+                    span_of(node)
                 );
                 let split_utf8 = "é".repeat(node.end_byte());
                 for incompatible in ["", split_utf8.as_str()] {

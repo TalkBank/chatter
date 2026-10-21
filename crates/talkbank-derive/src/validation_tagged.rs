@@ -95,7 +95,9 @@ pub(crate) fn emit_tagged_enum(input: &TaggedEnum) -> TokenStream {
     quote! {
         impl #impl_generics crate::model::ValidationTagged for #name #ty_generics #where_clause {
             fn validation_tag(&self) -> crate::model::ValidationTag {
-                match self { #(#arms,)* }
+                // Patterns inspect only the discriminant, never moving a
+                // payload. Dereferencing also admits the uninhabited case.
+                match *self { #(#arms,)* }
             }
         }
     }

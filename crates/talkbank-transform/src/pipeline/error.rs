@@ -82,3 +82,36 @@ impl From<std::io::Error> for PipelineError {
         PipelineError::Io(err)
     }
 }
+
+impl From<super::validated::ValidatedParseError> for PipelineError {
+    /// Consume source-admission failure without conflating invalidity,
+    /// incomplete provenance or a failed tool attempt. This compatibility
+    /// boundary discards the parse product; incomplete model admission retains
+    /// its rejected document, policy and transcript name.
+    fn from(error: super::validated::ValidatedParseError) -> Self {
+        use super::validated::ValidatedParseError;
+        use talkbank_model::{CompletedDiagnostics, ParseErrors};
+
+        match error {
+            ValidatedParseError::InternalFailure { failure, .. } => Self::InternalFailure(failure),
+            ValidatedParseError::Parse(product) => {
+                match CompletedDiagnostics::admit(product.diagnostics().to_vec()) {
+                    Err(internal) => Self::InternalFailure(internal),
+                    Ok(completed) => Self::Parse(ParseErrors::from(completed.into_diagnostics())),
+                }
+            }
+            ValidatedParseError::Validation(failure) => {
+                match CompletedDiagnostics::admit(failure.diagnostics().to_vec()) {
+                    Err(internal) => Self::InternalFailure(internal),
+                    Ok(completed) => {
+                        if failure.has_incomplete_parse() {
+                            Self::IncompleteValidation(Box::new(failure))
+                        } else {
+                            Self::Validation(completed.into_diagnostics())
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -25,7 +25,7 @@ Use `talkbank-parser-re2c` when you want:
 
 - a second parser implementation for cross-checking or fuzzing
 - direct access to the re2c lexer and token stream
-- fast batch parsing where incremental reparsing is not required
+- independent full-file parsing where incremental reparsing is not required
 
 Use `talkbank-parser` when you want the default tree-sitter-based parser,
 incremental parsing, or the parser surface used by the LSP and the rest of the
@@ -35,12 +35,12 @@ default toolchain.
 
 ```
 re2c DFA Lexer          Chumsky Combinators         AST-to-Model
-  (lexer.re)              (parser/)                  (convert.rs)
+  (lexer.re)              (parser/)                  (convert/)
 
 source text             &[Token<'a>]                ast types         talkbank-model
     |                        |                          |                  |
     v                        v                          v                  v
-  Lexer::new(input)  -->  main_tier_parser()  -->  MainTier<'a>  -->  model::MainTier
+  Lexer::new(input, condition) --> main_tier_parser() --> MainTier<'a> --> model::MainTier
                           gra_tier_parser()        GraTier<'a>        model::GraTier
                           mor_tier_parser()        MorTier<'a>        model::MorTier
                           ...                      ...                ...
@@ -53,18 +53,35 @@ zero-copy `&str` slices.
 
 **Parser:** Chumsky 1.0-alpha combinators consume `&[Token]` and produce
 AST types. The `recursive()` combinator handles nested groups and
-quotations. Parser combinators replace the original 1,923-line
-hand-written recursive descent parser.
+quotations. File-level dispatch also has an imperative loop for line ownership
+and recovery; not every parsing stage is a combinator.
 
-**Conversion:** `From` impls convert AST types to `talkbank-model` types.
-Source-aware conversions take `SourceText` to recover spans from AST slices
-that borrow the original input. Reconstructed word text is owned by the AST.
+**Conversion:** The `convert/` module lowers intermediate AST types into the
+public `talkbank-model` types, retaining diagnostics. Source-aware conversions
+use the original input's owner to locate borrowed slices. Reconstructed word
+text is owned by the AST. Borrowed intermediate ASTs are not borrowed public
+`ChatFile` models; the `ChatParser` entry point includes conversion.
 
-## Performance
+## Benchmark scope
 
-Benchmarked on the reference corpus (87 CHAT files) using
-[divan](https://docs.rs/divan). All content pre-loaded; zero I/O during
-measurement.
+The [divan benchmark](benches/parse_comparison.rs) now measures both file
+backends through `ChatParser`, producing the public model at offset zero with
+the same diagnostic collector. Main/MOR/GRA tier measurements also use shared
+trait entry points. Lex-only measurements remain a separate lower-level cost.
+The timed regions use preloaded inputs, not file I/O or model validation.
+Constructor-inclusive and reused tree-sitter cases are separate; the batch case
+constructs one tree-sitter parser per batch. Benchmark completion does not prove
+semantic equivalence, error-policy coverage or end-to-end CLI throughput.
+
+### Historical measurements, not current speed guarantees
+
+The tables below retain earlier reported timings. They lack a complete pinned
+build/hardware receipt here and have not been rerun for the current source.
+More importantly, the earlier comparison timed tree-sitter's public-model
+production against re2c's **intermediate AST**, omitting the latter's conversion
+and using different diagnostic paths. Do not interpret these ratios as the
+relative cost of equivalent public APIs or compare them directly with the
+corrected shared-model benchmark. No new performance result is claimed.
 
 ### File-level parse (median, parser reuse)
 
@@ -103,19 +120,13 @@ The re2c DFA accounts for 15-31% of total parse time. The remaining
 measurement. Current parsing borrows source and drops temporary token storage;
 these timings have not been remeasured after that ownership change.
 
-### Why re2c is faster
+### Architectural differences are not timing evidence
 
-1. **Zero constructor cost.** `Re2cParser` is a unit struct.
-   `TreeSitterParser` loads the tree-sitter grammar on construction.
-2. **DFA lexing.** re2c compiles regex patterns to a deterministic finite
-   automaton at build time. Tree-sitter's GLR lexer is more general but
-   slower for the fixed CHAT grammar.
-3. **Rich tokens.** The re2c lexer extracts word fields during lexing
-   (one DFA pass). TreeSitter produces a flat CST that requires a second
-   traversal pass to extract the same information.
-4. **No CST intermediate.** Re2c produces tokens directly consumed by
-   chumsky. TreeSitter produces a full concrete syntax tree, then the
-   Rust parser traverses it to build the model.
+`Re2cParser` is a unit struct and its parser consumes rich lexer tokens;
+tree-sitter constructs a CST that is lowered into the model. Both have work
+outside token recognition. Those differences motivate measurement but do not
+establish which current operation is faster or explain a measured ratio without
+a matched profile and result boundary.
 
 ### Limitations
 
@@ -132,13 +143,21 @@ these timings have not been remeasured after that ownership change.
 
 ## Build & Test
 
-Requires `re2rust` (part of re2c) on PATH: `brew install re2c`.
+Run these commands from the repository root. Ordinary Cargo builds copy the
+committed generated lexer into the build output; they do **not** require or
+invoke `re2rust` and do not verify that generated code is current.
 
 ```bash
 cargo check -p talkbank-parser-re2c
 cargo test -p talkbank-parser-re2c
 cargo bench -p talkbank-parser-re2c --bench parse_comparison
 ```
+
+For lexer-source changes, use the exact generator version in
+[`re2c-version.toml`](../../re2c-version.toml), regenerate with the invocation
+in [`build.rs`](build.rs), and run `just verify-vendored-lexer`. That currency
+check compares generated bytes; it does not replace parser behavior tests.
+Do not hand-edit `src/generated/lexer.rs`.
 
 ## CLI Integration
 

@@ -305,15 +305,15 @@ impl<S: ErrorSink> ErrorSink for ConfigurableErrorSink<'_, S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use talkbank_model::{ErrorCollector, ErrorContext, SourceLocation};
+    use talkbank_model::{DiagnosticLocation, ErrorCollector, ErrorContext};
 
     /// Builds a diagnostic to push through a policy.
     fn make_test_error(code: ErrorCode, severity: Severity) -> ParseError {
         ParseError::new(
             code,
             severity,
-            SourceLocation::at_offset(0),
-            ErrorContext::new("test", 0..4, "test"),
+            DiagnosticLocation::at_offset(0),
+            ErrorContext::new("test", talkbank_model::Span::new(0, 4), "test"),
             "Test error",
         )
     }

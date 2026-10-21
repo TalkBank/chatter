@@ -535,8 +535,8 @@ fn lexical_source_edits_exclude_markers_and_unselected_compound_partners() {
     assert_eq!(plan.previews().len(), 4);
     for preview in &plan.previews()[..3] {
         let mut local = String::new();
-        let span = preview.original().span;
-        let mut cursor = span.start as usize;
+        let span = preview.original().location;
+        let mut cursor = span.span().expect("located").start();
         let mut fields = Vec::new();
         // Exercise the proposed source edits at the wire boundary. This is not
         // a production writer: only this word is compared with its typed preview.
@@ -548,7 +548,7 @@ fn lexical_source_edits_exclude_markers_and_unselected_compound_partners() {
             cursor = range.end;
             fields.push((edit.original(), edit.replacement()));
         }
-        local.push_str(&source[cursor..span.end as usize]);
+        local.push_str(&source[cursor..span.span().expect("located").end()]);
         assert_eq!(local, preview.proposed().to_chat());
         actual.push(fields);
     }
@@ -835,9 +835,9 @@ fn document_lexical_plan_includes_retraced_replacement_targets_without_writing()
     for preview in plan.previews() {
         assert_eq!(preview.original().raw_text(), "female");
         assert_eq!(preview.proposed().to_chat(), "PersonA");
-        let span = preview.original().span;
+        let span = preview.original().location;
         assert_eq!(
-            source.get(span.start as usize..span.end as usize),
+            source.get(span.span().expect("located").start()..span.span().expect("located").end()),
             Some("female")
         );
         assert!(preview.decisions().any(|decision| matches!(decision,
@@ -854,11 +854,11 @@ fn document_lexical_plan_includes_retraced_replacement_targets_without_writing()
         refused_location.spelling(),
         talkbank_transform::pseudonymize::WordSpelling::Spoken
     );
-    let refused_span = plan.refusals()[0].span();
-    assert_eq!(
-        source.get(refused_span.start as usize..refused_span.end as usize),
-        Some("tika@u")
-    );
+    let refused_span = plan.refusals()[0]
+        .source()
+        .span()
+        .expect("refused word is located");
+    assert_eq!(source.get(refused_span.to_range()), Some("tika@u"));
     assert_eq!(input.document().to_chat_string(), before);
     // Both replacement targets were inspected, but only the non-retraced one
     // belongs to the morphology positional domain.
@@ -983,7 +983,7 @@ fn timing_changes_require_corroboration_and_preserve_original_bullets() {
                 change.original().inline_bullet
             );
             assert!(change.proposed().inline_bullet.is_some());
-            assert_eq!(change.proposed().span, change.original().span);
+            assert_eq!(change.proposed().location, change.original().location);
             assert_eq!(change.proposed().word_id, change.original().word_id);
             assert_eq!(change.edits().len(), 1);
             let edit = &change.edits()[0];
@@ -1182,7 +1182,10 @@ fn unreplaced_lemmas_are_findings_not_independent_rewrites() {
         .map(|finding| {
             assert!(
                 source
-                    .get(finding.tier().span.start as usize..finding.tier().span.end as usize)
+                    .get(
+                        finding.tier().location.span().expect("located").start()
+                            ..finding.tier().location.span().expect("located").end()
+                    )
                     .is_some()
             );
             (finding.word().lemma.as_ref(), finding.kind())

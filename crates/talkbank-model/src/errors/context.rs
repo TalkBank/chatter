@@ -51,16 +51,69 @@ pub struct ErrorContext {
     pub line_offset: Option<usize>,
 }
 
+impl miette::SourceCode for ErrorContext {
+    fn read_span<'a>(
+        &'a self,
+        span: &miette::SourceSpan,
+        context_lines_before: usize,
+        context_lines_after: usize,
+    ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
+        read_source_span(
+            "input",
+            &self.source_text,
+            self.line_offset.unwrap_or(1),
+            span,
+            context_lines_before,
+            context_lines_after,
+        )
+    }
+}
+
+/// Read a borrowed snippet without duplicating its mutable source/offset state.
+pub(super) fn read_source_span<'a>(
+    name: &str,
+    source: &'a str,
+    line_offset: usize,
+    span: &miette::SourceSpan,
+    context_lines_before: usize,
+    context_lines_after: usize,
+) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
+    let contents = miette::SourceCode::read_span(
+        source.as_bytes(),
+        span,
+        context_lines_before,
+        context_lines_after,
+    )?;
+    let line = line_offset
+        .saturating_sub(1)
+        .checked_add(contents.line())
+        .ok_or(miette::MietteError::OutOfBounds)?;
+    // Handlers add one-based line numbers and walk the entire returned context.
+    // miette's line_count counts separators, not a final unterminated line.
+    let trailing_line = usize::from(!matches!(contents.data().last(), Some(b'\n' | b'\r')));
+    let extent = contents
+        .line_count()
+        .checked_add(trailing_line)
+        .ok_or(miette::MietteError::OutOfBounds)?
+        .max(1);
+    line.checked_add(extent)
+        .ok_or(miette::MietteError::OutOfBounds)?;
+    Ok(Box::new(miette::MietteSpanContents::new_named(
+        name.to_owned(),
+        contents.data(),
+        *contents.span(),
+        line,
+        contents.column(),
+        contents.line_count(),
+    )))
+}
+
 impl ErrorContext {
     /// Create error context from source text and byte span
-    pub fn new(
-        source_text: impl Into<String>,
-        span: impl Into<Span>,
-        found: impl Into<String>,
-    ) -> Self {
+    pub fn new(source_text: impl Into<String>, span: Span, found: impl Into<String>) -> Self {
         Self {
             source_text: source_text.into(),
-            span: span.into(),
+            span,
             expected: SmallVec::new(),
             found: found.into(),
             line_offset: None,
@@ -72,14 +125,11 @@ impl ErrorContext {
     /// This is useful when validating structures that were parsed but the original
     /// source text is not available at validation time. The reconstructed text
     /// (from WriteChat serialization) is used as both source and found text.
-    pub fn from_reconstructed(
-        reconstructed_text: impl Into<String>,
-        span: impl Into<Span>,
-    ) -> Self {
+    pub fn from_reconstructed(reconstructed_text: impl Into<String>, span: Span) -> Self {
         let text = reconstructed_text.into();
         Self {
             source_text: text.clone(),
-            span: span.into(),
+            span,
             expected: SmallVec::new(),
             found: text,
             line_offset: None,
@@ -110,7 +160,7 @@ impl ErrorContext {
         span_end: usize,
         found: impl Into<String>,
     ) -> Result<Self, SourceExcerptError> {
-        use crate::SourceLocation;
+        use crate::LineColumn;
 
         let text =
             full_source
@@ -123,12 +173,12 @@ impl ErrorContext {
         let admitted = FragmentSource::new(text, 0)?;
 
         // Calculate line number for the start of the span
-        let (line, _column) = SourceLocation::calculate_line_column(span_start, full_source);
+        let line = LineColumn::of_offset(span_start, full_source).line.get();
 
         let source_text = admitted.input().to_owned();
 
         // Create context with relative span (0..length within the snippet)
-        let relative_span = Span::from_usize(0, source_text.len());
+        let relative_span = Span::new(0, source_text.len());
 
         Ok(Self {
             source_text,

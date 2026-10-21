@@ -27,7 +27,10 @@ impl AlignmentUnits {
             ),
             // `%wor` slots are the projection's, the one owner of that count.
             main_wor: (0..utterance.main.wor_projection().slot_count().get())
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect(),
             ..Default::default()
         };
@@ -35,32 +38,47 @@ impl AlignmentUnits {
         if let Some(tier) = utterance.mor_tier() {
             let item_count = tier.items.len();
             units.mor = (0..item_count)
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
             let chunk_count = tier.count_chunks();
             units.mor_chunks = (0..chunk_count)
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
         if let Some(tier) = utterance.gra_tier() {
             let item_count = tier.relations.0.len();
             units.gra = (0..item_count)
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
         if let Some(tier) = utterance.pho_tier() {
             let pho_count = tier.items.len();
             units.pho = (0..pho_count)
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
         if let Some(tier) = utterance.mod_tier() {
             let mod_count = tier.items.len();
             units.mod_ = (0..mod_count)
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
@@ -71,32 +89,47 @@ impl AlignmentUnits {
                 .filter(|item| matches!(item, crate::model::dependent_tier::WorItem::Word(_)))
                 .count();
             units.wor = (0..wor_count)
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
         if let Some(tier) = utterance.sin_tier() {
             let sin_count = tier.items.len();
             units.sin = (0..sin_count)
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
         if let Some(tier) = utterance.modsyl_tier() {
             units.modsyl = (0..tier.word_count())
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
         if let Some(tier) = utterance.phosyl_tier() {
             units.phosyl = (0..tier.word_count())
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
         if let Some(tier) = utterance.phoaln_tier() {
             units.phoaln = (0..tier.word_count())
-                .map(|index| AlignmentUnit { index, span: None })
+                .map(|index| AlignmentUnit {
+                    index,
+                    location: crate::Location::Unlocated,
+                })
                 .collect();
         }
 
@@ -129,6 +162,9 @@ fn build_main_units(
     domain: crate::alignment::PositionalDomain,
 ) -> Vec<AlignmentUnit> {
     (0..crate::alignment::helpers::count_tier_positions(content, domain))
-        .map(|index| AlignmentUnit { index, span: None })
+        .map(|index| AlignmentUnit {
+            index,
+            location: crate::Location::Unlocated,
+        })
         .collect()
 }

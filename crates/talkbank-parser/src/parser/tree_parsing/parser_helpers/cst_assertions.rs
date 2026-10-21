@@ -8,9 +8,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{Absence, RecoveryNode, SourceBindingError};
-use crate::parser::tree_parsing::helpers::unexpected_node_error;
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
+use crate::generated_traversal::{RecoveryNode, SourceBindingError};
+use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -24,8 +24,8 @@ pub fn check_not_missing(node: Node, source: &str, errors: &impl ErrorSink, cont
         errors.report(ParseError::new(
             ErrorCode::MissingRequiredElement,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), node.kind()),
             format!(
                 "Tree-sitter error recovery: MISSING '{}' node inserted in {}",
                 node.kind(),
@@ -81,9 +81,9 @@ pub fn extract_utf8_text<'a>(
 ///
 /// Use `present_or_recover` where the RECOVERY variant is wanted; use this
 /// where the call site only asks "is it there".
-pub(crate) fn present<'a, 'tree, T, M, U, A>(
-    slot: &'a crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
-) -> Option<&'a T> {
+pub(crate) fn present<T, M, E, U, A>(
+    slot: &crate::generated_traversal::NodeSlot<T, M, E, U, A>,
+) -> Option<&T> {
     use crate::generated_traversal::NodeSlot;
     match slot {
         NodeSlot::Present(value) => Some(value),
@@ -91,57 +91,6 @@ pub(crate) fn present<'a, 'tree, T, M, U, A>(
         | NodeSlot::Error(_)
         | NodeSlot::Unexpected(_)
         | NodeSlot::Absent(_) => None,
-    }
-}
-
-/// What a typed position held, once its recovery states have been reported.
-///
-/// `Recovered` is a MISSING placeholder or an ERROR or displaced node, already
-/// reported through [`expect_present`]; the caller decides what a reported
-/// recovery means for the construct (a `%mor` tier rejects itself on any).
-#[derive(Debug)]
-pub(crate) enum SlotState<'a, T> {
-    /// The node the grammar expected here.
-    Present(&'a T),
-    /// The optional position is empty.
-    Absent,
-    /// A recovery state, reported.
-    Recovered,
-}
-
-/// A typed position whose Present node carries something to parse, with
-/// every recovery state reported in one place: a MISSING placeholder
-/// through [`check_not_missing`] with `context`, an ERROR or a displaced
-/// node through [`unexpected_node_error`] with the same `context`. One owner
-/// for the four-arm match the `%mor` word and tier parsers had each written
-/// per position (eleven copies between them).
-pub(crate) fn expect_present<'a, 'tree, T, M, U, A>(
-    slot: &'a crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
-    context: &str,
-    source: &str,
-    errors: &impl ErrorSink,
-) -> SlotState<'a, T>
-where
-    M: RecoveryNode<'tree>,
-    U: RecoveryNode<'tree>,
-    A: Absence,
-{
-    use crate::generated_traversal::NodeSlot;
-    match slot {
-        NodeSlot::Present(value) => SlotState::Present(value),
-        NodeSlot::Absent(absent) => absent.when_absent(SlotState::Absent),
-        NodeSlot::Missing(missing) => {
-            check_not_missing(missing.node(), source, errors, context);
-            SlotState::Recovered
-        }
-        NodeSlot::Error(bad) => {
-            errors.report(unexpected_node_error(*bad, source, context));
-            SlotState::Recovered
-        }
-        NodeSlot::Unexpected(bad) => {
-            errors.report(unexpected_node_error(bad.node(), source, context));
-            SlotState::Recovered
-        }
     }
 }
 
@@ -155,14 +104,14 @@ where
 ///
 /// The MISSING policy is deliberate: list walkers and MOR pipe separators
 /// report their missing structural tokens locally; bracketed constructs do not.
-pub(crate) fn expect_delimiter<'tree, T, M, U: RecoveryNode<'tree>, A>(
-    slot: &crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
+pub(crate) fn expect_delimiter<'tree, T, M, E: RecoveryNode<'tree>, U: RecoveryNode<'tree>, A>(
+    slot: &crate::generated_traversal::NodeSlot<T, M, E, U, A>,
     on_bad: impl FnOnce(Node),
 ) {
     use crate::generated_traversal::NodeSlot;
     match slot {
         NodeSlot::Present(_) | NodeSlot::Missing(_) | NodeSlot::Absent(_) => {}
-        NodeSlot::Error(bad) => on_bad(*bad),
+        NodeSlot::Error(bad) => on_bad(bad.node()),
         NodeSlot::Unexpected(bad) => on_bad(bad.node()),
     }
 }

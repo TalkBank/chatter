@@ -159,8 +159,8 @@ impl<'tree, S: InspectField> InspectField for Positioned<'tree, S> {
 }
 
 /// Record one slot in `container`, recursing into a present payload.
-fn observe<'tree, T, M, U, A>(
-    slot: &NodeSlot<'tree, T, M, U, A>,
+fn observe<'tree, T, M, E, U, A>(
+    slot: &NodeSlot<T, M, E, U, A>,
     container: Container,
     rule: &'static str,
     position: Position,
@@ -168,6 +168,7 @@ fn observe<'tree, T, M, U, A>(
 ) where
     T: Inspect,
     M: RecoveryNode<'tree>,
+    E: RecoveryNode<'tree>,
     U: RecoveryNode<'tree>,
     A: Absence,
 {
@@ -177,7 +178,7 @@ fn observe<'tree, T, M, U, A>(
             (Observed::Present, String::new())
         }
         NodeSlot::Missing(node) => (Observed::Missing, node.node().kind().to_string()),
-        NodeSlot::Error(node) => (Observed::Error, node.kind().to_string()),
+        NodeSlot::Error(node) => (Observed::Error, node.node().kind().to_string()),
         NodeSlot::Unexpected(node) => (Observed::Unexpected, node.node().kind().to_string()),
         NodeSlot::Absent(absent) => absent.when_absent((Observed::Absent, String::new())),
     };
@@ -190,10 +191,11 @@ fn observe<'tree, T, M, U, A>(
     });
 }
 
-impl<'tree, T, M, U, A> InspectField for NodeSlot<'tree, T, M, U, A>
+impl<'tree, T, M, E, U, A> InspectField for NodeSlot<T, M, E, U, A>
 where
     T: Inspect,
     M: RecoveryNode<'tree>,
+    E: RecoveryNode<'tree>,
     U: RecoveryNode<'tree>,
     A: Absence,
 {
@@ -202,10 +204,11 @@ where
     }
 }
 
-impl<'tree, T, M, U, A> InspectField for Option<NodeSlot<'tree, T, M, U, A>>
+impl<'tree, T, M, E, U, A> InspectField for Option<NodeSlot<T, M, E, U, A>>
 where
     T: Inspect,
     M: RecoveryNode<'tree>,
+    E: RecoveryNode<'tree>,
     U: RecoveryNode<'tree>,
     A: Absence,
 {
@@ -223,10 +226,11 @@ where
     }
 }
 
-impl<'tree, T, M, U, A> InspectField for Vec<Positioned<'tree, NodeSlot<'tree, T, M, U, A>>>
+impl<'tree, T, M, E, U, A> InspectField for Vec<Positioned<'tree, NodeSlot<T, M, E, U, A>>>
 where
     T: Inspect,
     M: RecoveryNode<'tree>,
+    E: RecoveryNode<'tree>,
     U: RecoveryNode<'tree>,
     A: Absence,
 {

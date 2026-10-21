@@ -167,7 +167,7 @@ pub(crate) fn check_cross_utterance_patterns_with_sink(
 /// This catches annotation slips that are easy to miss when overlap brackets
 /// are edited manually across turn boundaries.
 fn check_self_overlap_markers(utterances: &FileUtterances<'_>, errors: &impl ErrorSink) {
-    use crate::{ErrorCode, ErrorContext, Severity, SourceLocation};
+    use crate::{ErrorCode, Severity};
 
     for (first, second) in utterances.consecutive_pairs() {
         if first.main.speaker != second.main.speaker {
@@ -179,14 +179,13 @@ fn check_self_overlap_markers(utterances: &FileUtterances<'_>, errors: &impl Err
             has_overlap_kind(&second.main.content.content, OverlapRegionKind::Bottom);
 
         if first_has_top && second_has_bottom {
-            let span = second.main.span;
+            let span = second.main.location;
             let speaker = second.main.speaker.as_str();
             errors.report(
-                crate::ParseError::new(
+                crate::ParseError::at_location(
                     ErrorCode::SpeakerSelfOverlap,
                     Severity::Error,
-                    SourceLocation::new(span),
-                    ErrorContext::new(speaker, span, speaker),
+                    span,
                     format!(
                         "Speaker '{}' has overlapping top/bottom overlap markers across adjacent utterances",
                         speaker
@@ -219,7 +218,7 @@ fn has_overlap_kind(content: &[UtteranceContent], target_kind: OverlapRegionKind
 /// Only orphaned tops (no matching bottom from any speaker) and orphaned
 /// bottoms (no matching top from any speaker) are reported.
 fn check_cross_utterance_overlap_balance(file: &crate::model::ChatFile, errors: &impl ErrorSink) {
-    use crate::{ErrorCode, ErrorContext, Severity, SourceLocation};
+    use crate::{ErrorCode, Severity};
 
     // Matching and vacant-sibling distribution have one owner shared with
     // alignment analysis; validation only selects reportable indexed orphans.
@@ -232,18 +231,13 @@ fn check_cross_utterance_overlap_balance(file: &crate::model::ChatFile, errors: 
         let Some(index) = orphan.region.index else {
             continue;
         };
-        let utterance_span = orphan.utterance_span();
+        let utterance_span = orphan.utterance_location();
         let index_label = format!(" (index {})", index.get());
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::UnbalancedOverlap,
                 Severity::Error,
-                SourceLocation::new(utterance_span),
-                ErrorContext::new(
-                    orphan.speaker.as_str(),
-                    utterance_span,
-                    orphan.speaker.as_str(),
-                ),
+                utterance_span,
                 format!(
                     "Top overlap ⌈{index_label} on speaker '{}' has no matching \
                      bottom overlap ⌊ from a different speaker",
@@ -262,18 +256,13 @@ fn check_cross_utterance_overlap_balance(file: &crate::model::ChatFile, errors: 
         let Some(index) = orphan.region.index else {
             continue;
         };
-        let utterance_span = orphan.utterance_span();
+        let utterance_span = orphan.utterance_location();
         let index_label = format!(" (index {})", index.get());
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::UnbalancedOverlap,
                 Severity::Error,
-                SourceLocation::new(utterance_span),
-                ErrorContext::new(
-                    orphan.speaker.as_str(),
-                    utterance_span,
-                    orphan.speaker.as_str(),
-                ),
+                utterance_span,
                 format!(
                     "Bottom overlap ⌊{index_label} on speaker '{}' has no matching \
                      top overlap ⌈ from a different speaker",

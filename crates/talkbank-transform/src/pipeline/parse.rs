@@ -238,26 +238,7 @@ fn required_validation(
 ) -> Result<ChatFile, PipelineError> {
     super::validated::parse_validated_with_parser(parser, content, policy, name, errors)
         .map(|accepted| accepted.into_unchecked())
-        .map_err(|error| match error {
-            super::validated::ValidatedParseError::InternalFailure { failure, .. } => {
-                PipelineError::InternalFailure(failure)
-            }
-            super::validated::ValidatedParseError::Parse(product) => {
-                PipelineError::Parse(ParseErrors::from(product.diagnostics().to_vec()))
-            }
-            super::validated::ValidatedParseError::Validation(failure) => {
-                match talkbank_model::CompletedDiagnostics::admit(failure.diagnostics().to_vec()) {
-                    Err(internal) => PipelineError::InternalFailure(internal),
-                    Ok(completed) => {
-                        if failure.has_incomplete_parse() {
-                            PipelineError::IncompleteValidation(Box::new(failure))
-                        } else {
-                            PipelineError::Validation(completed.into_diagnostics())
-                        }
-                    }
-                }
-            }
-        })
+        .map_err(PipelineError::from)
 }
 
 #[cfg(test)]
@@ -280,7 +261,10 @@ mod tests {
         assert_eq!(streamed.len(), 1);
         assert_eq!(returned.errors.len(), 1);
         assert_eq!(streamed[0].code, ErrorCode::ParseFailed);
-        assert!(streamed[0].location.span.is_dummy());
+        assert_eq!(
+            streamed[0].location,
+            talkbank_model::DiagnosticLocation::Unlocated
+        );
         assert_eq!(streamed[0].message, returned.errors[0].message);
     }
 
@@ -327,10 +311,19 @@ mod tests {
 
                 println!(
                     "Main tier span: {}..{}",
-                    main_tier.span.start, main_tier.span.end
+                    main_tier.location.span().expect("located").start(),
+                    main_tier.location.span().expect("located").end()
                 );
-                assert_ne!(main_tier.span.start, 0, "Span should not be 0..0");
-                assert_ne!(main_tier.span.end, 0, "Span should not be 0..0");
+                assert_ne!(
+                    main_tier.location.span().expect("located").start(),
+                    0,
+                    "Span should not be 0..0"
+                );
+                assert_ne!(
+                    main_tier.location.span().expect("located").end(),
+                    0,
+                    "Span should not be 0..0"
+                );
             }
             Err(PipelineError::Validation(errors)) => {
                 // Should have validation errors (missing terminator)
@@ -338,16 +331,20 @@ mod tests {
                 for error in &errors {
                     println!(
                         "  Error: {} at span {}..{}",
-                        error.message, error.location.span.start, error.location.span.end
+                        error.message,
+                        error.location.span().expect("located diagnostic").start(),
+                        error.location.span().expect("located diagnostic").end()
                     );
 
                     if error.code == ErrorCode::MissingSpeaker {
                         assert_ne!(
-                            error.location.span.start, 0,
+                            error.location.span().expect("located diagnostic").start(),
+                            0,
                             "E304 error span should not be 0..0"
                         );
                         assert_ne!(
-                            error.location.span.end, 0,
+                            error.location.span().expect("located diagnostic").end(),
+                            0,
                             "E304 error span should not be 0..0"
                         );
                     }

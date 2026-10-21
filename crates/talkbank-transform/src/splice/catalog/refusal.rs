@@ -30,6 +30,9 @@ pub enum CatalogIneligibility {
     /// Whitespace is not exactly the catalog's group-edge separator.
     #[error("the diagnosis is not the owned group-edge whitespace")]
     GroupEdge,
+    /// The diagnosis has no source location, so there is no source to repair.
+    #[error("the diagnosis has no source location")]
+    Unlocated,
 }
 
 /// A source capability failed, rather than a CHAT repair being unsupported.
@@ -38,12 +41,6 @@ pub enum CatalogFault {
     /// Generated traversal refused its source, grammar or admitted-kind evidence.
     #[error(transparent)]
     SourceCapability(#[from] talkbank_parser::CstFailure),
-    /// A source coordinate exceeds the existing representation.
-    #[error("source coordinate {bytes} does not fit in u32")]
-    CoordinateExtent {
-        /// The original, unnarrowed byte coordinate.
-        bytes: usize,
-    },
 }
 
 pub(super) enum CatalogRefusal {

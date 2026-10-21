@@ -18,14 +18,14 @@
 //! 3. Re-parse the serialized output
 //! 4. Compare original and re-parsed ASTs with `SemanticEq`
 //!
-//! This is the primary gate for serialization correctness. Any model or
-//! serialization change that breaks roundtrip idempotency will fail here.
+//! This checks semantic preservation for the discovered reference population,
+//! not byte-exact output, complete validity or compiler-code coverage.
 //!
 //! ## Usage
 //!
 //! ```bash
 //! cargo test -p talkbank-parser-tests roundtrip_reference
-//! cargo test -p talkbank-parser-tests --test roundtrip_reference_corpus
+//! cargo test -p talkbank-parser-tests --test integration roundtrip_reference_corpus::
 //! ```
 
 use std::path::PathBuf;

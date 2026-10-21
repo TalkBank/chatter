@@ -1,7 +1,15 @@
 # Structuring Opaque Tokens, Progress Log
 
-**Status:** Complete
-**Last updated:** 2026-03-23 16:54 EDT
+**Status:** Historical planning fragment, not completion evidence
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/grammar/docs/structuring-opaque-tokens.md)
+
+The March 23 plan below stops at its first progress entry. Its former
+“Complete” label was unsupported by this log. Preserve it as design history,
+not an inventory of current rules or an acceptance receipt. Current structure
+belongs to `grammar.js` and generated node types; use the
+[grammar workflow](../../book/src/contributing/grammar-workflow.md) and
+[word internals](../../book/src/chat-format/word-internals.md) for maintained guidance.
+The risk labels below were planning judgments, not proofs that a rewrite is safe.
 
 ## Plan
 

@@ -7,7 +7,6 @@
 use super::super::WriteChat;
 use super::relation::GrammaticalRelation;
 use super::tier_type::GraTierType;
-use crate::Span;
 use crate::alignment::indices::SemanticWordIndex1;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -55,10 +54,11 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Example
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation};
 ///
 /// // Create a %gra tier
-/// let gra = GraTier::new_gra(vec![
+/// let gra = GraTier::new_gra(Location::Unlocated, vec![
 ///     GrammaticalRelation::new(1, 2, "NSUBJ"),   // Word 1 is subject of word 2
 ///     GrammaticalRelation::new(2, 0, "ROOT"),   // Word 2 is root
 ///     GrammaticalRelation::new(3, 2, "OBJ"),    // Word 3 is object of word 2
@@ -77,9 +77,9 @@ pub struct GraTier {
     pub(crate) relations: GraRelations,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 
     /// Whether every relation the `%gra` LINE declared is in `relations`.
     ///
@@ -133,11 +133,15 @@ impl GraTier {
     /// established whether anything was dropped on the way. A parser that
     /// knows records its outcomes with [`super::GraLowering`] and consumes the
     /// completed receipt instead.
-    pub fn new(tier_type: GraTierType, relations: Vec<GrammaticalRelation>) -> Self {
+    pub fn new(
+        location: impl Into<crate::Location>,
+        tier_type: GraTierType,
+        relations: Vec<GrammaticalRelation>,
+    ) -> Self {
         Self {
             tier_type,
             relations: relations.into(),
-            span: Span::DUMMY,
+            location: location.into(),
             completeness: GraCompleteness::Unknown,
         }
     }
@@ -148,15 +152,12 @@ impl GraTier {
         self.completeness
     }
 
-    /// Sets source span metadata used in diagnostics.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
-    }
-
     /// Convenience constructor for standard `%gra`.
-    pub fn new_gra(relations: Vec<GrammaticalRelation>) -> Self {
-        Self::new(GraTierType::Gra, relations)
+    pub fn new_gra(
+        location: impl Into<crate::Location>,
+        relations: Vec<GrammaticalRelation>,
+    ) -> Self {
+        Self::new(location, GraTierType::Gra, relations)
     }
 
     /// Returns `true` if this tier serializes as `%gra`.
@@ -343,15 +344,15 @@ impl<'a> WholeGra<'a> {
         if relations.is_empty() {
             return;
         }
-        report_non_sequential_index(relations, self.tier.span, errors);
-        report_missing_root(relations, self.tier.span, errors);
+        report_non_sequential_index(relations, self.tier.location, errors);
+        report_missing_root(relations, self.tier.location, errors);
     }
 }
 
 /// E721: the indices run 1, 2, ..., N.
 fn report_non_sequential_index(
     relations: &[GrammaticalRelation],
-    span: crate::Span,
+    location: crate::Location,
     errors: &impl crate::ErrorSink,
 ) {
     use crate::{ErrorCode, ParseError, Severity};
@@ -360,10 +361,10 @@ fn report_non_sequential_index(
         let expected = position + 1;
         if relation.index != expected {
             errors.report(
-                ParseError::at_span(
+                ParseError::at_location(
                     ErrorCode::GraNonSequentialIndex,
                     Severity::Error,
-                    span,
+                    location,
                     format!(
                         "%gra indices not sequential: expected {expected}, found {}",
                         relation.index
@@ -384,7 +385,7 @@ fn report_non_sequential_index(
 /// consequence of the cycle, and reporting both is one fault told twice.
 fn report_missing_root(
     relations: &[GrammaticalRelation],
-    span: crate::Span,
+    location: crate::Location,
     errors: &impl crate::ErrorSink,
 ) {
     use crate::{ErrorCode, ParseError, Severity};
@@ -393,10 +394,10 @@ fn report_missing_root(
         return;
     }
     errors.report(
-        ParseError::at_span(
+        ParseError::at_location(
             ErrorCode::GraNoRoot,
             Severity::Error,
-            span,
+            location,
             "%gra tier has no ROOT relation",
         )
         .with_suggestion("Re-run morphotag to regenerate valid %gra"),
@@ -419,10 +420,10 @@ pub(crate) fn validate_monotone_gra_structure(tier: &GraTier, errors: &impl crat
     let roots = roots(relations);
     if roots.len() > 1 {
         errors.report(
-            ParseError::at_span(
+            ParseError::at_location(
                 ErrorCode::GraMultipleRoots,
                 Severity::Error,
-                tier.span,
+                tier.location,
                 format!("%gra tier has {} ROOT relations, expected 1", roots.len()),
             )
             .with_suggestion("Re-run morphotag to regenerate valid %gra"),
@@ -432,10 +433,10 @@ pub(crate) fn validate_monotone_gra_structure(tier: &GraTier, errors: &impl crat
     // E724: a cycle.
     if has_any_cycle(relations) {
         errors.report(
-            ParseError::at_span(
+            ParseError::at_location(
                 ErrorCode::GraCircularDependency,
                 Severity::Error,
-                tier.span,
+                tier.location,
                 "%gra tier has circular dependency",
             )
             .with_suggestion("Re-run morphotag to regenerate valid %gra"),
@@ -647,10 +648,13 @@ mod tests {
     /// The observation snapshot recorded E722 against it as expected output.
     #[test]
     fn a_root_in_the_last_relation_is_still_a_root() {
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "NSUBJ"),
-            GrammaticalRelation::new(2, 0, "ROOT"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 2, "NSUBJ"),
+                GrammaticalRelation::new(2, 0, "ROOT"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         assert!(
@@ -674,7 +678,7 @@ mod tests {
         .into_iter()
         .collect::<GraLowering>()
         .finish()
-        .into_tier();
+        .into_tier(crate::Location::Unlocated);
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         assert!(
@@ -698,7 +702,7 @@ mod tests {
         .into_iter()
         .collect::<GraLowering>()
         .finish()
-        .into_tier();
+        .into_tier(crate::Location::Unlocated);
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         assert!(
@@ -724,7 +728,7 @@ mod tests {
         .into_iter()
         .collect::<GraLowering>()
         .finish()
-        .into_tier();
+        .into_tier(crate::Location::Unlocated);
         let errors = ErrorCollector::new();
         validate_all(&rootless, &errors);
         let reported = errors.into_vec();
@@ -752,7 +756,7 @@ mod tests {
         .into_iter()
         .collect::<GraLowering>()
         .finish()
-        .into_tier();
+        .into_tier(crate::Location::Unlocated);
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let reported = errors.into_vec();
@@ -767,11 +771,14 @@ mod tests {
     /// New `%gra` construction preserves relation order and count.
     #[test]
     fn test_gra_tier_new() {
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "NSUBJ"),
-            GrammaticalRelation::new(2, 0, "ROOT"),
-            GrammaticalRelation::new(3, 2, "OBJ"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 2, "NSUBJ"),
+                GrammaticalRelation::new(2, 0, "ROOT"),
+                GrammaticalRelation::new(3, 2, "OBJ"),
+            ],
+        );
 
         assert_eq!(tier.len(), 3);
         assert!(!tier.is_empty());
@@ -783,7 +790,7 @@ mod tests {
     /// Empty relation input reports empty tier state.
     #[test]
     fn test_gra_tier_empty() {
-        let tier = GraTier::new_gra(vec![]);
+        let tier = GraTier::new_gra(crate::Location::Unlocated, vec![]);
         assert_eq!(tier.len(), 0);
         assert!(tier.is_empty());
     }
@@ -792,12 +799,15 @@ mod tests {
     #[test]
     fn test_validate_structure_valid() {
         // TalkBank convention: ROOT head points to self
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "DET"),
-            GrammaticalRelation::new(2, 3, "NSUBJ"),
-            GrammaticalRelation::new(3, 3, "ROOT"),
-            GrammaticalRelation::new(4, 3, "PUNCT"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 2, "DET"),
+                GrammaticalRelation::new(2, 3, "NSUBJ"),
+                GrammaticalRelation::new(3, 3, "ROOT"),
+                GrammaticalRelation::new(4, 3, "PUNCT"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         assert_eq!(errors.into_vec().len(), 0);
@@ -806,11 +816,14 @@ mod tests {
     /// Non-sequential indices trigger `E721`.
     #[test]
     fn test_validate_structure_non_sequential() {
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 3, "NSUBJ"),
-            GrammaticalRelation::new(3, 3, "ROOT"), // gap: expected 2
-            GrammaticalRelation::new(2, 3, "OBJ"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 3, "NSUBJ"),
+                GrammaticalRelation::new(3, 3, "ROOT"), // gap: expected 2
+                GrammaticalRelation::new(2, 3, "OBJ"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let errs = errors.into_vec();
@@ -823,11 +836,14 @@ mod tests {
     /// A cycle is E724, at error severity.
     #[test]
     fn a_cycle_is_reported_as_an_error() {
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "NSUBJ"),
-            GrammaticalRelation::new(2, 1, "OBJ"), // Circular: 1→2, 2→1
-            GrammaticalRelation::new(3, 2, "PUNCT"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 2, "NSUBJ"),
+                GrammaticalRelation::new(2, 1, "OBJ"), // Circular: 1→2, 2→1
+                GrammaticalRelation::new(3, 2, "PUNCT"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let errs = errors.into_vec();
@@ -842,11 +858,14 @@ mod tests {
     /// Two ROOTs are E723, at error severity.
     #[test]
     fn two_roots_are_reported_as_an_error() {
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 1, "ROOT"),
-            GrammaticalRelation::new(2, 2, "ROOT"),
-            GrammaticalRelation::new(3, 1, "PUNCT"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 1, "ROOT"),
+                GrammaticalRelation::new(2, 2, "ROOT"),
+                GrammaticalRelation::new(3, 1, "PUNCT"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let errs = errors.into_vec();
@@ -859,11 +878,14 @@ mod tests {
     #[test]
     fn test_validate_structure_root_head_zero_allowed() {
         // UD convention: ROOT head=0 is now allowed (no warning)
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "NSUBJ"),
-            GrammaticalRelation::new(2, 0, "ROOT"),
-            GrammaticalRelation::new(3, 2, "OBJ"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 2, "NSUBJ"),
+                GrammaticalRelation::new(2, 0, "ROOT"),
+                GrammaticalRelation::new(3, 2, "OBJ"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let errs = errors.into_vec();
@@ -873,12 +895,15 @@ mod tests {
     /// A self-headed non-ROOT relation is a cycle, not a second ROOT.
     #[test]
     fn test_validate_structure_self_headed_non_root_reports_cycle_not_multiple_roots() {
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 0, "ROOT"),
-            GrammaticalRelation::new(2, 1, "DEP"),
-            GrammaticalRelation::new(3, 3, "NMOD"),
-            GrammaticalRelation::new(4, 1, "PUNCT"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 0, "ROOT"),
+                GrammaticalRelation::new(2, 1, "DEP"),
+                GrammaticalRelation::new(3, 3, "NMOD"),
+                GrammaticalRelation::new(4, 1, "PUNCT"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let errs = errors.into_vec();
@@ -898,11 +923,14 @@ mod tests {
     /// additional "no ROOT" diagnostic.
     #[test]
     fn test_validate_structure_rootless_two_cycle_reports_cycle_not_no_root() {
-        let tier = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "DEP"),
-            GrammaticalRelation::new(2, 1, "PARATAXIS"),
-            GrammaticalRelation::new(3, 1, "PUNCT"),
-        ]);
+        let tier = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 2, "DEP"),
+                GrammaticalRelation::new(2, 1, "PARATAXIS"),
+                GrammaticalRelation::new(3, 1, "PUNCT"),
+            ],
+        );
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let errs = errors.into_vec();
@@ -922,7 +950,7 @@ mod tests {
     /// Empty tiers are accepted by structure validation.
     #[test]
     fn test_validate_structure_empty() {
-        let tier = GraTier::new_gra(vec![]);
+        let tier = GraTier::new_gra(crate::Location::Unlocated, vec![]);
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         assert_eq!(errors.into_vec().len(), 0);

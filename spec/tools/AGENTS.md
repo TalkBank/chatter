@@ -1,72 +1,71 @@
-# spec/tools - Core Generators Crate
+# Core generator agent guidance
 
-**Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/spec/tools/AGENTS.md)
 
-## Read the book first
+Read [spec guidance](../AGENTS.md) and the
+[repository guidance](../../AGENTS.md) first. The contributor
+[Spec System](../../book/src/architecture/spec-system.md) and
+[Spec Workflow](../../book/src/contributing/spec-workflow.md) own the format
+and commands; this file describes implementation boundaries.
 
-[`book/src/architecture/spec-system.md`](../../book/src/architecture/spec-system.md)
-is the authoritative description of the spec system and
-[`book/src/contributing/spec-workflow.md`](../../book/src/contributing/spec-workflow.md)
-is the procedure. `just spec-status` reports the live state. This file is the
-crate-level detail only.
+## Workspace and dependencies
 
-## Overview
-Rust generators that turn CHAT specs into tests and documentation artifacts.
-This crate lives in the separate `spec/Cargo.toml` workspace alongside
-`spec/runtime-tools`, which owns corpus candidate selection and live parser/model validation
-tasks.
+The `generators` package belongs to the independent `spec/Cargo.toml` workspace,
+alongside `runtime-tools` and `vocabulary`.
 
-## Key Commands
-```bash
-# From repo root:
-just spec-gen      # regenerate every artifact derived from spec/
-just spec-check    # report staleness, writing nothing
+Keep core generators independent of the live `talkbank-parser` and
+`talkbank-model` crates. Tree-sitter and the CHAT grammar are permitted here
+for wrapping examples and deriving CSTs. Work requiring the live model,
+`ErrorCode` enum, validation or public parser belongs in `spec/runtime-tools`.
+Shared authored schemas and diagnostic vocabulary belong in `spec/vocabulary`;
+do not copy their metadata into either consumer.
 
-cargo test
+This workspace has its own lint policy in `spec/Cargo.toml`. Do not infer that
+the root workspace's lint settings are inherited, or change the policy merely
+to make a check pass. Use typed input admission and explicit errors at authoring
+and filesystem boundaries; build-time failure is not permission to fabricate
+fallback values.
+
+## Producer ownership
+
+- `src/spec/` loads authored inputs against the shared schemas.
+- `src/output/` renders corpus, Rust-test and documentation artifacts.
+- `src/artifacts.rs` owns core artifact destinations and builders; runtime
+  artifacts are owned by the sibling runtime crate.
+- `src/generated/` contains generated vocabulary sites, not authored lists.
+- `templates/` contains the Tera files; `src/templates/` is their Rust tooling.
+
+Artifacts return their intended files before the owning output layer writes
+them. Preserve the distinction between named-file ownership in a shared
+directory and exclusive generated-directory ownership. Retain byte-identical
+outputs; prune only what that owner is entitled to remove. Never replace
+checked ownership with an arbitrary recursive delete or silently follow
+linked entries. Preserve output-planning and partial-failure semantics.
+
+Changes to a producer must carry its generated consumers and currency contract.
+Read the current artifact registry and its generated book table rather than
+adding another list of binaries or destinations to these instructions.
+The obsolete authored `layer` field is not restored: stages are observed in
+the generated snapshot and claims are adjudicated separately.
+
+## Commands and evidence
+
+From the repository root, the package-specific test command is:
+
+```sh
+cargo test --manifest-path spec/Cargo.toml -p generators
 ```
 
-Generation lives in `src/artifacts.rs`, one `Artifact` row per committed
-artifact, carrying its destination as a constant and a `build` that returns the
-files rather than writing them. That is what lets the gate compare without
-writing, and what stops a generator being pointed at the wrong directory.
+Use it only when relevant to the implementation change. The broader
+spec-workspace test command and regeneration sequence live in Spec Workflow;
+`just spec-gen` and `just spec-check` cover both core and runtime artifacts.
+A bare `cargo test` at the repository root tests a different workspace.
 
-## Binaries
+Keep native boundary tests for ownership refusal, missing inputs, wire formats
+and output behavior that the types alone cannot prove. Mutation candidates
+are unreviewed data, never diagnostic oracles; preserve seed provenance and
+review promotion through the normal spec workflow.
 
-`just --list` names every wired spec command with the question it answers, and
-`ls spec/*/src/bin` shows everything that exists. **This section used to carry
-four tables**, and between them they omitted `ca_census` and `spec_status` while
-four other files in the tree carried their own differing copies of the same
-list. `spec/docs/ERROR_SPEC_FORMAT.md` now holds the taxonomy, which is the part
-that is not derivable.
-
-What is worth knowing HERE, because it is about this crate rather than about the
-list:
-
-- **`spec/tools` must stay usable without the live parser/model crates.** That
-  is the whole reason for the split: ordinary spec generation should not pull
-  runtime parser dependencies. Anything needing the live `ErrorCode` enum, the
-  parser or the model belongs in the sibling `spec/runtime-tools`, which is why
-  `spec_gen` has a half in each.
-- **`fix_spec_layers` is DELETED** (R4, 2026-08-21). It rewrote an authored
-  `layer` field by running the parser; the field is gone and which stage
-  catches a rule is observed in `spec/observations/` instead.
-
-## Architecture
-```
-src/
-├── bin/           Entry points
-├── spec/          Spec file loaders and parsers
-├── output/        Output formatters (tree-sitter corpus, Rust tests, docs)
-├── generated/     Generated symbol sets (do not edit)
-└── templates/     Tera templates for wrapping test fragments in valid CHAT
-```
-
-## Testing
-```bash
-cargo test
-```
-
-## See Also
-- [spec/AGENTS.md](../AGENTS.md): specification structure and workflows
-- [spec/errors/README.md](../errors/README.md): error spec format reference
+Documentation-only edits do not require rebuilding these crates. Local
+generator tests do not establish independent public bootstrap, whole-language
+completeness or release readiness.

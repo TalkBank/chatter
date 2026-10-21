@@ -8,7 +8,7 @@
 use crate::model::{
     CADelimiterType, ContentStructure, Descend, Utterance, UtteranceContent, Word, WordContent,
 };
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 use std::collections::HashMap;
 
 /// A raw delimiter token discovered during utterance traversal.
@@ -17,8 +17,7 @@ use std::collections::HashMap;
 #[derive(Clone)]
 struct CADelimiterOccurrence {
     delimiter_type: CADelimiterType,
-    word_span: Span,
-    word_text: String,
+    word_location: crate::Location,
 }
 
 /// Role assigned to each delimiter occurrence after left-to-right pairing.
@@ -33,8 +32,7 @@ pub(crate) enum CADelimiterRole {
 pub(crate) struct CADelimiterRoleOccurrence {
     pub(crate) delimiter_type: CADelimiterType,
     pub(crate) role: CADelimiterRole,
-    pub(crate) word_span: Span,
-    pub(crate) word_text: String,
+    pub(crate) word_location: crate::Location,
     pub(crate) is_paired: bool,
 }
 
@@ -47,11 +45,10 @@ pub(crate) fn check_ca_delimiter_balance(utterance: &Utterance, errors: &impl Er
     for delimiter in analyze_ca_delimiter_roles(utterance) {
         if matches!(delimiter.role, CADelimiterRole::Begin) && !delimiter.is_paired {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::UnbalancedCADelimiter,
                     Severity::Error,
-                    SourceLocation::new(delimiter.word_span),
-                    ErrorContext::new(delimiter.word_text.clone(), delimiter.word_span, &delimiter.word_text),
+                    delimiter.word_location,
                     format!(
                         "Unbalanced CA delimiter {} ({:?}): missing closing delimiter",
                         delimiter.delimiter_type.to_symbol(),
@@ -97,8 +94,7 @@ fn assign_delimiter_roles(
             out.push(CADelimiterRoleOccurrence {
                 delimiter_type: delimiter.delimiter_type,
                 role: CADelimiterRole::End,
-                word_span: delimiter.word_span,
-                word_text: delimiter.word_text.clone(),
+                word_location: delimiter.word_location,
                 is_paired: true,
             });
             out[open_index].is_paired = true;
@@ -109,8 +105,7 @@ fn assign_delimiter_roles(
         out.push(CADelimiterRoleOccurrence {
             delimiter_type: delimiter.delimiter_type,
             role: CADelimiterRole::Begin,
-            word_span: delimiter.word_span,
-            word_text: delimiter.word_text,
+            word_location: delimiter.word_location,
             is_paired: false,
         });
         open_by_type
@@ -152,8 +147,7 @@ fn collect_ca_delimiters_from_word(word: &Word, delimiters: &mut Vec<CADelimiter
         if let WordContent::CADelimiter(delimiter) = content {
             delimiters.push(CADelimiterOccurrence {
                 delimiter_type: delimiter.delimiter_type,
-                word_span: word.span,
-                word_text: word.cleaned_text().to_string(),
+                word_location: word.location,
             });
         }
     }

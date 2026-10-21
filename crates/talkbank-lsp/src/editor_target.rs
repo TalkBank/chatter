@@ -46,10 +46,10 @@ use talkbank_model::model::{ContentStructure, GroupKind, UtteranceContent};
 #[must_use]
 pub(crate) fn editor_target_span(content: &UtteranceContent) -> Option<Span> {
     match content.structure() {
-        ContentStructure::Word(word) => Some(word.span()),
+        ContentStructure::Word(word) => word.location().span(),
         ContentStructure::Group(group) => match group.kind() {
             // The bracketed span, so a hover covers the whole group.
-            GroupKind::Angle => group.span(),
+            GroupKind::Angle => group.location().and_then(talkbank_model::Location::span),
             GroupKind::Quotation | GroupKind::Pho | GroupKind::Sin => None,
         },
         ContentStructure::Retrace(_) | ContentStructure::Leaf(_) => None,
@@ -60,14 +60,14 @@ pub(crate) fn editor_target_span(content: &UtteranceContent) -> Option<Span> {
 ///
 /// Existed five times in this crate, byte-identical, plus once more as a
 /// closure. The model has `span_contains_half_open`, which is EXCLUSIVE at the
-/// end and treats a dummy span as containing nothing; the two are not
-/// interchangeable, and an editor wants the inclusive form so a cursor resting
-/// on the closing character still targets the item. Kept separate deliberately
-/// rather than merged with the model's.
+/// end; the two are not interchangeable, and an editor wants the inclusive
+/// form so a cursor resting on the closing character still targets the item.
+/// Kept separate deliberately rather than merged with the model's. Callers
+/// with a `Location` match first: an unlocated value contains no offset.
 #[inline]
 #[must_use]
-pub(crate) fn span_contains(span: Span, offset: u32) -> bool {
-    offset >= span.start && offset <= span.end
+pub(crate) fn span_contains(span: Span, offset: usize) -> bool {
+    offset >= span.start() && offset <= span.end()
 }
 
 /// The index of the targetable item under `offset`, if any.
@@ -80,7 +80,7 @@ pub(crate) fn span_contains(span: Span, offset: u32) -> bool {
 #[must_use]
 pub(crate) fn find_content_index_at_offset(
     content: &[UtteranceContent],
-    offset: u32,
+    offset: usize,
 ) -> Option<usize> {
     content
         .iter()
@@ -125,8 +125,16 @@ mod tests {
         Word,
     };
 
+    /// A located word: the editor can only target what has a span.
+    fn located(start: usize, end: usize) -> talkbank_model::Location {
+        talkbank_model::Location::Located(Span::new(start, end))
+    }
+
     fn one_word() -> BracketedContent {
-        BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple("hello")))])
+        BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+            located(1, 6),
+            "hello",
+        )))])
     }
 
     /// What the editor targets, per structural category.
@@ -142,21 +150,42 @@ mod tests {
     /// crate had no test over the question at all.
     #[test]
     fn the_editor_targets_words_and_angle_groups_and_nothing_else() {
-        assert!(
-            editor_target_span(&UtteranceContent::Word(Box::new(Word::simple("hello")))).is_some(),
+        assert_eq!(
+            editor_target_span(&UtteranceContent::Word(Box::new(Word::simple(
+                located(0, 5),
+                "hello"
+            )))),
+            Some(Span::new(0, 5)),
             "a bare word is the primary target"
         );
+        assert_eq!(
+            editor_target_span(&UtteranceContent::Word(Box::new(Word::simple(
+                talkbank_model::Location::Unlocated,
+                "hello"
+            )))),
+            None,
+            "an unlocated word has nothing to target"
+        );
         assert!(
-            editor_target_span(&UtteranceContent::Group(Group::new(one_word()))).is_some(),
+            editor_target_span(&UtteranceContent::Group(Group::new(
+                located(0, 7),
+                one_word()
+            )))
+            .is_some(),
             "an angle group is targeted as a whole"
         );
         assert_eq!(
-            editor_target_span(&UtteranceContent::Action(Action::new())),
+            editor_target_span(&UtteranceContent::Action(Action::new(
+                talkbank_model::Location::Unlocated
+            ))),
             None,
             "a bare action is policy-excluded, not accidentally missed"
         );
         assert_eq!(
-            editor_target_span(&UtteranceContent::Quotation(Quotation::new(one_word()))),
+            editor_target_span(&UtteranceContent::Quotation(Quotation::new(
+                talkbank_model::Location::Unlocated,
+                one_word()
+            ))),
             None,
             "a quotation HAS a span; excluding it is an inherited policy"
         );
@@ -181,8 +210,14 @@ mod tests {
     #[test]
     fn only_alignable_items_have_a_mor_index() {
         let content = vec![
-            UtteranceContent::Word(Box::new(Word::simple("hello"))),
-            UtteranceContent::Pause(Pause::new(PauseDuration::Short)),
+            UtteranceContent::Word(Box::new(Word::simple(
+                talkbank_model::Location::Unlocated,
+                "hello",
+            ))),
+            UtteranceContent::Pause(Pause::new(
+                talkbank_model::Location::Unlocated,
+                PauseDuration::Short,
+            )),
         ];
         assert!(
             mor_alignment_index(&content, 0).is_some(),
@@ -204,7 +239,7 @@ mod tests {
     /// item, which is what an editor wants.
     #[test]
     fn span_contains_includes_both_ends() {
-        let span = Span { start: 10, end: 20 };
+        let span = Span::new(10, 20);
         assert!(span_contains(span, 10), "start is inside");
         assert!(span_contains(span, 20), "end is inside, unlike the model's");
         assert!(!span_contains(span, 9));

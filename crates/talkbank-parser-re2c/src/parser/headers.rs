@@ -88,7 +88,7 @@ fn report_participant_syntax(
     errors.report(talkbank_model::ParseError::new(
         code,
         talkbank_model::Severity::Error,
-        talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+        talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
         None,
         message,
     ));

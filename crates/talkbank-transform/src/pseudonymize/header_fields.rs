@@ -23,7 +23,7 @@ pub enum HeaderNameField {
 }
 
 /// Original header and typed metadata field selected by the producer.
-/// The index is zero-based in `headers_with_spans`, including structural headers.
+/// The index is zero-based in `headers_with_locations`, including structural headers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HeaderFieldLocation {
     header: usize,
@@ -80,15 +80,20 @@ pub(super) fn plan<'input>(
 ) -> Result<Vec<HeaderFieldReview<'input>>, HeaderFieldRefusal> {
     let parsed = input.parsed_source();
     let mut findings = Vec::new();
-    for (header_index, (header, span)) in
-        input.document().document().headers_with_spans().enumerate()
+    for (header_index, (header, span)) in input
+        .document()
+        .document()
+        .headers_with_locations()
+        .enumerate()
     {
         if !matches!(header, Header::ID(_) | Header::Participants { .. }) {
             continue;
         }
+        // A header that cannot be placed in the source cannot be edited in it.
+        let span = span.span().ok_or(HeaderFieldRefusal)?;
         let raw = parsed
             .root_node()
-            .named_descendant_for_byte_range(span.start as usize, span.end as usize)
+            .named_descendant_for_byte_range(span.start(), span.end())
             .ok_or(HeaderFieldRefusal)?;
         if matches!(header, Header::Participants { .. }) {
             let node = ParticipantsHeaderNode::from_node(raw).ok_or(HeaderFieldRefusal)?;

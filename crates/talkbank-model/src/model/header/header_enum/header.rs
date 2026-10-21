@@ -168,8 +168,8 @@ impl crate::validation::Validate for LanguageCodes {
             errors.report(crate::ParseError::new(
                 crate::ErrorCode::EmptyLanguagesHeader,
                 crate::Severity::Error,
-                crate::SourceLocation::at_offset(0),
-                crate::ErrorContext::new("", 0..0, "languages"),
+                context.field_diagnostic_location(),
+                crate::ErrorContext::new("", crate::Span::new(0, 0), "languages"),
                 "@Languages header should specify at least one language code",
             ));
         }
@@ -264,8 +264,8 @@ impl crate::validation::Validate for ParticipantEntries {
             errors.report(crate::ParseError::new(
                 crate::ErrorCode::EmptyParticipantsHeader,
                 crate::Severity::Error,
-                crate::SourceLocation::at_offset(0),
-                crate::ErrorContext::new("", 0..0, "participants"),
+                context.field_diagnostic_location(),
+                crate::ErrorContext::new("", crate::Span::new(0, 0), "participants"),
                 "@Participants header cannot be empty",
             ));
         }
@@ -370,15 +370,15 @@ impl crate::validation::Validate for ChatOptionFlags {
     /// Enforces non-empty `@Options` (option values are otherwise free-form flags).
     fn validate(
         &self,
-        _context: &crate::validation::ValidationContext,
+        context: &crate::validation::ValidationContext,
         errors: &impl crate::ErrorSink,
     ) {
         if self.is_empty() {
             errors.report(crate::ParseError::new(
                 crate::ErrorCode::EmptyOptionsHeader,
                 crate::Severity::Error,
-                crate::SourceLocation::at_offset(0),
-                crate::ErrorContext::new("", 0..0, "options"),
+                context.field_diagnostic_location(),
+                crate::ErrorContext::new("", crate::Span::new(0, 0), "options"),
                 "@Options header cannot be empty",
             ));
         }

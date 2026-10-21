@@ -18,8 +18,10 @@ Key capabilities:
   macOS, Linux, and Windows.
 - **Validation result reuse**: Stores pass/fail outcomes keyed by the
   `ContentHash` of the bytes the caller read and validated, the alignment
-  coverage (`AlignmentValidation`), and a `RulesVersion` (cache crate version
-  folded with a fingerprint of the active validation rule set). When the
+  coverage (`AlignmentValidation`), resolved path, parser namespace and a
+  `RulesVersion`. Production identities include the cache crate version, key
+  scheme, validation-rule and parser-behavior fingerprints, and semantic rule
+  selection. When the
   rules change, prior verdicts become a cache miss instead of being served
   stale.
 - **Failures are not misses**: every lookup returns

@@ -40,7 +40,9 @@ impl Utterance {
     ) {
         // Determine utterance baseline language state.
         self.utterance_language = if let Some(code) = self.main.content.language_code.as_ref() {
-            UtteranceLanguage::ResolvedTierScoped { code: code.clone() }
+            UtteranceLanguage::ResolvedTierScoped {
+                code: code.code.clone(),
+            }
         } else if let Some(code) = default_language {
             UtteranceLanguage::ResolvedDefault { code: code.clone() }
         } else {

@@ -3,6 +3,7 @@
 use talkbank_model::alignment::helpers::{
     WordItem, WordItemMut, walk_code_switch_spans, walk_words, walk_words_mut,
 };
+use talkbank_model::model::LanguagePrecode;
 use talkbank_model::model::{
     ChatFile, CodeSwitchSpan, Header, LanguageCode, Line, MainTier, ReplacedWord,
     UnspannedSwitchTarget, Word, WordLanguageMarker,
@@ -210,6 +211,7 @@ fn rewrite_main_tier_language_switch(
         .content
         .language_code
         .as_ref()
+        .map(|precode| &precode.code)
         .or(default_language)
         .cloned();
     let mut cleared_any_word_marker = false;
@@ -247,9 +249,24 @@ fn rewrite_main_tier_language_switch(
         },
     );
 
-    let language_changed = main_tier.content.language_code.as_ref() != Some(target.language());
+    let language_changed = main_tier
+        .content
+        .language_code
+        .as_ref()
+        .map(|precode| &precode.code)
+        != Some(target.language());
     if language_changed {
-        main_tier.content.language_code = Some(target.language().clone());
+        // The precode is inserted by this fix, not read from source: unlocated
+        // unless one was already there.
+        let location = main_tier
+            .content
+            .language_code
+            .as_ref()
+            .map_or(talkbank_model::Location::Unlocated, |precode| {
+                precode.location
+            });
+        main_tier.content.language_code =
+            Some(LanguagePrecode::new(location, target.language().clone()));
     }
 
     language_changed || cleared_any_word_marker

@@ -32,7 +32,7 @@ serde = { workspace = true }
 
 [dev-dependencies]
 # The spec format's vocabulary, shared with the spec workspace.
-talkbank-spec-vocabulary = { path = "../../spec/vocabulary" }
+talkbank-spec-vocabulary = { path = "../../spec/vocabulary", features = ["model-runtime"] }
 divan = { workspace = true }
 insta = { workspace = true }
 proptest = { workspace = true }

@@ -18,7 +18,7 @@
 
 use super::{Bullet, LanguageCode, Linker, Postcode, Terminator, UtteranceContent, WriteChat};
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -42,9 +42,10 @@ pub struct TierContent {
     #[serde(skip_serializing_if = "TierLinkers::is_empty", default)]
     pub linkers: TierLinkers,
 
-    /// Optional utterance-scoped language code (`[- code]`).
+    /// Optional utterance-scoped language precode (`[- code]`), with its
+    /// source location.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub language_code: Option<LanguageCode>,
+    pub language_code: Option<LanguagePrecode>,
 
     /// Ordered tier content items (words, groups, events, pauses, etc.).
     pub content: TierContentItems,
@@ -61,33 +62,46 @@ pub struct TierContent {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub bullet: Option<Bullet>,
 
-    /// Optional source span for content region (after colon).
-    ///
-    /// Used for precise diagnostics and skipped in JSON output.
-    #[serde(skip)]
+    /// Source location of the content region (after the colon). Skipped in
+    /// JSON output; programmatic content is unlocated.
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub content_span: Option<Span>,
-
-    /// Optional source span of the `[- code]` utterance-language precode.
-    ///
-    /// The precode is a real leading source token whose classification lives
-    /// in [`Self::language_code`] (a shared [`LanguageCode`] newtype also used
-    /// by the `@Languages` / `@ID` headers, where a precode position is
-    /// meaningless), so its POSITION is recorded here at the field level, not
-    /// on the newtype. `.start` is the byte of the opening `[`. Provenance
-    /// only: skipped in serialization, schema, and semantic equality, so the
-    /// wire format is unchanged. Used by source-spacing validation (E758) to
-    /// treat the precode as a first real element (no longer an opt-out).
-    #[serde(skip)]
-    #[schemars(skip)]
-    #[semantic_eq(skip)]
-    pub language_code_span: Option<Span>,
+    pub location: crate::Location,
 }
 
+/// The `[- code]` utterance-language precode: a real leading source token
+/// whose classification is a shared [`LanguageCode`] (also used by the
+/// `@Languages` and `@ID` headers, where a position is meaningless), so the
+/// POSITION lives here, beside it. `location` covers the token from its
+/// opening `[`. Serializes as the bare code, so the wire format is unchanged.
+/// Used by source-spacing validation (E758) to treat the precode as a first
+/// real element.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[serde(transparent)]
+#[schemars(transparent)]
+pub struct LanguagePrecode {
+    /// The language the utterance is in.
+    pub code: LanguageCode,
+    /// Where the precode token sits; unlocated when built programmatically.
+    #[serde(skip, default = "crate::Location::unlocated")]
+    #[schemars(skip)]
+    #[semantic_eq(skip)]
+    pub location: crate::Location,
+}
+
+impl LanguagePrecode {
+    /// A precode for `code` at `location`.
+    pub fn new(location: impl Into<crate::Location>, code: LanguageCode) -> Self {
+        Self {
+            code,
+            location: location.into(),
+        }
+    }
+}
 impl TierContent {
     /// Builds tier content with required body items and empty optional components.
-    pub fn new(content: Vec<UtteranceContent>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, content: Vec<UtteranceContent>) -> Self {
         Self {
             linkers: TierLinkers::new(Vec::new()),
             language_code: None,
@@ -95,15 +109,15 @@ impl TierContent {
             terminator: None,
             postcodes: TierPostcodes::new(Vec::new()),
             bullet: None,
-            content_span: None,
-            language_code_span: None,
+            location: location.into(),
         }
     }
 
     /// Builds tier content with all fields explicitly provided.
     pub fn with_all(
+        location: impl Into<crate::Location>,
         linkers: Vec<Linker>,
-        language_code: Option<LanguageCode>,
+        language_code: Option<LanguagePrecode>,
         content: Vec<UtteranceContent>,
         terminator: Option<Terminator>,
         postcodes: Vec<Postcode>,
@@ -116,8 +130,7 @@ impl TierContent {
             terminator,
             postcodes: postcodes.into(),
             bullet,
-            content_span: None,
-            language_code_span: None,
+            location: location.into(),
         }
     }
 
@@ -127,16 +140,9 @@ impl TierContent {
         self
     }
 
-    /// Sets utterance-scoped language code (`[- code]`).
-    pub fn with_language_code(mut self, code: LanguageCode) -> Self {
-        self.language_code = Some(code);
-        self
-    }
-
-    /// Sets the source span of the `[- code]` precode (its opening `[` at
-    /// `.start`). Provenance only; see [`Self::language_code_span`].
-    pub fn with_language_code_span(mut self, span: Span) -> Self {
-        self.language_code_span = Some(span);
+    /// Sets the utterance-scoped language precode (`[- code]`).
+    pub fn with_language_code(mut self, precode: LanguagePrecode) -> Self {
+        self.language_code = Some(precode);
         self
     }
 
@@ -172,12 +178,6 @@ impl TierContent {
         self.bullet = self.content.take_trailing_bullet();
     }
 
-    /// Sets source span for content region.
-    pub fn with_content_span(mut self, span: Span) -> Self {
-        self.content_span = Some(span);
-        self
-    }
-
     /// Writes only the payload region (everything after tier prefix).
     ///
     /// This writes: linkers, language_code, content, terminator, postcodes, bullet
@@ -197,7 +197,7 @@ impl TierContent {
                 w.write_char(' ')?;
             }
             w.write_str("[- ")?;
-            lang_code.write_chat(w)?;
+            lang_code.code.write_chat(w)?;
             w.write_char(']')?;
         }
 
@@ -261,22 +261,6 @@ impl TierContent {
         let mut output = String::new();
         let _ = self.write_tier_content(&mut output);
         output
-    }
-}
-
-impl Default for TierContent {
-    /// Builds an empty tier payload used by constructors and serde defaults.
-    fn default() -> Self {
-        Self {
-            linkers: TierLinkers::new(Vec::new()),
-            language_code: None,
-            content: TierContentItems::new(Vec::new()),
-            terminator: None,
-            postcodes: TierPostcodes::new(Vec::new()),
-            bullet: None,
-            content_span: None,
-            language_code_span: None,
-        }
     }
 }
 
@@ -475,13 +459,7 @@ impl IntoIterator for TierContentItems {
 impl Validate for TierContentItems {
     /// Enforces minimum-content invariants before deeper item-level validation.
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
-        let span = match context.field_span {
-            Some(span) => span,
-            None => Span::from_usize(0, 0),
-        };
-        // DEFAULT: Missing field text is reported as empty to match the offending value.
-        let field_text = context.field_text.clone().unwrap_or_default();
-        let error_context = ErrorContext::new(field_text.clone(), span, field_text.clone());
+        let location = context.field_location;
 
         if self.0.is_empty() {
             // E306: no content after the speaker. Same code as the
@@ -494,11 +472,10 @@ impl Validate for TierContentItems {
                 return;
             }
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::EmptyUtterance,
                     Severity::Error,
-                    SourceLocation::new(span),
-                    error_context,
+                    location,
                     "Utterance is empty (no content after speaker)",
                 )
                 .with_suggestion("Add at least one word or content element to the utterance"),
@@ -526,22 +503,20 @@ impl Validate for TierContentItems {
                 return;
             }
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::EmptyUtterance,
                     Severity::Error,
-                    SourceLocation::new(span),
-                    error_context.clone(),
+                    location,
                     "Utterance has no meaningful content (only separators)",
                 )
                 .with_suggestion("Add at least one word or content element to the utterance"),
             );
 
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::EmptyWordContent,
                     Severity::Error,
-                    SourceLocation::new(span),
-                    error_context,
+                    location,
                     "Utterance contains no word content",
                 )
                 .with_suggestion("Add at least one lexical word item to the utterance"),

@@ -29,6 +29,61 @@ const VALID_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI C
 /// Minimal valid CHAT file without utterances.
 const MINIMAL_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@End\n";
 
+// ===== Rewrite admission =====
+
+/// The public rewrite boundary must not reuse one surviving occurrence as
+/// evidence for two source lines. Mutate an authored model, not CHAT syntax.
+#[test]
+fn rewrite_refuses_a_deleted_duplicate_utterance() {
+    use talkbank_model::{Line, WriteChat};
+
+    let source =
+        include_str!("../../../../corpus/reference/word-features/currency-number-spelling.cha");
+    let mut model = parse_and_validate(source, ParseValidateOptions::default()).unwrap();
+    let repeated: Vec<_> = model
+        .lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| match line {
+            Line::Utterance(utterance)
+                if utterance.main.to_chat_string().trim_end() == "*CHI:\ttwelve euros ." =>
+            {
+                Some(index)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(repeated.len(), 2, "authored repeated-utterance control");
+    assert!(talkbank_transform::Rewrite::of(&model, source).is_ok());
+    model.lines.remove(repeated[0]);
+    assert!(
+        talkbank_transform::Rewrite::of(&model, source).is_err(),
+        "one surviving occurrence must not certify the deleted duplicate"
+    );
+}
+
+/// Preserving every line's spelling does not permit changing their order.
+#[test]
+fn rewrite_refuses_reordered_utterances() {
+    use talkbank_model::Line;
+
+    let source =
+        include_str!("../../../../corpus/reference/word-features/currency-number-spelling.cha");
+    let mut model = parse_and_validate(source, ParseValidateOptions::default()).unwrap();
+    let first = model
+        .lines
+        .iter()
+        .position(|line| matches!(line, Line::Utterance(_)))
+        .unwrap();
+    assert!(matches!(model.lines[first + 1], Line::Utterance(_)));
+    let moved = model.lines.remove(first);
+    model.lines.insert(first + 1, moved);
+    assert!(
+        talkbank_transform::Rewrite::of(&model, source).is_err(),
+        "normalization cannot reorder the authored utterances"
+    );
+}
+
 // ===== Parse & validate (5 tests) =====
 
 #[test]

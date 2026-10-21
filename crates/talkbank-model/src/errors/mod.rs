@@ -64,8 +64,9 @@ pub mod parse_error;
 /// Collection type: `ParseErrors` and `ParseResult` type alias.
 pub mod parse_errors;
 mod rebased_sink;
-pub use fragment_source::{FragmentRangeError, FragmentSource};
-/// Source location types: `SourceLocation`, `ErrorLabel`, `Severity`, `ErrorVec`.
+pub use fragment_source::{FragmentRangeError, FragmentSource, MAX_PARSER_INPUT_BYTES};
+/// Source location types: `DiagnosticLocation`, `ErrorLabel`, `Severity`, `ErrorVec`.
+pub mod location;
 pub mod source_location;
 /// Span shifting trait for adjusting byte offsets in errors and AST nodes.
 pub mod span_shift;
@@ -78,7 +79,7 @@ mod tests;
 #[cfg(feature = "async")]
 pub use async_channel_sink::AsyncChannelErrorSink;
 pub use builder::ParseErrorBuilder;
-pub use clan_location::{ClanHiddenLineError, ClanLocation, resolve_clan_location};
+pub use clan_location::{ClanLocation, ClanLocationError, resolve_clan_location};
 pub use codes::{CheckStatus, ErrorCode, XPHON_ERROR_CODES, validation_rules_fingerprint};
 pub use collectors::{ErrorCollector, ParseTracker};
 pub use completed_diagnostics::{CompletedDiagnostics, InternalFailure};
@@ -91,6 +92,7 @@ mod source_diagnostic;
 pub use error_sink::ChannelErrorSink;
 pub use error_sink::{ErrorSink, NullErrorSink};
 pub use line_map::{LineMap, SourceIndex};
+pub use location::Location;
 pub use offset_adjusting_sink::OffsetAdjustingErrorSink;
 pub use parse_error::ParseError;
 pub use parse_errors::{ParseErrors, ParseResult};
@@ -99,120 +101,126 @@ pub use source_diagnostic::{
     DiagnosticContext, DiagnosticLabel, DiagnosticPresentation, DiagnosticSourceError, DisplaySpan,
     SourceDiagnostic,
 };
-pub use source_location::{ErrorLabel, ErrorVec, Severity, SourceLocation, SourceLocationError};
+pub use source_location::{
+    DiagnosticLocation, DiagnosticLocationWireError, ErrorLabel, ErrorVec, LineColumn, Severity,
+    SourceLocationError,
+};
 pub use span_shift::SpanShift;
 pub use tee_sink::TeeErrorSink;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
-pub use text_size::{TextRange, TextSize};
 
 // =============================================================================
-// Span - Compact source location backed by text-size::TextRange
+// Span - a byte range in source text
 // =============================================================================
 
-/// Compact source span representing a byte range in source text.
+/// A half-open byte range `start..end` in source text.
 ///
-/// This is a thin wrapper around [`text_size::TextRange`] that preserves
-/// our existing API while gaining the type-safe offset arithmetic from
-/// the `text-size` ecosystem (used by rust-analyzer, rowan, etc.).
+/// Offsets are `usize`, the width every producer (tree-sitter, the re2c lexer,
+/// `str` slicing) already uses, so constructing a span never truncates. The
+/// fields are private: a span is built through [`Span::new`] (trusted, ordered
+/// producer offsets), [`Span::at`] (a zero-width point) or the checked
+/// [`Span::try_new`] for untrusted input. JSON
+/// deserialization goes through the checked path, so a decoded span always has
+/// `start <= end`.
 ///
-// KNOWN HAZARD, for maintainers: `DUMMY` is `{0, 0}`, and so is a real
-// zero-length position at the start of the file.
-//
-// Deliberately a plain comment, not rustdoc: schemars turns doc comments into
-// `description` text in the published `schema/chat-file.schema.json`, and this
-// is internal maintenance detail, not something a schema consumer should read.
-//
-// `DUMMY` is the sentinel meaning "this value has no source location", and
-// several validators branch on it: `validation/utterance/spacing.rs` SKIPS a
-// retrace whose span is `DUMMY`, and `underline.rs` /
-// `validation/retrace/mod.rs` widen to an enclosing span. `splice/engine.rs`
-// rejects an edit carrying it outright, because splicing at offset 0 and
-// "no location" are the same bytes. So the VALUE is still overloaded, and that
-// part is not fixed.
-//
-// What IS fixed, and this comment described the pre-fix world for long enough
-// to mislead a reader: `Span` no longer derives `Default`. It used to, and
-// `Span::default()` was `{0, 0}`, so the sentinel was ALSO whatever any caller
-// got from `default()` or `unwrap_or_default()`, invisibly and un-greppably.
-// That derive is gone. `Span::dummy()` below exists so a serde-skipped field
-// asks for the sentinel BY NAME in its own attribute, where a reader of the
-// field can see what deserialization produces. Count the asks with
-// `rg -o 'default = "[a-zA-Z:_]*Span::dummy"' crates | wc -l` rather than
-// trusting a number written here.
-//
-// So: `Span::DUMMY` is alive ON PURPOSE and is the only route to the sentinel.
-// Writing it is a deliberate, greppable act, which is exactly what the removal
-// of `Default` bought. Removing the sentinel itself is a different and much
-// larger change (an `Option<Span>`, or a span type that cannot be absent),
-// and it is not what happened here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(try_from = "SpanWire")]
+#[schemars(description = "A half-open byte range `start..end` in the source text; `start <= end`.")]
 pub struct Span {
     /// Start byte offset (0-indexed, inclusive)
-    pub start: u32,
+    start: usize,
     /// End byte offset (0-indexed, exclusive)
-    pub end: u32,
+    end: usize,
+}
+
+/// The unchecked wire shape of a [`Span`]; admitted through [`Span::try_new`].
+/// schemars follows `try_from`, so the published schema describes this shape.
+#[derive(Deserialize, JsonSchema)]
+struct SpanWire {
+    /// Start byte offset (0-indexed, inclusive)
+    start: usize,
+    /// End byte offset (0-indexed, exclusive)
+    end: usize,
+}
+
+impl TryFrom<SpanWire> for Span {
+    type Error = InvertedSpan;
+
+    fn try_from(wire: SpanWire) -> Result<Self, Self::Error> {
+        Span::try_new(wire.start, wire.end)
+    }
+}
+
+/// A byte range whose start lies after its end.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("byte range {start}..{end} ends before it starts")]
+pub struct InvertedSpan {
+    /// The offered start offset.
+    pub start: usize,
+    /// The offered end offset.
+    pub end: usize,
 }
 
 impl Span {
-    /// Dummy span for programmatic construction (tests, builders).
-    pub const DUMMY: Span = Span { start: 0, end: 0 };
-
-    /// [`Span::DUMMY`], as a function, for `#[serde(skip, default = ...)]`.
+    /// A span from a trusted producer's ordered offsets.
     ///
-    /// Exists because dropping the `Default` derive left serde with no way to
-    /// reconstruct a skipped field. That is the point: the sentinel is now
-    /// something a field has to ASK for by name, and the ask is visible in the
-    /// field's own attribute, where a reader looking at the field can see what
-    /// deserialization will produce.
-    #[must_use]
-    pub const fn dummy() -> Span {
-        Span::DUMMY
-    }
-
-    /// Create a span from byte offsets.
+    /// Callers are parsers and lexers whose ranges are ordered by construction
+    /// (a tree-sitter node's `start_byte() <= end_byte()`, a lexer token's
+    /// bounds) and arithmetic on spans already admitted. Untrusted offsets
+    /// (wire input, editor positions) must use [`Span::try_new`].
     ///
-    /// - `start`: inclusive start byte offset (0-indexed).
-    /// - `end`: exclusive end byte offset (0-indexed).
+    /// # Panics
+    ///
+    /// If `start > end`, in every build profile. An inverted range from a
+    /// trusted producer is a bug in that producer (or in tree-sitter), not a
+    /// property of the input, so it fails at the call site (reported through
+    /// `track_caller`) rather than travelling on as a span that slices or
+    /// measures wrongly. In a `const` context the check runs at compile time.
     #[inline]
-    pub fn new(start: u32, end: u32) -> Self {
+    #[track_caller]
+    pub const fn new(start: usize, end: usize) -> Self {
+        assert!(start <= end, "Span::new: start lies after end");
         Self { start, end }
     }
 
-    /// Create a span from `usize` byte offsets, truncating to `u32`.
-    ///
-    /// Convenience constructor for call sites that work with `usize` lengths
-    /// (e.g., `str::len()`). The offsets are cast with `as u32`, so values
-    /// larger than `u32::MAX` will be silently truncated.
+    /// A span from untrusted offsets, refusing `start > end`.
     #[inline]
-    pub fn from_usize(start: usize, end: usize) -> Self {
-        Self {
-            start: start as u32,
-            end: end as u32,
+    pub fn try_new(start: usize, end: usize) -> Result<Self, InvertedSpan> {
+        if start <= end {
+            Ok(Self { start, end })
+        } else {
+            Err(InvertedSpan { start, end })
         }
     }
 
-    /// Create a zero-width span at a single byte offset
+    /// A zero-width span at a single byte offset.
     #[inline]
-    pub fn at(offset: u32) -> Self {
+    pub fn at(offset: usize) -> Self {
         Self {
             start: offset,
             end: offset,
         }
     }
 
-    /// Check if this is a dummy span
+    /// Start byte offset (inclusive).
     #[inline]
-    pub fn is_dummy(&self) -> bool {
-        self.start == 0 && self.end == 0
+    pub fn start(&self) -> usize {
+        self.start
     }
 
-    /// Get the length in bytes
+    /// End byte offset (exclusive).
     #[inline]
-    pub fn len(&self) -> u32 {
-        self.end.saturating_sub(self.start)
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
+    /// Length in bytes.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.end - self.start
     }
 
     /// Check if span is empty (zero-width)
@@ -224,7 +232,7 @@ impl Span {
     /// Convert to `Range<usize>` for slicing.
     #[inline]
     pub fn to_range(&self) -> Range<usize> {
-        (self.start as usize)..(self.end as usize)
+        self.start..self.end
     }
 
     /// Merge two spans into the smallest span that covers both.
@@ -240,12 +248,6 @@ impl Span {
         }
     }
 
-    /// Convert to the underlying `text_size::TextRange`
-    #[inline]
-    pub fn to_text_range(&self) -> TextRange {
-        TextRange::new(TextSize::new(self.start), TextSize::new(self.end))
-    }
-
     /// Check if this span fully contains another span
     #[inline]
     pub fn contains_span(&self, other: Span) -> bool {
@@ -254,7 +256,7 @@ impl Span {
 
     /// Check if this span contains a byte offset
     #[inline]
-    pub fn contains_offset(&self, offset: u32) -> bool {
+    pub fn contains_offset(&self, offset: usize) -> bool {
         self.start <= offset && offset < self.end
     }
 
@@ -274,10 +276,12 @@ impl Span {
     }
 }
 
-impl From<Range<usize>> for Span {
-    /// Convert a byte range into a `Span`.
-    fn from(range: Range<usize>) -> Self {
-        Span::from_usize(range.start, range.end)
+impl TryFrom<Range<usize>> for Span {
+    type Error = InvertedSpan;
+
+    /// A span from a range whose order is not known, refusing `start > end`.
+    fn try_from(range: Range<usize>) -> Result<Self, Self::Error> {
+        Span::try_new(range.start, range.end)
     }
 }
 
@@ -286,36 +290,4 @@ impl From<Span> for Range<usize> {
     fn from(span: Span) -> Self {
         span.to_range()
     }
-}
-
-impl From<TextRange> for Span {
-    /// Convert a `TextRange` into `Span` while preserving byte offsets.
-    #[inline]
-    fn from(range: TextRange) -> Self {
-        Span {
-            start: range.start().into(),
-            end: range.end().into(),
-        }
-    }
-}
-
-impl From<Span> for TextRange {
-    /// Convert `Span` into `text_size::TextRange`.
-    #[inline]
-    fn from(span: Span) -> Self {
-        TextRange::new(TextSize::new(span.start), TextSize::new(span.end))
-    }
-}
-
-// =============================================================================
-// Spanned trait - uniform span access for all AST/model nodes
-// =============================================================================
-
-/// Trait for types that have a source span.
-///
-/// Implement this for every model type that carries source location information.
-/// This provides a uniform way to extract spans from any node in the AST.
-pub trait Spanned {
-    /// Returns the source span of this node.
-    fn span(&self) -> Span;
 }

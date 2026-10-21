@@ -3,7 +3,9 @@
 //! These tests document expected behavior and regressions.
 
 use crate::parser::{ParserInitError, TreeSitterParser};
-use talkbank_model::{ErrorCode, ErrorContext, ParseError, ParseErrors, Severity, SourceLocation};
+use talkbank_model::{
+    DiagnosticLocation, ErrorCode, ErrorContext, ParseError, ParseErrors, Severity,
+};
 
 mod utterance;
 mod word;
@@ -32,8 +34,8 @@ fn parser_init_errors(err: ParserInitError) -> ParseErrors {
     ParseErrors::from(vec![ParseError::new(
         ErrorCode::TreeParsingError,
         Severity::Error,
-        SourceLocation::from_offsets(0, 0),
-        ErrorContext::new("", 0..0, "TreeSitterParser::new"),
+        DiagnosticLocation::from_offsets(0, 0),
+        ErrorContext::new("", talkbank_model::Span::new(0, 0), "TreeSitterParser::new"),
         err.to_string(),
     )])
 }

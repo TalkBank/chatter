@@ -8,7 +8,7 @@
 
 **chatter** is the modern toolchain for the TalkBank
 [CHAT](https://talkbank.org/0info/manuals/CHAT.html) transcript format:
-validate, convert, normalize, merge, and explore `.cha` files through a
+validate, convert, normalize, and explore `.cha` files through a
 desktop app, a command-line tool, and an editor language server.
 
 ## Are you a clinician or researcher? Start here
@@ -21,8 +21,8 @@ build tools:
   Windows, or Linux from the
   [latest release](https://github.com/TalkBank/chatter/releases/latest), open
   a `.cha` file or a whole folder, and read the validation results. The app
-  keeps itself up to date: it checks for a new version on launch and offers
-  to install it. Recommended if you do not use a command line.
+  checks for a new version on launch and offers to install it; an offer is
+  not a completed update. Recommended if you do not use a command line.
 - **Command line (`chatter`).** Install with one command, then validate a
   single file or a whole folder:
 
@@ -36,10 +36,18 @@ build tools:
   chatter update                    # update to the newest release
   ```
 
+The installer command downloads and executes a script. Review the official
+release and follow your organization's installation policy; see
+[Installation](book/src/chatter/user-guide/installation.md) for manual downloads,
+checksums and security prompts. `chatter update` requires an official installer
+receipt; source and package-manager installs use their original update method.
+
 New to chatter? The
 **[User Guide](book/src/chatter/user-guide/quick-start.md)** walks through
 validating, fixing, and converting transcripts step by step, and the
 [Installation](#installation) section below has full per-platform details.
+For live feedback while typing, follow the
+[Editor Integration tutorial](book/src/chatter/user-guide/editor-integration.md).
 
 ## What this project is
 
@@ -64,19 +72,19 @@ and an LSP-backed editor experience.
 |---|---|
 | [`talkbank-model`](crates/talkbank-model/) | CHAT data model, validation rules, error codes, tier-alignment primitives |
 | [`talkbank-parser`](crates/talkbank-parser/) | Tree-sitter-backed primary parser (incremental, LSP-friendly), driven by a generated, exhaustive typed CST visitor |
-| [`talkbank-parser-re2c`](crates/talkbank-parser-re2c/) | Independent re2c-based oracle parser that cross-checks tree-sitter on every wild-corpus file |
+| [`talkbank-parser-re2c`](crates/talkbank-parser-re2c/) | Independent experimental parser with finite reference and error-spec comparisons; use tree-sitter for production validity decisions |
 | [`talkbank-parser-tests`](crates/talkbank-parser-tests/) | Internal test harness: parser equivalence, reference-corpus golden tests, CLAN CHECK parity fixtures |
 | [`talkbank-transform`](crates/talkbank-transform/) | CHAT to JSON, normalization, transcript merge, redaction, transform pipelines |
 | [`talkbank-derive`](crates/talkbank-derive/) | Derive macros for the data model |
 | [`talkbank-cache`](crates/talkbank-cache/) | SQLite-backed pass/fail cache for validation and roundtrip results |
-| [`talkbank-llm`](crates/talkbank-llm/) | OpenAI-compatible HTTP judgment provider with a persistent response cache (the only network-dependent crate; backs holistic speaker-id, opt-in) |
+| [`talkbank-llm`](crates/talkbank-llm/) | Opt-in OpenAI-compatible HTTP judgment provider with a persistent response cache; backs holistic speaker-id |
 | [`send2clan`](crates/send2clan/) | Rust bindings for "open in CLAN" (macOS Apple Events, Windows WM_APP) |
 
 ### User-facing tools
 
 | Component | What it is |
 |---|---|
-| [`chatter`](crates/chatter/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON), watch, plus experimental speaker-id reconciliation and interactive adjudication |
+| [`talkbank-chatter`](crates/chatter/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON), watch, plus experimental speaker-id reconciliation and interactive adjudication |
 | [`talkbank-lsp`](crates/talkbank-lsp/), the `talkbank-lsp` binary | Language Server Protocol implementation; powers real-time validation, hover, go-to-definition, and cross-tier alignment in any LSP-aware editor |
 | [`apps/chatter-desktop/`](apps/chatter-desktop/) | Desktop validation app (Tauri) for researchers who do not use a terminal; runs the same validation engine as the CLI, with the same cache |
 
@@ -87,7 +95,7 @@ and an LSP-backed editor experience.
 | [`grammar/`](grammar/) | The `tree-sitter-talkbank` grammar, the source of truth for CHAT syntax. Generates the parser used by `talkbank-parser`. |
 | [`spec/`](spec/) | The CHAT format specification (constructs, errors, symbol registry); generates the test corpus that gates every grammar/parser change |
 | [`schema/`](schema/) | JSON Schema for the typed CHAT AST emitted by `chatter to-json` |
-| [`corpus/reference/`](corpus/reference/) | The reference corpus: every file must pass parser equivalence and roundtrip validation on every commit |
+| [`corpus/reference/`](corpus/reference/) | Finite reference transcripts for parser, validation and roundtrip regression contracts |
 | [`test-fixtures/`](test-fixtures/) | Minimal `.cha` fixtures used by integration tests |
 
 ### Documentation
@@ -101,57 +109,63 @@ and an LSP-backed editor experience.
 
 ## Installation
 
-Prebuilt binaries for macOS (Apple Silicon and Intel), Linux, and
-Windows are attached to every [GitHub
-Release](https://github.com/TalkBank/chatter/releases). The `chatter`
+Choose a [GitHub Release](https://github.com/TalkBank/chatter/releases) and
+inspect its available assets. CLI builds target macOS (Apple Silicon and Intel),
+Linux (x86_64 and ARM64), and Windows (x64); desktop installers are separate.
+Asset availability does not establish compatibility with every OS version. The `chatter`
 CLI installs via the release's shell (macOS/Linux) or PowerShell
 (Windows) installer script, or you can download the archive for your
 platform directly from the release page.
 
 - **macOS / Linux (CLI):** run the installer one-liner from the
   [latest release](https://github.com/TalkBank/chatter/releases/latest).
-- **Windows (CLI):** run the PowerShell installer from the latest
-  release. The downloaded binary is not yet code-signed, so SmartScreen
-  may warn; choose "More info" then "Run anyway".
+- **Windows (CLI):** use the PowerShell installer from the selected release.
+  Verify the official source and follow the installation guide and your
+  organization's policy if Windows displays a security warning.
 - **Desktop app:** download the installer for your platform from the
   release page. The macOS `.dmg` is signed and notarized; the Windows
-  installer is not yet signed (same SmartScreen note as above).
-- **From crates.io:** not yet published; planned to coincide with the
-  1.0 release. Until then, depend on the crates via a git dependency
-  pinned to a release tag.
+  installer is not yet signed (follow the security guidance above).
+- **From crates.io:** the CLI/LSP packages are not yet published. Until registry
+  installation is available, use a release download or the documented source
+  installation. Library consumers can use a git dependency pinned to a reviewed
+  release tag; see [Library Usage](book/src/chatter/integrating/library-usage.md).
 
 To build the CLI from source instead, see the developer quick start
 below.
 
 ## Quick start (for developers)
 
-Prerequisites: current stable Rust, selected by
-[`rust-toolchain.toml`](rust-toolchain.toml) (`rustup` reads it and
-installs it with the needed components automatically) and SQLite dev headers
-(bundled on macOS; Linux needs `libsqlite3-dev`).
+Start with [Contributor Setup](book/src/contributing/setup.md) for the selected
+surface's prerequisites: workspace-selected stable Rust, native compiler/linker
+tools, and any platform-specific libraries. A whole-workspace build also includes
+the desktop app and its native/frontend requirements; it is not the minimum CLI
+or library setup. Commands below use a Unix-style shell.
 
 ```sh
 # Clone
-git clone git@github.com:TalkBank/chatter.git
+git clone https://github.com/TalkBank/chatter.git
 cd chatter
 
-# Build the whole workspace
-cargo build --workspace --all-targets --locked
-
-# Run the full workspace test suite (cargo test --workspace also works)
-cargo test --workspace
+# Build the CLI without selecting the desktop workspace member
+cargo build -p talkbank-chatter --locked
 
 # Try the chatter binary
 ./target/debug/chatter --help
 ./target/debug/chatter validate path/to/file.cha
 ```
 
-Build the docs locally:
+Choose focused tests through [Developer Verification
+Checks](book/src/contributing/dev-checks.md). The root and `spec/` are separate
+Cargo workspaces: root `cargo test --workspace` does not cover both. `just test`
+runs root compiled test targets; doctests and final publication checks have
+their own maintained recipes. A successful build is not a complete test run.
+
+Build the docs locally after installing Python 3.11+ and `just`:
 
 ```sh
 just book-install-tools
 just book
-# Output at book/build/html/
+# Output at book/build/
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full development
@@ -164,7 +178,7 @@ flowchart TD
     spec["spec/\n(CHAT format specification,\nsource of truth)"]
     grammar["grammar/\n(tree-sitter-talkbank grammar)"]
     parser["talkbank-parser\n(tree-sitter parser,\ngenerated typed CST visitor)"]
-    re2c["talkbank-parser-re2c\n(independent oracle parser)"]
+    re2c["talkbank-parser-re2c\n(experimental independent parser)"]
     model["talkbank-model + talkbank-derive\n(data model, validation rules,\nerror codes, alignment)"]
     transform["talkbank-transform + talkbank-cache\n(CHAT to JSON, normalize,\nmerge, redact, pipelines)"]
     cli["chatter\n(CLI)"]
@@ -187,11 +201,10 @@ Detailed architecture documentation: the
 
 ## Toolchain
 
-- **Rust**, the current stable release, selected by
-  [`rust-toolchain.toml`](rust-toolchain.toml) (edition 2024; no MSRV
-  declared until crates.io publication)
-- **Node 20+** for the desktop app's web front end
-- **SQLite** dev headers (bundled on macOS; Linux `libsqlite3-dev`)
+[`rust-toolchain.toml`](rust-toolchain.toml) selects stable Rust (edition 2024);
+Chatter 1.0 supports current stable, with no older-compiler or fixed-MSRV promise. [Contributor
+Setup](book/src/contributing/setup.md) owns the per-surface tool and platform
+requirements, including grammar generation and desktop development.
 
 ## License
 

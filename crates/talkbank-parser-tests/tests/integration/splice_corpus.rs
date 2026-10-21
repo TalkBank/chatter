@@ -15,10 +15,10 @@ fn identity_edit(source: &str, span: Span) -> SpliceEdit {
         EditTarget::Replace(span),
         Replacement::new(
             source
-                .get(span.start as usize..span.end as usize)
+                .get(span.start()..span.end())
                 .expect("source-owned main-tier span"),
         ),
-        EditProvenance::Transform(TransformName::new(format!("identity-at-{}", span.start))),
+        EditProvenance::Transform(TransformName::new(format!("identity-at-{}", span.start()))),
     )
 }
 
@@ -36,7 +36,10 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         let file = strict_parse(parser.parse_chat_file(source)).expect("reference parses");
         for utterance in file.utterances() {
             if let Some(last) = utterance.dependent_tiers.last() {
-                let span = Span::new(utterance.main.span.start, last.tier.span().end);
+                let span = Span::new(
+                    utterance.main.location.span().expect("located").start(),
+                    last.tier.location().span().expect("located").end(),
+                );
                 let accepted = admit_edits(&file, vec![identity_edit(source, span)]);
                 assert!(
                     accepted.skipped().is_empty(),
@@ -50,7 +53,10 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         if let (Some(first), Some(second)) = (rows.next(), rows.next()) {
             let crossing = identity_edit(
                 source,
-                Span::new(first.main.span.start, second.main.span.end),
+                Span::new(
+                    first.main.location.span().expect("located").start(),
+                    second.main.location.span().expect("located").end(),
+                ),
             );
             let refused = admit_edits(&file, vec![crossing]);
             assert!(
@@ -63,7 +69,7 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         }
         let mut proposed: Vec<_> = file
             .utterances()
-            .map(|u| identity_edit(source, u.main.span))
+            .map(|u| identity_edit(source, u.main.location.span().expect("located")))
             .collect();
         proposed.reverse();
         let admission = admit_edits(&file, proposed);
@@ -82,7 +88,7 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         {
             assert_eq!(
                 site.original(),
-                utterance.main.span,
+                utterance.main.location.span().expect("located"),
                 "mapping restores source order"
             );
             assert_eq!(
@@ -92,7 +98,7 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             );
             assert_eq!(
                 site.replacement().as_str(),
-                &source[site.original().start as usize..site.original().end as usize]
+                &source[site.original().start()..site.original().end()]
             );
             assert_eq!(site.provenance(), proposed.provenance());
         }
@@ -114,13 +120,11 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         // A zero-width replacement is not an insertion; the target enum must
         // preserve that distinction even when the resulting bytes would match.
         enum Refusal {
-            Dummy,
             Empty,
             Bounds,
         }
-        let len = u32::try_from(source.len()).expect("reference fits coordinates");
+        let len = source.len();
         for (target, refusal) in [
-            (EditTarget::Replace(Span::DUMMY), Refusal::Dummy),
             (EditTarget::Replace(Span::at(len)), Refusal::Empty),
             (
                 EditTarget::Replace(Span::new(len, len + 1)),
@@ -140,9 +144,6 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
                     .expect_err("invalid target cannot produce output"),
             ] {
                 match (&refusal, error) {
-                    (Refusal::Dummy, SpliceError::DummySpan { provenance }) => {
-                        assert_eq!(&provenance, edit.provenance());
-                    }
                     (Refusal::Empty, SpliceError::EmptyReplaceRange { span }) => {
                         assert_eq!(span, Span::at(len));
                     }
@@ -168,8 +169,8 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         let normalized: Vec<_> = file
             .utterances()
             .map(|u| {
-                let span = u.main.span;
-                let original = &source[span.start as usize..span.end as usize];
+                let span = u.main.location.span().expect("located");
+                let original = &source[span.start()..span.end()];
                 let mut replacement = u.main.to_chat_string();
                 // The model serializes tier content, not source line framing.
                 // Preserve the actual span's ending without interpreting CHAT text.
@@ -203,7 +204,7 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         );
         for site in normalized.plan().sites() {
             assert_eq!(
-                &normalized[site.spliced().start as usize..site.spliced().end as usize],
+                &normalized[site.spliced().start()..site.spliced().end()],
                 site.replacement().as_str(),
                 "replacement resides at its mapped coordinate"
             );
@@ -245,7 +246,7 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             .char_indices()
             .find(|(_, character)| character.len_utf8() > 1)
         {
-            let offset = u32::try_from(offset + 1).expect("fixture fits source coordinates");
+            let offset = offset + 1;
             let edit = SpliceEdit::new(
                 EditTarget::InsertAt(offset),
                 Replacement::new(""),

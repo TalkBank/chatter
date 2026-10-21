@@ -106,7 +106,7 @@ fn item_repr(item: &SinItem) -> SinItemRepr {
 struct SinParse {
     items: Vec<SinItemRepr>,
     saw_sin_tier: bool,
-    diags: Vec<(String, u32, u32, String)>,
+    diags: Vec<(String, usize, usize, String)>,
 }
 
 /// Parse `input` at the streaming boundary, collecting `%sin`-tier items and
@@ -135,8 +135,8 @@ fn parse_sin(input: &str) -> SinParse {
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })

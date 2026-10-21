@@ -25,7 +25,7 @@ pub fn find_pho_tier_hover_info(
     let pho_alignment = utterance.alignments.as_ref()?.pho.as_ref()?;
 
     let offset = position_to_offset(document, position);
-    let pho_idx = find_pho_item_index_at_offset(tree, pho_tier.span, offset)?;
+    let pho_idx = find_pho_item_index_at_offset(tree, pho_tier.location.span()?, offset)?;
 
     // Get the pho token
     let pho_token = pho_tier.items.get(pho_idx)?;

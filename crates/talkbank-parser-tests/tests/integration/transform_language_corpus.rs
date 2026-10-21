@@ -831,8 +831,8 @@ fn semicolon_specs_preserve_typed_invalidity_and_extraction() {
             assert_eq!(diagnostics[0].code, ErrorCode::SemicolonOnMainTier);
             let start = source.find(';').expect("authored semicolon");
             assert_eq!(
-                diagnostics[0].location.span,
-                Span::from_usize(start, start + 1)
+                diagnostics[0].location.span().expect("located diagnostic"),
+                Span::new(start, start + 1)
             );
         }
         if example == 2 {
@@ -1025,6 +1025,7 @@ fn whole_utterance_rewrite_matches_authored_spec_controls() {
         ("E255_1.cha", "E255_3.cha"),
         ("E255_2.cha", "E255_4.cha"),
         ("E255_5.cha", "E255_6.cha"),
+        ("E255_10.cha", "E255_11.cha"),
     ] {
         let source = std::fs::read_to_string(root.join(input)).expect("authored violation");
         let target = std::fs::read_to_string(root.join(output)).expect("authored legal control");
@@ -1042,6 +1043,39 @@ fn whole_utterance_rewrite_matches_authored_spec_controls() {
             .validate_into(&errors, talkbank_model::model::TranscriptName::Anonymous)
             .expect("rewritten spec control is admitted");
         assert!(rewrite_whole_utterance_language_switches(&mut actual).is_empty());
+    }
+}
+
+#[test]
+fn mixed_explicit_language_specs_preserve_word_level_attribution() {
+    let root =
+        workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
+    let parser = TreeSitterParser::new().expect("parser");
+    for fixture in ["E255_8.cha", "E255_9.cha"] {
+        let source = std::fs::read_to_string(root.join(fixture)).expect("mixed-language spec");
+        let mut file = strict_parse(parser.parse_chat_file(&source)).expect("spec syntax parses");
+        let errors = talkbank_model::ErrorCollector::new();
+        file.clone()
+            .validate_into(&errors, talkbank_model::model::TranscriptName::Anonymous)
+            .expect("mixed explicit languages are valid");
+        let original = file.clone();
+        assert_eq!(file.utterances().count(), 1);
+        for utterance in file.utterances() {
+            assert!(
+                utterance
+                    .main
+                    .whole_utterance_language_switch_target(file.languages.first(), &file.languages)
+                    .is_none(),
+                "different resolved languages cannot issue one rewrite capability: {fixture}"
+            );
+        }
+        assert!(rewrite_whole_utterance_language_switches(&mut file).is_empty());
+        assert!(original.semantic_eq(&file));
+        assert_eq!(
+            file.to_chat_string(),
+            source,
+            "preserve every marker: {fixture}"
+        );
     }
 }
 

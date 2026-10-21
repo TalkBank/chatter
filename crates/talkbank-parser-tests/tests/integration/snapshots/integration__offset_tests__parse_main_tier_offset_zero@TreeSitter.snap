@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
+assertion_line: 113
 expression: "(main, errors.into_vec())"
 ---
 (
@@ -17,10 +18,12 @@ expression: "(main, errors.into_vec())"
                     [
                         Word(
                             Word {
-                                span: Span {
-                                    start: 6,
-                                    end: 11,
-                                },
+                                location: Located(
+                                    Span {
+                                        start: 6,
+                                        end: 11,
+                                    },
+                                ),
                                 word_id: None,
                                 content: WordContents(
                                     [
@@ -49,32 +52,37 @@ expression: "(main, errors.into_vec())"
                 ),
                 terminator: Some(
                     Period {
-                        span: Span {
-                            start: 12,
-                            end: 13,
-                        },
+                        location: Located(
+                            Span {
+                                start: 12,
+                                end: 13,
+                            },
+                        ),
                     },
                 ),
                 postcodes: TierPostcodes(
                     [],
                 ),
                 bullet: None,
-                content_span: Some(
+                location: Located(
                     Span {
                         start: 5,
                         end: 13,
                     },
                 ),
-                language_code_span: None,
             },
-            span: Span {
-                start: 0,
-                end: 13,
-            },
-            speaker_span: Span {
-                start: 1,
-                end: 4,
-            },
+            location: Located(
+                Span {
+                    start: 0,
+                    end: 13,
+                },
+            ),
+            speaker_location: Located(
+                Span {
+                    start: 1,
+                    end: 4,
+                },
+            ),
             separator: TierSeparator {
                 trailing_space: None,
             },

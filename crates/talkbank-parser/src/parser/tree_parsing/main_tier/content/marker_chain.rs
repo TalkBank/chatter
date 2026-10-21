@@ -53,26 +53,52 @@ use super::group::convert_to_group_content;
 
 /// Fold a content item and its ordered marker run into one `UtteranceContent`.
 ///
-/// `span` is the whole construct, the item through the final `]`. E757's glue
-/// detection relies on a wrapper's span ending at the last bracket, so every
-/// wrapper the fold builds gets it.
+/// `span` is the whole construct, the item through the final `]`; only its
+/// start is read. Every value the fold builds is placed exactly at itself,
+/// the convention both backends share: a wrapper runs from the construct
+/// through the LAST annotation attached to it (so the outermost wrapper ends
+/// at the chain's final `]`, which E757's glue detection relies on, and an
+/// inner wrapper ends at its own last annotation), and a retrace runs from
+/// its content through its marker.
 pub(crate) fn fold_marker_chain(
     core: UtteranceContent,
     markers: Vec<ParsedAnnotation>,
     span: Span,
 ) -> UtteranceContent {
+    let start = span.start();
     markers
         .into_iter()
         .fold(core, |current, marker| match marker {
-            ParsedAnnotation::Content(annotation) => annotate(current, annotation, span),
+            ParsedAnnotation::Content {
+                annotation,
+                span: annotation_span,
+            } => annotate(current, annotation, Span::new(start, annotation_span.end())),
             ParsedAnnotation::Retrace {
                 kind,
                 span: marker_span,
-            } => retrace(current, kind, span, marker_span),
+            } => retrace(
+                current,
+                kind,
+                Span::new(start, marker_span.end()),
+                marker_span,
+            ),
         })
 }
 
-/// Attach one annotation to whatever the chain has built so far.
+/// A wrapper that gains an annotation grows to end where that annotation
+/// ends; its start never moves.
+fn extend<T>(
+    mut annotated: Annotated<T>,
+    annotation: ContentAnnotation,
+    span: Span,
+) -> Annotated<T> {
+    annotated = annotated.with_scoped_annotation(annotation);
+    annotated.location = talkbank_model::Location::Located(span);
+    annotated
+}
+
+/// Attach one annotation to whatever the chain has built so far; `span` is
+/// the construct through this annotation, which the wrapper takes as its own.
 ///
 /// An already-annotated wrapper gains the annotation rather than being wrapped
 /// again: `dog [?] [!]` is one word with two annotations, which is how every
@@ -84,25 +110,25 @@ fn annotate(
     span: Span,
 ) -> UtteranceContent {
     match current {
-        // Already a wrapper: extend it.
-        UtteranceContent::AnnotatedWord(annotated) => UtteranceContent::AnnotatedWord(Box::new(
-            (*annotated).with_scoped_annotation(annotation),
-        )),
+        // Already a wrapper: extend it, in annotations and in extent.
+        UtteranceContent::AnnotatedWord(annotated) => {
+            UtteranceContent::AnnotatedWord(Box::new(extend(*annotated, annotation, span)))
+        }
         UtteranceContent::AnnotatedGroup(annotated) => {
-            UtteranceContent::AnnotatedGroup(annotated.with_scoped_annotation(annotation))
+            UtteranceContent::AnnotatedGroup(extend(annotated, annotation, span))
         }
         UtteranceContent::AnnotatedQuotation(annotated) => {
-            UtteranceContent::AnnotatedQuotation(annotated.with_scoped_annotation(annotation))
+            UtteranceContent::AnnotatedQuotation(extend(annotated, annotation, span))
         }
         UtteranceContent::AnnotatedEvent(annotated) => {
-            UtteranceContent::AnnotatedEvent(annotated.with_scoped_annotation(annotation))
+            UtteranceContent::AnnotatedEvent(extend(annotated, annotation, span))
         }
         UtteranceContent::AnnotatedAction(annotated) => {
-            UtteranceContent::AnnotatedAction(annotated.with_scoped_annotation(annotation))
+            UtteranceContent::AnnotatedAction(extend(annotated, annotation, span))
         }
-        UtteranceContent::AnnotatedRetrace(annotated) => UtteranceContent::AnnotatedRetrace(
-            Box::new((*annotated).with_scoped_annotation(annotation)),
-        ),
+        UtteranceContent::AnnotatedRetrace(annotated) => {
+            UtteranceContent::AnnotatedRetrace(Box::new(extend(*annotated, annotation, span)))
+        }
         // A replacement keeps its own annotation list, which is the pre-existing
         // behaviour of `word [: text] [* code]` and is not this change's to move.
         UtteranceContent::ReplacedWord(replaced) => {
@@ -112,30 +138,32 @@ fn annotate(
             let mut scoped: Vec<ContentAnnotation> =
                 replaced.scoped_annotations.iter().cloned().collect();
             scoped.push(annotation);
-            UtteranceContent::ReplacedWord(Box::new(replaced.with_scoped_annotations(scoped)))
+            let mut replaced = replaced.with_scoped_annotations(scoped);
+            replaced.location = talkbank_model::Location::Located(span);
+            UtteranceContent::ReplacedWord(Box::new(replaced))
         }
         // Not yet a wrapper: become one.
-        UtteranceContent::Word(word) => UtteranceContent::AnnotatedWord(Box::new(
-            Annotated::with_one(*word, annotation).with_span(span),
-        )),
-        UtteranceContent::Group(group) => {
-            UtteranceContent::AnnotatedGroup(Annotated::with_one(group, annotation).with_span(span))
+        UtteranceContent::Word(word) => {
+            UtteranceContent::AnnotatedWord(Box::new(Annotated::with_one(span, *word, annotation)))
         }
-        UtteranceContent::Quotation(quotation) => UtteranceContent::AnnotatedQuotation(
-            Annotated::with_one(quotation, annotation).with_span(span),
-        ),
+        UtteranceContent::Group(group) => {
+            UtteranceContent::AnnotatedGroup(Annotated::with_one(span, group, annotation))
+        }
+        UtteranceContent::Quotation(quotation) => {
+            UtteranceContent::AnnotatedQuotation(Annotated::with_one(span, quotation, annotation))
+        }
         UtteranceContent::Event(event) => {
-            UtteranceContent::AnnotatedEvent(Annotated::with_one(event, annotation).with_span(span))
+            UtteranceContent::AnnotatedEvent(Annotated::with_one(span, event, annotation))
         }
         // Added 2026-08-26 with the bare `Action` variant: an action that
         // meets its first scoped marker is promoted exactly as an event is.
         // Before that variant existed the parser had pre-wrapped every action,
         // so there was nothing here to promote.
-        UtteranceContent::Action(action) => UtteranceContent::AnnotatedAction(
-            Annotated::with_one(action, annotation).with_span(span),
-        ),
+        UtteranceContent::Action(action) => {
+            UtteranceContent::AnnotatedAction(Annotated::with_one(span, action, annotation))
+        }
         UtteranceContent::Retrace(retraced) => UtteranceContent::AnnotatedRetrace(Box::new(
-            Annotated::with_one(*retraced, annotation).with_span(span),
+            Annotated::with_one(span, *retraced, annotation),
         )),
         // Unreachable from the three seed call sites, which produce only
         // `Word`, `ReplacedWord`, `Group`, `Event` and `AnnotatedAction`, and
@@ -165,8 +193,9 @@ fn annotate(
 
 /// Wrap whatever the chain has built so far in a retrace.
 ///
-/// `span` is the whole chain's, as for every wrapper the fold builds;
-/// `marker_span` is the marker token's own bytes, which E370 reports at.
+/// `span` is the content through the marker, which is the retrace's own
+/// extent; `marker_span` is the marker token's own bytes, which E370 reports
+/// at.
 fn retrace(
     current: UtteranceContent,
     kind: RetraceKind,
@@ -186,14 +215,14 @@ fn retrace(
         // A BARE group hands its brackets to the retrace, which is what
         // `Retrace::is_group` records. Tested here rather than reported by the
         // converter, because this is the only caller for which it matters.
-        Retrace::new(group.content, kind).as_group()
+        Retrace::new(span, marker_span, group.content, kind).as_group()
     } else {
         Retrace::new(
+            span,
+            marker_span,
             BracketedContent::new(vec![convert_to_group_content(current)]),
             kind,
         )
     };
-    UtteranceContent::Retrace(Box::new(
-        built.with_span(span).with_marker_span(marker_span),
-    ))
+    UtteranceContent::Retrace(Box::new(built))
 }

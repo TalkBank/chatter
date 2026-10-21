@@ -4,8 +4,9 @@
 //! consumed as unrelated word structure. Decode only the source-bound kind,
 //! then convert every component atomically; registry validity is a later policy.
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, NamedKind, SourceBound, WordLangSuffixNode};
+use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{LanguageCode, WordLanguageMarker};
 
@@ -86,10 +87,10 @@ fn report_fault<'tree>(
     errors.report(ParseError::new(
         ErrorCode::TreeParsingError,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+        DiagnosticLocation::new(span_of(node)),
         ErrorContext::new(
             token.source(),
-            node.byte_range(),
+            span_of(node),
             WordLangSuffixNode::KIND.name(),
         ),
         message,

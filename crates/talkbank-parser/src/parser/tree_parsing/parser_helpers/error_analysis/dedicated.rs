@@ -1,11 +1,11 @@
 //! Quotation diagnostics justified by delimiter nodes in a recovery subtree.
 //! Only a producer-issued unbalanced-delimiter finding can emit the diagnostic.
 
-use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 use crate::node_types::{
     LEFT_DOUBLE_QUOTE as LEFT_DOUBLE_QUOTE_NODE, RIGHT_DOUBLE_QUOTE as RIGHT_DOUBLE_QUOTE_NODE,
 };
-use std::ops::Range;
+use crate::parser::node_span::span_of;
 use talkbank_model::chars::{LEFT_DOUBLE_QUOTE, RIGHT_DOUBLE_QUOTE};
 use tree_sitter::Node;
 
@@ -33,7 +33,7 @@ pub(crate) enum QuotationDelimiterScan {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct UnbalancedQuotationDelimiter {
     delimiter: UnpairedQuotationDelimiter,
-    span: Range<usize>,
+    span: talkbank_model::Span,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,7 +63,7 @@ impl UnbalancedQuotationDelimiter {
         ParseError::new(
             ErrorCode::UnbalancedQuotation,
             Severity::Error,
-            SourceLocation::from_offsets(span.start, span.end),
+            DiagnosticLocation::new(span),
             ErrorContext::new(source, span, found),
             message,
         )
@@ -80,20 +80,20 @@ impl UnbalancedQuotationDelimiter {
 pub(crate) fn scan_quotation_delimiters(node: Node<'_>) -> QuotationDelimiterScan {
     fn visit(
         node: Node<'_>,
-        opens: &mut Vec<Range<usize>>,
-        first_unmatched_close: &mut Option<Range<usize>>,
+        opens: &mut Vec<talkbank_model::Span>,
+        first_unmatched_close: &mut Option<talkbank_model::Span>,
         saw_delimiter: &mut bool,
     ) {
         match node.kind() {
             LEFT_DOUBLE_QUOTE_NODE => {
                 *saw_delimiter = true;
-                opens.push(node.start_byte()..node.end_byte());
+                opens.push(span_of(node));
                 return;
             }
             RIGHT_DOUBLE_QUOTE_NODE => {
                 *saw_delimiter = true;
                 if opens.pop().is_none() && first_unmatched_close.is_none() {
-                    *first_unmatched_close = Some(node.start_byte()..node.end_byte());
+                    *first_unmatched_close = Some(span_of(node));
                 }
                 return;
             }

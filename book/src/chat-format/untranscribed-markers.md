@@ -1,7 +1,7 @@
 # Untranscribed Markers: `xxx`, `yyy`, `www`
 
 **Status:** Reference
-**Last updated:** 2026-06-14 19:57 EDT
+**Last updated:** {{git-dates:page}}
 
 CHAT reserves three short word-level markers for material the human
 transcriber cannot or chose not to render as words on the main tier.
@@ -40,10 +40,9 @@ misled. The signal is destroyed for the entire history of that
 corpus, because the corruption is indistinguishable from real
 unintelligibility once committed.
 
-The same reasoning applies to `yyy` and `www`. A converter or
-post-processor that emits any of these three markers because *the
-tooling* couldn't handle a token is committing semantic vandalism
-against the whole field.
+The same reasoning applies to `yyy` and `www`: substituting any of these
+markers for a processing failure changes the transcript's meaning and hides
+the distinction between source evidence and tool failure.
 
 ## Rules for tooling
 
@@ -56,9 +55,10 @@ against the whole field.
      (or CLAN's `check`) flag it for human review. The transcriber
      listens, decides, and corrects.
    - Fail loud, abort the file rather than emit corrupted output.
-   - Apply only purely orthographic, semantically null repairs
-     (e.g., stripping a stray boundary quote mark from `"My`). These
-     are safe because no information is lost.
+   - Apply an explicitly reviewed transformation whose preservation contract
+     covers the source format and retain the original plus the change record.
+     A quote at a token boundary is not, by itself, evidence that it is stray
+     or safe to remove.
 3. **Never sanitize a token by replacing it with one of the three
    markers.** That is exactly the corrupting behavior this document
    prohibits.
@@ -71,31 +71,31 @@ Any tool that builds CHAT from an external source (ASR output, an
 importer, a format converter) should follow the same division of
 labor:
 
-1. Silently fix only orthographically inarguable problems (for
-   example, stripping a stray boundary quote mark from `"My`).
-2. For tokens that fail language-level validation but are
-   structurally legal CHAT (e.g., `C-3PO` under English: tree-sitter
-   accepts the digit-hyphen compound but `Word::validate` fires E220
-   "numeric digits not allowed"), ship the token verbatim. The
-   full-file validator and `check` fire E220 on the same word, the
-   file ends up in the human review queue, and the transcriber
-   listens to the audio and decides what was actually said.
-3. For tokens that fail *structural* parsing (tree-sitter rejects),
-   fail loud: emitting malformed CHAT would corrupt the file beyond
-   the validator's ability to flag it.
+1. Preserve the source and distinguish format conversion from transcription
+   judgment. Do not silently remove punctuation or replace failed tokens.
+2. If the candidate parses but fails validation, retain the candidate and
+   diagnostics for review or refuse publication. Successful parsing does not
+   establish validity, and a diagnostic does not establish what was spoken.
+3. If parsing reports errors, stop the conversion's successful-output path.
+   A recovered model can help diagnosis, but it is not permission to publish
+   reconstructed CHAT as a faithful transcript. Keep the original evidence.
 
-The division of labor is: the tool fixes only what is mechanically
-unambiguous; CHECK and the human transcriber handle everything that
-requires judgment about what the speaker said.
+The division of labor is: tooling reports the failure and applies only reviewed
+transformations; the transcriber decides what the recording supports. Chatter
+and CLAN CHECK are distinct validators, not interchangeable diagnostic-code
+authorities or substitutes for listening.
 
 ## Related rules
 
-- `xxx` / `yyy` / `www` survive the transcript through all NLP passes
-  (morphotag, utseg, translate, coref) without re-interpretation.
-  Tools that walk the AST treat them as opaque tokens; they have no
-  POS tag, no lemma, no dependency parent, no translation.
-- `%wor` excludes all three (no phoneme sequence to align). `%pho`
-  may reference `yyy` directly because the phonetic content is the
-  whole point of the marker.
-- See `word-syntax.md` for grammar; this document is the policy
+- Downstream processing must preserve the markers' meanings; this is a
+  requirement, not a claim that every NLP implementation has been verified.
+- Chatter's current `%mor` membership excludes untranscribed markers;
+  `%pho` and `%sin` include them as positions. This structural distinction
+  does not supply missing phonetic content.
+- The current `%wor` policy, `FilteredLexicalV1`, excludes all three,
+  including inside retraces. That generation policy does not prohibit a
+  legacy parsed tier from containing them. See
+  [`%wor` timing semantics](../architecture/wor-timing.md) for the separate
+  correspondence and timing-evidence contracts.
+- See [Word Syntax](word-syntax.md) for grammar; this document is the policy
   reference for *who is allowed to emit them and why*.

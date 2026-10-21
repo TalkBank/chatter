@@ -91,7 +91,7 @@ fn valid_langcode_switch_attaches_language_code_with_zero_diagnostics() {
             .content
             .language_code
             .as_ref()
-            .map(|lc| lc.as_str()),
+            .map(|lc| lc.code.as_str()),
         Some("zho"),
         "the [- zho] language-code switch must attach to the main tier"
     );

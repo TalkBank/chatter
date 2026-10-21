@@ -61,7 +61,7 @@ use talkbank_model::model::Line;
 use talkbank_parser::TreeSitterParser;
 
 /// One diagnostic: (code, span start, span end, message).
-type Diag = (String, u32, u32, String);
+type Diag = (String, usize, usize, String);
 
 /// Read a fixture verbatim from `corpus/reference/<relative>`.
 fn read_corpus_fixture(relative: &str) -> String {
@@ -100,8 +100,8 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })

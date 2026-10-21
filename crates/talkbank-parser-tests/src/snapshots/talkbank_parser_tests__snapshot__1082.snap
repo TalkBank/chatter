@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
@@ -304,12 +305,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 457,
-                      "start": 456
-                    }
-                  },
+                  "content": {},
                   "type": "lengthening"
                 }
               ],

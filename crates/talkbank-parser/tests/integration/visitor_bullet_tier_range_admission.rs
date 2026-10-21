@@ -12,17 +12,23 @@ use talkbank_parser::generated_traversal::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BodyState {
     Present,
-    Missing,
     Error,
 }
 
 #[test]
 fn reference_bullet_tier_ranges_retain_fields_and_count_selected_work() {
-    // SAFETY: both exports come from the same statically linked canonical grammar.
+    // SAFETY: all bridge exports come from the same statically linked canonical
+    // grammar and reviewed engine as the production admission owner.
     let grammar = unsafe {
         CompiledLanguage::from_bridge(
             tree_sitter_talkbank::LANGUAGE.into(),
             tree_sitter_talkbank::LANGUAGE_METADATA_BRIDGE,
+            talkbank_parser::generated_traversal::RequiredPresenceBridge {
+                create: tree_sitter_talkbank::REQUIRED_GRAPH_NEW,
+                destroy: tree_sitter_talkbank::REQUIRED_GRAPH_DROP,
+                check: tree_sitter_talkbank::REQUIRED_RULE,
+                prefix: tree_sitter_talkbank::REQUIRED_PREFIX,
+            },
         )
     }
     .admit_generated()
@@ -78,16 +84,7 @@ fn reference_bullet_tier_ranges_retain_fields_and_count_selected_work() {
                                 recovered += 1;
                                 Some((body.byte_range(), BodyState::Error))
                             }
-                            Some(NodeSlot::Missing(missing)) => {
-                                recovered += 1;
-                                Some((
-                                    talkbank_parser::generated_traversal::RecoveryNode::view(
-                                        missing,
-                                    )
-                                    .byte_range(),
-                                    BodyState::Missing,
-                                ))
-                            }
+                            Some(NodeSlot::Missing(missing)) => match missing.0 {},
                             Some(NodeSlot::Unexpected(never) | NodeSlot::Absent(never)) => {
                                 match *never {}
                             }
@@ -129,15 +126,7 @@ fn reference_bullet_tier_ranges_retain_fields_and_count_selected_work() {
                                         whitespace_present.insert(stringify!($kind));
                                     }
                                 }
-                                (
-                                    Some(ReadableSlot::Missing(body)),
-                                    Some((range, BodyState::Missing)),
-                                ) => {
-                                    assert!(body.raw_node().is_missing());
-                                    assert_eq!(body.source(), source);
-                                    assert_eq!(body.raw_node().byte_range(), *range);
-                                    assert_eq!(body.text(), source.get(range.clone()).unwrap());
-                                }
+                                (Some(ReadableSlot::Missing(missing)), _) => match missing.0 {},
                                 (
                                     Some(ReadableSlot::Error(body)),
                                     Some((range, BodyState::Error)),

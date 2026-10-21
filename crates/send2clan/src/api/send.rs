@@ -18,40 +18,43 @@ use crate::ffi;
 /// 2. Launches CLAN if not already running (platform-specific)
 /// 3. Sends file path, cursor position, and optional message to CLAN
 ///
-/// The function is stateless and thread-safe. Multiple threads can call it
-/// concurrently without coordination.
+/// The API has no caller-owned context, but Windows calls share a message file
+/// without synchronization. Do not overlap sends; a caller-local lock cannot
+/// coordinate other processes using that file. The combined formatted request
+/// can be truncated by the C implementation's fixed buffer.
 ///
 /// # Arguments
 ///
-/// * `timeout` - Timeout in seconds for the entire operation. Use 0 for default (30 seconds).
-///   Negative values are treated as 0. Recommended: 10-30 seconds for interactive use.
+/// * `timeout` - Seconds for selected platform waits, not an end-to-end deadline.
+///   Nonpositive values select platform defaults. macOS launch does not use
+///   this limit; Windows launch and window lookup wait separately, and the
+///   subsequent `SendMessageA` call is not bounded by it.
 ///
 /// * `file_path` - Path to the .cha file to open in CLAN. Must be non-empty.
 ///   Can be absolute or relative (relative to CLAN's working directory).
 ///
-/// * `line_number` - 1-based line number for cursor positioning. Must be >= 1.
+/// * `line_number` - Requested 1-based line number, admitted in `1..=1_000_000`.
 ///
-/// * `column_number` - 1-based column number for cursor positioning. Must be >= 1.
+/// * `column_number` - Requested 1-based column number, admitted in `1..=10_000`.
 ///
 /// * `message` - Optional error/status message to display in CLAN.
 ///   Typical use: error descriptions, warnings.
 ///
 /// # Returns
 ///
-/// * `Ok(())` - File was successfully sent to CLAN and opened at the cursor position
+/// * `Ok(())` - The bridge reported transport success; GUI navigation is not verified.
 /// * `Err(Error)` - Operation failed with specific error details
 ///
 /// # Platform Support
 ///
-/// * **macOS**: Full support using Apple Events and Launch Services
-/// * **Windows**: Full support using Win32 APIs and message files
+/// * **macOS**: Apple Events and Launch Services implementation
+/// * **Windows**: Win32/message-file implementation, with the coordination and
+///   installation-query limits described here and in [`crate::is_clan_available`]
 /// * **Linux**: Returns `Err(Error::UnsupportedPlatform)`
 ///
-/// # Performance
-///
-/// * CLAN already running: 100-500ms typical
-/// * CLAN needs launching: 2-5 seconds (includes app startup)
-/// * Timeout scenario: Up to `timeout` seconds
+/// A reported failure can follow partial external effects. Retrying is not an
+/// exactly-once delivery mechanism; assess whether duplicate GUI requests are
+/// acceptable before using the retry example below. No latency bound is promised.
 ///
 /// # Examples
 ///

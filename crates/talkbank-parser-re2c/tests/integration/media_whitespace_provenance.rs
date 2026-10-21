@@ -15,9 +15,9 @@
 //! introduced it was emitted from the tree-sitter lowering instead, and this
 //! parser silently did not report it.
 //!
-//! Nothing else would have caught that: the equivalence oracle compares the
-//! parsed MODELS via `semantic_eq`, never the two parsers' diagnostics, and the
-//! provenance field is `#[semantic_eq(skip)]` besides. This test is the gate.
+//! Model equivalence alone cannot establish this field's preservation:
+//! `semantic_eq` excludes it via `#[semantic_eq(skip)]` and does not compare
+//! diagnostics. This test checks that distinct source-provenance contract.
 
 use talkbank_model::model::Header;
 use talkbank_model::{ChatParser, ErrorCollector, ParseOutcome};

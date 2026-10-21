@@ -11,9 +11,9 @@ pub use rejected_tier::RejectedMorTier;
 
 mod word;
 pub use word::{
-    CaDelimiterKind, CaElementKind, OverlapKind, ParsedAnnotation, ParsedLangSuffix,
-    ReplacementParsed, ScopedAnnotationParsed, ScopedOverlapIndex, StressKind, WordBodyItem,
-    WordCategory, WordWithAnnotations,
+    CaDelimiterKind, CaElementKind, LengtheningRun, OverlapKind, ParsedAnnotation,
+    ParsedLangSuffix, ReplacementParsed, ScopedAnnotationParsed, ScopedOverlapIndex, StressKind,
+    WordBodyItem, WordCategory, WordWithAnnotations,
 };
 
 /// A parsed main tier: *SPEAKER:\t tier_body
@@ -35,11 +35,11 @@ pub struct MainTier<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TierBody<'a> {
     pub linkers: Vec<Token<'a>>,
-    pub langcode: Option<Token<'a>>,
+    pub langcode: Option<crate::token::Extracted<'a>>,
     pub contents: Vec<ContentItem<'a>>,
     pub terminator: Option<Token<'a>>,
     pub postcodes: Vec<crate::token::PostcodeToken<'a>>,
-    pub media_bullet: Option<Token<'a>>,
+    pub media_bullet: Option<crate::token::MediaBulletToken<'a>>,
 }
 
 /// Which terminator a tier ends with.
@@ -212,9 +212,9 @@ pub enum ContentItem<'a> {
     Word(WordWithAnnotations<'a>),
     /// grammar.js: pause_token
     Pause(PauseKindParsed<'a>),
-    /// Freecode (`[^ text]`), a first-class content item. Carries the
-    /// tag-extracted text, not the token.
-    Freecode(&'a str),
+    /// Freecode (`[^ text]`), a first-class content item. Its payload is the
+    /// tag-extracted text, its lexeme the whole `[^ text]`.
+    Freecode(crate::token::Extracted<'a>),
     /// An annotation with nothing to scope over, e.g. a `[/]` opening an
     /// utterance. Ungrammatical, and the subject of E759.
     ///
@@ -256,6 +256,9 @@ pub enum ContentItem<'a> {
         kind: OverlapKind,
         /// `⌈2` and friends; the digit written after the marker.
         index: Option<u32>,
+        /// The marker as written, borrowed from the source, so the converter
+        /// can place it.
+        text: &'a str,
     },
     /// Retrace: word(s) followed by [/], [//], [///], [/-], or [/?]
     /// The retraced content is wrapped here; the corrected content follows.
@@ -272,25 +275,19 @@ pub enum ContentItem<'a> {
     /// state the parser cannot produce. A `Vec` that is always length one is a
     /// dead axis, and its emptiness case is a wrong answer waiting for a
     /// reader who does not know that.
-    Event(&'a str),
+    Event(crate::token::Extracted<'a>),
     /// Event with annotations: `&=description [annotation1] [annotation2] ...`
     /// grammar.js: nonword_with_optional_annotations wraps events.
     /// Retrace markers are dropped (not applicable to events).
     AnnotatedEvent {
-        /// The event description, as the lexer tag-extracted it.
-        event: &'a str,
+        /// The event, with its description as the lexer tag-extracted it.
+        event: crate::token::Extracted<'a>,
         annotations: Vec<ParsedAnnotation<'a>>,
     },
-    /// Media bullet, with its two timestamps already separated by the lexer.
-    ///
-    /// Typed for the same reason as [`PauseKindParsed`]: storing the raw
-    /// `Token` forced every consumer to re-destructure a ~180-variant enum and
-    /// invent a fallback for a shape the parser never builds.
+    /// Media bullet with lexer-owned numeric admission and original spelling.
+    /// Rejected timing remains present until lowering, never a zero sentinel.
     MediaBullet {
-        /// Start timestamp text, digits as written.
-        start: &'a str,
-        /// End timestamp text, digits as written.
-        end: &'a str,
+        bullet: crate::token::MediaBulletToken<'a>,
     },
     // `CaMarker` was deleted 2026-08-09: nothing constructed it. CA element
     // and delimiter tokens are consumed by the word-body scanner into
@@ -300,33 +297,37 @@ pub enum ContentItem<'a> {
     // `&'a str` rather than a `Token`: every consumer read them as
     // `tok.text()` on an already tag-extracted token, so the token was a
     // wrapper around the one field anyone wanted.
-    /// Underline begin marker (`␂␁`). Carries no payload: both converters
-    /// ignored the token entirely, so the field only kept a wrong one
-    /// constructible.
-    UnderlineBegin,
+    /// Underline begin marker (`␂␁`), as written, so the converter can place
+    /// it.
+    UnderlineBegin(&'a str),
     /// Underline end marker (`␂␂`). See [`ContentItem::UnderlineBegin`].
-    UnderlineEnd,
+    UnderlineEnd(&'a str),
     /// Other spoken event (`&*SPK:word`), with its two fields separated.
     ///
     /// Replaces a raw `Token` whose only purpose was to be re-destructured in
     /// the converter behind an `unreachable!()`, i.e. a panic in a parser that
     /// existed solely because the variant could hold a token the parser never
     /// puts there.
-    OtherSpokenEvent { speaker: &'a str, text: &'a str },
+    OtherSpokenEvent {
+        speaker: &'a str,
+        text: &'a str,
+        /// The whole `&*SPK:word`, for placement.
+        lexeme: &'a str,
+    },
     /// Phonological group: ‹ contents ›
     PhoGroup(Vec<ContentItem<'a>>),
     /// Sign group: 〔 contents 〕
     SinGroup(Vec<ContentItem<'a>>),
-    /// Long feature begin (`&{l=LABEL`); carries the label alone.
-    LongFeatureBegin(&'a str),
-    /// Long feature end (`&}l=LABEL`); carries the label alone.
-    LongFeatureEnd(&'a str),
-    /// Nonvocal begin (`&{n=LABEL`); carries the label alone.
-    NonvocalBegin(&'a str),
-    /// Nonvocal end (`&}n=LABEL`); carries the label alone.
-    NonvocalEnd(&'a str),
-    /// Nonvocal simple, self-closing (`&{n=LABEL}`); carries the label alone.
-    NonvocalSimple(&'a str),
+    /// Long feature begin (`&{l=LABEL`); its payload is the label alone.
+    LongFeatureBegin(crate::token::Extracted<'a>),
+    /// Long feature end (`&}l=LABEL`); its payload is the label alone.
+    LongFeatureEnd(crate::token::Extracted<'a>),
+    /// Nonvocal begin (`&{n=LABEL`); its payload is the label alone.
+    NonvocalBegin(crate::token::Extracted<'a>),
+    /// Nonvocal end (`&}n=LABEL`); its payload is the label alone.
+    NonvocalEnd(crate::token::Extracted<'a>),
+    /// Nonvocal simple, self-closing (`&{n=LABEL}`); its payload is the label alone.
+    NonvocalSimple(crate::token::Extracted<'a>),
     /// Standalone zero (0), action without speech.
     /// grammar.js: nonword = choice(event, zero)
     /// With annotations: annotated_action; without: bare action.
@@ -346,10 +347,9 @@ impl<'a> ContentItem<'a> {
     /// The one place that knows which variants of this enum contain other
     /// content. Every recursive walker needs that fact, and until this existed
     /// each answered it with its own match, which is how
-    /// `has_synthesized_missing_annotation` came to descend into `Retrace`,
-    /// `Group` and `Quotation` but not `PhoGroup` or `SinGroup`: a retrace
-    /// carrying a synthesized missing annotation inside `‹...›` was invisible
-    /// to it.
+    /// the missing-annotation walker came to descend into `Retrace`, `Group`
+    /// and `Quotation` but not `PhoGroup` or `SinGroup`. A missing annotation
+    /// inside `‹...›` was invisible to it.
     ///
     /// EXHAUSTIVENESS DOES NOT CATCH THAT. A walker can list every variant and
     /// still answer `false` for a container, so `_ => false` and
@@ -370,7 +370,7 @@ impl<'a> ContentItem<'a> {
     #[inline]
     pub fn children(&self) -> &[ContentItem<'a>] {
         match self {
-            Self::Retrace(retrace) => &retrace.content,
+            Self::Retrace(retrace) => retrace.body.items(),
             Self::Group(group) => &group.contents,
             Self::Quotation(quotation) => &quotation.contents,
             Self::PhoGroup(items) | Self::SinGroup(items) => items,
@@ -383,8 +383,8 @@ impl<'a> ContentItem<'a> {
             | Self::Event(_)
             | Self::AnnotatedEvent { .. }
             | Self::MediaBullet { .. }
-            | Self::UnderlineBegin
-            | Self::UnderlineEnd
+            | Self::UnderlineBegin(_)
+            | Self::UnderlineEnd(_)
             | Self::OtherSpokenEvent { .. }
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)
@@ -396,28 +396,81 @@ impl<'a> ContentItem<'a> {
     }
 }
 
+/// The opening and closing delimiters of an enclosed run (`<` and `>`, or the
+/// two quotation marks), as written, so the construct can be placed from one
+/// to the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Enclosure<'a> {
+    pub open: &'a str,
+    pub close: &'a str,
+}
+
+impl Enclosure<'_> {
+    /// The extent from the opening delimiter through the closing one, when
+    /// both are slices of `source`.
+    pub fn span_in(
+        self,
+        source: crate::source_text::SourceText<'_>,
+    ) -> Option<talkbank_model::Span> {
+        Some(
+            source
+                .span_of(self.open)?
+                .merge(source.span_of(self.close)?),
+        )
+    }
+}
+
+/// What a retrace marker scopes over: the two shapes the chain fold builds,
+/// each carrying exactly what its extent needs, so "no brackets means one
+/// item" is the type rather than a convention a converter has to re-check.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum RetraceBody<'a> {
+    /// `<a b> [/]`: a bare group handed its brackets to the retrace (the
+    /// model's `is_group`); the extent runs from the opening bracket.
+    Enclosed(Enclosure<'a>, Vec<ContentItem<'a>>),
+    /// `word [/]`, `<a b> [?] [/]`, `“a” [/]`: the one item the marker
+    /// scopes over, whose own extent starts the retrace's.
+    Single(Box<ContentItem<'a>>),
+}
+
+impl<'a> RetraceBody<'a> {
+    /// The retraced items, in order.
+    pub fn items(&self) -> &[ContentItem<'a>] {
+        match self {
+            Self::Enclosed(_, items) => items,
+            Self::Single(item) => std::slice::from_ref(item),
+        }
+    }
+
+    /// The retraced items, owned.
+    pub fn into_items(self) -> Vec<ContentItem<'a>> {
+        match self {
+            Self::Enclosed(_, items) => items,
+            Self::Single(item) => vec![*item],
+        }
+    }
+}
+
 /// Retraced content: words the speaker said then corrected.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Retrace<'a> {
-    /// The retraced content (words that were corrected).
-    pub content: Vec<ContentItem<'a>>,
+    /// What the marker scopes over.
+    pub body: RetraceBody<'a>,
     /// The retrace kind.
     pub kind: RetraceKindParsed,
-    /// Whether this retrace originated from a `<group> [/]` (angle brackets).
-    pub is_group: bool,
-    /// True iff this retrace is a RECOVERY from a `<...>` group that had no
-    /// following annotation. `group_with_annotations` requires one; on its
-    /// absence both parsers recover to `Retrace { kind: Complete, is_group:
-    /// true, annotations: [] }`, model-indistinguishable from a real
-    /// `<...> [//]`. This flag is the only thing that distinguishes the
-    /// synthesized case, so the file-level parser can emit a matching MISSING
-    /// diagnostic (E342) on it (recovery is not validity; see this crate's
-    /// MISSING-Token Recovery Policy). It does NOT affect model conversion.
-    pub synthesized_missing_annotation: bool,
+    /// The retrace marker as written (`[/]`, `[//]`, ...), for placement.
+    pub marker: &'a str,
     /// Non-retrace annotations that followed the retrace marker (e.g., `[?]` after `[/]`).
     /// In grammar.js, annotations attach to `word_with_optional_annotations`, so
     /// they belong to the retrace, not the word inside it.
     pub annotations: Vec<ParsedAnnotation<'a>>,
+}
+
+impl Retrace<'_> {
+    /// Whether this retrace originated from a `<group> [/]` (angle brackets).
+    pub fn is_group(&self) -> bool {
+        matches!(self.body, RetraceBody::Enclosed(..))
+    }
 }
 
 /// Retrace kind, matches grammar.js retrace variants exactly.
@@ -436,6 +489,8 @@ pub enum RetraceKindParsed {
 /// grammar.js: group_with_annotations
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Group<'a> {
+    /// The `<` and `>` as written.
+    pub enclosure: Enclosure<'a>,
     pub contents: Vec<ContentItem<'a>>,
     pub annotations: Vec<ParsedAnnotation<'a>>,
 }
@@ -443,6 +498,8 @@ pub struct Group<'a> {
 /// grammar.js: quotation
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Quotation<'a> {
+    /// The two quotation marks as written.
+    pub enclosure: Enclosure<'a>,
     pub contents: Vec<ContentItem<'a>>,
     /// Markers attached to the quotation, retained by the ordered chain fold.
     pub annotations: Vec<ParsedAnnotation<'a>>,
@@ -520,7 +577,9 @@ pub enum HeaderParsed<'a> {
 // Full file AST
 // ═══════════════════════════════════════════════════════════════
 
-pub use file::{ChatFile, DependentTierEntryParsed, HeaderProvenance, Line, Utterance};
+pub use file::{
+    ChatFile, DependentTierEntryParsed, HeaderProvenance, Line, LocatedMainTier, Utterance,
+};
 
 /// A parsed dependent tier.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -552,7 +611,7 @@ pub enum DependentTierParsed<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WorTierParsed<'a> {
     /// `[- zho]` and friends, written before the first timed word.
-    pub langcode: Option<Token<'a>>,
+    pub langcode: Option<crate::token::Extracted<'a>>,
     pub items: Vec<WorItemParsed<'a>>,
     pub terminator: Option<Token<'a>>,
 }
@@ -560,13 +619,18 @@ pub struct WorTierParsed<'a> {
 /// A parsed %wor item: word with optional timing bullet.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum WorItemParsed<'a> {
-    /// A word with optional timing bullet.
+    /// A word with optional timing bullet. The whole token is kept, not only
+    /// its numeric admission, so the bullet can be placed at its own bytes.
     Word {
-        word: WordWithAnnotations<'a>,
-        bullet: Option<(u64, u64)>,
+        word: Box<WordWithAnnotations<'a>>,
+        bullet: Option<crate::token::MediaBulletToken<'a>>,
     },
-    /// Separator (comma, tag marker, vocative marker).
-    Separator(SeparatorKindParsed),
+    /// Separator (comma, tag marker, vocative marker), with its text so the
+    /// converter can place it.
+    Separator {
+        kind: SeparatorKindParsed,
+        text: &'a str,
+    },
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -622,7 +686,7 @@ pub struct TextTierParsed<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum TextTierSegment<'a> {
     Text(&'a str),
-    Bullet(Token<'a>),
+    Bullet(crate::token::MediaBulletToken<'a>),
     Pic(Token<'a>),
 }
 
@@ -688,10 +752,15 @@ mod children_tests {
 
     fn retrace<'a>(content: Vec<ContentItem<'a>>) -> ContentItem<'a> {
         ContentItem::Retrace(Retrace {
-            content,
+            body: RetraceBody::Enclosed(
+                Enclosure {
+                    open: "<",
+                    close: ">",
+                },
+                content,
+            ),
             kind: RetraceKindParsed::Complete,
-            is_group: false,
-            synthesized_missing_annotation: false,
+            marker: "[//]",
             annotations: vec![],
         })
     }
@@ -705,7 +774,7 @@ mod children_tests {
     /// rather than on each walker. Before `children()` every recursion answered
     /// "which variants nest" itself, so guarding the class meant a test per
     /// walker, and the walker that never got one
-    /// (`has_synthesized_missing_annotation`) is the one that silently skipped
+    /// (the missing-annotation check) is the one that silently skipped
     /// `PhoGroup` and `SinGroup`.
     ///
     /// Exhaustiveness cannot replace it. A `match` listing every variant and
@@ -720,6 +789,10 @@ mod children_tests {
             (
                 "Group",
                 ContentItem::Group(Group {
+                    enclosure: Enclosure {
+                        open: "<",
+                        close: ">",
+                    },
                     contents: vec![marker()],
                     annotations: vec![],
                 }),
@@ -727,6 +800,10 @@ mod children_tests {
             (
                 "Quotation",
                 ContentItem::Quotation(Quotation {
+                    enclosure: Enclosure {
+                        open: "\u{201C}",
+                        close: "\u{201D}",
+                    },
                     contents: vec![marker()],
                     annotations: vec![],
                 }),
@@ -750,12 +827,16 @@ mod children_tests {
     /// forever rather than answer wrong.
     #[test]
     fn a_leaf_yields_nothing() {
-        assert!(ContentItem::Event("laughs").children().is_empty());
+        assert!(
+            ContentItem::Event(crate::token::Extracted::from_lexed("laughs", "&=laughs"))
+                .children()
+                .is_empty()
+        );
     }
 
     /// SURVIVES: behaviour. Descent through `children()` reaches content nested
     /// inside a pho group, which is the precise case
-    /// `has_synthesized_missing_annotation` used to miss.
+    /// the missing-annotation check used to miss.
     #[test]
     fn descent_reaches_content_inside_a_pho_group() {
         let nested = ContentItem::PhoGroup(vec![retrace(vec![])]);

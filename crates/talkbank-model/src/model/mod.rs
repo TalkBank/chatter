@@ -41,7 +41,7 @@ pub use semantic_eq::SemanticEq;
 mod semantic_diff;
 pub use semantic_diff::{
     DEFAULT_MAX_DIFFS, PathSegment, SemanticDiff, SemanticDiffContext, SemanticDiffKind,
-    SemanticDiffReport, SemanticDifference, SemanticPath, normalize_span, normalize_span_option,
+    SemanticDiffReport, SemanticDifference, SemanticPath,
 };
 mod validation_tag;
 pub use validation_tag::{ValidationTag, ValidationTagged};
@@ -174,6 +174,7 @@ pub use content::{
     FormType,
     Freecode,
     Group,
+    LanguagePrecode,
     Linker,
     LinkerKind,
     LongFeatureBegin,
@@ -182,6 +183,7 @@ pub use content::{
     LongFeatureLabel,
     // Main tier structure
     MainTier,
+    MainTierLocations,
     NonvocalBegin,
     NonvocalEnd,
     NonvocalLabel,

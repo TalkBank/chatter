@@ -5,15 +5,53 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Comment_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Date_Header>
 
-use super::fragment::HeaderFragment;
-use crate::api::fragment::WrappedFragment;
-use crate::error::{
-    ErrorCode, ErrorContext, ParseError, ParseErrors, ParseResult, Severity, SourceLocation,
-};
+use super::fragment::{HeaderCoverage, HeaderFragment};
+use crate::api::fragment::{Synthetic, WrappedFragment};
+use crate::error::{ErrorCode, ParseErrors, ParseResult, Severity};
 use crate::model::Header;
 use crate::parser::TreeSitterParser;
 
+/// The synthetic documents a lone header line is parsed inside: before
+/// `@Begin` (index 1) and after the preamble (index 5).
+pub(crate) const PRE_BEGIN_PREFIX: &str = "@UTF8\n";
+pub(crate) const PRE_BEGIN_SUFFIX: &str = "\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@End\n";
+pub(crate) const POST_BEGIN_PREFIX: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n";
+pub(crate) const POST_BEGIN_SUFFIX: &str = "\n@End\n";
+/// The header index of a line placed after `POST_BEGIN_PREFIX`.
+pub(crate) const POST_BEGIN_HEADER_INDEX: usize = 5;
+
 impl TreeSitterParser {
+    /// Parse a header inside a wrapper this caller built, keeping the result
+    /// in the wrapper's coordinates for the caller to rebase.
+    ///
+    /// # Errors
+    ///
+    /// A failed parse, a header not found at `header_index`, a node not
+    /// covering the caller's input, or a lowering fault, each already
+    /// projected into the caller's coordinates by the wrapper's sink.
+    pub(crate) fn lower_wrapped_header(
+        &self,
+        fragment: &WrappedFragment<'_>,
+        header_index: usize,
+        coverage: HeaderCoverage,
+    ) -> ParseResult<Synthetic<Header>> {
+        let parsed = fragment.parse(self).map_err(|_| {
+            ParseErrors::from(vec![
+                fragment
+                    .whole_input_error(
+                        ErrorCode::TierValidationError,
+                        Severity::Error,
+                        "header",
+                        "Tier validation error: tree-sitter could not parse this header line",
+                    )
+                    .with_suggestion(
+                        "Check that the header line follows CHAT format (e.g., @Header:<TAB>value)",
+                    ),
+            ])
+        })?;
+        HeaderFragment::admit(&parsed, header_index, coverage)?.lower()
+    }
+
     /// Parse one header line in isolation using a minimal wrapper CHAT document.
     ///
     /// Because tree-sitter requires a complete CHAT document for context, this method
@@ -51,43 +89,24 @@ impl TreeSitterParser {
             _ => {}
         }
 
-        const PRE_BEGIN_PREFIX: &str = "@UTF8\n";
-        const PRE_BEGIN_SUFFIX: &str = "\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@End\n";
-        const POST_BEGIN_PREFIX: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n";
-        const POST_BEGIN_SUFFIX: &str = "\n@End\n";
-
         let pre_begin_wrapped =
-            WrappedFragment::new(&[PRE_BEGIN_PREFIX], input, PRE_BEGIN_SUFFIX, 0)?;
+            WrappedFragment::local(&[PRE_BEGIN_PREFIX], input, PRE_BEGIN_SUFFIX)?;
         let post_begin_wrapped =
-            WrappedFragment::new(&[POST_BEGIN_PREFIX], input, POST_BEGIN_SUFFIX, 0)?;
+            WrappedFragment::local(&[POST_BEGIN_PREFIX], input, POST_BEGIN_SUFFIX)?;
 
+        // The lowered header is in the wrapper's coordinates; the wrapper
+        // moves it into the caller's (input-relative, origin 0).
         let try_parse =
             |fragment: &WrappedFragment<'_>, header_index: usize| -> ParseResult<Header> {
-                let parsed = fragment.parse(self).map_err(|_| {
-                    let mut errors = ParseErrors::new();
-                    errors.push(
-                    ParseError::new(
-                        ErrorCode::TierValidationError,
-                        Severity::Error,
-                        SourceLocation::from_offsets(0, input.len()),
-                        ErrorContext::new(input, 0..input.len(), "header"),
-                        "Tier validation error: tree-sitter could not parse this header line",
-                    )
-                    .with_suggestion(
-                        "Check that the header line follows CHAT format (e.g., @Header:<TAB>value)",
-                    ),
-                );
-                    errors
-                })?;
-
-                HeaderFragment::admit(&parsed, header_index)?.lower()
+                self.lower_wrapped_header(fragment, header_index, HeaderCoverage::WholeLine)
+                    .map(|header| fragment.rebase(header))
             };
 
         let pre_err = match try_parse(&pre_begin_wrapped, 1) {
             Ok(header) => return Ok(header),
             Err(error) => error,
         };
-        match try_parse(&post_begin_wrapped, 5) {
+        match try_parse(&post_begin_wrapped, POST_BEGIN_HEADER_INDEX) {
             Ok(header) => Ok(header),
             Err(post_err) => {
                 if post_err.len() <= pre_err.len() {

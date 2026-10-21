@@ -1,7 +1,7 @@
 # Replacements
 
 **Status:** Current
-**Last modified:** 2026-05-29 17:47 EDT
+**Last modified:** {{git-dates:page}}
 
 A **replacement** is a CHAT annotation `[: ...]` that pairs a single
 spoken word on the main tier with one or more "intended" words. It
@@ -14,10 +14,9 @@ treat the utterance as containing.
 *CHI:	rocking+house [: rocking+horse] [*] ?
 ```
 
-This page is the canonical reference for what replacements mean in
-TalkBank, both as a CHAT-manual construct and as a typed AST in this
-repo. The most important load-bearing fact, which the rest of the page
-expands on:
+This page describes Chatter's representation and processing rules. The CHAT
+manual defines the notation; this implementation guide is not a separate
+authority for transcription judgments. The central distinction is:
 
 > **Replacements are word-level, not group-level. Each tier domain
 > chooses *one* side of the pair: `%mor` analyzes the replacement
@@ -49,7 +48,8 @@ with two words.
 
 `<dat is> [: that is]` is **not** valid CHAT. A replacement does not
 attach to a group; it attaches to a single word. The grammar enforces
-this by typing: `ReplacedWord.word: Word`, never `Group`. To replace
+this structurally; the model also stores `ReplacedWord.word: Word`, never
+`Group`. To replace
 words inside a group, attach the replacement to the inner word:
 
 ```chat
@@ -61,11 +61,10 @@ because each annotation operates at its own scope.
 
 ### There Is No `[::]` Form
 
-Some literature on CHILDES tooling references a `[::]` annotation; it
-does **not** exist in this repo's grammar, parser, or model, and is not
-defined by the current CHAT manual. Only `[:]` exists. If you encounter
-`[::]` in legacy data, treat it as a parse error to investigate, not a
-construct to support.
+The current grammar has a single-colon replacement, not a separate `[::]`
+construct. If legacy input contains the latter, retain the original and
+investigate the diagnostic and transcription convention. Do not silently
+reinterpret it as `[: ...]` or treat a recovery model as evidence of support.
 
 ## The Per-Domain Alignment Rule
 
@@ -78,7 +77,7 @@ domains align to different sides of a replacement pair:
 | `%gra` | **replacement** (right) | Grammatical relations align to `%mor`'s structure |
 | `%wor` | **original** (left) | Word-level timing is for what was actually spoken |
 | `%pho` | **original** (left) | Phonological transcription describes what was actually spoken |
-| `%sin` | **original** (left) | Spelling-in-actual describes the original surface form |
+| `%sin` | **original** (left) | Gesture/sign annotation aligns to the original slot |
 
 The mnemonic: **the replacement encodes the intended form** (what the
 speaker meant or what a corrected transcript would read). Tiers
@@ -92,7 +91,7 @@ flowchart LR
 
     spoken -->|"%wor (timing)"| wor["%wor: dis"]
     spoken -->|"%pho (phonology)"| pho["%pho: dɪs"]
-    spoken -->|"%sin (spelling)"| sin["%sin: dis"]
+    spoken -->|"%sin (gesture/sign)"| sin["Annotation for the original slot"]
     target -->|"%mor (UD parse)"| mor["%mor: pron|this"]
     target -->|"%gra (paired with %mor)"| gra["%gra: 1|0|ROOT"]
 ```
@@ -102,11 +101,22 @@ generalizes consistently:
 
 - `%wor` / `%pho` / `%sin` produce **one** entry, for `gonna`.
 - `%mor` produces **two** entries, for `going` and `to`.
-- `%gra` produces **two** entries, paired to the two `%mor` items.
+- Without clitics, those two MOR items contribute **two** `%gra` chunks;
+  a terminator contributes its own additional chunk when present.
+
+This example assumes ordinary eligible words outside an excluding annotation.
+Choosing the original side does not override domain membership: omissions and
+fragment-like originals with replacements are excluded from Pho/Sin alignment,
+and Wor applies its separate `FilteredLexicalV1` policy. Mor-domain retraces
+remain excluded. See the linked rules rather than applying a universal
+one-original-versus-many-replacements count to every context.
 
 The alignment-counting code that enforces this is in
-[`alignment/units.rs`](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs)
-look for the `UtteranceContent::ReplacedWord` arm. The full table
+[`alignment/helpers/count.rs`](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-model/src/alignment/helpers/count.rs)
+(the `walk_alignable_replaced_word` function), with eligibility predicates in
+`alignment/helpers/rules.rs`. Wor has its own
+[typed projection](../architecture/wor-timing.md#current-membership-policy).
+The full table
 of per-domain rules is in
 [`spec/docs/ALIGNMENT_RULES.md`](https://github.com/TalkBank/chatter/blob/main/spec/docs/ALIGNMENT_RULES.md).
 
@@ -121,6 +131,7 @@ pub struct ReplacedWord {
     pub word: Word,                       // left side: original spoken word
     pub replacement: Replacement,         // right side: 1+ intended words
     pub scoped_annotations: ReplacedWordAnnotations,
+    pub span: Span,                       // source location, omitted from JSON
 }
 ```
 
@@ -144,37 +155,48 @@ Two consequences of this shape:
 
 ### Each Replacement Word Is Validated Like a Main-Tier Word
 
-The replacement is a `Vec<Word>`. Each `Word` inside it goes through
-the same validator that runs on main-tier words:
+`ReplacementWords` is a checked, nonempty collection of `Word`, not an
+unrestricted `Vec<Word>`. Its constructor and JSON deserializer reject an empty
+collection. Each contained word still runs ordinary word validation in the
+supplied context, followed by replacement-specific checks. Nonempty construction
+does not certify the words, their language policy or the entire document.
+For example, putting a token inside a replacement does not exempt it from
+ordinary word checks:
 
 ```chat
 *CHI:	dog [: C-3PO] .
 ```
 
-This produces `[E220] "C-3PO" is not a legal word in language(s) "eng":
-numeric digits not allowed`, exactly as if `C-3PO` had appeared on the
-main tier directly. **The replacement does not provide an escape from
+The result depends on the effective word-validation context, not merely on the
+presence of brackets. **The replacement does not provide an escape from
 word-level validation.** The implementation is in
 [`replacement.rs`](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-model/src/model/annotation/replacement.rs).
 
 This is critical for any code generating replacements programmatically:
 do not assume `[: ...]` lets you smuggle arbitrary text past the word
 validator. If your producer emits a replacement, both sides must be
-CHAT-legal under the utterance's declared language.
+CHAT-legal under the effective validation context. That includes applicable
+language scope rather than just membership in the file's language header.
 
 ### Replacement-Specific Error Codes
 
-Three error codes are specific to replacements and do not apply to
-main-tier words:
+Replacement admission and validation cover different boundaries:
 
 | Code | Meaning |
 |------|---------|
-| `E208` | Empty replacement `[:]` (no words provided between `:` and `]`) |
+| `E208` (historical) | Empty replacement; the current primary parser instead reports E376/E342 for missing replacement material before model construction |
+| `E387` | Replacement attached to a phonological fragment (`&+`) |
+| `E388` | Replacement attached to a nonword (`&~`) |
+| `E389` | Replacement attached to a filler (`&-`) |
 | `E390` | Replacement contains an omission (`0prefix` form), disallowed inside replacements |
 | `E391` | Replacement contains untranscribed material (`xxx`, `yyy`, `www`), disallowed inside replacements |
 
 The principle: a replacement must be a **concrete intended form**. Empty,
-omitted, or unintelligible content defeats that purpose.
+omitted, or unintelligible content defeats that purpose. The
+[E208 specification](https://github.com/TalkBank/chatter/blob/main/spec/errors/E208.md)
+records the current parser and checked-construction boundary. Recovery diagnostics
+need not match between backends; neither backend may admit an empty replacement.
+Alignment behavior for a retained invalid model is not permission to publish it.
 
 ## Interactions with Other Annotations
 
@@ -193,7 +215,7 @@ levels:
 Both can coexist:
 
 ```chat
-*CHI:	<dat [: that] is> [/] is broken .   (replacement inside retrace)
+*CHI:	<dat [: that] is> [/] is broken .
 ```
 
 A retrace cannot live *inside* a replacement (the grammar wraps
@@ -208,25 +230,24 @@ a unit:
 *CHI:	rocking+house [: rocking+horse] [*] ?
 ```
 
-Here `[*]` marks `rocking+house` as containing a phonological/lexical
-error; the `[: rocking+horse]` records the intended form. The two
+Here `[*]` marks an error without specifying its subtype; the
+`[: rocking+horse]` records the intended form. The two
 annotations cooperate: the replacement encodes *what was meant*, the
 error code classifies *how it deviates*. Implementation:
 `scoped_annotations` field on `ReplacedWord`.
 
 ## Common Misconceptions
 
-These are bugs we have repeatedly written down then forgotten, recording
-them here so future contributors don't reinvent them.
+Keep these distinctions when building or consuming replacement-bearing CHAT.
 
 1. **"`[: ...]` lets me put any text I want."** No. Each replacement
-   word is validated. `[: C-3PO]` fails E220 in English just as
-   `C-3PO` would.
-2. **"`[:]` is the right mechanism for ASR sanitization."** Usually
-   no. ASR-introduced normalization typically wants `[% ...]` (free-
-   form comment) or `[= ...]` (free-form explanation), neither of
-   which validates word grammar. Use `[:]` only when you have a
-   concrete CHAT-legal intended form.
+   word is validated; nonempty collection admission is only one invariant.
+2. **"A different annotation can bypass a failed replacement."** No.
+   `[% ...]` comments and `[= ...]` explanations have different meanings;
+   they are not substitutes chosen merely to avoid word validation. Preserve
+   source evidence, report the failure and apply only a reviewed transformation.
+   Use a replacement only when the intended form is supported by the
+   transcription judgment, not as an invented explanation of a tool failure.
 3. **"`%mor` analyzes the original."** No. `%mor` analyzes the
    replacement. This is the correction's morphology, not the error's.
 4. **"`%wor` count must equal `%mor` count."** No. For
@@ -239,12 +260,12 @@ them here so future contributors don't reinvent them.
 
 ## Source Citations
 
-| Concern | File:line |
+| Concern | Source owner |
 |---------|-----------|
-| Grammar rule (`replacement`) | `grammar/grammar.js:1341-1352` |
-| Word-with-replacement rule | `grammar/grammar.js:1063-1071` |
+| Grammar rule (`replacement`) | `grammar/grammar.js`, `replacement` |
+| Word-with-replacement rule | `grammar/grammar.js`, `word_with_optional_annotations` |
 | `ReplacedWord` struct | `crates/talkbank-model/src/model/annotation/replacement.rs` (search `pub struct ReplacedWord`) |
-| Per-domain alignment | `crates/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs` (search `UtteranceContent::ReplacedWord`) |
+| Per-domain alignment | `crates/talkbank-model/src/alignment/helpers/count.rs` (`walk_alignable_replaced_word`); Wor projection described in the timing contract |
 | Replacement validation | `crates/talkbank-model/src/model/annotation/replacement.rs` (search `impl ... Validate for ReplacementWords`) |
 | Reference corpus example | `corpus/reference/annotation/errors-and-replacements.cha` |
 | CHAT manual | <https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope> |

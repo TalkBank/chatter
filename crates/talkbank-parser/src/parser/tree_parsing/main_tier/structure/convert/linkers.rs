@@ -2,7 +2,7 @@
 //!
 //! CHAT reference: <https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, FromNodeKind, KindSlot, KindSlotValue, LinkerChoice, LinkersChild0Child0Choice,
     LinkersChild1Child0Choice, LinkersNode, NoChild, SlotView, WhitespacesNode, extract_linkers,
@@ -30,7 +30,7 @@ macro_rules! linker_tokens {
                         Self::CaTechnicalBreakLinker(_) => LinkerKind::TcuContinuation,
                         Self::CaNoBreakLinker(_) => LinkerKind::NoBreakTcuContinuation,
                     };
-                    Linker::new(kind, span_of(self.raw_node()))
+                    Linker::new(span_of(self.raw_node()), kind)
                 }
             }
         )*
@@ -51,16 +51,19 @@ impl SourceOrderedLinkers {
         let linker = token.to_linker();
         // Normal traversal appends in constant time. Only displaced recovery
         // can require insertion among already-read tokens.
+        // Linkers come from tokens and are located; `Option` ordering keeps an
+        // unlocated one (which this parser does not produce) sorting first.
+        let start = |linker: &Linker| linker.location.span().map(|span| span.start());
         if self
             .0
             .last()
-            .is_none_or(|last| last.span.start <= linker.span.start)
+            .is_none_or(|last| start(last) <= start(&linker))
         {
             self.0.push(linker);
         } else {
             let position = self
                 .0
-                .partition_point(|prior| prior.span.start <= linker.span.start);
+                .partition_point(|prior| start(prior) <= start(&linker));
             self.0.insert(position, linker);
         }
     }
@@ -148,8 +151,8 @@ fn report_unexpected(node: Node<'_>, source: &str, errors: &impl ErrorSink) {
     errors.report(ParseError::new(
         ErrorCode::StructuralOrderError,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.byte_range(), ""),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), ""),
         format!(
             "Expected 'linker' or 'whitespaces' in linkers, found '{}'",
             node.kind()
@@ -193,7 +196,10 @@ mod tests {
         for linker in &linkers {
             let rendered = linker.to_string();
             assert_eq!(
-                source.get(linker.span.start as usize..linker.span.end as usize),
+                source.get(
+                    linker.location.span().expect("located").start()
+                        ..linker.location.span().expect("located").end()
+                ),
                 Some(rendered.as_str())
             );
         }

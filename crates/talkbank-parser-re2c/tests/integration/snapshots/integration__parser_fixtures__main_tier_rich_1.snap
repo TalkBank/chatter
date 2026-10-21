@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
+assertion_line: 92
 expression: result.unwrap()
 ---
 speaker:
@@ -12,7 +13,7 @@ tier_body:
         category: Filler
         body:
           - Text: m
-          - Lengthening: 1
+          - Lengthening: ":"
         form_marker: ~
         lang: ~
         pos_tag: ~
@@ -70,7 +71,6 @@ tier_body:
     Question: "?"
   postcodes: []
   media_bullet:
-    MediaBullet:
-      raw_text: "\u0015532330_533470\u0015"
-      start_time: "532330"
-      end_time: "533470"
+    raw_text: "\u0015532330_533470\u0015"
+    start_time: "532330"
+    end_time: "533470"

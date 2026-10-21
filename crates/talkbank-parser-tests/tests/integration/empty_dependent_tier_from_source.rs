@@ -19,7 +19,7 @@
 //! called `check_dependent_tier_content("xfoo", Span::DUMMY, &errors)` and
 //! asserted the report. Here each is the tier line as written, `%xfoo:`
 //! followed by a tab and nothing, so the emptiness DECISION
-//! (`DependentTier::empty_content_span`) and the report are both exercised
+//! (`DependentTier::empty_content_location`) and the report are both exercised
 //! from CHAT text. The `%xfoo` / `%xxfoo` pair records a real past bug: the
 //! label already carries its `x`, and an older format string double-prefixed
 //! it.
@@ -60,7 +60,7 @@ fn a_standard_tier_reports_under_the_same_code() -> Result<(), TestError> {
     Ok(())
 }
 
-// ── the emptiness DECISION, `DependentTier::empty_content_span` ─────────
+// ── the emptiness DECISION, `DependentTier::empty_content_location` ─────────
 //
 // From `talkbank-model`'s `model/dependent_tier/kind.rs`, whose inline tests
 // built `UserDefinedDependentTier { .., span: Span::DUMMY }` and
@@ -141,10 +141,10 @@ fn every_emptiness_decision_holds_over_a_parsed_tier() -> Result<(), TestError> 
             wrong.push(format!("{}: the fixture built no dependent tier", row.what));
             continue;
         };
-        let got = entry.tier.empty_content_span().is_some();
+        let got = entry.tier.empty_content_location().is_some();
         if got != row.declares_nothing {
             wrong.push(format!(
-                "{}: empty_content_span().is_some() was {got}, expected {}",
+                "{}: empty_content_location().is_some() was {got}, expected {}",
                 row.what, row.declares_nothing
             ));
         }

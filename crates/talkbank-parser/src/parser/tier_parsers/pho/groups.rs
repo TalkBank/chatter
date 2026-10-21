@@ -6,6 +6,7 @@ use crate::generated_traversal::{
     AsRawNode, KindSlot, NoChild, PhoGroupChoiceSourceView, PhoGroupNode, PhoGroupedContentNode,
     PhoWordsNode, SourceBound, SourceField, SourceSlotView, WhitespacesNode,
 };
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ErrorSink;
 use talkbank_model::model::{PhoItem, PhoWord};
 
@@ -22,7 +23,7 @@ pub(super) fn extract_pho_group_items<'tree>(
     errors: &impl ErrorSink,
 ) -> Result<Vec<PhoItem>, crate::CstFailure> {
     let source = typed.source();
-    let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let children = typed.extract_canonical()?;
     surface_displaced(&children.children().unexpected, "pho_group", source, errors);
     let choice = match children.field_content().slot().view() {
         SourceSlotView::Present(choice) => choice,
@@ -49,10 +50,6 @@ pub(super) fn extract_pho_group_items<'tree>(
                 SourceSlotView::Present(content) => build_group_from_words(
                     extract_pho_grouped_content_words(content.read()?, errors)?,
                 ),
-                SourceSlotView::Missing(missing) => {
-                    check_not_missing(missing.raw_node(), source, errors, "pho_group");
-                    fallback_group_as_text(typed)
-                }
                 SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
                     fallback_group_as_text(typed)
                 }
@@ -67,7 +64,7 @@ pub(super) fn extract_pho_grouped_content_words<'tree, 'source>(
     errors: &impl ErrorSink,
 ) -> Result<Vec<&'source str>, crate::CstFailure> {
     let source = typed.source();
-    let contents = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let contents = typed.extract_canonical()?;
     let mut words = Vec::with_capacity(contents.field_child_1().slot().iter().len() + 1);
     push_pho_word(contents.field_child_0().slot(), errors, &mut words)?;
     for element in contents.field_child_1().slot().iter() {
@@ -125,9 +122,14 @@ pub(super) fn push_pho_separator<'tree>(
 }
 
 /// Preserve nonempty word text, diagnose Error, and omit absent slots.
-/// A missing composite word is diagnosed, not read as spoken text.
+/// Compiled admission excludes MISSING at this composite word position.
 fn push_pho_word<'tree, 'source>(
-    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, PhoWordsNode<'tree>>>,
+    slot: SourceField<
+        '_,
+        'tree,
+        'source,
+        crate::generated_traversal::NonMissingKindSlot<'tree, PhoWordsNode<'tree>>,
+    >,
     errors: &impl ErrorSink,
     words: &mut Vec<&'source str>,
 ) -> Result<(), crate::CstFailure> {
@@ -138,9 +140,6 @@ fn push_pho_word<'tree, 'source>(
             if !text.is_empty() {
                 words.push(text);
             }
-        }
-        SourceSlotView::Missing(missing) => {
-            check_not_missing(missing.raw_node(), source, errors, "pho_grouped_content");
         }
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(

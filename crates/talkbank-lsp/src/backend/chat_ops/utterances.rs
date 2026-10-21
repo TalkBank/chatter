@@ -41,11 +41,12 @@ fn extract_utterances(
         .iter()
         .filter_map(|line| {
             if let Line::Utterance(utterance) = line {
-                let main_line = if utterance.main.span.is_dummy() {
-                    0
-                } else {
-                    line_index.byte_to_line(utterance.main.span.start as usize)
-                };
+                // Line 0 stands for an utterance with no source position, as before.
+                let main_line = utterance
+                    .main
+                    .location
+                    .span()
+                    .map_or(0, |span| line_index.byte_to_line(span.start()));
 
                 let has_cod = utterance
                     .dependent_tiers

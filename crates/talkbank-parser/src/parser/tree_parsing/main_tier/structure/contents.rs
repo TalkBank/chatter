@@ -9,22 +9,25 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{Absence, Never, NodeSlot};
 use crate::model::UtteranceContent;
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 
 use crate::generated_traversal::{
     AsRawNode, ContentItemChoice, ContentItemChoiceBoundView, ContentItemNode,
-    ContentsChild0Choice, ContentsChild0ChoiceBoundView, ContentsChild1Choice,
-    ContentsChild1ChoiceBoundView, ContentsChildren, ContentsNode, OverlapPointNode, SeparatorNode,
-    SourceBound, SourceBoundKind, SourceChildren, SourceField, SourceSlotView,
+    ContentsChild0Choice, ContentsChild0ChoiceBoundView, ContentsChild0MissingSourceView,
+    ContentsChild1Choice, ContentsChild1ChoiceBoundView, ContentsChild1MissingSourceView,
+    ContentsChildren, ContentsNode, KindAdmitted, OverlapPointNode, SeparatorNode,
+    SourceBindingError, SourceBound, SourceBoundKind, SourceChildren, SourceField, SourceRecovery,
+    SourceSlotView,
 };
-use crate::parser::typed_cst::{read_source_field, report_cst_failure};
+use crate::parser::tree_parsing::parser_helpers::check_not_missing;
+use crate::parser::typed_cst::{read_source_field, report_admission, report_cst_failure};
 
 use super::super::super::parser_helpers::parse_separator_node;
 use super::super::content::{
     MainTierRegion, classify_main_tier_recovery, illegal_curly_quote_error, misplaced_linker_error,
     parse_overlap_point, surface_main_tier_sink,
 };
-use crate::parser::tree_parsing::helpers::unexpected_node_error;
 
 /// One `contents` alternative, keyed by its NEW-backend per-position choice
 /// enum (`ContentsChild0Choice` for the required first element,
@@ -42,6 +45,46 @@ trait ContentsItem<'tree>: SourceBoundKind<'tree> {
     /// `node.kind()`: a `contents` child is one of exactly these four, and a
     /// match with no other arm is the grammar's own statement of that.
     fn leaf<'source>(bound: SourceBound<'tree, 'source, Self>) -> ContentsLeaf<'tree, 'source>;
+}
+
+/// A `contents` position's generated missing view under the admitted kind
+/// proof, read as the leaf a present child of its kind would be, so a MISSING
+/// overlap point keeps its kind (the policy `separator.rs` measured and
+/// records). The view still names `content_item` and `separator`, but those
+/// are rules, which tree-sitter never inserts MISSING, and the compiled
+/// grammar proves it: under `KindAdmitted` their payload is the uninhabited
+/// `Never`, so their arms below are empty matches rather than code. One
+/// exhaustive conversion per position, so a kind added to a position's heads
+/// fails to compile here instead of falling through.
+trait ContentsPlaceholder<'value, 'tree, 'source> {
+    /// The leaf, its zero-width range admitted like a present child's.
+    fn read_leaf(self) -> Result<ContentsLeaf<'tree, 'source>, SourceBindingError>;
+}
+
+impl<'value, 'tree, 'source> ContentsPlaceholder<'value, 'tree, 'source>
+    for ContentsChild0MissingSourceView<'value, 'tree, 'source, KindAdmitted>
+{
+    fn read_leaf(self) -> Result<ContentsLeaf<'tree, 'source>, SourceBindingError> {
+        Ok(match self {
+            Self::Whitespaces(_) => ContentsLeaf::Whitespace,
+            Self::ContentItem(item) => match item.0 {},
+            Self::Separator(separator) => match separator.0 {},
+            Self::OverlapPoint(overlap) => ContentsLeaf::OverlapPoint(overlap.read()?),
+        })
+    }
+}
+
+impl<'value, 'tree, 'source> ContentsPlaceholder<'value, 'tree, 'source>
+    for ContentsChild1MissingSourceView<'value, 'tree, 'source, KindAdmitted>
+{
+    fn read_leaf(self) -> Result<ContentsLeaf<'tree, 'source>, SourceBindingError> {
+        Ok(match self {
+            Self::Whitespaces(_) => ContentsLeaf::Whitespace,
+            Self::ContentItem(item) => match item.0 {},
+            Self::Separator(separator) => match separator.0 {},
+            Self::OverlapPoint(overlap) => ContentsLeaf::OverlapPoint(overlap.read()?),
+        })
+    }
 }
 
 /// The four things a `contents` child can be. Each parsed alternative retains
@@ -99,8 +142,15 @@ impl<'tree> ContentsItem<'tree> for ContentsChild1Choice<'tree> {
 pub fn parse_main_tier_contents<'tree>(
     typed: SourceBound<'tree, '_, ContentsNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Vec<UtteranceContent> {
-    parse_contents(&typed.extract(), errors)
+) -> Result<Vec<UtteranceContent>, crate::CstFailure> {
+    // Admitted extraction: the compiled grammar's proof that `content_item`
+    // and `separator` are never MISSING is what empties their missing arms.
+    // The failure is a grammar-binding fault or the proof's refusal of a
+    // contradicting tree; like every other fault in the tier body it
+    // propagates, so the caller rejects the tier rather than lowering it
+    // with invented empty content.
+    let children = typed.extract_canonical()?;
+    Ok(parse_contents(&children, errors))
 }
 
 /// Parse source-associated `contents` children, wherever they sit.
@@ -113,7 +163,7 @@ pub fn parse_main_tier_contents<'tree>(
 /// (`group/nested.rs`), with its own arms for every separator kind the
 /// grammar never places there.
 pub(crate) fn parse_contents<'tree>(
-    contents: &SourceChildren<'tree, '_, ContentsChildren<'tree>>,
+    contents: &SourceChildren<'tree, '_, ContentsChildren<'tree, KindAdmitted>>,
     errors: &impl ErrorSink,
 ) -> Vec<UtteranceContent> {
     // `content` starts empty rather than pre-sized to the child count: that
@@ -134,63 +184,44 @@ pub(crate) fn parse_contents<'tree>(
 /// element of the repeated `child_1` tail) into `content`.
 ///
 /// A present item is dispatched on the typed choice it already carries; a
-/// MISSING placeholder is classified like a present one through the same
-/// typed constructors, which is the precedent `separator.rs` set and
-/// explained: a migration that changes diagnostics is a behaviour change
-/// wearing a refactor's clothes, and this one changes none.
-fn process_contents_slot<'tree, C: ContentsItem<'tree>, A: Absence>(
-    slot: SourceField<'_, 'tree, '_, NodeSlot<'tree, C, tree_sitter::Node<'tree>, Never, A>>,
+/// MISSING placeholder is dispatched on its typed missing view (since
+/// 2026-10-20 the generator types a choice's MISSING head by kind), and both
+/// go down one path, the precedent `separator.rs` set and explained.
+fn process_contents_slot<'value, 'tree, 'source, C, M, A>(
+    slot: SourceField<'value, 'tree, 'source, NodeSlot<C, M, tree_sitter::Node<'tree>, Never, A>>,
     errors: &impl ErrorSink,
     content: &mut Vec<UtteranceContent>,
-) {
+) where
+    C: ContentsItem<'tree>,
+    M: SourceRecovery<'value, 'tree, 'source>,
+    M::View: ContentsPlaceholder<'value, 'tree, 'source> + AsRawNode<'tree>,
+    A: Absence,
+{
     let source = slot.source();
-    match slot.view() {
+    let leaf = match slot.view() {
         // The choice enum names which of the four kinds this is; nothing here
         // reads `node.kind()`.
         SourceSlotView::Present(item) => {
             let Some(item) = read_source_field(item, errors) else {
                 return;
             };
-            let parsed = match C::leaf(item) {
-                ContentsLeaf::Whitespace => return,
-                ContentsLeaf::Separator(node) => {
-                    parse_separator_node(node, errors).map(UtteranceContent::Separator)
-                }
-                ContentsLeaf::OverlapPoint(node) => parse_overlap_point(node, errors),
-                ContentsLeaf::ContentItem(node) => parse_content_item(node, errors),
-            };
-            if let ParseOutcome::Parsed(parsed) = parsed {
-                content.push(parsed);
-            }
+            C::leaf(item)
         }
-        // A zero-width MISSING placeholder at a content position. It carries
-        // no choice classification, so it is classified through the typed
-        // constructors and parsed like a present item, which is what the
-        // old kind() dispatch did (it never checked `is_missing`) and what
-        // `separator.rs` chose for the same case, for the reason its comment
-        // gives. A MISSING `whitespaces` is the one kind the old dispatch had
-        // no arm for, and it fell to the fail-loud arm; it still does.
-        SourceSlotView::Missing(item_node) => {
-            let node = item_node.raw_node();
-            let bound = match item_node.read_raw() {
-                Ok(bound) => bound,
+        // A zero-width MISSING placeholder: reported here (E342; the
+        // whole-tree backstop's same-code duplicate is suppressed, and the
+        // backstop can drop a candidate another diagnostic covers, so this
+        // position does not rely on it), then read as the leaf of its kind.
+        // A MISSING `whitespaces` contributes nothing, like a present one;
+        // until 2026-10-20 it was reported as an "unexpected node" instead.
+        SourceSlotView::Missing(placeholder) => {
+            let node = placeholder.raw_node();
+            check_not_missing(node, source, errors, "contents");
+            match placeholder.read_leaf() {
+                Ok(leaf) => leaf,
                 Err(error) => {
                     report_cst_failure(node, source, error, errors);
                     return;
                 }
-            };
-            let parsed = if let Some(separator) = bound.typed::<SeparatorNode>() {
-                parse_separator_node(separator, errors).map(UtteranceContent::Separator)
-            } else if let Some(overlap) = bound.typed::<OverlapPointNode>() {
-                parse_overlap_point(overlap, errors)
-            } else if let Some(item) = bound.typed::<ContentItemNode>() {
-                parse_content_item(item, errors)
-            } else {
-                errors.report(unexpected_node_error(node, source, "content item"));
-                ParseOutcome::rejected()
-            };
-            if let ParseOutcome::Parsed(parsed) = parsed {
-                content.push(parsed);
             }
         }
         // ERROR is recovery evidence, not an admitted word suffix. Keep its
@@ -202,22 +233,38 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>, A: Absence>(
                 error_node.source(),
                 MainTierRegion::Body,
             ));
+            return;
         }
         // Selected choices cannot produce Unexpected; producer inconsistencies
         // return CstFailure before content construction.
         SourceSlotView::Unexpected(never) => match never {},
-        // Reachable at `child_0` (never at a `child_1` repeat element, since
-        // `repeat_split` never pushes an `Absent` element there) when the
-        // OUTER `contents` node itself is a childless MISSING placeholder
-        // (`body.rs`'s `NodeSlot::Missing` arm for the tier-body `content`
-        // position hands this function a zero-width synthetic node with no
-        // children at all, so `child_0`'s cursor peek finds nothing). Matches
-        // the OLD backend's `extract_contents_iter` on the same input, which
-        // likewise yields zero items (empty iteration over a childless node):
-        // both produce empty `content`. No-op, not a diagnostic (a missing
-        // `contents` node's own "Missing"-ness is reported once, by `body.rs`'s
-        // caller, not duplicated here).
-        SourceSlotView::Absent(_) => {}
+        // Only `child_0` has this state (a repeat element never records
+        // `Absent`). It is not a MISSING `contents` node, which tree-sitter
+        // cannot produce (MISSING nodes are terminals and `contents` is a
+        // rule); it would be a walk that left the required first position
+        // empty. It is classified with the coverage drive's batch 5 (the
+        // main-tier batch in the drive plan); until then it is left as it was.
+        SourceSlotView::Absent(_) => return,
+    };
+    push_leaf(leaf, errors, content);
+}
+
+/// Parse one `contents` leaf and push what it yields.
+fn push_leaf(
+    leaf: ContentsLeaf<'_, '_>,
+    errors: &impl ErrorSink,
+    content: &mut Vec<UtteranceContent>,
+) {
+    let parsed = match leaf {
+        ContentsLeaf::Whitespace => return,
+        ContentsLeaf::Separator(node) => {
+            parse_separator_node(node, errors).map(UtteranceContent::Separator)
+        }
+        ContentsLeaf::OverlapPoint(node) => parse_overlap_point(node, errors),
+        ContentsLeaf::ContentItem(node) => parse_content_item(node, errors),
+    };
+    if let ParseOutcome::Parsed(parsed) = parsed {
+        content.push(parsed);
     }
 }
 
@@ -236,32 +283,31 @@ fn parse_content_item<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
-    let children = typed.extract();
+    // Admitted, so the five rule kinds of the missing view below are
+    // uninhabited types rather than a claim in the comment on its arm.
+    let Ok(children) =
+        report_admission(typed.extract_canonical(), typed.raw_node(), source, errors)
+    else {
+        return ParseOutcome::rejected();
+    };
     let outcome = match children.field_content().slot().view() {
         SourceSlotView::Present(choice) => match read_source_field(choice, errors) {
             Some(choice) => parse_content_item_choice(choice, errors),
             None => ParseOutcome::rejected(),
         },
-        // A zero-width MISSING placeholder for a whole construct: classified
-        // through the typed constructors and parsed like a present one, the
-        // precedent `separator.rs` set (the old walk never checked
-        // `is_missing` here either).
-        SourceSlotView::Missing(placeholder) => match placeholder.read_typed::<ContentItemChoice>()
-        {
-            Some(Ok(choice)) => parse_content_item_choice(choice, errors),
-            Some(Err(error)) => {
-                report_cst_failure(placeholder.raw_node(), source, error, errors);
-                ParseOutcome::rejected()
-            }
-            None => {
-                errors.report(unexpected_node_error(
-                    placeholder.raw_node(),
-                    source,
-                    "content item child",
-                ));
-                ParseOutcome::rejected()
-            }
-        },
+        // A MISSING head: tree-sitter inserts MISSING nodes only for
+        // terminals, and under the admitted proof the view's rule kinds are
+        // uninhabited, so what arrives is a linker token or an illegal curly
+        // quote. Neither is content the author wrote, so it yields no
+        // model element; it is reported as the missing element it is (E342,
+        // the backstop's duplicate suppressed). Until 2026-10-20 the raw
+        // placeholder was re-classified and parsed like a present item, which
+        // reported E766 ("Linker '' must be utterance-initial"), E233 or E256
+        // for a token that is not in the source.
+        SourceSlotView::Missing(placeholder) => {
+            check_not_missing(placeholder.raw_node(), source, errors, "content item");
+            ParseOutcome::rejected()
+        }
         SourceSlotView::Error(error_node) => {
             errors.report(classify_main_tier_recovery(
                 error_node.raw_node(),
@@ -271,8 +317,9 @@ fn parse_content_item<'tree>(
             ParseOutcome::rejected()
         }
         SourceSlotView::Unexpected(never) => match never {},
-        // A `content_item` with no child at all, which only a childless
-        // MISSING wrapper can be; it carries nothing to parse.
+        // A `content_item` whose required content the walk left empty. It is
+        // not a MISSING `content_item` (a rule, never inserted MISSING); it is
+        // classified with the drive's batch 5 and carries nothing to parse.
         SourceSlotView::Absent(_) => ParseOutcome::rejected(),
     };
     surface_main_tier_sink(children.children(), source, errors);

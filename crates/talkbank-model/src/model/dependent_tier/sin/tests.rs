@@ -12,7 +12,7 @@ fn test_sin_tier_new() {
         SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
         SinItem::Token(SinToken::new("0").expect("nonempty test token")),
     ];
-    let tier = SinTier::new(items);
+    let tier = SinTier::new(crate::Location::Unlocated, items);
     assert_eq!(tier.items.len(), 2);
     assert_eq!(tier.len(), 2);
     assert!(!tier.is_empty());
@@ -21,17 +21,20 @@ fn test_sin_tier_new() {
 /// Handles an empty `%sin` tier.
 #[test]
 fn test_sin_tier_empty() {
-    let tier = SinTier::new(vec![]);
+    let tier = SinTier::new(crate::Location::Unlocated, vec![]);
     assert_eq!(tier.len(), 0);
     assert!(tier.is_empty());
-    assert!(SinTier::from_tokens(vec![String::new()]).is_err());
+    assert!(SinTier::from_tokens(crate::Location::Unlocated, vec![String::new()]).is_err());
 }
 
 /// Preserves literal `0` gesture placeholders.
 #[test]
 fn test_sin_tier_with_zeros() -> Result<(), String> {
-    let tier = SinTier::from_tokens(vec!["0".to_string(), "0".to_string(), "0".to_string()])
-        .expect("nonempty test tokens");
+    let tier = SinTier::from_tokens(
+        crate::Location::Unlocated,
+        vec!["0".to_string(), "0".to_string(), "0".to_string()],
+    )
+    .expect("nonempty test tokens");
     assert_eq!(tier.len(), 3);
     match &tier.items[0] {
         SinItem::Token(text) => assert_eq!(text.as_ref(), "0"),
@@ -43,10 +46,10 @@ fn test_sin_tier_with_zeros() -> Result<(), String> {
 /// Preserves explicit gesture tokens.
 #[test]
 fn test_sin_tier_with_gesture_codes() -> Result<(), String> {
-    let tier = SinTier::from_tokens(vec![
-        "g:toy:dpoint".to_string(),
-        "gg:toyy:dpointt".to_string(),
-    ])
+    let tier = SinTier::from_tokens(
+        crate::Location::Unlocated,
+        vec!["g:toy:dpoint".to_string(), "gg:toyy:dpointt".to_string()],
+    )
     .expect("nonempty test tokens");
     assert_eq!(tier.len(), 2);
     match &tier.items[0] {
@@ -67,7 +70,7 @@ fn test_sin_tier_with_groups() -> Result<(), String> {
         ])),
         SinItem::Token(SinToken::new("e").expect("nonempty test token")),
     ];
-    let tier = SinTier::new(items);
+    let tier = SinTier::new(crate::Location::Unlocated, items);
     assert_eq!(tier.len(), 3);
     match &tier.items[1] {
         SinItem::SinGroup(gestures) => assert_eq!(gestures.len(), 2),
@@ -80,11 +83,14 @@ fn test_sin_tier_with_groups() -> Result<(), String> {
 #[test]
 fn test_sin_tier_chat_format() {
     use crate::model::WriteChat;
-    let tier = SinTier::from_tokens(vec![
-        "g:toy:dpoint".to_string(),
-        "0".to_string(),
-        "g:book:hold".to_string(),
-    ])
+    let tier = SinTier::from_tokens(
+        crate::Location::Unlocated,
+        vec![
+            "g:toy:dpoint".to_string(),
+            "0".to_string(),
+            "g:book:hold".to_string(),
+        ],
+    )
     .expect("nonempty test tokens");
     let output = tier.to_chat_string();
     assert_eq!(output, "%sin:\tg:toy:dpoint 0 g:book:hold");
@@ -97,16 +103,25 @@ fn deserialized_sin_tokens_are_validated_through_the_utterance() {
     use crate::validation::{Validate, ValidationContext};
     use crate::{ErrorCode, ErrorCollector, Span};
 
-    let tier: SinTier = serde_json::from_value(serde_json::json!({
+    let mut tier: SinTier = serde_json::from_value(serde_json::json!({
         "items": [
             {"type": "token", "content": ""},
             {"type": "sin_group", "content": ["g:toy:hold", ""]}
         ]
     }))
     .expect("editable JSON permits invalid text for contextual validation");
-    let span = Span::from_usize(40, 70);
-    let main = MainTier::new("CHI", vec![], Terminator::Period { span: Span::DUMMY });
-    let utterance = Utterance::new(main).with_sin(tier.with_span(span));
+    let span = Span::new(40, 70);
+    let main = MainTier::new(
+        crate::MainTierLocations::UNLOCATED,
+        "CHI",
+        vec![],
+        Terminator::Period {
+            location: crate::Location::Unlocated,
+        },
+    );
+    // Read back from JSON the tier is unlocated; the test places it.
+    tier.location = crate::Location::Located(span);
+    let utterance = Utterance::new(main).with_sin(tier);
     let errors = ErrorCollector::new();
     utterance.validate(&ValidationContext::default(), &errors);
     let empty_tokens: Vec<_> = errors
@@ -119,5 +134,9 @@ fn deserialized_sin_tokens_are_validated_through_the_utterance() {
         2,
         "both bare and grouped empty tokens must be diagnosed"
     );
-    assert!(empty_tokens.iter().all(|error| error.location.span == span));
+    assert!(
+        empty_tokens
+            .iter()
+            .all(|error| error.location.span().expect("located diagnostic") == span)
+    );
 }

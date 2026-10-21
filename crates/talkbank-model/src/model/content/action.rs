@@ -7,7 +7,6 @@
 //! - [Action Code](https://talkbank.org/0info/manuals/CHAT.html#Action_Code)
 
 use super::WriteChat;
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -35,33 +34,26 @@ use talkbank_derive::{SemanticEq, SpanShift};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct Action {
     /// Source location metadata for diagnostics.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
-// NO `Default`, deliberately, and clippy's `new_without_default` is allowed
-// here rather than satisfied. `new()` fills in `Span::DUMMY`, and this
-// repository names exactly that as a sentinel that is also a legal value: a
-// dummy span equals the default equals a real zero-length position at offset 0.
-// A `Default` impl would make fabricating one the most natural thing a caller
-// can write, which is the affordance the ban exists to remove.
+// NO `Default`, deliberately. `new()` requires the caller to say where the
+// action is, or that it is `Location::Unlocated`; a `Default` would make
+// inventing a location the most natural thing a caller can write, which is the
+// affordance the ban exists to remove.
 #[allow(clippy::new_without_default)]
 impl Action {
     /// Build an action token with dummy span metadata.
     ///
     /// Parser fixtures and hand-built model values typically use this, then
     /// optionally attach real span data later in parser-owned paths.
-    pub fn new() -> Self {
-        Self { span: Span::DUMMY }
-    }
-
-    /// Build an action token with explicit source span metadata.
-    ///
-    /// Use this constructor when source offsets are already known at creation.
-    pub fn with_span(span: Span) -> Self {
-        Self { span }
+    pub fn new(location: impl Into<crate::Location>) -> Self {
+        Self {
+            location: location.into(),
+        }
     }
 }
 

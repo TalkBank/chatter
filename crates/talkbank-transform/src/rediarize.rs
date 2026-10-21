@@ -810,7 +810,7 @@ fn reconcile_headers(lines: Vec<Line>, NonEmptyTracks(used_tracks): &NonEmptyTra
         match line {
             Line::Header {
                 header,
-                span,
+                location: span,
                 separator,
             } => match *header {
                 Header::Participants { entries } => {
@@ -837,7 +837,7 @@ fn reconcile_headers(lines: Vec<Line>, NonEmptyTracks(used_tracks): &NonEmptyTra
                         header: Box::new(Header::Participants {
                             entries: ParticipantEntries::new(kept),
                         }),
-                        span,
+                        location: span,
                         separator,
                     });
                 }
@@ -846,7 +846,7 @@ fn reconcile_headers(lines: Vec<Line>, NonEmptyTracks(used_tracks): &NonEmptyTra
                         declared_ids.insert(id.speaker.clone());
                         result.push(Line::Header {
                             header: Box::new(Header::ID(id)),
-                            span,
+                            location: span,
                             separator,
                         });
                     }
@@ -854,7 +854,7 @@ fn reconcile_headers(lines: Vec<Line>, NonEmptyTracks(used_tracks): &NonEmptyTra
                 }
                 other => result.push(Line::Header {
                     header: Box::new(other),
-                    span,
+                    location: span,
                     separator,
                 }),
             },
@@ -879,7 +879,7 @@ fn reconcile_headers(lines: Vec<Line>, NonEmptyTracks(used_tracks): &NonEmptyTra
                 new_id.speaker = track.clone();
                 Line::Header {
                     header: Box::new(Header::ID(new_id)),
-                    span: talkbank_model::Span::DUMMY,
+                    location: talkbank_model::Location::Unlocated,
                     separator: TierSeparator::CLEAN,
                 }
             })

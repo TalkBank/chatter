@@ -4,7 +4,7 @@
 use crate::alignment::helpers::{ContentItem, walk_content};
 use crate::model::{Bullet, MainTier};
 use crate::validation::ValidationContext;
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// Whether traversal has established any material in this utterance.
 /// Later bullets never erase that knowledge: inter-bullet policy is separate.
@@ -19,11 +19,10 @@ impl ScopeState {
     fn check_bullet(self, bullet: &Bullet, errors: &impl ErrorSink) {
         match self {
             Self::AwaitingMaterial => errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::TimingBulletBeforeContent,
                     Severity::Error,
-                    SourceLocation::new(bullet.span),
-                    ErrorContext::new("", bullet.span, "timing bullet"),
+                    bullet.location,
                     "Timing bullet has no preceding utterance material",
                 )
                 .with_suggestion("Place the bullet after the material it times; use explicit 0 for a nonverbal utterance"),

@@ -70,9 +70,14 @@ pub fn find_alignment_hover_info(
 ) -> Option<AlignmentHoverInfo> {
     // Find which utterance contains this position
     let utterance = utils::find_utterance_at_position(chat_file, position, document)?;
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
 
-    if span_contains(utterance.main.span, offset) {
+    if utterance
+        .main
+        .location
+        .span()
+        .is_some_and(|span| span_contains(span, offset))
+    {
         return find_main_tier_hover_info(utterance, tree, position, document);
     }
 
@@ -98,7 +103,7 @@ pub fn find_alignment_hover_info(
 /// Dependent tiers follow the CHAT manual’s tier ordering (`%mor`, `%gra`, `%pho`, `%sin`, etc.).
 /// This helper looks up the tier whose span contains the cursor so alignment hover information can
 /// surface the same tier-specific guidance later in the pipeline.
-fn find_dependent_tier_at_offset(utterance: &Utterance, offset: u32) -> Option<&DependentTier> {
+fn find_dependent_tier_at_offset(utterance: &Utterance, offset: usize) -> Option<&DependentTier> {
     utterance
         .dependent_tiers
         .iter()
@@ -111,5 +116,5 @@ fn find_dependent_tier_at_offset(utterance: &Utterance, offset: u32) -> Option<&
 /// Each dependent tier keeps track of its byte span so hover information can show which tier the cursor
 /// sits in (helpful for explaining `%mor` vs `%gra` alignment errors as described in the manual).
 fn dependent_tier_span(tier: &DependentTier) -> Option<Span> {
-    Some(tier.span())
+    tier.location().span()
 }

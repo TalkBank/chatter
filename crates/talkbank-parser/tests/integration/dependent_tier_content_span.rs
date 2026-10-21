@@ -32,7 +32,7 @@ fn assert_content_spans(source: &str, expected: &[(&str, &str)]) {
             for entry in &utterance.dependent_tiers {
                 let span = entry.content_span().expect("a real span");
                 let text = source
-                    .get(span.start as usize..span.end as usize)
+                    .get(span.start()..span.end())
                     .expect("the span must be in bounds and on char boundaries");
                 seen.push((entry.kind().to_owned(), text.to_owned()));
             }

@@ -42,11 +42,11 @@
 //!
 //! # Reachability note (why the malformed case looks the way it does)
 //!
-//! `parse_mor_tier` is only invoked from the dispatch when the tier node has
-//! NO tree-sitter error (`dependent_tier_dispatch/parsed.rs`:
-//! `MOR_DEPENDENT_TIER => if tier_node.has_error() { ... } else {
-//! parse_mor_tier(...) }`). A structurally broken `%mor` line (no content at
-//! all) makes the tier node `has_error()` and never reaches `parse_mor_tier`.
+//! `parse_mor_tier` takes a `HealthyTier`, which only `TierAdmission::admit`
+//! builds, and only for a tier node with NO tree-sitter error; the dispatch
+//! reports a recovery carrier instead. A structurally broken `%mor` line (no
+//! content at all) makes the tier node `has_error()` and never reaches
+//! `parse_mor_tier`.
 //! The reachable malformed path exercised here is a STRUCTURALLY valid
 //! `%mor` line that simply omits the (grammar-optional) trailing terminator,
 //! which `parse_mor_tier_inner`'s own policy rejects with `MissingTerminator`
@@ -59,7 +59,7 @@ use talkbank_model::model::{DependentTier, Line};
 use talkbank_parser::TreeSitterParser;
 
 /// One diagnostic: (code, span start, span end, message).
-type Diag = (String, u32, u32, String);
+type Diag = (String, usize, usize, String);
 
 /// A valid `%mor` line with four plain items and a period terminator.
 const VALID_MULTI_ITEM: &str =
@@ -105,8 +105,8 @@ fn parse_mor(input: &str) -> (Vec<String>, bool, Vec<Diag>) {
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })
@@ -180,7 +180,7 @@ fn missing_terminator_rejects_the_whole_tier_leaving_the_empty_placeholder() {
          synthetic Period terminator), never the two real items"
     );
 
-    let e305: Vec<&(String, u32, u32, String)> =
+    let e305: Vec<&(String, usize, usize, String)> =
         diags.iter().filter(|(c, _, _, _)| c == "E305").collect();
     assert_eq!(
         e305,

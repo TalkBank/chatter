@@ -7,17 +7,18 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Font_Header>
 
 use crate::error::{
-    ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+    DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity,
 };
 use crate::generated_traversal::{
     AsRawNode, ColorWordsHeaderNode, FontHeaderNode, FreeTextNode, FullDocumentChild1Choice,
-    FullDocumentChild1ChoiceBoundView, NamedKind, NoChild, SourceBound, SourceField,
-    SourceRecovery, SourceSlotView, WindowHeaderNode,
+    FullDocumentChild1ChoiceBoundView, NamedKind, SourceBound, SourceField, SourceRecovery,
+    SourceSlotView, WindowHeaderNode,
 };
 use crate::model::{self, Header, Line};
 use tree_sitter::Node;
 
 use super::helpers::header_separator;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::header::parse_pid_header;
 use crate::parser::tree_parsing::parser_helpers::{surface_displaced, unknown_header_from_node};
 use crate::parser::typed_cst::AnyKindSlot;
@@ -37,10 +38,7 @@ pub fn handle_pre_begin_header<'tree>(
     append: impl FnOnce(Line),
 ) {
     let input = choice.source();
-    let span = Span::new(
-        choice.raw_node().start_byte() as u32,
-        choice.raw_node().end_byte() as u32,
-    );
+    let span = span_of(choice.raw_node());
     let header = match parse_pre_begin_header(choice, errors) {
         Ok(header) => header,
         Err(failure) => {
@@ -48,8 +46,15 @@ pub fn handle_pre_begin_header<'tree>(
             return;
         }
     };
-    let separator = header_separator(choice.raw_node());
-    append(Line::header_with_separator(header, span, separator));
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        header_separator(choice.raw_node()),
+        choice.raw_node(),
+        input,
+        errors,
+    ) else {
+        return;
+    };
+    append(Line::header_with_separator(span, header, separator));
 }
 
 /// Decode the generated pre-begin choice for either document or fragment APIs.
@@ -67,7 +72,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
             header?
         }
         FullDocumentChild1ChoiceBoundView::WindowHeader(window) => {
-            let associated = window.extract();
+            let associated = crate::parser::typed_cst::extract_envelope(window)?;
             surface_displaced(
                 &associated.children().unexpected,
                 "window_header",
@@ -89,7 +94,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
             )?
         }
         FullDocumentChild1ChoiceBoundView::ColorWordsHeader(color_words) => {
-            let associated = color_words.extract();
+            let associated = crate::parser::typed_cst::extract_envelope(color_words)?;
             surface_displaced(
                 &associated.children().unexpected,
                 "color_words_header",
@@ -111,7 +116,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
             )?
         }
         FullDocumentChild1ChoiceBoundView::FontHeader(font) => {
-            let associated = font.extract();
+            let associated = crate::parser::typed_cst::extract_envelope(font)?;
             surface_displaced(
                 &associated.children().unexpected,
                 "font_header",
@@ -151,8 +156,8 @@ struct FreeText {
 /// `Header::Unknown`. A source-binding failure is instead an internal fault.
 /// Generic over the text slot's `Missing` payload: a placeholder is only ever
 /// "not a value", so one body serves either kind proof.
-fn free_text_header<'value, 'tree: 'value, 'source, M>(
-    text: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, FreeTextNode<'tree>, M>>,
+fn free_text_header<'value, 'tree: 'value, 'source, M, E, A>(
+    text: SourceField<'value, 'tree, 'source, AnyKindSlot<FreeTextNode<'tree>, M, E, A>>,
     header_node: Node,
     words: FreeText,
     errors: &impl ErrorSink,
@@ -160,6 +165,8 @@ fn free_text_header<'value, 'tree: 'value, 'source, M>(
 ) -> Result<Header, crate::parser::typed_cst::CstFailure>
 where
     M: SourceRecovery<'value, 'tree, 'source>,
+    E: SourceRecovery<'value, 'tree, 'source>,
+    A: crate::generated_traversal::Absence,
 {
     let input = text.source();
     // What the position holds. An EMPTY text is no value: a line with
@@ -183,7 +190,7 @@ where
                 value => Held::Value(value.to_owned()),
             }
         }
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {
             Held::Nothing
         }
         SourceSlotView::Unexpected(never) => match never {},
@@ -195,12 +202,8 @@ where
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
-                SourceLocation::from_offsets(header_node.start_byte(), header_node.end_byte()),
-                ErrorContext::new(
-                    input,
-                    header_node.start_byte()..header_node.end_byte(),
-                    words.kind,
-                ),
+                DiagnosticLocation::new(span_of(header_node)),
+                ErrorContext::new(input, span_of(header_node), words.kind),
                 words.missing,
             ));
             unknown_header_from_node(header_node, input, words.malformed, None)?

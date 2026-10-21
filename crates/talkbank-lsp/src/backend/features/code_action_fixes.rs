@@ -1,7 +1,8 @@
 use talkbank_model::ErrorCode;
 use tower_lsp::lsp_types::*;
 
-use super::builders::{delete_diagnostic_line, insert_at, replace_diagnostic_range};
+use super::ProposedQuickFix;
+use super::builders::{insert_at, replace_diagnostic_range};
 
 /// Build the quick-fix actions offered for one diagnostic, if its code has
 /// a verified fix.
@@ -14,7 +15,7 @@ use super::builders::{delete_diagnostic_line, insert_at, replace_diagnostic_rang
 /// in the sibling test module names every code that was removed and why.
 /// The rationale for several of the same exclusions is written out in more
 /// detail in `talkbank_transform::splice::catalog`'s module docs, the
-/// shared fix catalog this LSP module has not yet migrated onto.
+/// shared fix catalog used for E305 and E306 by the composition root.
 ///
 /// This routes on [`ErrorCode`] variants, not the wire-protocol code
 /// string, specifically so that renumbering an `ErrorCode` (changing its
@@ -23,39 +24,28 @@ use super::builders::{delete_diagnostic_line, insert_at, replace_diagnostic_rang
 /// The string comparison this replaced (`"E501" => ...`) was exactly how
 /// several of the removed cases went stale: a code's meaning moved to a
 /// different number and nothing here noticed.
-pub(super) fn actions_for_diagnostic(
-    uri: &Url,
-    diagnostic: &Diagnostic,
-    doc: Option<&str>,
-) -> Vec<CodeAction> {
+pub(super) fn actions_for_diagnostic(diagnostic: &Diagnostic, doc: &str) -> Vec<ProposedQuickFix> {
     let Some(code) = diagnostic_code(diagnostic) else {
         return Vec::new();
     };
 
     match code {
-        ErrorCode::MissingTerminator => missing_terminator_actions(uri, diagnostic),
+        // These require source-owned catalog findings, not diagnostic geometry.
+        ErrorCode::MissingTerminator | ErrorCode::EmptyUtterance => Vec::new(),
         // A diagnostic establishes missing facts, not values for those facts.
         // Keep the same refusal policy as the shared fix catalog: no role,
         // participant or language may be constructed from diagnostic prose.
         ErrorCode::UndeclaredSpeaker
         | ErrorCode::MissingRequiredHeader
         | ErrorCode::EmptyLanguagesHeader => Vec::new(),
-        ErrorCode::MissingEndHeader => doc
-            .map(|text| insert_at_end(uri, text, "@End\n", "Insert '@End' at end of file"))
+        ErrorCode::MissingEndHeader => insert_at_end(doc, "@End\n", "Insert '@End' at end of file")
             .into_iter()
             .collect(),
         ErrorCode::MissingUTF8Header => vec![insert_at_start(
-            uri,
             "@UTF8\n",
             "Insert '@UTF8' at start of file",
         )],
-        ErrorCode::EmptyUtterance => vec![delete_diagnostic_line(
-            uri,
-            diagnostic,
-            "Delete empty utterance",
-        )],
         ErrorCode::CommaAfterNonSpokenContent => vec![replace_diagnostic_range(
-            uri,
             diagnostic,
             "",
             "Remove comma after non-spoken content",
@@ -64,51 +54,30 @@ pub(super) fn actions_for_diagnostic(
     }
 }
 
-fn diagnostic_code(diagnostic: &Diagnostic) -> Option<ErrorCode> {
+pub(super) fn diagnostic_code(diagnostic: &Diagnostic) -> Option<ErrorCode> {
     match &diagnostic.code {
         Some(NumberOrString::String(code)) => ErrorCode::parse_exact(code),
         _ => None,
     }
 }
 
-fn missing_terminator_actions(uri: &Url, diagnostic: &Diagnostic) -> Vec<CodeAction> {
-    [
-        (".", "Add '.' (declarative/default)"),
-        ("?", "Add '?' (question)"),
-        ("!", "Add '!' (exclamation)"),
-    ]
-    .into_iter()
-    .map(|(terminator, title)| {
-        insert_at(
-            uri,
-            diagnostic.range.end,
-            format!(" {terminator}"),
-            title,
-            Some(diagnostic),
-        )
-    })
-    .collect()
-}
-
-fn insert_at_end(uri: &Url, doc: &str, text: &str, title: &str) -> CodeAction {
+fn insert_at_end(doc: &str, text: &str, title: &str) -> Option<ProposedQuickFix> {
     let insert_text = if doc.ends_with('\n') {
         text.to_string()
     } else {
         format!("\n{text}")
     };
 
-    insert_at(
-        uri,
-        crate::backend::utils::offset_to_position(doc, doc.len() as u32),
+    Some(insert_at(
+        crate::backend::utils::offset_to_position(doc, doc.len()),
         insert_text,
         title,
         None,
-    )
+    ))
 }
 
-fn insert_at_start(uri: &Url, text: &str, title: &str) -> CodeAction {
+fn insert_at_start(text: &str, title: &str) -> ProposedQuickFix {
     insert_at(
-        uri,
         Position {
             line: 0,
             character: 0,

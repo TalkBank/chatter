@@ -165,8 +165,8 @@ fn code_switch_annotation_recovery_specs_preserve_native_refusal_and_source() {
                 let labels: Vec<_> = scoped
                     .iter()
                     .map(|error| {
-                        let span = error.location.span;
-                        source.get(span.start as usize..span.end as usize)
+                        let span = error.location.span().expect("located diagnostic");
+                        source.get(span.start()..span.end())
                     })
                     .collect();
                 if labels != [Some(spelling)] {
@@ -205,11 +205,8 @@ fn code_switch_annotation_recovery_specs_preserve_native_refusal_and_source() {
         let validation_sites: Vec<_> = validation_errors
             .iter()
             .map(|error| {
-                let span = error.location.span;
-                (
-                    error.code.to_string(),
-                    source.get(span.start as usize..span.end as usize),
-                )
+                let span = error.location.span().expect("located diagnostic");
+                (error.code.to_string(), source.get(span.start()..span.end()))
             })
             .collect();
         // A group's language governs each word: validation diagnoses the
@@ -269,13 +266,13 @@ fn speaker_boundary_specs_report_length_and_ascii_faults_independently() {
         let file = parser.parse_chat_file_streaming(&source, &sink);
         file.validate(&sink, TranscriptName::Anonymous);
         let diagnostics = sink.into_vec();
-        let mut sites = std::collections::BTreeMap::<(u32, u32), (bool, bool)>::new();
+        let mut sites = std::collections::BTreeMap::<(usize, usize), (bool, bool)>::new();
         for error in diagnostics
             .iter()
             .filter(|error| error.code == ErrorCode::InvalidSpeaker)
         {
-            let span = error.location.span;
-            let faults = sites.entry((span.start, span.end)).or_default();
+            let span = error.location.span().expect("located diagnostic");
+            let faults = sites.entry((span.start(), span.end())).or_default();
             if error.message.contains("exceeds maximum length") {
                 faults.0 = true;
             } else if error.message.contains("contains invalid character") {
@@ -342,9 +339,9 @@ fn leading_bullet_specs_preserve_scope_diagnostics_and_timing() {
             "example {example}: {diagnostics:?}"
         );
         for (index, error) in leading.iter().enumerate() {
-            let span = error.location.span;
+            let span = error.location.span().expect("located diagnostic");
             assert_eq!(
-                &source[span.start as usize..span.end as usize],
+                &source[span.start()..span.end()],
                 ["\u{15}100_200\u{15}", "\u{15}200_300\u{15}"][index]
             );
         }
@@ -512,10 +509,13 @@ fn free_text_recovery_specs_preserve_unaffected_sibling_tiers() {
                 let start = source.find(label).expect("authored damaged tier");
                 let end = start + source[start..].find('\n').expect("tier newline") + 1;
                 assert!(
-                    diagnostics
-                        .iter()
-                        .all(|error| error.location.span.start as usize >= start
-                            && error.location.span.end as usize <= end),
+                    diagnostics.iter().all(|error| error
+                        .location
+                        .span()
+                        .expect("located diagnostic")
+                        .start()
+                        >= start
+                        && error.location.span().expect("located diagnostic").end() <= end),
                     "{diagnostics:?}"
                 );
                 for sibling in utterance

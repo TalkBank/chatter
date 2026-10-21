@@ -1,10 +1,11 @@
 //! Source-bound CST decoding for `%pho` and `%mod` tiers.
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, ModDependentTierNode, NoChild, PhoDependentTierNode, PhoGroupNode,
-    PhoGroupsNode, SourceBound, SourceField, SourceSlotView,
+    AsRawNode, ModDependentTierNode, NoChild, NonMissingKindSlot, PhoDependentTierNode,
+    PhoGroupNode, PhoGroupsNode, SourceBound, SourceField, SourceSlotView,
 };
 use crate::parser::node_span::span_of;
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ErrorSink;
 use talkbank_model::model::dependent_tier::PhoGroupWords;
 use talkbank_model::model::{PhoItem, PhoTier, PhoTierType, PhoWord};
@@ -36,68 +37,38 @@ enum PhoBodyTier<'tree, 'source> {
     Mod(SourceBound<'tree, 'source, ModDependentTierNode<'tree>>),
 }
 
-/// Producer admission retains missing composite bodies. Recovery and absence
-/// retain the empty-tier policy, with missing nodes reported before lowering.
+/// Per-rule admission proves ordinary composite bodies present. Nested lexical
+/// recovery remains independent of this envelope proof.
 fn parse_pho_tier_inner(
     tier: PhoBodyTier<'_, '_>,
     errors: &impl ErrorSink,
 ) -> Result<PhoTier, crate::CstFailure> {
     let (tier_type, node, body) = match tier {
         PhoBodyTier::Pho(n) => {
-            let children = n.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+            let children = crate::parser::typed_cst::extract_envelope(n)?;
             surface_displaced(
                 &children.children().unexpected,
                 "pho_dependent_tier",
                 n.source(),
                 errors,
             );
-            (
-                PhoTierType::Pho,
-                n.raw_node(),
-                read_body(children.field_child_2().slot(), errors)?,
-            )
+            let SourceSlotView::Present(body) = children.field_child_2().slot().view();
+            (PhoTierType::Pho, n.raw_node(), body.read()?)
         }
         PhoBodyTier::Mod(n) => {
-            let children = n.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+            let children = crate::parser::typed_cst::extract_envelope(n)?;
             surface_displaced(
                 &children.children().unexpected,
                 "mod_dependent_tier",
                 n.source(),
                 errors,
             );
-            (
-                PhoTierType::Mod,
-                n.raw_node(),
-                read_body(children.field_child_2().slot(), errors)?,
-            )
+            let SourceSlotView::Present(body) = children.field_child_2().slot().view();
+            (PhoTierType::Mod, n.raw_node(), body.read()?)
         }
     };
-    let items = match body {
-        Some(groups) => parse_pho_groups(groups, errors)?,
-        None => Vec::new(),
-    };
-    Ok(PhoTier::new(tier_type, items).with_span(span_of(node)))
-}
-
-/// Read an identified composite body. A source
-/// admission failure is an internal failure, never an absent CHAT body.
-fn read_body<'tree, 'source>(
-    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, PhoGroupsNode<'tree>>>,
-    errors: &impl ErrorSink,
-) -> Result<Option<SourceBound<'tree, 'source, PhoGroupsNode<'tree>>>, crate::CstFailure> {
-    match slot.view() {
-        SourceSlotView::Present(body) => Ok(Some(body.read()?)),
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "phonology_tier",
-            );
-            Ok(None)
-        }
-        SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => Ok(None),
-    }
+    let items = parse_pho_groups(body, errors)?;
+    Ok(PhoTier::new(span_of(node), tier_type, items))
 }
 
 /// Traverse the generated first group and repeated separator/group pairs.
@@ -106,7 +77,7 @@ fn parse_pho_groups<'tree>(
     errors: &impl ErrorSink,
 ) -> Result<Vec<PhoItem>, crate::CstFailure> {
     let source = typed.source();
-    let groups = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let groups = typed.extract_canonical()?;
     let mut items = Vec::with_capacity(groups.field_child_1().slot().iter().len() + 1);
     push_pho_group(groups.field_child_0().slot(), errors, &mut items)?;
     for element in groups.field_child_1().slot().iter() {
@@ -130,9 +101,9 @@ fn parse_pho_groups<'tree>(
 }
 
 /// Decode present groups, diagnose Error, and omit absent positions.
-/// Missing composite groups are diagnosed without fabricating group content.
+/// Compiled admission excludes MISSING at this composite group position.
 fn push_pho_group<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, PhoGroupNode<'tree>>>,
+    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, PhoGroupNode<'tree>>>,
     errors: &impl ErrorSink,
     items: &mut Vec<PhoItem>,
 ) -> Result<(), crate::CstFailure> {
@@ -140,14 +111,6 @@ fn push_pho_group<'tree>(
     match slot.view() {
         SourceSlotView::Present(group) => {
             items.extend(extract_pho_group_items(group.read()?, errors)?);
-        }
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                source,
-                errors,
-                "pho_groups",
-            );
         }
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(raw.raw_node(), source, "pho_groups"));

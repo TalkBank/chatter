@@ -16,7 +16,7 @@
 //!
 //! `talkbank-model`'s `model/content/main_tier/tests.rs` built a `MainTier`
 //! by hand for twelve tests; the ten testing
-//! `find_context_dependent_ca_omission_span`,
+//! `find_context_dependent_ca_omission`,
 //! `whole_utterance_language_switch_target` and the `@s` half of `validate`
 //! moved here.
 //! The hand-built tier stated the input twice: `Word::new_unchecked("&~dang3",
@@ -157,11 +157,11 @@ fn wor_tier_extracts_words_from_groups() -> Result<(), TestError> {
     Ok(())
 }
 
-// ── find_context_dependent_ca_omission_span ─────────────────────────────
+// ── find_context_dependent_ca_omission ──────────────────────────────────
 
 /// A CA omission inside a group is found, at the omission's OWN span.
 ///
-/// The original compared against `Span::from_usize(12, 18)`, a number it had
+/// The original compared against `Span::new(12, 18)`, a number it had
 /// also written. Here the expected span is read off the parsed word.
 #[test]
 fn ca_omission_span_is_found_inside_a_group() -> Result<(), TestError> {
@@ -180,16 +180,13 @@ fn ca_omission_span_is_found_inside_a_group() -> Result<(), TestError> {
                 .content
                 .iter()
                 .find_map(|i| match i {
-                    BracketedItem::Word(word) => Some(word.span),
+                    BracketedItem::Word(word) => Some(word.location),
                     _ => None,
                 }),
             _ => None,
         })
         .ok_or_else(|| TestError::Failure("the group built no word".into()))?;
-    assert_eq!(
-        main.find_context_dependent_ca_omission_span(),
-        Some(omission)
-    );
+    assert_eq!(main.find_context_dependent_ca_omission(), Some(omission));
     Ok(())
 }
 
@@ -203,15 +200,12 @@ fn ca_omission_span_is_found_in_a_replacement_shortening() -> Result<(), TestErr
         .iter()
         .find_map(|item| match item {
             UtteranceContent::ReplacedWord(replaced) => {
-                replaced.replacement.words.first().map(|w| w.span)
+                replaced.replacement.words.first().map(|w| w.location)
             }
             _ => None,
         })
         .ok_or_else(|| TestError::Failure("the replacement built no word".into()))?;
-    assert_eq!(
-        main.find_context_dependent_ca_omission_span(),
-        Some(shortening)
-    );
+    assert_eq!(main.find_context_dependent_ca_omission(), Some(shortening));
     Ok(())
 }
 

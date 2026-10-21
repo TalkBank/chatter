@@ -32,18 +32,21 @@ pub struct DependentTierContentSpan(crate::Span);
 pub struct InvalidDependentTierContentSpan;
 
 impl DependentTierContentSpan {
-    /// Admit ranges selected by a parser from the same source tier.
+    /// Admit body bounds selected by a parser from the same source tier.
     ///
-    /// This checks containment and ordering; the producer owns the evidence
-    /// that the boundaries really are its separator and line ending.
+    /// The bounds arrive raw because they come from two different tokens (a
+    /// separator's end and a line ending), whose order the producer cannot
+    /// prove; this is the one place that checks both order and containment.
+    /// The producer owns the evidence that the boundaries really are its
+    /// separator and line ending.
     pub fn try_new(
         tier: crate::Span,
-        body: crate::Span,
+        body_start: usize,
+        body_end: usize,
     ) -> Result<Self, InvalidDependentTierContentSpan> {
-        if tier.start <= body.start && body.start <= body.end && body.end <= tier.end {
-            Ok(Self(body))
-        } else {
-            Err(InvalidDependentTierContentSpan)
+        match crate::Span::try_new(body_start, body_end) {
+            Ok(body) if tier.contains_span(body) => Ok(Self(body)),
+            Ok(_) | Err(_) => Err(InvalidDependentTierContentSpan),
         }
     }
 }
@@ -97,8 +100,8 @@ impl DependentTierEntry {
     /// Forwards to [`DependentTier::span`], with the same reasoning as
     /// [`Self::kind`]. For the content without the prefix, see
     /// [`Self::content_span`].
-    pub fn span(&self) -> crate::Span {
-        self.tier.span()
+    pub fn location(&self) -> crate::Location {
+        self.tier.location()
     }
 
     /// The span of the tier's CONTENT: no `%label:`, no separator, no newline.
@@ -175,11 +178,11 @@ mod tests {
 
         let content = NonEmptyString::new("hello").expect("literal is non-empty");
         let a = DependentTierEntry::with_separator(
-            DependentTier::Eng(TextTier::new(content.clone())),
+            DependentTier::Eng(TextTier::new(crate::Location::Unlocated, content.clone())),
             TierSeparator::CLEAN,
         );
         let b = DependentTierEntry::with_separator(
-            DependentTier::Eng(TextTier::new(content)),
+            DependentTier::Eng(TextTier::new(crate::Location::Unlocated, content)),
             TierSeparator::with_trailing_space(Span::new(3, 5)),
         );
         assert!(

@@ -7,7 +7,8 @@ The persistent CHAT validation cache, used by `chatter validate` and the
 desktop validation runner. The LSP maintains its own in-memory document cache. Distinct from the audio-task cache used by upstream
 `batchalign3` for FA / UTR ASR / media conversion (documented
 separately in that project): this cache stores **parse + validate**
-results keyed by file path + options.
+verdicts bound to resolved file location, content, parser and validation policy.
+It does not store parsed models or diagnostic messages.
 
 `crates/talkbank-cache/`.
 
@@ -18,14 +19,14 @@ flowchart TD
     read["Worker reads the file once"]
     hash["ContentHash::of(bytes read)"]
     key["Cache key\n(path/parser namespace + RulesVersion\n+ AlignmentValidation + ContentHash)"]
-    db["SQLite WAL\n~/.cache/talkbank-chat/\ntalkbank-cache.db"]
-    hit["CacheLookup::Hit(outcome)\n→ serve a Valid verdict"]
+    db["SQLite WAL\nplatform cache directory\ntalkbank-cache.db"]
+    hit["Hit(Valid)\n→ reuse validation verdict"]
     miss["CacheLookup::Miss\n→ validate the bytes read, store for that hash"]
     err["Err(CacheError)\n→ validate without the cache,\ncount it in cache_errors"]
 
     read --> hash --> key --> db
-    db -->|"row for this version, coverage and content"| hit
-    db -->|"no row, rules changed, or other content"| miss
+    db -->|"matching clean verdict"| hit
+    db -->|"Invalid verdict, no row, or identity/content mismatch"| miss
     db -->|"database failed"| err
     miss --> db
 ```
@@ -41,6 +42,11 @@ database is an `Err`, which the runner counts in the run's
 `cache_errors` and reports (stderr, the JSON summary, the desktop summary),
 and the file is then validated without the cache. It is never a miss.
 
+A validation lookup can return `Hit(Invalid)`, including for warnings-only
+input. The worker still parses and validates that input to recover diagnostics;
+it is not a reusable clean result. When roundtrip checking is requested, even
+`Hit(Valid)` skips processing only if a matching roundtrip verdict is available.
+
 The methods of `VerdictReader` (`get`, `get_roundtrip`) and
 `ValidationCache` (`set`, `set_roundtrip`) are all required. A cache that
 keeps no roundtrip verdicts answers `Miss` and stores nothing in its own body,
@@ -51,12 +57,19 @@ rather than inheriting a silent default.
 | Config | Value | Why |
 |---|---|---|
 | Backend | SQLite via `sqlx` | Concurrent reads (WAL), atomic writes, zero-config |
-| Pool size | 16 connections | Matches validation worker count |
+| Pool size | 16 connections | SQLite connection limit, not a promise about worker count |
 | `mmap` | 256 MB | Fast random access for 95k+ entries |
-| Invalidation | Rules-version field + content hash + 30-day TTL | Rule-set or schema changes auto-invalidate; content edits invalidate per-file; stale entries pruned |
-| Reachability prune | On validation open: keep the opening version plus one predecessor | Rows under any other version can never be bound again; without this the file grew by a corpus per release |
+| Invalidation | Production rules identity + content hash | Changed semantic inputs cannot reuse a mismatched verdict |
+| Age cleanup | Delete rows older than 30 days on writable validation open | Not a per-lookup TTL; read-only and maintenance opens do not expire rows |
+| Generation prune | On writable validation open: keep the opening version plus one predecessor | Older generations are evicted; an older executable may recompute them |
 | Bridge | Embedded single-threaded tokio runtime, entered only via `blocking::block_on` | Sync workers block on async SQLite. Never `Runtime::block_on` directly: a caller that is itself driving a runtime (a Tauri `async fn` command) would nest one runtime in another and panic. Such a call is run on a thread with no ambient runtime instead |
 | Init serialization | Advisory file lock (`talkbank-cache.init.lock`) | Exactly one opener performs first-time create + migrate; see below |
+
+`TALKBANK_CHAT_CACHE_DIR`, when nonempty, selects the directory verbatim.
+Otherwise the platform cache root is used with `talkbank-chat` appended:
+`~/Library/Caches` on macOS, the XDG cache root (normally `~/.cache`) on
+Linux, and the local application-data directory on Windows. The database
+filename is always `talkbank-cache.db`.
 
 ## Schema
 
@@ -68,7 +81,7 @@ rather than inheriting a silent default.
 | `path_hash` | The `CacheKey`: a blake3 hash of the path and its namespace (`validation:tree-sitter` or `validation:re2c` for validation, the parser's label for roundtrip), as 64 hex digits |
 | `file_path` | The row's `ResolvedPath` as text, indexed for `cache clear --prefix` and the missing-file purge; keys never read it |
 | `content_hash` | Hash of the file content; mismatch invalidates the entry |
-| `version` | Cache-compatibility version (`RulesVersion`): the cache crate version folded together with a fingerprint of the active validation rule set. A mismatch invalidates the entry |
+| `version` | Production `RulesVersion`: cache crate version, key scheme, validation-rule fingerprint, parser-behavior fingerprint and semantic rule selection. A mismatch prevents reuse |
 | `cached_at` | Insertion timestamp |
 | `check_alignment` | The `AlignmentValidation` coverage, as 0 (`Structure`) or 1 (`IncludeTierAlignment`); the only place it is a number |
 | `is_valid` | Cached validation outcome (0/1) |
@@ -193,9 +206,8 @@ misses with nothing to say so.
 **The key scheme is part of the version.** `rules_version::KEY_SCHEME`
 (`+keys.blake3-components-1`) is folded into every `RulesVersion`, so a change
 to `CacheKey`'s encoding is a version change: rows written under another
-scheme carry another version, are never served, and leave the database
-through the same reachability prune as any superseded rule set (kept for one
-generation, then deleted on open; the 30-day expiry removes them in any case).
+scheme carry another version and are not served by this identity. They are
+eligible for generation and age cleanup on writable validation open.
 Rows are retired deliberately rather than lingering as unexplained misses.
 
 ## What a run may do with the cache
@@ -395,8 +407,10 @@ A row records ONE fact: **this file produced no diagnostics at all under this
 rule selection**. That is a property of the bytes and the rules, so it is the
 same answer for every run, whatever any given run chooses to display.
 
-Only `RuleSelection` therefore reaches the key
-(`RulesVersion::current_with_rule_selection`). A `PresentationPolicy`
+`RuleSelection` contributes the semantic-policy part of the identity through
+`RulesVersion::current_with_rule_selection`; the parser fingerprint is also
+required. Resolved path, content hash, parser namespace and alignment coverage
+remain independent lookup dimensions. A `PresentationPolicy`
 (`--suppress`, severity remapping) never does: it is applied to diagnostics that
 have already been computed and have already decided what gets cached.
 
@@ -409,9 +423,9 @@ from cold.
 
 ## Only a clean file skips work, and that asymmetry is deliberate
 
-A cache hit on a VALID file skips the parse entirely: the row says the file
-produced no diagnostics, and "no diagnostics" is the whole of what a caller
-needs, so there is nothing left to reconstruct.
+A cached VALID verdict skips parsing when roundtrip checking is not requested,
+or when the requested roundtrip verdict is also cached. Otherwise the worker
+processes the file to compute the missing roundtrip result.
 
 A file recorded as INVALID is re-parsed and re-validated on every run
 (`worker.rs`, the `CacheOutcome::Valid` arm is the only one that short-circuits).
@@ -433,34 +447,32 @@ reasons, in order of weight:
    the rule selection correctly serves the verdict across such a change, but
    would serve STALE TEXT for the same key, which is worse than slow: a user
    would see last release's wording and last release's suggestion.
-3. **The asymmetry costs nothing on a healthy corpus and self-corrects.** The
-   kept corpus is ~106,000 files with ~141 invalid, so re-validation touches
-   0.1% of the work; a full warm run is about 6 seconds. As files get fixed they
-   move into the fast path on their own.
+3. **The benefit depends on the input population.** Clean, unchanged files can
+   use the fast path; files with diagnostics require fresh work. No fixed hit
+   rate or runtime follows from the cache design.
 
 The cost is real only where MOST files are invalid, which is the case during a
 cleanup campaign or when a rule has just been tightened. If that ever needs to
 be fast, the answer is not to cache diagnostics but to make the invalid path
 cheaper, or to give the campaign its own narrower target than the whole corpus.
 
-**When measuring cache behaviour, do not build a synthetic corpus by copying
-files under new names.** Renaming breaks the `@Media` filename check (E531), so
-the copies validate as INVALID, and a benchmark built that way measures the
-re-validation path while appearing to measure the hit path. Measured on a real
-subtree the difference is stark: 9,263 real files take 29.0 s cold and 0.5 s
-warm at a 100% hit rate, while the same files flattened under generated names
-report a 28% hit rate and a warm run barely faster than cold. Use a real corpus
-subtree; `scripts/debug/chatter_validate_scaling.sh` in the operator workspace
-documents this and the sorted-file-list trap beside it.
+When measuring cache behaviour, preserve filename-sensitive input semantics.
+Renaming a fixture can introduce an `@Media` filename mismatch (E531), turning
+a clean-hit experiment into repeated validation. Use reviewed reference inputs,
+an isolated cache and explicit cold/warm phases; retain the executable identity,
+options and input hashes with measurements. Do not generalize one population's
+timing to other inputs or platforms.
 
 ## Reachability pruning
 
 Deleting by AGE and deleting by REACHABILITY are different questions, and the
-cache answers both on open.
+cache applies both policies on writable validation open, not read-only or
+maintenance open.
 
-The 30-day TTL removes rows that are stale, not rows that are merely
-unreachable; without a second rule every release would strand a complete copy
-of the corpus under its retired version, which no reader could ever bind.
+Age cleanup deletes rows whose insertion timestamp is more than 30 days old.
+Lookups do not check age or refresh that timestamp. Generation cleanup bounds
+retained versions separately; an older executable could still request an
+evicted version, but would have to recompute its verdicts.
 
 Opening deletes every row whose version is outside a two-generation window:
 
@@ -537,28 +549,22 @@ flowchart LR
 
 ## Invalidation
 
-- **Validation-rule changes**: the `version` column holds a `RulesVersion`,
-  which folds the `talkbank-cache` crate version together with a fingerprint of
-  the active validation rule set (an FNV-1a hash over every `ErrorCode` the
-  validator can emit, via `talkbank_model::validation_rules_fingerprint`).
-  Adding, removing, or renaming a rule (for example introducing error code
-  E370, "retrace marker must be followed by material") changes the fingerprint,
-  hence the `RulesVersion`, hence the lookup key, so verdicts cached under the
-  old rule set become a cache MISS and are re-validated instead of served stale.
-  This is the mechanism that keeps `chatter validate` (the authority on CHAT
-  validity) from returning a stale "Valid" after the rules tighten.
-
-  Rows under a superseded version are then UNREACHABLE: no query any binary can
-  issue will match them again. Opening the cache deletes them (see
-  "Reachability pruning" below), keeping one predecessor generation.
+- **Semantic identity changes**: production `RulesVersion` combines the cache
+  crate version, key scheme, validation-rule fingerprint, parser-behavior
+  fingerprint and rule selection. A different identity cannot reuse the old
+  verdict. The source-fingerprint scope and its limits are described below;
+  this is not a claim that every possible build/environment change is tracked.
 - **Content changes**: each entry stores the file's `content_hash`; a mismatch
   is a per-file miss.
-- **Time-based**: entries older than 30 days are pruned.
+- **Time-based**: entries older than 30 days are pruned on writable validation
+  open, not rejected by each lookup.
 - **Reachability**: rows under versions outside the two-generation window are
-  deleted on open (see above). This is about unbounded growth, not correctness:
-  those rows were already invisible.
-- **Manual**: pass `--force` to bypass cache lookups for a
-  particular validation run.
+  deleted on writable validation open (see above). This bounds retained
+  generations; an older binary can still request an evicted generation.
+- **Manual**: `--force` requests clearing the selected files' cache keys in
+  every written namespace before validation. Clearing failures are reported;
+  this option is not a separate cache-free execution mode. Audit presentation
+  refuses `--force` because it is read-only.
 
 Per repository policy, do not delete the cache directory without explicit
 request. Use `--force` when you want fresh validation for specific paths

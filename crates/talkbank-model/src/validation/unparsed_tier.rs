@@ -20,14 +20,14 @@
 //!
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 
 /// Report a dependent tier that declares no content.
 ///
 /// `label` is the tier label as parsed, without `%` or colon: a `%xtst:` tier
 /// arrives as `xtst` and a `%eng:` tier as `eng`. Callers get it from
 /// [`crate::model::DependentTier::kind`], and decide WHETHER to call by asking
-/// [`crate::model::DependentTier::empty_content_span`], which owns the question
+/// [`crate::model::DependentTier::empty_content_location`], which owns the question
 /// of whether a given tier kind can even be empty.
 ///
 /// `pub(crate)` since 2026-08-16, and that is the point rather than tidiness.
@@ -35,24 +35,23 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 /// PARSE path, which is how an empty `%xtst:` came to be reported without ever
 /// being added to the model: the parser both judged the tier and dropped it.
 /// With the decision back where it belongs (the validator asks
-/// `empty_content_span`), no caller outside this crate remains, and closing the
+/// `empty_content_location`), no caller outside this crate remains, and closing the
 /// door is what stops the next one reopening it. Leaving a better primitive
 /// public only moves the duplication to the next caller.
 pub(crate) fn check_dependent_tier_content(
     label: &str,
-    span: crate::Span,
+    location: crate::Location,
     errors: &impl ErrorSink,
 ) {
-    let mut err = ParseError::new(
+    let err = ParseError::new(
         ErrorCode::EmptyDependentTier,
         Severity::Error,
-        SourceLocation::at_offset(span.start as usize),
-        ErrorContext::new("", 0..0, ""),
+        DiagnosticLocation::from(location),
+        ErrorContext::new("", crate::Span::new(0, 0), ""),
         format!("Dependent tier %{label} has no content"),
     )
     .with_suggestion(
         "A dependent tier must carry the annotation it declares; remove the empty tier line otherwise",
     );
-    err.location.span = span;
     errors.report(err);
 }

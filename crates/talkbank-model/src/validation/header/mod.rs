@@ -36,9 +36,9 @@ mod tests {
     //! invalid-character check is reachable only from a value built by hand,
     //! and building it is the only way to reach the check at all.
     use super::check_header;
+    use crate::ErrorCollector;
     use crate::model::{Header, ParticipantEntry, ParticipantRole, SpeakerCode};
     use crate::validation::ValidationContext;
-    use crate::{ErrorCollector, Span};
 
     /// Speaker IDs containing `:` are rejected as invalid.
     ///
@@ -58,7 +58,7 @@ mod tests {
 
         let errors = ErrorCollector::new();
         let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
+        check_header(&header, crate::Location::Unlocated, &ctx, &errors);
         let error_vec = errors.into_vec();
 
         // Should catch the ':' character (reserved as delimiter)
@@ -90,7 +90,7 @@ mod tests {
 
         let errors = ErrorCollector::new();
         let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
+        check_header(&header, crate::Location::Unlocated, &ctx, &errors);
         let error_vec = errors.into_vec();
 
         // Should not have speaker ID character errors (might have other errors though)

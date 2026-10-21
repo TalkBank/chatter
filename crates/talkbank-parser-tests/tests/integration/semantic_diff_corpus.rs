@@ -31,14 +31,14 @@ fn compare_content_pair(
                     actual.kind,
                     &actual.left,
                     &actual.right,
-                    actual.span
+                    actual.location
                 ),
                 (
                     &expected.path,
                     expected.kind,
                     &expected.left,
                     &expected.right,
-                    expected.span
+                    expected.location
                 )
             );
         }
@@ -57,8 +57,8 @@ fn report<T: SemanticDiff>(left: &T, right: &T, limit: usize) -> SemanticDiffRep
         "traversal restores the caller's path"
     );
     assert_eq!(
-        context.current_span(),
-        None,
+        context.current_location(),
+        talkbank_model::Location::Unlocated,
         "traversal restores the caller's source context"
     );
     report
@@ -122,14 +122,14 @@ fn reference_word_projections_preserve_tuple_order_and_report_limits() {
                         actual.kind,
                         &actual.left,
                         &actual.right,
-                        actual.span
+                        actual.location
                     ),
                     (
                         &expected.path,
                         expected.kind,
                         &expected.left,
                         &expected.right,
-                        expected.span
+                        expected.location
                     )
                 );
             }
@@ -141,7 +141,10 @@ fn reference_word_projections_preserve_tuple_order_and_report_limits() {
                 left.semantic_diff_into(right, &mut path, &mut bounded, &mut context);
                 assert_eq!(bounded.differences().len(), before);
                 assert_eq!(path.to_string(), "/");
-                assert_eq!(context.current_span(), None);
+                assert_eq!(
+                    context.current_location(),
+                    talkbank_model::Location::Unlocated
+                );
             }
         }
     }
@@ -225,7 +228,8 @@ fn reference_word_projections_preserve_tuple_order_and_report_limits() {
                     assert_eq!(difference.left, format!("{left:?}"));
                     assert_eq!(difference.right, format!("{right:?}"));
                     assert_eq!(
-                        difference.span, None,
+                        difference.location,
+                        talkbank_model::Location::Unlocated,
                         "text views do not invent source provenance"
                     );
                 }
@@ -317,14 +321,14 @@ fn reference_speaker_removal_reports_sequence_tail_and_bounded_prefix() {
                             actual.kind,
                             &actual.left,
                             &actual.right,
-                            actual.span
+                            actual.location
                         ),
                         (
                             &expected.path,
                             expected.kind,
                             &expected.left,
                             &expected.right,
-                            expected.span
+                            expected.location
                         )
                     );
                 }
@@ -373,7 +377,8 @@ fn reference_participant_reports_preserve_order_keys_and_truncation() {
     assert_eq!(difference.left, "\"CHI\"");
     assert_eq!(difference.right, "\"SPK\"");
     assert_eq!(
-        difference.span, None,
+        difference.location,
+        talkbank_model::Location::Unlocated,
         "speaker keys do not carry source spans"
     );
 
@@ -425,14 +430,14 @@ fn reference_participant_reports_preserve_order_keys_and_truncation() {
                         actual.kind,
                         &actual.left,
                         &actual.right,
-                        actual.span
+                        actual.location
                     ),
                     (
                         &expected.path,
                         expected.kind,
                         &expected.left,
                         &expected.right,
-                        expected.span
+                        expected.location
                     )
                 );
             }
@@ -490,14 +495,14 @@ fn reference_word_reports_preserve_semantics_and_budget_boundaries() {
                                     actual.kind,
                                     &actual.left,
                                     &actual.right,
-                                    actual.span
+                                    actual.location
                                 ),
                                 (
                                     &expected.path,
                                     expected.kind,
                                     &expected.left,
                                     &expected.right,
-                                    expected.span
+                                    expected.location
                                 )
                             );
                         }
@@ -588,7 +593,7 @@ fn reference_semantic_reports_agree_with_equality_and_preserve_bounded_prefixes(
             for difference in full.differences() {
                 assert!(!difference.path.is_empty());
                 kinds.insert(difference.kind.as_str());
-                located += usize::from(difference.span.is_some());
+                located += usize::from(difference.location.span().is_some());
             }
             for limit in [0, 1, 3] {
                 let bounded = report(left, &current, limit);
@@ -604,14 +609,14 @@ fn reference_semantic_reports_agree_with_equality_and_preserve_bounded_prefixes(
                             actual.kind,
                             &actual.left,
                             &actual.right,
-                            actual.span
+                            actual.location
                         ),
                         (
                             &expected.path,
                             expected.kind,
                             &expected.left,
                             &expected.right,
-                            expected.span
+                            expected.location
                         )
                     );
                 }

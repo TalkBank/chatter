@@ -23,22 +23,22 @@ pub fn compute_related_information(
     let uri = uri?;
     let chat_file = chat_file?;
 
-    let header_span = match error.code {
-        ErrorCode::SpeakerNotDefined => find_header_span(chat_file, |header| {
+    let header_location = match error.code {
+        ErrorCode::SpeakerNotDefined => find_header_location(chat_file, |header| {
             matches!(header, Header::Participants { .. })
         }),
         ErrorCode::MediaFilenameMismatch
         | ErrorCode::MediaFilenameNonCanonicalUnicode
         | ErrorCode::MediaFilenameCaseDiffers => {
-            find_header_span(chat_file, |header| matches!(header, Header::Media(_)))
+            find_header_location(chat_file, |header| matches!(header, Header::Media(_)))
         }
-        ErrorCode::InvalidLanguageCode => find_header_span(chat_file, |header| {
+        ErrorCode::InvalidLanguageCode => find_header_location(chat_file, |header| {
             matches!(header, Header::Languages { .. })
         }),
         _ => None,
     };
 
-    if let Some(span) = header_span {
+    if let Some(span) = header_location {
         let range = span_to_range(text, span);
         let message = match error.code {
             ErrorCode::SpeakerNotDefined => {
@@ -88,12 +88,14 @@ pub fn compute_related_information(
 }
 
 /// Finds header span.
-fn find_header_span(chat_file: &ChatFile, predicate: impl Fn(&Header) -> bool) -> Option<Span> {
+fn find_header_location(chat_file: &ChatFile, predicate: impl Fn(&Header) -> bool) -> Option<Span> {
     for line in &chat_file.lines {
-        if let Line::Header { header, span, .. } = line
+        if let Line::Header {
+            header, location, ..
+        } = line
             && predicate(header)
         {
-            return Some(*span);
+            return location.span();
         }
     }
     None
@@ -102,7 +104,7 @@ fn find_header_span(chat_file: &ChatFile, predicate: impl Fn(&Header) -> bool) -
 /// Convert a byte-span into an LSP range using document offsets.
 fn span_to_range(text: &str, span: Span) -> Range {
     Range {
-        start: utils::offset_to_position(text, span.start),
-        end: utils::offset_to_position(text, span.end),
+        start: utils::offset_to_position(text, span.start()),
+        end: utils::offset_to_position(text, span.end()),
     }
 }

@@ -18,7 +18,7 @@ use talkbank_parser::TreeSitterParser;
 
 /// One diagnostic as surfaced at the streaming boundary:
 /// `(code, span start, span end, message)`.
-pub type DiagRecord = (String, u32, u32, String);
+pub type DiagRecord = (String, usize, usize, String);
 
 /// Parse `input` through `TreeSitterParser::parse_chat_file_streaming`
 /// and return every collected diagnostic.
@@ -90,8 +90,8 @@ pub fn parse_utterances_and_diags(input: &str) -> (Vec<Utterance>, Vec<DiagRecor
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })

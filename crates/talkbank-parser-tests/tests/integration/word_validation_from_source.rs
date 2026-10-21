@@ -274,11 +274,13 @@ fn every_word_rule_holds_for_a_parsed_word() -> Result<(), TestError> {
         // `[20, 28]`) it had also written; here the bounds are the parsed
         // word's own span, and every violating row gets the check.
         for error in reported.iter().filter(|e| e.code.as_str() == row.code) {
-            let span = error.location.span;
-            if span.start < word.span.start || span.end > word.span.end {
+            let span = error.location.span().expect("located diagnostic");
+            if span.start() < word.location.span().expect("located").start()
+                || span.end() > word.location.span().expect("located").end()
+            {
                 wrong.push(format!(
                     "{:?}: {}'s span {:?} lies outside the word's span {:?}",
-                    row.word, row.code, span, word.span
+                    row.word, row.code, span, word.location
                 ));
             }
         }

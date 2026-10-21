@@ -1,238 +1,105 @@
 # Speaker-ID (`chatter speaker-id`)
 
-**Status:** Draft
+**Status:** Current
 **Last modified:** {{git-dates:page}}
 
-`chatter speaker-id` assigns CHAT-conformant speaker codes and role
-tags to a CHAT file whose speakers carry anonymous or placeholder
-labels (typically the output of an ASR system that labels speakers
-as `PAR0`, `PAR1`, …). It is the bridge between an ASR pipeline that
-does not understand speaker roles and a CHAT pipeline that does.
+This experimental command applies speaker mappings to CHAT. Renames change
+speaker codes and participant/ID metadata; drops remove that speaker's turns
+and corresponding metadata. It does not analyze voices, correct transcription,
+prove recording identity or certify the output for publication.
 
-The command is **structural**: it does not modify utterance content,
-does not run audio analysis, does not infer speaker identity from
-voice features. Its inputs are the CHAT file to relabel plus an
-identification signal (reference transcript, explicit mapping, or
-saved override record); its output is the same CHAT file with
-speaker codes rewritten and `@Participants` / `@ID` headers
-reconciled.
-
-## When to use it
-
-Whenever you have a CHAT file with placeholder speaker codes that
-need to become CHAT-conformant codes before downstream tooling can
-process the file meaningfully. The canonical case is an ASR system
-that emits CHAT but does not know which speaker is the child,
-parent, clinician, etc.
-
-A complete pipeline that consumes ASR output and produces a
-publishable CHAT file goes:
-
-```mermaid
-flowchart LR
-    Media --> Transcribe
-    Transcribe["batchalign3 transcribe<br/>ASR"] --> AsrAnon["asr.cha<br/>PAR0, PAR1, ..."]
-    Ref["reference.cha<br/>target speakers only"] -.->|reference signal| SpkId
-    AsrAnon --> SpkId
-    SpkId["chatter speaker-id<br/>(this page)"] --> AsrLabeled["asr-labeled.cha<br/>CHI, INV, MOT, ..."]
-    AsrLabeled --> Merge["Structural assembly (library)"]
-    Ref --> Merge
-    Merge --> Aligned["batchalign3 align"]
-```
-
-The speaker-id stage is the single point in the pipeline where
-"which anonymous speaker corresponds to which CHAT role" is
-decided. Downstream stages (structural assembly, `batchalign3 align`,
-`batchalign3 morphotag`) all trust that the labels they receive
-are correct.
+This guide covers deterministic judgment. The separate holistic judgment engine
+can call an external LLM and writes review-gated pending suggestions rather than
+relabeled CHAT; see the [CLI reference](cli-reference.md). Do not treat local
+deterministic checks as provider qualification.
 
 ## Identification modes
 
-Three mutually-exclusive modes, exactly one of which must be
-selected:
+For deterministic judgment, choose exactly one mapping source.
 
 ### 1. Reference mode
 
-The most common case: a separate CHAT file already exists that
-covers the same media and contains an authoritative speaker
-(typically the hand-transcribed target speaker). The reference
-file's anchor speaker tells us what that speaker's content looks
-like; `speaker-id` finds the matching speaker in the input by
-text similarity.
+Supply a reference containing the known anchor speaker. Lexical similarity
+selects a donor speaker for dropping; all other donor speakers are renamed to
+the single supplied `CODE:ROLE`. Dropping is intended for later assembly with
+the retained reference, not for producing a complete standalone transcript.
 
-The matching algorithm is **multiset Jaccard over bags of content
-tokens**, see "Algorithm" below for the full specification. The
-ASR speaker whose bag-of-words best matches the reference anchor's
-bag-of-words is taken as the same speaker, and is marked for
-**drop** in the output (because the reference file authoritatively
-covers them, a downstream structural assembly stage will pull
-their utterances from the reference, not from this file). The
-remaining speakers are renamed to the role specified by
-`--inserted-role`.
+```bash
+chatter speaker-id donor.cha \
+  --reference reference.cha --anchor CHI --inserted-role INV:Investigator \
+  --write-match-report match-report.json \
+  --write-override overrides.toml --write-pending pending.toml \
+  -o relabeled.cha
+```
 
-If the Jaccard margin between the winning speaker and the
-runner-up is below `--confidence-threshold`, the command refuses
-to auto-decide. The operator must either lower the threshold
-(not recommended without spot-checking), supply an explicit
-mapping (`--mapping`), or load a previously-adjudicated override
-(`--override-file`).
+These are placeholder paths: establish source correspondence and speaker evidence
+before using this operation on real inputs. Reference mode's single inserted
+identity is not a safe way to distinguish several non-anchor speakers.
+
+The default confidence threshold is two. No lexical information refuses;
+positive winner/zero runner-up is unbounded. Low confidence exits four without
+relabeled CHAT, and writes a pending entry when requested.
+Inspect the support counts and evidence rather than lowering a threshold just
+to obtain output.
 
 ### 2. Explicit-mapping mode
 
-The operator already knows the mapping (typically because they
-listened to the audio, or because the contributor's data sheet
-documents it). They supply it directly.
-
 ```bash
-chatter speaker-id input.cha \
-  --mapping "PAR0=INV:Investigator,PAR1=drop" \
-  -o relabeled.cha
+chatter speaker-id donor.cha \
+  --mapping "PAR0=INV:Investigator,PAR1=drop" -o relabeled.cha
 ```
 
-The grammar for `--mapping`:
-- One or more comma-separated assignments.
-- `OLD=CODE:ROLE` renames OLD to CODE with role tag ROLE.
-- `OLD=drop` removes OLD's utterances entirely.
-- Every speaker present in the input must be named in the mapping
-  (no defaulting). This is intentional, we want operator decisions
-  to be explicit.
+Assignments are comma-separated `OLD=CODE:ROLE` or `OLD=drop`.
+Malformed/duplicate source assignments refuse.
+Speakers absent from the map currently pass through unchanged; unused mapping
+keys do not prove that those speakers existed in the input. Review the whole
+mapping yourself. Target uniqueness and complete source coverage are not
+validated here.
+
+`--write-override` is rejected in explicit mode. Use
+[adjudication](merge-workflow.md) to persist operator decisions; an explicit
+mapping invocation does not automatically preserve scores from an earlier run.
 
 ### 3. Override-file mode
 
-The operator has previously adjudicated this session (perhaps
-through an interactive review tool) and saved the decision to a
-shared override file. `speaker-id` reads the file, finds the entry
-for this session, and applies it. See "Override file format"
-below.
-
 ```bash
-chatter speaker-id input.cha \
-  --override-file batch-2026-05-27.overrides.toml \
-  --session-id S01-1 \
-  -o relabeled.cha
+chatter speaker-id donor.cha --override-file overrides.toml \
+  --session-id session-demo -o relabeled.cha
 ```
 
-This mode is the production substrate for batch workflows: the
-orchestrator first runs `chatter speaker-id` in reference mode for
-every session; for any session that exits with low-confidence, the
-operator works through an adjudication tool that writes to the
-override file; the orchestrator then re-runs `chatter speaker-id`
-in override-file mode for those sessions.
+The session ID defaults to the input basename stem. The requested entry must
+exist and its renames must have role records. Replay applies the saved mapping
+without rerunning lexical identification or updating the original record's
+mode, operator or timestamp. A session key is not proof of recording identity.
 
-## CLI contract
+## Outputs and failures
 
-```text
-chatter speaker-id <INPUT> [OPTIONS]
+Without `-o`, relabeled CHAT goes to stdout. An output path is written with
+replacement semantics, not exclusive creation: choose a new destination and
+keep source files intact.
 
-ARGUMENTS:
-  <INPUT>  Path to the CHAT file to relabel.
+Input parse/validation and I/O failures exit one; mapping/precondition refusals
+exit two; low reference confidence exits four. Unsupported override versions
+also exit two. Complete output validity and speaker correctness are not proved
+by exit zero: mapping application serializes an edited model without a new
+output-validation transition.
 
-OPERATION MODES (exactly one required):
+The transform preserves retained content in the model and updates
+`@Participants` and `@ID` for mapped speakers. It is not a general raw-byte
+editing API. A supplied specific role can replace the participant name field.
+Do not generalize fixture byte-stability checks to all source formatting.
 
-  REFERENCE MODE:
-    --reference <FILE>
-    --anchor <SPEAKER>
-    --inserted-role <CODE>:<TAG>[,<CODE>:<TAG>...]
+Reference `--write-override` keys entries by input basename, with operator
+from `USER` or `unknown`. It writes the decision before writing CHAT output,
+so a later output failure can leave the override changed.
+`--session-id` selects replay entries; it does not rename reference-mode
+output records. Pending writes append requests and do not deduplicate repeated
+runs. See [Override File Format](../integrating/merge-overrides.md).
 
-  EXPLICIT-MAPPING MODE:
-    --mapping <SPEC>
-
-  OVERRIDE-FILE MODE:
-    --override-file <FILE>
-    --session-id <ID>
-
-REFERENCE-MODE OPTIONS:
-  --confidence-threshold <FLOAT>
-      Minimum Jaccard margin (winner_score / loser_score) for the
-      command to auto-decide. Below threshold: exit code 4. The
-      command prints per-speaker scores to stderr so the operator
-      can inspect. Default: 2.0.
-
-  --write-match-report <NEW-FILE.json>
-      Write a typed report for the complete reference-mode attempt.
-      Matched outcomes record reference, donor, shared, and union token
-      counts plus the derived score and margin. Structural and input
-      refusals record their own outcome-specific evidence. The report
-      never overwrites an existing file.
-
-  --write-override <FILE>
-      When auto-decide succeeds, append the decision to FILE in
-      override-file format (creates if missing). Captures the
-      audit trail of a batch run.
-
-COMMON OPTIONS:
-  -o, --output <PATH>
-      Write relabeled CHAT to PATH. Default: stdout.
-
-The operator identity and any free-text note for a session are set
-when an operator confirms it through `chatter adjudicate` (see the
-merge workflow), not on this command.
-```
-
-Exit codes:
-
-| Code | Meaning |
-|---|---|
-| 0 | Success, relabeled file written |
-| 1 | Invalid input (parse error, missing file, unreadable) |
-| 2 | Semantic precondition violated (reference has no utterances for anchor; mapping covers a speaker not in input; etc.) |
-| 3 | Internal error |
-| 4 | Reference mode: confidence threshold not met. Per-speaker scores printed to stderr; no output written |
-
-## What the output guarantees
-
-These are testable invariants. Every release verifies them against
-the reference corpus.
-
-### Speaker codes match the supplied mapping
-
-For every speaker in the input file:
-- If the mapping marks the speaker for **drop**, none of their
-  utterances appear in the output, AND their `@ID` row (if any) is
-  removed from the headers, AND their entry is removed from the
-  `@Participants` header.
-- If the mapping marks the speaker for **rename**, every main-tier
-  line `*OLD:\t...` becomes `*NEW:\t...` byte-stable except for the
-  speaker code prefix. The `@ID` row's third pipe-separated field
-  (speaker code) and eighth field (role tag) are rewritten; other
-  `@ID` fields are preserved. The `@Participants` entry's code and
-  role-tag tokens are rewritten; any intervening tokens (corpus ID,
-  participant name) are preserved.
-- Speakers not in the mapping are passed through unchanged. (In
-  modes 1 and 3, all speakers are assigned automatically; in mode
-  2, "all speakers must be in the mapping" is a precondition.)
-
-### Utterance content is byte-stable except for the speaker prefix
-
-For every retained utterance, every byte EXCEPT the leading
-`*CODE:\t` prefix is preserved verbatim. Dependent tiers attached
-to the utterance are preserved exactly. NAK-delimited time
-bullets, CHAT markup, special-form annotations, paralinguistic
-codes, retracing scopes, all untouched.
-
-### Headers reconcile per a fixed table
-
-| Header | Behavior |
-|---|---|
-| `@UTF8`, `@Begin`, `@End`, `@Window`, `@Languages`, `@Media` | Pass-through unchanged |
-| `@Participants` | Drop entries for dropped speakers; rewrite code + role-tag for renamed speakers; entries for unaffected speakers preserved |
-| `@ID` | Drop rows for dropped speakers; rewrite field 3 (code) and field 8 (role) for renamed speakers; other fields preserved |
-| `@Comment` | Pass-through unchanged (provenance-carrying comments survive) |
-
-### Provenance is captured if `--write-override` is set
-
-When `--write-override <FILE>` is supplied AND the command succeeds
-in reference mode, an entry is appended to FILE recording the
-session ID (derived from the input filename stem unless overridden),
-the per-speaker Jaccard scores, the chosen mapping, the operator, and
-an ISO 8601 timestamp. The format is specified in "Override file
-format" below. The operator identity and any free-text note are set
-later, when a session is confirmed via [`chatter adjudicate`](./merge-workflow.md).
-
-This is the audit-trail mechanism: a year from now, a researcher
-who asks "why was PAR0 labeled INV in this session?" can read
-the override entry and see the scores, the operator, and any
-notes the operator added.
+After a low-confidence refusal, review the pending decision and prepare
+adjudication input. On successful adjudication, replay the resulting override
+into a new CHAT path. Validate and inspect that output separately.
+No removed merge CLI or automatic two-pass orchestrator is implied.
 
 ## Algorithm (reference mode)
 
@@ -279,18 +146,15 @@ not just speakers whose vocabulary happens to intersect.
 
 ### Decision
 
-```text
-scores  = { speaker: J(anchor_bag, speaker_bag) for speaker in input }
-winner  = argmax(scores)
-loser   = argmax(scores - {winner})
-margin  = scores[winner] / scores[loser]    # ∞ when loser score = 0
-```
+Scores are ranked with document order retained for ties. The reference must
+contain anchor utterances, and the donor must contain at least two distinct
+utterance speakers. The leading score supplies the drop candidate; the
+runner-up supplies the margin comparison. A zero/zero comparison is
+`NoInformation`, not an accepted tie.
 
-- `winner` is the input speaker whose content matches the
-  reference anchor's content best → marked for drop (the reference
-  authoritatively covers them).
-- `loser` (and any other lower-scoring speakers, in the multi-speaker
-  case) → renamed to the role given by `--inserted-role`.
+The checked threshold admits finite values at least one. A finite ratio must
+meet that threshold; an unbounded positive match does. Neither a high ratio nor
+a large shared token count independently proves speaker identity.
 
 ### Match-evidence report
 
@@ -331,171 +195,20 @@ exits with code 4 and prints per-speaker scores to stderr. The
 operator must inspect, adjudicate, and re-run with
 `--mapping` or `--override-file`.
 
-### Why this algorithm
-
-The choice was empirical, not theoretical, and was made against a
-calibration set of CHAT files paired with their corresponding ASR
-output. Two earlier candidates were tested first and rejected:
-
-- **Raw temporal-overlap** (sum of ms of an input speaker's
-  activity inside the anchor's bullet windows): too weak on real
-  data. Hand transcripts often place per-utterance time bullets
-  as end-to-end segmentation boundaries covering 95-99% of the
-  session timeline, rather than as tight "speaker active here"
-  windows. Both input speakers fall almost entirely "inside" the
-  anchor's bullet windows and the signal disappears.
-- **Speaker purity** (fraction of each input speaker's activity
-  falling inside anchor windows): same root cause, same failure.
-
-**Multiset Jaccard over content tokens** succeeded on every
-session of the calibration set. The borderline cases (margin
-below 2.0x) clustered around tasks where the non-anchor speaker
-shares vocabulary with the anchor by the structure of the task,
-e.g. a clinician describing the same scene the child is also
-describing in a picture-narrative task. These borderline cases
-are the reason for the conservative threshold and the
-`--mapping`/`--override-file` escape hatches; the algorithm
-correctly *refuses* to auto-decide them rather than silently
-picking wrong.
-
 ## Override file format
 
-The override file is a UTF-8 TOML document with one
-`[<session_id>]` table per decision. A minimal entry:
+Use [Merge Override File Format](../integrating/merge-overrides.md) for the
+version-two TOML representation, per-speaker roles, optional evidence and
+replacement/recovery limits. The override wire margin is numeric; it is not
+the tagged margin in the JSON match report.
 
-```toml
-schema_version = 2
+## Implementation and evidence
 
-[session-101-t1]
-mode = "auto"
-adult_roles = { PAR0 = { code = "INV", tag = "Investigator" } }
-mapping = { PAR0 = "rename", PAR1 = "drop" }
-scores = { PAR0 = 0.1931, PAR1 = 0.7347 }
-margin = 3.81
-operator = "alice"
-decided_at = "2026-05-27T08:41:00-04:00"
-```
+The library owns lexical evidence and mappings in
+`crates/talkbank-transform/src/speaker_id/`; CLI mode dispatch and persistence
+live in `crates/chatter/src/commands/speaker_id/`.
 
-The complete schema specification, every field, every type, every
-mode-semantics rule, the strict refuse-with-clear-error versioning
-policy, and worked examples for auto/explicit/replay/diarization-mixed
-cases, is on the dedicated reference page:
-[**Merge Override File Format**](../integrating/merge-overrides.md).
-
-Highlights from the reference:
-
-- `mode = "auto" | "explicit" | "override"` records how the decision
-  was made (informational for audit trail; behavior at apply time
-  is the same).
-- `adult_roles` maps each renamed speaker's donor code to its own
-  role assignment: `adult_roles[<donor_code>].code` is the CHAT
-  speaker code (`INV`, `MOT`, `FAT`, `PAR`, …); `.tag` is the CHAT
-  role-tag (`Investigator`, `Mother`, …). Renamed speakers in one
-  entry may share a role or each carry a distinct one.
-- `mapping` must cover every speaker in the input, no defaulting.
-- `scores` and `margin` are optional but the writer always records
-  them when an auto attempt produced them (even when the final
-  decision was operator-supplied).
-- `flags` carries operator-supplied markers like `"diarization-mixed"`
-  for unusual cases. Unknown strings are preserved verbatim.
-
-## Preconditions
-
-`chatter speaker-id` refuses (exit code 2) if any hold:
-
-### Reference mode
-- The reference file has no utterances for `--anchor`
-- The reference file fails to parse
-- The input file has fewer than 2 distinct speakers (no
-  discrimination problem)
-
-### Explicit-mapping mode
-- A speaker in the mapping is not present in the input
-- A speaker in the input is not covered by the mapping (no
-  defaulting)
-
-### Override-file mode
-- The override file does not contain a `<session-id>` entry
-- The entry's `mapping` references a speaker not in the input
-- The entry's mapping does not cover every speaker in the input
-
-## What chatter speaker-id is NOT
-
-- Not voice diarization. Use Batchalign's ASR pipeline upstream;
-  the labels this command consumes are the labels Batchalign
-  emits.
-- Not content correction. If the speaker the command identifies
-  has been mis-transcribed by ASR, this command does not fix that
-, re-run ASR with a better engine.
-- Not a merge. This command operates on a single CHAT file. To
-  combine it with a reference, applications must resolve event correspondence
-  before using structural assembly. The [`merge` CLI was removed](./merge.md).
-- Not interactive. `chatter speaker-id` is batch-only: it succeeds,
-  refuses, or fails. The interactive review that resolves a
-  low-confidence refusal into an override-file entry is a separate
-  command, [`chatter adjudicate`](./merge-workflow.md), run as part of
-  [the merge workflow](./merge-workflow.md).
-
-## Worked example
-
-A typical fully-automated reference-mode call from an orchestrator
-script:
-
-```bash
-chatter speaker-id asr-anonymous.cha \
-  --reference hand-transcript.cha \
-  --anchor CHI \
-  --inserted-role INV:Investigator \
-  --confidence-threshold 2.0 \
-  --write-override batch.overrides.toml \
-  -o asr-labeled.cha
-```
-
-For a session this refused (e.g., shared-vocabulary narrative
-task with margin 1.82x), the orchestrator captures the failure
-and the operator later resolves it:
-
-```bash
-# Inspect the scores the command emitted to stderr:
-#   PAR0=0.6286  PAR1=0.3457  margin=1.82x  threshold=2.0
-# Operator listens to a few seconds of audio and confirms PAR0 is
-# the child:
-
-chatter speaker-id asr-anonymous.cha \
-  --mapping "PAR0=drop,PAR1=INV:Investigator" \
-  --write-override batch.overrides.toml \
-  -o asr-labeled.cha
-```
-
-Later, if anyone re-runs the batch, they use override-file mode:
-
-```bash
-chatter speaker-id asr-anonymous.cha \
-  --override-file batch.overrides.toml \
-  --session-id S02-1 \
-  -o asr-labeled.cha
-```
-
-The same `asr-labeled.cha` content is produced; the audit trail
-remains intact.
-
-## Implementation notes (for contributors)
-
-- Source: `crates/talkbank-transform/src/speaker_id/`.
-- CLI surface: `crates/chatter/src/commands/speaker_id/`.
-- CHAT-domain types such as `SpeakerCode` and `ParticipantRole` live in
-  `talkbank-model`. Speaker-identification types such as `MappingSpec`,
-  `MergeOverride`, `LexicalMatchEvidence`, `JaccardScore`,
-  `ConfidenceThreshold`, and `ConfidenceMargin` live beside the algorithms in
-  `talkbank-transform::speaker_id`.
-- The Jaccard cleaner walks `talkbank-model::ChatFile` directly
-  via the existing content walker
-  (`talkbank-model::walk_words`); it does NOT re-implement CHAT
-  parsing or use regex on raw bytes for tokenization.
-- Spec entries for the cleaner and the algorithm live in
-  `spec/constructs/speaker-id/`. Every invariant on this page has
-  a spec; regenerate them with the current `spec/tools` commands from
-  [Spec Workflow](../../contributing/spec-workflow.md).
-- The override-file reader/writer is a typed `serde` round-trip on a TOML
-  representation owned by `talkbank-transform::speaker_id`, so consumers use
-  one shared parser rather than duplicating the format.
+[Merge Test Plan](../../architecture/merge-test-plan.md) identifies actual
+integration and canonical-reference owners. Finite fixtures check lexical,
+mapping and wire contracts, not universal speaker identity or multilingual
+accuracy. No calibration-success census is claimed here.

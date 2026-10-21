@@ -41,7 +41,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
 
-use crate::Span;
 use crate::model::content::bracketed::BracketedContent;
 
 /// Content that was spoken but then corrected/repeated.
@@ -79,53 +78,44 @@ pub struct Retrace {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_group: bool,
     /// Source span for diagnostics.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub span: Span,
+    pub location: crate::Location,
     /// The marker's own bytes in the source (`[/]`, `[//]`, `[///]`,
-    /// `[/-]`), when the parser that built this retrace recorded them.
-    /// `span` covers the whole construct through the last annotation of the
-    /// chain the marker sat in, so it cannot say where the marker is; a
-    /// diagnostic about the marker (E370) reports here. `None` is a retrace
-    /// built without a source, or by a backend that keeps no offsets.
-    #[serde(skip)]
+    /// `[/-]`). `location` is the content through this marker, so it cannot
+    /// say where the marker alone is; a diagnostic about the marker (E370)
+    /// reports here. Unlocated for a retrace built without a source.
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub marker_span: Option<Span>,
+    pub marker_location: crate::Location,
 }
 
 impl Retrace {
     /// Create a new retrace with the given content and kind.
-    pub fn new(content: BracketedContent, kind: RetraceKind) -> Self {
+    ///
+    /// `location` is the whole retrace (content and marker); `marker_location`
+    /// is the `[/]`-style marker alone. A programmatic retrace passes
+    /// `Location::Unlocated` for both.
+    pub fn new(
+        location: impl Into<crate::Location>,
+        marker_location: impl Into<crate::Location>,
+        content: BracketedContent,
+        kind: RetraceKind,
+    ) -> Self {
         Self {
             content,
             kind,
             is_group: false,
-            // No source location yet: callers that have one attach it with
-            // `with_span`. Spelled out rather than defaulted, because this
-            // sentinel makes `check_code_glued_to_following_content` skip the
-            // retrace entirely.
-            span: Span::DUMMY,
-            marker_span: None,
+            location: location.into(),
+            marker_location: marker_location.into(),
         }
     }
 
     /// Mark as originally having angle brackets (`<content> [/]`).
     pub fn as_group(mut self) -> Self {
         self.is_group = true;
-        self
-    }
-
-    /// Record the marker's own span, from the parse.
-    pub fn with_marker_span(mut self, marker_span: Span) -> Self {
-        self.marker_span = Some(marker_span);
-        self
-    }
-
-    /// Set source span.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
         self
     }
 }
@@ -166,7 +156,7 @@ impl std::fmt::Display for RetraceKind {
 }
 
 impl crate::SpanShift for RetraceKind {
-    fn shift_spans_after(&mut self, _threshold: u32, _delta: i32) {
+    fn shift_spans_after(&mut self, _threshold: usize, _delta: isize) {
         // No span fields, nothing to shift
     }
 }

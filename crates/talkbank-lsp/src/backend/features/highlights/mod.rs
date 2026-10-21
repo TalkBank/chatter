@@ -33,9 +33,14 @@ pub fn document_highlights(
 ) -> Option<Vec<DocumentHighlight>> {
     // Find the utterance at this position
     let utterance = utils::find_utterance_at_position(chat_file, position, document)?;
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
 
-    if span_contains(utterance.main.span, offset) {
+    if utterance
+        .main
+        .location
+        .span()
+        .is_some_and(|span| span_contains(span, offset))
+    {
         // Main tier - find alignment index and highlight across all tiers
         highlights_from_main_tier(utterance, tree, position, document)
     } else {
@@ -54,7 +59,7 @@ pub fn document_highlights(
 /// Finds dependent tier at offset.
 fn find_dependent_tier_at_offset(
     utterance: &talkbank_model::model::Utterance,
-    offset: u32,
+    offset: usize,
 ) -> Option<&DependentTier> {
     utterance
         .dependent_tiers
@@ -65,7 +70,7 @@ fn find_dependent_tier_at_offset(
 
 /// Return the source span for a dependent tier variant.
 fn dependent_tier_span(tier: &DependentTier) -> Option<Span> {
-    Some(tier.span())
+    tier.location().span()
 }
 
 #[cfg(test)]
@@ -152,7 +157,7 @@ mod tests {
 
     #[test]
     fn span_contains_boundary_values() {
-        let span = Span { start: 10, end: 20 };
+        let span = Span::new(10, 20);
         assert!(span_contains(span, 10), "Start of span should be contained");
         assert!(span_contains(span, 20), "End of span should be contained");
         assert!(

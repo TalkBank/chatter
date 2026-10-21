@@ -1,94 +1,100 @@
 # CHAT Processing Playbook for Developers
 
 **Status:** Current
-**Last updated:** 2026-09-28 20:59 EDT
+**Last updated:** {{git-dates:page}}
 
-## Objective
-Provide an implementation playbook for developers building or extending CHAT parsing,
-validation, transformation, and serialization logic.
+Use this playbook when changing parsing, validation, transformation or
+serialization. The [parser/model contract](../architecture/parser-model-contracts.md)
+defines the boundaries; [Library Usage](../chatter/integrating/library-usage.md)
+provides source-included executable recipes.
 
-## Mental Model
-Treat CHAT processing as a layered pipeline:
-1. Ingest bytes and normalize line boundaries.
-2. Parse syntax into structured model with exact spans.
-3. Validate semantic rules with structured diagnostics.
-4. Transform or enrich model without breaking invariants.
-5. Serialize in canonical form.
+## Preserve the source, then choose the boundary
 
-## Developer Workflow
-1. Start from a concrete fixture or corpus case.
-2. Add/adjust parser behavior with contract tests first.
-3. Add semantic validator rules separately from parser acceptance.
-4. Confirm roundtrip and equivalence gates.
-5. Update docs for any visible behavior or policy change.
+1. Retain the original UTF-8 bytes. Do not normalize line endings or whitespace
+   before parsing when diagnostics, edits or unchanged output must refer to
+   that source.
+2. Parse with the supported API. Keep both the product and its diagnostics;
+   a built model is not necessarily valid.
+3. Select the required admission policy. Distinguish invalid input, incomplete
+   evidence and internal tool failure.
+4. Transform only through the appropriate typed boundary. Mutation invalidates
+   any proof whose inputs it changes.
+5. Validate the required output properties, then serialize or return admitted
+   original bytes according to the operation's contract.
 
-## Tier Dispatch Strategy
-Use cheap byte-prefix dispatch before heavy parsing:
-- `@` => header candidate,
-- `*` => main tier,
-- `%` => dependent tier,
-- continuation rules and whitespace handled deterministically.
+Serialization is not a universal source-preservation operation. Conversely,
+returning unchanged bytes does not certify validity unless those exact bytes
+were admitted. Do not pair cached model evidence with unrelated source.
 
-This preserves performance and isolates error contexts earlier.
+## Begin with an observed defect
 
-For downstream `batchalign3` consumers, tier dispatch is only the front door.
-The important contract is what happens after dispatch: parse-health taint,
-recovery vs rejection, and whether a tier is safe to pass into alignment.
+Use a public reference fixture or an authored spec example with a clear
+expected outcome. Adjudicate parser versus data defects before editing data.
+Do not copy private transcript material into public fixtures or documentation.
 
-## Word Parsing Rules of Thumb
-- Parse suffix markers in strict order (`@...`, `@s...`, `$...`) with explicit precedence.
-- Derive `raw_text` from typed structure; use the original source and its spans
-  when exact input bytes are required. Keep `cleaned_text` policy-driven and
-  test-locked. See the [JSON contract](../chatter/integrating/json-output.md#computed-fields).
-- Treat CA delimiters and special symbols via centralized symbol sets.
-- Never embed ad hoc symbol literals in multiple files.
+Map the connected producer/consumer paths before implementing a repair. State
+which invariant should become unforgeable and which checks remain meaningful
+at external boundaries. Keep genuine constructor, policy and serialization
+tests; a type-level restriction is not permission to delete all tests around it.
 
-## Error Handling Contract
-- Every parser failure should produce structured diagnostics with:
-  - code,
-  - severity,
-  - span,
-  - context,
-  - message.
-- Avoid silent fallback behavior unless policy explicitly allows it.
-- If fallback occurs, emit warning-grade diagnostics where relevant.
-- Never fabricate semantic placeholders (empty required text, arbitrary enum default, fake word/chunk) to satisfy type construction.
-- Prefer `None`/partial outcome + diagnostics over synthetic model values.
+For syntax or rule changes, update the source-owned spec and grammar as needed,
+regenerate through `just regen`, review the generated differences, and run the
+focused contracts. Do not update snapshots solely because the new code emits
+different output. See [Spec Workflow](spec-workflow.md).
 
-## Span Discipline
-- Offsets are absolute across full file content.
-- Nested parser helpers must accept base offset and return shifted spans.
-- Add tests for boundary and continuation-line spans.
+## Diagnostics and recovery
 
-## Performance Policy
-- Prefer byte-oriented prechecks for top-level dispatch and simple delimiters.
-- Use parser combinators for structural parsing, not for obvious constant-prefix routing.
-- Measure parser performance on representative corpus slices before/after major changes.
+Handle `ParseProduct` and streaming `ParseOutcome` according to their actual
+contracts. Streaming diagnostics are separate from the value; retain the sink's
+evidence. Internal failure must remain distinguishable from a CHAT violation,
+even if its diagnostic severity is not an error.
 
-## Common Failure Patterns and Fixes
-- Symptom: semantic mismatch only in snapshots.
-  - Fix: compare parser outputs directly and isolate first structural delta.
-- Symptom: generated tests pass, corpus fails.
-  - Fix: add missing fixture, decide parse-vs-validate placement, lock behavior.
-- Symptom: output drift after grammar edit.
-  - Fix: run full regeneration and equivalent parser contract suite before merge.
+Do not replace failed admission with empty required text, guessed enum values,
+fake words or zero timestamps. Regressions must inspect the model or serialized
+output when fabrication is the defect; checking only that a diagnostic fired
+is insufficient. Preserve recoverable surrounding content without admitting the
+malformed part as a valid semantic value.
 
-## Batchalign3 Surface Checks
+Use checked source/presentation APIs for diagnostics. Not every failure has a
+valid source location. Do not fabricate spans merely to satisfy a renderer.
+See the [diagnostic contract](../chatter/integrating/diagnostic-contract.md).
 
-When a change affects the surface used by `batchalign3`, confirm:
+## Coordinates and words
 
-- full-file parse equivalence still holds for corpus coverage
-- alignment-sensitive downstream tiers still gate on parse-health appropriately
+Source offsets belong to their source snapshot. Fragment origins, continuation
+lines, CRLF, multibyte text and edits are separate boundary cases. Do not
+double-shift offsets or index a fragment string with document coordinates.
 
-## Review Checklist for Parser PRs
-- New or changed behavior has targeted tests.
-- Equivalence suite status is attached.
-- Snapshot updates are intentional and explained.
-- No hidden magic symbols or magic string literals introduced.
-- Docs updated where user-visible behavior changes.
+Word `raw_text` is derived from typed structure, while `cleaned_text` follows
+its documented projection. Neither is an independent lexical authority or a
+substitute for source bytes. See [computed word fields](../chatter/integrating/json-output.md#computed-fields).
+Use existing symbol registries and typed marker/annotation policies instead of
+parallel character scanners that imitate CHAT parsing.
 
-## Required Artifacts for Significant Changes
-- Design note (architecture decision record in the book).
-- Before/after examples.
-- Impacted fixtures list.
-- Migration implications for integrators.
+## Verify the property that changed
+
+| Defect | Necessary observation |
+| --- | --- |
+| Wrong acceptance or rejection | Authored legal/invalid expectation, diagnostics and applicable policy |
+| Wrong model structure | Actual typed structure or semantic comparison with an authored expectation |
+| Lost or invented content | Retained source/model relationship and actual serialized output |
+| Wrong coordinates | Source-bound spans and the relevant client coordinate conversion |
+| Backend omission of an error | Supported API, isolated invalid control and valid counterpart |
+| CLI/LSP/desktop boundary failure | Actual command or protocol boundary, not only an internal helper |
+
+A second parser is evidence, not an oracle. Equal recovery ASTs are not required
+merely because both backends reject the same invalid input. A successful roundtrip
+does not prove source validity, linguistic correctness or completeness.
+
+Run scoped feedback after a coherent repair batch. Use the
+[development checks](dev-checks.md) for the final publication gate and release
+sequence; do not add new routine gates from this playbook. Performance changes
+need relevant measurements, not blanket byte-dispatch or combinator rules.
+
+## Handoff
+
+Record the exact source and test scope, observed result, remaining limits and
+consumer-facing behavior changes. Explain failures rather than hiding skipped
+or zero-test selections behind a successful shell exit. Update the owning
+documentation and changelog when behavior changes; do not create a second
+fixture registry or copy generated reference material into prose.

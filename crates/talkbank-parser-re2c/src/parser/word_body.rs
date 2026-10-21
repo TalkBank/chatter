@@ -48,41 +48,48 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
             }
             // Lengthening: one or more colons
             ':' => {
-                let mut count = 0usize;
                 while let Some(&(_, ':')) = chars.peek() {
                     chars.next();
-                    count += 1;
                 }
-                // Count source bytes without narrowing. The grammar branch
-                // consumes at least one colon; only a nonempty run can enter
-                // the AST and the shared model.
-                if let Some(count) = std::num::NonZeroUsize::new(count) {
-                    items.push(WordBodyItem::Lengthening(count));
-                }
+                let end = chars.peek().map_or(body.len(), |&(j, _)| j);
+                // This branch consumed at least one colon, so the run admits;
+                // the run type owns that proof for the model's count. Were it
+                // ever refused, the bytes stay in the word as text rather
+                // than vanishing.
+                items.push(match LengtheningRun::new(&body[i..end]) {
+                    Some(run) => WordBodyItem::Lengthening(run),
+                    None => WordBodyItem::Text(&body[i..end]),
+                });
             }
             // Compound marker
             '+' => {
                 chars.next();
-                items.push(WordBodyItem::CompoundMarker);
+                items.push(WordBodyItem::CompoundMarker(&body[i..i + ch.len_utf8()]));
             }
             // Stress markers
             '\u{02C8}' => {
                 chars.next();
-                items.push(WordBodyItem::Stress(StressKind::Primary));
+                items.push(WordBodyItem::Stress(
+                    StressKind::Primary,
+                    &body[i..i + ch.len_utf8()],
+                ));
             }
             '\u{02CC}' => {
                 chars.next();
-                items.push(WordBodyItem::Stress(StressKind::Secondary));
+                items.push(WordBodyItem::Stress(
+                    StressKind::Secondary,
+                    &body[i..i + ch.len_utf8()],
+                ));
             }
             // Syllable pause
             '^' => {
                 chars.next();
-                items.push(WordBodyItem::SyllablePause);
+                items.push(WordBodyItem::SyllablePause(&body[i..i + ch.len_utf8()]));
             }
             // Clitic boundary
             '~' => {
                 chars.next();
-                items.push(WordBodyItem::CliticBoundary);
+                items.push(WordBodyItem::CliticBoundary(&body[i..i + ch.len_utf8()]));
             }
             // Overlap points: ⌈ ⌉ ⌊ ⌋ with optional digit.
             _ if let Some(kind) = char_to_overlap_kind(ch) => {
@@ -109,11 +116,13 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
                     match next_ch {
                         '\u{0001}' => {
                             chars.next();
-                            items.push(WordBodyItem::UnderlineBegin);
+                            let end = chars.peek().map_or(body.len(), |&(j, _)| j);
+                            items.push(WordBodyItem::UnderlineBegin(&body[i..end]));
                         }
                         '\u{0002}' => {
                             chars.next();
-                            items.push(WordBodyItem::UnderlineEnd);
+                            let end = chars.peek().map_or(body.len(), |&(j, _)| j);
+                            items.push(WordBodyItem::UnderlineEnd(&body[i..end]));
                         }
                         // A lone `\u{0002}` is not an underline marker. Keep it
                         // as text rather than consuming it silently: this match
@@ -121,17 +130,21 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
                         // dropping the odd byte is the same shape one arm over.
                         _ => items.push(WordBodyItem::Text(&body[i..i + ch.len_utf8()])),
                     }
+                } else {
+                    // A `\u{0002}` ending the body is equally not a marker, and
+                    // equally kept.
+                    items.push(WordBodyItem::Text(&body[i..i + ch.len_utf8()]));
                 }
             }
             // CA elements
             _ if let Some(kind) = char_to_ca_element(ch) => {
                 chars.next();
-                items.push(WordBodyItem::CaElement(kind));
+                items.push(WordBodyItem::CaElement(kind, &body[i..i + ch.len_utf8()]));
             }
             // CA delimiters
             _ if let Some(kind) = char_to_ca_delimiter(ch) => {
                 chars.next();
-                items.push(WordBodyItem::CaDelimiter(kind));
+                items.push(WordBodyItem::CaDelimiter(kind, &body[i..i + ch.len_utf8()]));
             }
             // Text segment: everything else until a special char
             _ => {

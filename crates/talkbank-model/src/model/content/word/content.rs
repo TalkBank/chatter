@@ -473,24 +473,19 @@ pub struct WordStressMarker {
     /// The kind of stress (primary or secondary).
     pub marker_type: WordStressMarkerType,
     /// Source span for error reporting.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[semantic_eq(skip)]
-    pub span: Option<crate::Span>,
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 impl WordStressMarker {
     /// Builds a stress marker with no span metadata.
-    pub fn new(marker_type: WordStressMarkerType) -> Self {
+    pub fn new(location: impl Into<crate::Location>, marker_type: WordStressMarkerType) -> Self {
         Self {
             marker_type,
-            span: None,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = Some(span);
-        self
     }
 }
 
@@ -538,23 +533,27 @@ pub struct WordLengthening {
     )]
     pub count: std::num::NonZeroUsize,
     /// Source span for error reporting.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[semantic_eq(skip)]
-    pub span: Option<crate::Span>,
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 impl WordLengthening {
     /// Builds a lengthening marker with count 1 and no span metadata.
-    pub fn new() -> Self {
+    pub fn new(location: impl Into<crate::Location>) -> Self {
         Self {
             count: std::num::NonZeroUsize::MIN,
-            span: None,
+            location: location.into(),
         }
     }
 
     /// Builds a lengthening marker with a specific colon count.
-    pub fn with_count(count: std::num::NonZeroUsize) -> Self {
-        Self { count, span: None }
+    pub fn with_count(location: impl Into<crate::Location>, count: std::num::NonZeroUsize) -> Self {
+        Self {
+            count,
+            location: location.into(),
+        }
     }
 
     fn default_count() -> std::num::NonZeroUsize {
@@ -562,18 +561,6 @@ impl WordLengthening {
     }
     fn is_one(count: &std::num::NonZeroUsize) -> bool {
         count.get() == 1
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = Some(span);
-        self
-    }
-}
-
-impl Default for WordLengthening {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -603,7 +590,6 @@ impl Validate for WordLengthening {
 #[derive(
     Clone,
     Copy,
-    Default,
     Debug,
     PartialEq,
     Eq,
@@ -616,21 +602,18 @@ impl Validate for WordLengthening {
 )]
 pub struct WordSyllablePause {
     /// Source span for error reporting.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[semantic_eq(skip)]
-    pub span: Option<crate::Span>,
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 impl WordSyllablePause {
     /// Builds a syllable-pause marker with no span metadata.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = Some(span);
-        self
+    pub fn new(location: impl Into<crate::Location>) -> Self {
+        Self {
+            location: location.into(),
+        }
     }
 }
 
@@ -657,7 +640,6 @@ impl Validate for WordSyllablePause {
 #[derive(
     Clone,
     Copy,
-    Default,
     Debug,
     PartialEq,
     Eq,
@@ -670,21 +652,18 @@ impl Validate for WordSyllablePause {
 )]
 pub struct WordCompoundMarker {
     /// Source span for error reporting.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[semantic_eq(skip)]
-    pub span: Option<crate::Span>,
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 impl WordCompoundMarker {
     /// Builds a compound-boundary marker with no span metadata.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = Some(span);
-        self
+    pub fn new(location: impl Into<crate::Location>) -> Self {
+        Self {
+            location: location.into(),
+        }
     }
 }
 
@@ -707,26 +686,21 @@ impl Validate for WordCompoundMarker {
 /// NOT included in `cleaned_text`.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Clitics>
-#[derive(
-    Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift,
-)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct WordCliticBoundary {
     /// Source span for error reporting.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[semantic_eq(skip)]
-    pub span: Option<crate::Span>,
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 impl WordCliticBoundary {
     /// Builds a clitic boundary marker with no span metadata.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = Some(span);
-        self
+    pub fn new(location: impl Into<crate::Location>) -> Self {
+        Self {
+            location: location.into(),
+        }
     }
 }
 
@@ -748,13 +722,13 @@ impl Validate for WordCliticBoundary {
 /// or `{}` → nothing extra (internally tagged) to preserve backward-compatible JSON.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
-#[derive(Clone, Debug, Default, PartialEq, JsonSchema, SemanticEq, SpanShift)]
+#[derive(Clone, Debug, PartialEq, JsonSchema, SemanticEq, SpanShift)]
 #[schemars(with = "UnderlineMarkerWire")]
 pub struct UnderlineMarker {
     /// Known source location; wire-decoded markers have no source location.
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    span: Option<crate::Span>,
+    location: crate::Location,
 }
 
 /// The two legacy wire shapes, shared by decoding and schema generation.
@@ -778,31 +752,24 @@ impl<'de> serde::Deserialize<'de> for UnderlineMarker {
     /// Accepts legacy underline marker encodings through the schema's wire type.
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         UnderlineMarkerWire::deserialize(deserializer).map(|wire| match wire {
-            UnderlineMarkerWire::Unit | UnderlineMarkerWire::Object {} => Self::default(),
+            UnderlineMarkerWire::Unit | UnderlineMarkerWire::Object {} => {
+                Self::new(crate::Location::Unlocated)
+            }
         })
     }
 }
 
 impl UnderlineMarker {
     /// Builds an underline marker whose source location is unknown.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(location: impl Into<crate::Location>) -> Self {
+        Self {
+            location: location.into(),
+        }
     }
 
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = (!span.is_dummy()).then_some(span);
-        self
-    }
-
-    /// Builds an underline marker from explicit span metadata.
-    pub fn from_span(span: crate::Span) -> Self {
-        Self::new().with_span(span)
-    }
-
-    /// Returns the source location, or `None` for source-independent markers.
-    pub fn span(&self) -> Option<crate::Span> {
-        self.span
+    /// Returns the source location; wire-decoded markers are unlocated.
+    pub fn location(&self) -> crate::Location {
+        self.location
     }
 }
 

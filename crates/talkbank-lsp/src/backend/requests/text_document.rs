@@ -123,15 +123,26 @@ impl DocumentFeatureService {
         backend: &Backend,
         params: CodeActionParams,
     ) -> Result<Option<CodeActionResponse>> {
-        let Some(context) = TextDocumentContext::resolve(backend, params.text_document.uri) else {
+        let Some(support) = backend.versioned_edits.get().and_then(Option::as_ref) else {
+            return Ok(None);
+        };
+        let Some(revision) =
+            crate::backend::diagnostics::document_diagnostics(backend, &params.text_document.uri)?
+        else {
             return Ok(None);
         };
 
-        Ok(features::code_action(
-            context.uri,
-            params.context.diagnostics,
-            Some(&context.doc),
-        ))
+        backend
+            .language_services
+            .with_parser(|parser| {
+                let prepared =
+                    features::prepare_code_actions(&revision, &params.context.diagnostics, parser);
+                revision.with_current(backend, |current| prepared.finish(current, support))
+            })
+            .map_err(|error| tower_lsp::jsonrpc::Error::invalid_params(error.to_string()))?
+            .ok_or_else(|| {
+                tower_lsp::jsonrpc::Error::new(tower_lsp::jsonrpc::ErrorCode::ContentModified)
+            })
     }
 
     fn handle_inlay_hint(

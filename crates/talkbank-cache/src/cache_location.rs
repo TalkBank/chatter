@@ -79,13 +79,4 @@ mod tests {
         let db = cache_db_path(dir);
         assert_eq!(db.parent(), Some(dir));
     }
-
-    /// Two callers asking for the database of the same directory get the same
-    /// path. Trivially true now, and the reason the name is not written at each
-    /// call site: it was, and one of them could have drifted.
-    #[test]
-    fn the_database_path_has_one_spelling() {
-        let dir = Path::new("/some/cache/root");
-        assert_eq!(cache_db_path(dir), cache_db_path(dir));
-    }
 }

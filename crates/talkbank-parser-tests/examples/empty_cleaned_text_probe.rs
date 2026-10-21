@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     empties.push(format!(
                         "{shown}: raw={:?} span={:?}",
                         word.raw_text(),
-                        word.span
+                        word.location
                     ));
                 }
             });

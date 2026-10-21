@@ -345,7 +345,11 @@ fn measure_word_ownership(
     timeline: &DiarizationTimeline,
 ) -> Result<TrackOwnership, WordSpeakerSplitRefusal> {
     let timing = word.timing();
-    let measured = Bullet::new(timing.start().get(), timing.end().get());
+    let measured = Bullet::new(
+        talkbank_model::Location::Unlocated,
+        timing.start().get(),
+        timing.end().get(),
+    );
     let held = TrackOwnership::of(&measured, timeline)
         .ok_or(WordSpeakerSplitRefusal::UncoveredWord { slot })?;
     if let [(_, lead), (_, runner_up), ..] = held.shares()

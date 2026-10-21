@@ -11,7 +11,6 @@
 //! - [Colon](https://talkbank.org/0info/manuals/CHAT.html#Colon)
 
 use super::WriteChat;
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -66,187 +65,187 @@ pub enum Separator {
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Comma>
     #[serde(rename = "comma")]
     Comma {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// Legacy semicolon separator (;), rejected on main tiers by E769.
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Semicolon>
     #[serde(rename = "semicolon")]
     Semicolon {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// Colon separator (:) - elongation or emphasis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Colon>
     #[serde(rename = "colon")]
     Colon {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// „ (U+201E) - TAG marker (double low-9 quotation mark) - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TAG_Marker>
     #[serde(rename = "tag")]
     Tag {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ‡ (U+2021) - VOCATIVE marker (double dagger) - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Vocative_Marker>
     #[serde(rename = "vocative")]
     Vocative {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// `[^c]` - CA continuation marker - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#CA_Continuation>
     #[serde(rename = "ca_continuation")]
     CaContinuation {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ∞ (U+221E) - Unmarked ending (no clear terminal intonation) - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#UnmarkedEnding>
     #[serde(rename = "unmarked_ending")]
     UnmarkedEnding {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ≡ (U+2261) - Uptake/latching (no gap between turns) - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Uptake_Marker>
     #[serde(rename = "uptake")]
     Uptake {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ≈ (U+2248) - No-break TCU separator - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TCU_NoBreak>
     #[serde(rename = "ca_no_break")]
     CaNoBreak {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ≋ (U+224B) - Technical-break TCU separator - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TCU_Technical_Break>
     #[serde(rename = "ca_technical_break")]
     CaTechnicalBreak {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ⇗ (U+21D7) - Rising to high intonation - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#RisingToHigh>
     #[serde(rename = "rising_to_high")]
     RisingToHigh {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ↗ (U+2197) - Rising to mid intonation - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#RisingToMid>
     #[serde(rename = "rising_to_mid")]
     RisingToMid {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// → (U+2192) - Level intonation (continuing) - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Level_Intonation>
     #[serde(rename = "level")]
     Level {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ↘ (U+2198) - Falling to mid intonation - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#FallingToMid>
     #[serde(rename = "falling_to_mid")]
     FallingToMid {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 
     /// ⇘ (U+21D8) - Falling to low intonation - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#FallingToLow>
     #[serde(rename = "falling_to_low")]
     FallingToLow {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 }
 
 impl Separator {
     /// Returns source span metadata associated with this separator.
-    pub fn span(&self) -> Span {
+    pub fn location(&self) -> crate::Location {
         match self {
-            Separator::Comma { span }
-            | Separator::Semicolon { span }
-            | Separator::Colon { span }
-            | Separator::Tag { span }
-            | Separator::Vocative { span }
-            | Separator::CaContinuation { span }
-            | Separator::UnmarkedEnding { span }
-            | Separator::Uptake { span }
-            | Separator::CaNoBreak { span }
-            | Separator::CaTechnicalBreak { span }
-            | Separator::RisingToHigh { span }
-            | Separator::RisingToMid { span }
-            | Separator::Level { span }
-            | Separator::FallingToMid { span }
-            | Separator::FallingToLow { span } => *span,
+            Separator::Comma { location }
+            | Separator::Semicolon { location }
+            | Separator::Colon { location }
+            | Separator::Tag { location }
+            | Separator::Vocative { location }
+            | Separator::CaContinuation { location }
+            | Separator::UnmarkedEnding { location }
+            | Separator::Uptake { location }
+            | Separator::CaNoBreak { location }
+            | Separator::CaTechnicalBreak { location }
+            | Separator::RisingToHigh { location }
+            | Separator::RisingToMid { location }
+            | Separator::Level { location }
+            | Separator::FallingToMid { location }
+            | Separator::FallingToLow { location } => *location,
         }
     }
 

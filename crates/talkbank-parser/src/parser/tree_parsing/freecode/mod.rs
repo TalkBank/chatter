@@ -5,11 +5,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Freecodes>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
-use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, FreecodeNode};
 use crate::model::{Freecode, UtteranceContent};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
 
@@ -40,16 +39,16 @@ pub fn parse_freecode(
 
     match code {
         Some(c) if !c.is_empty() => {
-            let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-            let freecode = Freecode::with_span(c, span);
+            let span = span_of(node);
+            let freecode = Freecode::new(span, c);
             ParseOutcome::parsed(UtteranceContent::Freecode(freecode))
         }
         _ => {
             errors.report(ParseError::new(
                 ErrorCode::EmptyUtterance,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), "freecode"),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, span_of(node), "freecode"),
                 "Empty freecode content",
             ));
             ParseOutcome::rejected()

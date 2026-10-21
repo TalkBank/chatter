@@ -15,9 +15,10 @@ fn mor_tier_round_trip_simple() {
     ];
 
     let tier = MorTier::new_mor(
+        talkbank_model::Location::Unlocated,
         mor_items,
         talkbank_model::Terminator::Period {
-            span: talkbank_model::Span::DUMMY,
+            location: talkbank_model::Location::Unlocated,
         },
     );
     let output = tier.to_chat();
@@ -40,9 +41,10 @@ fn mor_tier_round_trip_with_post_clitic() {
 
     let mor = Mor::new(main).with_post_clitic(post);
     let tier = MorTier::new_mor(
+        talkbank_model::Location::Unlocated,
         vec![mor],
         talkbank_model::Terminator::Period {
-            span: talkbank_model::Span::DUMMY,
+            location: talkbank_model::Location::Unlocated,
         },
     );
     let output = tier.to_chat();
@@ -61,9 +63,10 @@ fn mor_tier_round_trip_multiple_features() {
         .with_feature(MorFeature::new("Nom"))
         .with_feature(MorFeature::new("S1"));
     let tier = MorTier::new_mor(
+        talkbank_model::Location::Unlocated,
         vec![Mor::new(word)],
         talkbank_model::Terminator::Period {
-            span: talkbank_model::Span::DUMMY,
+            location: talkbank_model::Location::Unlocated,
         },
     );
     let output = tier.to_chat();

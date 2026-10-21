@@ -11,6 +11,47 @@ use super::find_alignment_hover_info;
 use crate::test_fixtures::{parse_tree_incremental, valid_chat_with_alignments};
 use tower_lsp::lsp_types::Position;
 
+/// Presentation must consume the model's independent source positions, not
+/// re-create a positional mapping from the hovered alignment-word index.
+#[test]
+fn phon_hover_uses_independent_source_positions() -> Result<(), String> {
+    let content = include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E740_4.cha"
+    );
+    let (chat_file, tree) = parse_and_validate_chat_file(content)?;
+    let (line, text) = content
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.starts_with("%xphoaln:"))
+        .ok_or("Missing fixture alignment tier")?;
+    for (token, model, actual) in [
+        ("(.)↔∅", Some("(.)"), None),
+        ("k↔k", Some("kæt"), Some("kæt")),
+        ("∅↔(..)", None, Some("(..)")),
+        ("d↔d", Some("dɔg"), Some("dɔg")),
+    ] {
+        let offset = text.find(token).ok_or("Missing fixture token")?;
+        let position = Position::new(line as u32, text[..offset].encode_utf16().count() as u32);
+        let info = find_alignment_hover_info(&chat_file, &tree, position, content)
+            .ok_or("Missing Phon hover")?;
+        assert_eq!(info.aligned_to_mod.as_deref(), model, "{token}");
+        assert_eq!(info.aligned_to_pho.as_deref(), actual, "{token}");
+    }
+    let mut utterance = crate::test_fixtures::first_utterance(chat_file)?;
+    utterance.alignments = None;
+    let offset = text.find("k↔k").ok_or("Missing fixture token")?;
+    let position = Position::new(line as u32, text[..offset].encode_utf16().count() as u32);
+    let info = super::find_phoaln_tier_hover_info(&utterance, position, content)
+        .ok_or("Missing local Phon hover without alignment metadata")?;
+    assert_eq!(info.aligned_to_mod, None);
+    assert_eq!(info.aligned_to_pho, None);
+    assert!(
+        !info.details.is_empty(),
+        "Local segment detail remains available"
+    );
+    Ok(())
+}
+
 /// The parsed, aligned file and the CST the hover resolvers read, for a
 /// fixture that must be valid CHAT.
 ///

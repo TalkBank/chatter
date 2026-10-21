@@ -84,7 +84,7 @@ fn spec_lenient_parsing_retains_recovery_and_primary_diagnostics() {
                     .dependent_tiers
                     .iter()
                     .filter_map(|entry| match &entry.tier {
-                        DependentTier::Mor(_) | DependentTier::Gra(_) => Some(entry.span()),
+                        DependentTier::Mor(_) | DependentTier::Gra(_) => Some(entry.location()),
                         _ => None,
                     })
             })
@@ -97,11 +97,14 @@ fn spec_lenient_parsing_retains_recovery_and_primary_diagnostics() {
                 );
                 for error in &original_errors {
                     if !retained.contains(error) {
-                        let offset = error.location.span.start;
+                        let offset = error.location.span().expect("located diagnostic").start();
                         assert!(
-                            generated_spans
-                                .iter()
-                                .any(|span| span.start <= offset && offset < span.end),
+                            generated_spans.iter().any(|span| span
+                                .span()
+                                .expect("located")
+                                .start()
+                                <= offset
+                                && offset < span.span().expect("located").end()),
                             "{fixture}: suppression must belong to a typed generated tier"
                         );
                     }

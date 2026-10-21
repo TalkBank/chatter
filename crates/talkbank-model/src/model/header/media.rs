@@ -44,7 +44,7 @@ pub struct MediaHeader {
     #[serde(skip)]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub whitespace_before_comma: Option<crate::Span>,
+    pub whitespace_before_comma: Option<crate::Location>,
 }
 
 impl MediaHeader {
@@ -66,8 +66,8 @@ impl MediaHeader {
     /// Records illegal whitespace between the filename and the comma.
     ///
     /// Mirrors `TierSeparator::with_trailing_space`; see the field docs.
-    pub fn with_whitespace_before_comma(mut self, span: crate::Span) -> Self {
-        self.whitespace_before_comma = Some(span);
+    pub fn with_whitespace_before_comma(mut self, location: impl Into<crate::Location>) -> Self {
+        self.whitespace_before_comma = Some(location.into());
         self
     }
 

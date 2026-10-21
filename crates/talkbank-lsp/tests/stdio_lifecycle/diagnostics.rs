@@ -3,9 +3,13 @@
 
 use super::Editor;
 use serde_json::{Value, json};
+use tower_lsp::lsp_types::{Position, Range, SelectionRange};
 
 const SOURCE: &str = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
 const URI: &str = "file:///diagnostic-edits.cha";
+
+#[path = "code_actions.rs"]
+mod code_actions;
 
 impl Editor {
     fn diagnostics(&self) -> Value {
@@ -100,7 +104,10 @@ fn spec_diagnostics_do_not_offer_guessed_participant_or_language_facts() {
     assert!(response["error"].is_null(), "{response}");
     let actions = response["result"].as_array().unwrap();
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0]["edit"]["changes"][URI][0]["newText"], "@UTF8\n");
+    assert!(actions[0]["edit"]["changes"].is_null());
+    let change = &actions[0]["edit"]["documentChanges"][0];
+    assert_eq!(change["textDocument"], json!({"uri":URI,"version":1}));
+    assert_eq!(change["edits"][0]["newText"], "@UTF8\n");
     editor.close();
     editor.send(json!({"jsonrpc":"2.0","id":2,"method":"shutdown"}));
     assert!(editor.response(2)["error"].is_null());
@@ -185,7 +192,15 @@ fn edited_diagnostics_match_fresh_open() {
 #[test]
 fn utf16_incremental_edit_preserves_neighboring_text() {
     let mut editor = Editor::start();
-    editor.initialize();
+    editor.send(json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+        "params":{"processId":null,"rootUri":null,"capabilities":{}}}));
+    let initialized = editor.response(1);
+    assert!(initialized["error"].is_null(), "{initialized}");
+    assert_eq!(
+        initialized["result"]["capabilities"]["selectionRangeProvider"],
+        true
+    );
+    editor.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
     // CRLF input ensures formatting returns the current document's text.
     let source = SOURCE
         .replace("@Begin\n", "@Begin\n@Comment:\ta😀b\n")
@@ -229,17 +244,7 @@ fn utf16_incremental_edit_preserves_neighboring_text() {
     let unchanged = editor.response(9);
     assert!(unchanged["error"].is_null(), "{unchanged}");
     assert!(unchanged["result"].is_null(), "{unchanged}");
-    editor.send(
-        json!({"jsonrpc":"2.0","id":12,"method":"textDocument/selectionRange","params":{
-        "textDocument":{"uri":URI},"positions":[{"line":2,"character":13}]}}),
-    );
-    let selection = editor.response(12);
-    assert!(selection["error"].is_null(), "{selection}");
-    assert_eq!(
-        selection["result"][0]["range"],
-        json!({
-        "start":{"line":2,"character":10},"end":{"line":2,"character":14}})
-    );
+    assert_selection_chains(&mut editor, 12, 10, 14);
     for (id, method, params) in [
         (
             10,
@@ -279,8 +284,54 @@ fn utf16_incremental_edit_preserves_neighboring_text() {
             );
         }
     }
+    // Move the content word by three UTF-16 units, then request immediately:
+    // selection must follow this revision rather than cached parse geometry.
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+        "textDocument":{"uri":URI,"version":4},"contentChanges":[{
+            "range":{"start":{"line":2,"character":10},"end":{"line":2,"character":10}},
+            "text":"😀 "}]}}),
+    );
+    assert_selection_chains(&mut editor, 13, 13, 17);
     editor.send(json!({"jsonrpc":"2.0","id":2,"method":"shutdown"}));
     assert!(editor.response(2)["error"].is_null());
     editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
     editor.expect_exit(0);
+}
+
+fn assert_selection_chains(editor: &mut Editor, id: u64, word_start: u32, word_end: u32) {
+    let positions = [Position::new(2, 2), Position::new(2, word_end - 1)];
+    editor.send(
+        json!({"jsonrpc":"2.0","id":id,"method":"textDocument/selectionRange",
+        "params":{"textDocument":{"uri":URI},"positions":positions}}),
+    );
+    let response = editor.response(id);
+    assert!(response["error"].is_null(), "{response}");
+    let selections: Vec<SelectionRange> =
+        serde_json::from_value(response["result"].clone()).expect("typed selection response");
+    assert_eq!(selections.len(), positions.len());
+    assert_eq!(
+        selections[0].range,
+        Range::new(Position::new(2, 0), Position::new(2, 9))
+    );
+    assert_eq!(
+        selections[1].range,
+        Range::new(Position::new(2, word_start), Position::new(2, word_end))
+    );
+    let contains = |range: Range, point: Position| {
+        (range.start.line, range.start.character) <= (point.line, point.character)
+            && (point.line, point.character) <= (range.end.line, range.end.character)
+    };
+    for (selection, position) in selections.iter().zip(positions) {
+        assert!(contains(selection.range, position));
+        let mut child = selection;
+        while let Some(parent) = child.parent.as_deref() {
+            assert!(
+                contains(parent.range, child.range.start)
+                    && contains(parent.range, child.range.end),
+                "{selection:?}"
+            );
+            child = parent;
+        }
+    }
 }

@@ -51,7 +51,7 @@ pub(super) fn fields<'input>(
     word: &Word,
 ) -> Result<Vec<(usize, SourceSlice<'input, 'input>)>, LexicalSourceRefusal> {
     let refused = LexicalSourceRefusal;
-    let range = word.span.start as usize..word.span.end as usize;
+    let range = word.location.span().ok_or(refused)?.to_range();
     let mut raw = parsed
         .root_node()
         .named_descendant_for_byte_range(range.start, range.end)

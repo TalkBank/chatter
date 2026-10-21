@@ -15,7 +15,7 @@ This runs the checks used by per-push CI, including doctests, both Rust
 workspaces, generated-artifact currency, and the book. Wait for GitHub Actions
 on the exact pushed commit before announcing it as ready. Release-only checks
 run separately through `just release-lint`. That recipe first checks app versions
-and the changelog section/link, before formatting and compiler checks, so a
+and the changelog section/link, before formatting checks and compiler checks, so a
 missing release entry fails before compilation.
 
 ## Generated artifact drift
@@ -52,16 +52,18 @@ drift CI would have caught). The procedure:
    The app-version check exercises this command against temporary manifests
    and lockfiles before checking the checkout, including independent drift in
    each lockfile version and preservation of dependency versions.
-2. Write the `## [X.Y.Z]` CHANGELOG section (the one deliberately manual
-   step; every gate enforces its presence).
+2. Write the `## [X.Y.Z]` CHANGELOG section and its comparison link. The
+   app-version check requires them; it does not write release notes for you.
 3. Format, run `just release-lint` and `just gate`, then squash the commits
    since the last push into one release commit whose message is the
-   CHANGELOG section. Verify the gate on the squashed tree and, with maintainer
-   authorization, push and wait for CI on that commit. The content stamp survives
-   a squash that leaves the checked bytes unchanged. Push rarely; preserve
+   CHANGELOG section. Verify that the squashed tree retains the checked content
+   and, with maintainer authorization for that candidate, push and wait for CI
+   on that commit. Reuse the receipt when its checked inputs are unchanged;
+   a squash alone is not a reason to rerun the gate. Push rarely; preserve
    already-published commits instead of rewriting history at release time.
-4. `just release-tag X.Y.Z` tags and pushes `vX.Y.Z`, refusing on a dirty
-   tree, an unpushed HEAD, any version-copy drift, a missing CHANGELOG
+4. With release authorization, `just release-tag X.Y.Z` tags and pushes
+   `vX.Y.Z`, refusing on a dirty tree, an unpushed HEAD, any version-copy
+   drift, a missing CHANGELOG
    section, or CI/Cross-platform not yet green on the exact tagged commit.
 
 After the tag: `release-tag-dispatch.yml` dispatches `release.yml` for that
@@ -131,9 +133,7 @@ workflow:
 
 ### Release secrets (Actions secrets on this repository)
 
-Required by the macOS jobs of `release-desktop.yml` (and by cargo-dist
-macOS codesigning if `macos-sign` is enabled, which uses the separate
-`CODESIGN_*` names documented in the strategy doc):
+The macOS jobs of `release-desktop.yml` use:
 
 | Secret | Content |
 |--------|---------|
@@ -144,9 +144,26 @@ macOS codesigning if `macos-sign` is enabled, which uses the separate
 | `APPLE_API_ISSUER` | App Store Connect issuer ID |
 | `APPLE_API_KEY_CONTENT` | contents of the `AuthKey_*.p8` file |
 
-Rotation: replacing the certificate or notary key means updating these
-secrets and nothing else; no workflow edits are needed. A maintainer must
-re-create all of them on any new repository (secrets do not transfer).
+Every desktop platform also uses `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to sign updater bundles. These are
+separate from Apple code signing and notarization. Their matching public key
+is committed in `apps/chatter-desktop/src-tauri/tauri.conf.json` under
+`plugins.updater.pubkey`; the private key must never enter the repository.
+An unsigned Windows or Linux installer does not mean its updater bundle can
+omit this signature.
+
+The cargo-dist CLI signing path uses the separate `CODESIGN_CERTIFICATE`,
+`CODESIGN_CERTIFICATE_PASSWORD` and `CODESIGN_IDENTITY` secrets. Maintainers
+must verify access to each required credential before an authorized release;
+the presence of a secret name does not prove its value is usable. Do not print
+secret values in logs or paste them into issues.
+
+Replacing an Apple certificate or notary key updates the corresponding
+secrets. Do not treat replacing the updater key as the same operation: existing
+installations trust their embedded public key, so a key change needs a reviewed
+update/reinstallation migration. Handover must preserve the updater key and
+verify the successor's access without publishing it. Repository secrets do not
+automatically transfer to a new repository.
 
 ## The development loop
 
@@ -160,14 +177,18 @@ around it rather than to the fix.
    regen`, then `just test`. Every derived artifact has a currency test, and
    they are far cheaper to satisfy together than one gate run at a time.
 3. **Before committing:** review the final diff once.
-4. **Before pushing:** `just gate`, once. It mirrors per-push CI exactly, so
-   CI is a confirmation and never a discovery. The pre-push hook refuses a
+4. **Before pushing:** `just gate` on the final candidate content. It runs the
+   per-push checks locally; still inspect hosted CI on the exact pushed commit.
+   The pre-push hook refuses a
    push without the stamp; the stamp hashes tree content, so a gate run on
    uncommitted changes stays valid once the same bytes are committed. Clippy
    and the feature-off build are `just release-lint`, run before a release.
-5. **Releasing:** format, `just release-lint`, gate, squash every commit since the last push into
-   one release commit carrying the changelog section, gate once more, push,
-   wait for CI, then `just release-tag`. Push rarely and preserve already-pushed
-   history.
+5. **Releasing:** use the candidate-bound procedure above. A content-preserving
+   squash reuses its valid receipt; changed checked inputs require another gate.
+   Push and tag only with their respective maintainer authorization, and preserve
+   already-pushed history.
 
-Nothing on this path needs data that is not in the repository.
+Functional tests use the repository's finite specs and reference corpus;
+they do not require private transcript data. Building still requires the
+documented tools and dependencies. Publishing additionally needs GitHub access,
+the signing credentials above and candidate-bound runtime verification.

@@ -46,7 +46,7 @@ Conversation Analysis notation; CLAN names them `NOTCA_CROSSED_EQUAL` and
 
 1. Symbols change in `spec/symbols/symbol_registry.json` and nowhere else.
 2. Regenerate after any change: `just symbols-gen`, which validates the
-   registry and then runs both generators.
+   registry and then runs every discovered `generate_*.js` generator.
 3. Generated files are never edited by hand.
 
 ## What is enforced, and where
@@ -56,8 +56,10 @@ generator reads the registry through, so a malformed registry cannot reach a
 generator even if nobody runs the validator: required fields present, ids
 snake_case and unique, codepoints well-formed and unique, `parse_role` and
 `notation_family` from their closed sets, and every example containing its own
-symbol. `validate_symbol_registry.js` adds the character-class checks (single
-Unicode scalar values, no duplicates) and prints the report.
+symbol. The shared loader also checks character classes for single Unicode
+scalar values and duplicates. `validate_symbol_registry.js` invokes that same
+loader and prints the report; bypassing the standalone command does not bypass
+those class checks.
 
 There is no disjointness check. The two derived arrays come from a single
 `parse_role` field, so a symbol in both is unrepresentable and there is
@@ -102,10 +104,13 @@ It runs the REAL generators rather than re-describing their output, so there is
 no second description to drift. They are JavaScript, so the gate shells out to
 `node`.
 
-**The generator list is DISCOVERED, not written down.** A gate that lists what
-it covers stops covering things silently, so the gate globs
-`spec/symbols/generate_*.js` and refuses to report at all if the glob finds
-fewer than two.
+**The generator list is discovered.** The test selects
+`spec/symbols/generate_*.js`, requires successful execution of each in `--check`
+mode, and requires each report to identify at least one checked artifact with
+`current: PATH`. Empty discovery and a silent generator fail independently;
+one generator cannot borrow another's artifact reports. This is evidence about
+the discovered generators, not proof that no necessary generator was deleted
+or omitted from that naming convention.
 
 A hand-edit to a generated symbol set is therefore detected by the gate, which
 runs in CI.
@@ -113,9 +118,11 @@ runs in CI.
 ## Change workflow
 
 1. Edit the registry JSON.
-2. `just symbols-gen`.
-3. Regenerate the parser if the grammar's tokenization changed:
-   see [Grammar Workflow](../contributing/grammar-workflow.md).
-4. Run the gates: `cargo test --manifest-path spec/Cargo.toml --workspace`
-   and `just test`.
+2. Run the consolidated `just regen` workflow and review generated changes.
+   `just symbols-gen` is the symbol-output substep, not complete grammar and
+   traversal regeneration.
+3. Follow [Grammar Workflow](../contributing/grammar-workflow.md) for affected
+   parser and traversal consumers.
+4. Run focused currency and behavioral checks for the changed contract;
+   [development checks](../contributing/dev-checks.md) own final publication gates.
 5. Commit the registry and every regenerated output together.

@@ -90,6 +90,7 @@ mod roundtrip_reference_corpus;
 mod scoped_markers_from_source;
 mod semantic_diff_from_source;
 mod sin_alignment_from_source;
+mod strict_parse_admission;
 mod temporal_from_source;
 mod terminator_presence_from_source;
 mod text_tier_missing_content;

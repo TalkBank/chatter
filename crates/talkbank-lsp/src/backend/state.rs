@@ -8,11 +8,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use dashmap::DashMap;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, OnceLock};
 use tower_lsp::Client;
 use tower_lsp::lsp_types::Url;
 
+use super::capabilities::VersionedEdits;
 use super::diagnostics::DocumentAnalysis;
 use super::language_services::LanguageServices;
 
@@ -47,20 +48,24 @@ pub struct Backend {
 
     /// Atomically replaced source-bound syntax, model, and diagnostic snapshots.
     pub(crate) analyses: Arc<DashMap<Url, Arc<DocumentAnalysis>>>,
+
+    /// Initialized once from the client's versioned workspace-edit capability.
+    pub(crate) versioned_edits: Arc<OnceLock<Option<VersionedEdits>>>,
 }
 
 /// Informational status of the backend's cached analysis.
 ///
-/// `StaleBaseline` means analysis is pending or the last parse recovered errors.
+/// `PendingOrRecovered` means analysis is pending or the last parse recovered errors.
 /// Feature requests still parse their exact current source; this classification
 /// only controls the existing caution annotation, never stale-model admission.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParseState {
-    /// Last parse succeeded; baseline is authoritative.
+    /// Cached analysis matches current source and has no parser errors.
+    /// This does not certify semantic validity.
     Clean,
     /// Current analysis is pending or contains parser recovery.
-    StaleBaseline,
-    /// No baseline exists.
+    PendingOrRecovered,
+    /// No document or cached analysis exists.
     Absent,
 }
 
@@ -74,6 +79,7 @@ impl Backend {
             pending_validations: Arc::new(DashMap::new()),
             validation_counter: Arc::new(AtomicU64::new(0)),
             analyses: Arc::new(DashMap::new()),
+            versioned_edits: Arc::new(OnceLock::new()),
         }
     }
 
@@ -89,7 +95,7 @@ impl Backend {
         if analysis.for_source(&source.source).is_some() && analysis.is_parsed() {
             ParseState::Clean
         } else {
-            ParseState::StaleBaseline
+            ParseState::PendingOrRecovered
         }
     }
 }

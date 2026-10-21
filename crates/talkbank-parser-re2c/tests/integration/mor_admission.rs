@@ -48,8 +48,8 @@ fn rejected_morphology_retains_taint_and_reports_its_source_boundary() {
                 .collect();
             assert_eq!(tier_errors.len(), 1);
             assert_eq!(
-                tier_errors[0].location.span,
-                Span::from_usize(start + offset, end + offset)
+                tier_errors[0].location.span().expect("located diagnostic"),
+                Span::new(start + offset, end + offset)
             );
         }
     }
@@ -124,8 +124,8 @@ fn empty_pos_diagnostics_name_the_original_item_at_any_offset() {
                 .collect();
             assert_eq!(diagnoses.len(), 1);
             assert_eq!(
-                diagnoses[0].location.span,
-                Span::from_usize(start + offset, start + item.len() + offset)
+                diagnoses[0].location.span().expect("located diagnostic"),
+                Span::new(start + offset, start + item.len() + offset)
             );
             assert!(diagnoses[0].message.contains(item));
         }

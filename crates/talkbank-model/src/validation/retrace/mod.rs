@@ -21,7 +21,7 @@ mod visit;
 mod without_words;
 
 use crate::model::MainTier;
-use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 use collection::collect_retrace_checks;
 use marker_on_marker::report_if_marker_on_marker;
 use types::LeafKind;
@@ -41,20 +41,17 @@ use without_words::report_if_no_words_retraced;
 /// context standing in for no context; `at_span` passes no context, which is
 /// what is true.
 ///
-/// The label is suppressed on a dummy span. Under `--parser re2c` that backend
-/// discards the lexer's offsets, so a label would point at byte 0.
+/// An unlocated retrace gets no label: there is no span to underline.
 pub(super) fn retrace_error(
     code: ErrorCode,
-    span: Span,
+    location: crate::Location,
     message: impl Into<String>,
     suggestion: &str,
     label: &str,
 ) -> ParseError {
-    let mut error = ParseError::at_span(code, Severity::Error, span, message)
-        .with_suggestion(suggestion.to_owned());
-    if !span.is_dummy() {
-        error = error.with_label(crate::ErrorLabel::new(span, label));
-    }
+    let mut error = ParseError::at_location(code, Severity::Error, location, message)
+        .with_suggestion(suggestion.to_owned())
+        .with_label_at(location, label);
     // Retrace diagnostics carry their explanation inline; there is no hosted
     // page for them, and a stale help URL is worse than none.
     error.help_url = None;
@@ -140,7 +137,7 @@ fn check_retraces_have_content(main_tier: &MainTier, errors: &impl ErrorSink) {
     for check in violations {
         errors.report(retrace_error(
             ErrorCode::StructuralOrderError,
-            check.marker_span,
+            check.marker_location,
             "Retrace marker ([/], [//], [///], or [/-]) must be followed by the repeated or corrected material",
             "Add content after the retrace marker, or remove the retrace if it's not needed",
             "Retrace marker",

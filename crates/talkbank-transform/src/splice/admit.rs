@@ -110,9 +110,9 @@ impl<'a> UtteranceScopedEdit<'a> {
             .filter(|utterance| match edit.target() {
                 EditTarget::InsertAt(_) => true,
                 EditTarget::Replace(span) => {
-                    span.start < span.end
+                    span.start() < span.end()
                         && file
-                            .utterance_containing(span.end - 1)
+                            .utterance_containing(span.end() - 1)
                             .is_some_and(|last| std::ptr::eq(*utterance, last))
                 }
             });
@@ -227,7 +227,7 @@ mod tests {
             "fixture assumption: the first utterance must parse clean despite \
              the second utterance's malformed %mor tier"
         );
-        let offset = first.main.span.start;
+        let offset = first.main.location.span().expect("located").start();
 
         let admission = admit_edits(&file, vec![make_edit(EditTarget::InsertAt(offset))]);
 
@@ -246,8 +246,18 @@ mod tests {
     fn unknown_health_is_refused_not_treated_as_clean() {
         // Ordinary construction cannot certify parser provenance, even when
         // the caller supplies source locations.
-        let main = MainTier::new("CHI", vec![], Terminator::Period { span: Span::DUMMY })
-            .with_span(Span::new(0, 20));
+        let main = MainTier::new(
+            talkbank_model::MainTierLocations {
+                line: Span::new(0, 20).into(),
+                speaker: talkbank_model::Location::Unlocated,
+                content: talkbank_model::Location::Unlocated,
+            },
+            "CHI",
+            vec![],
+            Terminator::Period {
+                location: talkbank_model::Location::Unlocated,
+            },
+        );
         let utterance = Utterance::new(main);
         let file = ChatFile::new(vec![Line::Utterance(Box::new(utterance))]);
 
@@ -274,7 +284,7 @@ mod tests {
             "fixture assumption: the malformed %mor tier must taint its own utterance, got {:?}",
             second.parse_health()
         );
-        let offset = second.main.span.start;
+        let offset = second.main.location.span().expect("located").start();
 
         let admission = admit_edits(&file, vec![make_edit(EditTarget::InsertAt(offset))]);
 

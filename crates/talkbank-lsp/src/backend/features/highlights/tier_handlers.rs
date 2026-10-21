@@ -61,7 +61,7 @@ pub(super) fn highlights_from_main_tier(
     position: Position,
     document: &str,
 ) -> Option<Vec<DocumentHighlight>> {
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
     let content_idx = find_content_index_at_offset(&utterance.main.content.content, offset)?;
 
     let alignment_idx = mor_alignment_index(&utterance.main.content.content, content_idx)?;
@@ -82,8 +82,8 @@ pub(super) fn highlights_from_main_tier(
             && let Some(pair) = mor_align.pairs.get(alignment_idx)
             && let Some(mor_idx) = pair.target_index
             && let Some(mor_tier) = utterance.mor_tier()
-            && let Some(range) =
-                find_mor_item_range(tree, document, mor_tier.span, mor_idx.as_usize())
+            && let Some(mor_span) = mor_tier.location.span()
+            && let Some(range) = find_mor_item_range(tree, document, mor_span, mor_idx.as_usize())
         {
             highlights.push(DocumentHighlight {
                 range,
@@ -95,8 +95,8 @@ pub(super) fn highlights_from_main_tier(
             && let Some(pair) = pho_align.pairs.get(alignment_idx)
             && let Some(pho_idx) = pair.target_index
             && let Some(pho_tier) = utterance.pho()
-            && let Some(range) =
-                find_pho_item_range(tree, document, pho_tier.span, pho_idx.as_usize())
+            && let Some(pho_span) = pho_tier.location.span()
+            && let Some(range) = find_pho_item_range(tree, document, pho_span, pho_idx.as_usize())
         {
             highlights.push(DocumentHighlight {
                 range,
@@ -108,8 +108,8 @@ pub(super) fn highlights_from_main_tier(
             && let Some(pair) = mod_align.pairs.get(alignment_idx)
             && let Some(mod_idx) = pair.target_index
             && let Some(mod_tier) = utterance.mod_tier()
-            && let Some(range) =
-                find_pho_item_range(tree, document, mod_tier.span, mod_idx.as_usize())
+            && let Some(mod_span) = mod_tier.location.span()
+            && let Some(range) = find_pho_item_range(tree, document, mod_span, mod_idx.as_usize())
         {
             highlights.push(DocumentHighlight {
                 range,
@@ -121,8 +121,8 @@ pub(super) fn highlights_from_main_tier(
             && let Some(pair) = sin_align.pairs.get(alignment_idx)
             && let Some(sin_idx) = pair.target_index
             && let Some(sin_tier) = utterance.sin()
-            && let Some(range) =
-                find_sin_item_range(tree, document, sin_tier.span, sin_idx.as_usize())
+            && let Some(sin_span) = sin_tier.location.span()
+            && let Some(range) = find_sin_item_range(tree, document, sin_span, sin_idx.as_usize())
         {
             highlights.push(DocumentHighlight {
                 range,
@@ -145,9 +145,9 @@ pub(super) fn highlights_from_mor_tier(
     position: Position,
     document: &str,
 ) -> Option<Vec<DocumentHighlight>> {
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
     let mor_tier = utterance.mor_tier()?;
-    let mor_idx = find_mor_item_index_at_offset(tree, mor_tier.span, offset)?;
+    let mor_idx = find_mor_item_index_at_offset(tree, mor_tier.location.span()?, offset)?;
 
     let alignments = utterance.alignments.as_ref()?;
     let mor_align = alignments.mor.as_ref()?;
@@ -166,7 +166,9 @@ pub(super) fn highlights_from_mor_tier(
         });
     }
 
-    if let Some(range) = find_mor_item_range(tree, document, mor_tier.span, mor_idx) {
+    if let Some(mor_span) = mor_tier.location.span()
+        && let Some(range) = find_mor_item_range(tree, document, mor_span, mor_idx)
+    {
         highlights.push(DocumentHighlight {
             range,
             kind: Some(DocumentHighlightKind::READ),
@@ -187,9 +189,9 @@ pub(super) fn highlights_from_pho_tier(
     position: Position,
     document: &str,
 ) -> Option<Vec<DocumentHighlight>> {
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
     let pho_tier = utterance.pho()?;
-    let pho_idx = find_pho_item_index_at_offset(tree, pho_tier.span, offset)?;
+    let pho_idx = find_pho_item_index_at_offset(tree, pho_tier.location.span()?, offset)?;
 
     let alignments = utterance.alignments.as_ref()?;
     let pho_align = alignments.pho.as_ref()?;
@@ -208,7 +210,9 @@ pub(super) fn highlights_from_pho_tier(
         });
     }
 
-    if let Some(range) = find_pho_item_range(tree, document, pho_tier.span, pho_idx) {
+    if let Some(pho_span) = pho_tier.location.span()
+        && let Some(range) = find_pho_item_range(tree, document, pho_span, pho_idx)
+    {
         highlights.push(DocumentHighlight {
             range,
             kind: Some(DocumentHighlightKind::READ),
@@ -229,9 +233,9 @@ pub(super) fn highlights_from_mod_tier(
     position: Position,
     document: &str,
 ) -> Option<Vec<DocumentHighlight>> {
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
     let mod_tier = utterance.mod_tier()?;
-    let mod_idx = find_pho_item_index_at_offset(tree, mod_tier.span, offset)?;
+    let mod_idx = find_pho_item_index_at_offset(tree, mod_tier.location.span()?, offset)?;
 
     let alignments = utterance.alignments.as_ref()?;
     let mod_align = alignments.mod_.as_ref()?;
@@ -250,7 +254,9 @@ pub(super) fn highlights_from_mod_tier(
         });
     }
 
-    if let Some(range) = find_pho_item_range(tree, document, mod_tier.span, mod_idx) {
+    if let Some(mod_span) = mod_tier.location.span()
+        && let Some(range) = find_pho_item_range(tree, document, mod_span, mod_idx)
+    {
         highlights.push(DocumentHighlight {
             range,
             kind: Some(DocumentHighlightKind::READ),
@@ -271,9 +277,9 @@ pub(super) fn highlights_from_sin_tier(
     position: Position,
     document: &str,
 ) -> Option<Vec<DocumentHighlight>> {
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
     let sin_tier = utterance.sin()?;
-    let sin_idx = find_sin_item_index_at_offset(tree, sin_tier.span, offset)?;
+    let sin_idx = find_sin_item_index_at_offset(tree, sin_tier.location.span()?, offset)?;
 
     let alignments = utterance.alignments.as_ref()?;
     let sin_align = alignments.sin.as_ref()?;
@@ -292,7 +298,9 @@ pub(super) fn highlights_from_sin_tier(
         });
     }
 
-    if let Some(range) = find_sin_item_range(tree, document, sin_tier.span, sin_idx) {
+    if let Some(sin_span) = sin_tier.location.span()
+        && let Some(range) = find_sin_item_range(tree, document, sin_span, sin_idx)
+    {
         highlights.push(DocumentHighlight {
             range,
             kind: Some(DocumentHighlightKind::READ),
@@ -329,9 +337,9 @@ pub(super) fn highlights_from_gra_tier(
     position: Position,
     document: &str,
 ) -> Option<Vec<DocumentHighlight>> {
-    let offset = utils::position_to_offset(document, position) as u32;
+    let offset = utils::position_to_offset(document, position);
     let gra_tier = utterance.gra_tier()?;
-    let gra_idx = find_gra_item_index_at_offset(tree, gra_tier.span, offset)?;
+    let gra_idx = find_gra_item_index_at_offset(tree, gra_tier.location.span()?, offset)?;
 
     let alignments = utterance.alignments.as_ref()?;
     let gra_align = alignments.gra.as_ref()?;
@@ -365,14 +373,18 @@ pub(super) fn highlights_from_gra_tier(
     // Highlighting the whole `pron|it~aux|be` item is the right affordance:
     // it tells the user "this relation refers to the clitic group on this
     // mor item," which matches how the main-tier highlight works.
-    if let Some(range) = find_mor_item_range(tree, document, mor_tier.span, host_item_idx) {
+    if let Some(mor_span) = mor_tier.location.span()
+        && let Some(range) = find_mor_item_range(tree, document, mor_span, host_item_idx)
+    {
         highlights.push(DocumentHighlight {
             range,
             kind: Some(DocumentHighlightKind::READ),
         });
     }
 
-    if let Some(range) = find_gra_item_range(tree, document, gra_tier.span, gra_idx) {
+    if let Some(gra_span) = gra_tier.location.span()
+        && let Some(range) = find_gra_item_range(tree, document, gra_span, gra_idx)
+    {
         highlights.push(DocumentHighlight {
             range,
             kind: Some(DocumentHighlightKind::WRITE),

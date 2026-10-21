@@ -25,7 +25,6 @@ tier_body:
     - content:
         Present: SR
   media_bullet:
-    MediaBullet:
-      raw_text: "\u0015171921_173802\u0015"
-      start_time: "171921"
-      end_time: "173802"
+    raw_text: "\u0015171921_173802\u0015"
+    start_time: "171921"
+    end_time: "173802"

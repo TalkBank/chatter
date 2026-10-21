@@ -195,14 +195,9 @@ mod tests {
             .collect();
         scripts.sort();
 
-        // What this gate verified, counted from what the generators actually
-        // reported rather than from a number written here. An earlier cut
-        // asserted `scripts.len() >= 2` beside a directory holding four, which
-        // is a hand-written census of the list it had just enumerated: deleting
-        // two generators left it green. Counting `current:` lines instead means
-        // a broken glob (no scripts), a script that emits nothing, and a script
-        // that fails to run are all the same failure, which is what they are.
-        let mut artifacts_verified = 0usize;
+        // Each successful process must supply its own nonempty artifact report.
+        // Aggregating first lets a silent generator borrow another's evidence.
+        let mut reports = Vec::new();
 
         for script in &scripts {
             let path = symbols_dir.join(script);
@@ -217,18 +212,78 @@ mod tests {
                  `just symbols-gen`.\n{}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            artifacts_verified += String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .filter(|line| line.starts_with("current:"))
-                .count();
+            reports.push((
+                script.as_str(),
+                String::from_utf8_lossy(&output.stdout).into_owned(),
+            ));
         }
 
-        assert!(
-            artifacts_verified > 0,
-            "ran {} generator(s) from {} and not one reported a verified artifact, \
-             so this gate checked nothing.",
-            scripts.len(),
-            symbols_dir.display()
+        verified_symbol_artifacts(
+            reports
+                .iter()
+                .map(|(script, report)| (*script, report.as_str())),
+        )
+        .expect("every symbol generator must report checked artifacts");
+    }
+
+    fn verified_symbol_artifacts<'a>(
+        reports: impl IntoIterator<Item = (&'a str, &'a str)>,
+    ) -> Result<std::num::NonZeroUsize, String> {
+        let mut total = 0usize;
+        for (script, report) in reports {
+            let count = report
+                .lines()
+                .filter_map(|line| line.strip_prefix("current: "))
+                .filter(|path| !path.trim().is_empty())
+                .count();
+            let verified = std::num::NonZeroUsize::new(count)
+                .ok_or_else(|| format!("{script} reported no checked artifacts"))?;
+            total = total
+                .checked_add(verified.get())
+                .ok_or_else(|| "artifact report count overflow".to_owned())?;
+        }
+        std::num::NonZeroUsize::new(total)
+            .ok_or_else(|| "no symbol generators reported checked artifacts".to_owned())
+    }
+
+    #[test]
+    fn symbol_reports_require_evidence_from_each_generator() {
+        let reports = [
+            (
+                "generate_sets.js",
+                "current: grammar/src/generated_symbol_sets.js\n",
+            ),
+            ("generate_types.js", ""),
+        ];
+        let error = verified_symbol_artifacts(reports)
+            .expect_err("a silent generator must not borrow another generator's evidence");
+        assert!(error.contains("generate_types.js"), "{error}");
+    }
+
+    #[test]
+    fn symbol_reports_reject_empty_discovery_and_unnamed_artifacts() {
+        assert!(verified_symbol_artifacts([]).is_err());
+        for report in ["", "finished successfully\n", "current:\n", "current: \t\n"] {
+            let error = verified_symbol_artifacts([("generate_empty.js", report)])
+                .expect_err("success without a named checked artifact is not evidence");
+            assert!(error.contains("generate_empty.js"), "{error}");
+        }
+    }
+
+    #[test]
+    fn symbol_reports_accept_multiple_generators_and_artifacts() {
+        let reports = [
+            (
+                "generate_sets.js",
+                "current: grammar/src/generated_symbol_sets.js\ncurrent: model.rs\n",
+            ),
+            ("generate_types.js", "checking types\ncurrent: types.rs\n"),
+        ];
+        assert_eq!(
+            verified_symbol_artifacts(reports)
+                .expect("complete reports")
+                .get(),
+            3
         );
     }
 

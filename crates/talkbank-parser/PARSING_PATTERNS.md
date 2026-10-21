@@ -1,20 +1,18 @@
-# rust   crates   talkbank tree sitter parser   PARSING PATTERNS
+# Parser implementation guidance
 
-## Overview
-Short summary for `rust/crates/talkbank-parser/PARSING_PATTERNS.md`. This document is intentionally concise; legacy detail has been trimmed.
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-parser/PARSING_PATTERNS.md)
 
-## Key Commands
-```bash
-cargo test -p talkbank-parser
-```
+The maintained parsing guidance lives in the book. Start with:
 
-## Status and Limitations
-- This is a brief reference; consult AGENTS.md files for full workflow guidance.
-- Update alongside code changes to keep commands and references accurate.
+- [Parser, model, and API contracts](../../book/src/architecture/parser-model-contracts.md)
+  for recovery versus admission, diagnostic source identity, and boundary review.
+- [Parser backends](../../book/src/architecture/parser-backends.md)
+  for whole-file and fragment APIs and backend compatibility limits.
+- [Library usage](../../book/src/chatter/integrating/library-usage.md)
+  for source-included examples rather than copied API snippets.
+- [Spec workflow](../../book/src/contributing/spec-workflow.md)
+  for authored regression cases and generated artifacts.
 
-## See Also
-- AGENTS.md
-- rust/AGENTS.md
-
----
-**Last modified:** 2026-09-24 00:21 EDT
+Use the repository [agent guidance](../../AGENTS.md) and
+[development reference](../../docs/agent-reference/development.md) for verification
+and release policy. This routing page does not define a separate parser workflow.

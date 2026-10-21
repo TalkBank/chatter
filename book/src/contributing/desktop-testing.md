@@ -19,12 +19,12 @@ This document covers the testing strategy for the Chatter desktop app
 │  Real validation pipeline, real event bridge, no GUI.    │
 │  Catches: serialization mismatches, event ordering,      │
 │  stats consistency, single-file handling.                 │
-│  Run: every commit, CI required.                         │
+│  Use: affected behavior and final candidate checks.      │
 ├─────────────────────────────────────────────────────────┤
 │  Tier 1: Unit tests (Rust + TypeScript)                  │
 │  Pure functions and thin runtime seams in isolation.     │
 │  Catches: protocol drift, reducer bugs, CLAN math.       │
-│  Run: every commit, CI required.                         │
+│  Use: affected behavior and final candidate checks.      │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -34,6 +34,10 @@ a plain-thread call cannot detect nested-runtime failures at the Tauri boundary.
 Use isolated cache directories, never the real user cache. Passing these tests
 does not establish that native menus, dialogs, drag/drop, signing or installation
 work; those require their respective runtime or release checks.
+
+Choose checks deliberately for the changed behavior and retain final candidate
+evidence. These tiers describe scope, not automatic per-commit gates. Follow the
+repository's contributor and publication workflow.
 
 ## Release-facing behavioral contracts
 

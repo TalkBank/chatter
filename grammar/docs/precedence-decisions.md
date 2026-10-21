@@ -1,12 +1,15 @@
 # Grammar Precedence Decisions
 
-**Status:** Current
-**Last modified:** 2026-05-29 18:43 EDT
+**Status:** Design rationale with historical observations, not a completeness proof
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/grammar/docs/precedence-decisions.md)
 
 This document records non-obvious grammar design decisions, particularly
-around tree-sitter precedence and disambiguation. These decisions were
-validated empirically with minimal proof grammars before being applied
-to the full CHAT grammar.
+around tree-sitter precedence and disambiguation. Earlier investigations used
+small experimental grammars and corpus observations. Those observations are
+historical, not a current proof over every parser state or supported input.
+Current rules live in `grammar.js`; authored specs and generated tests own the
+retained behavioral controls. See the
+[grammar workflow](../../book/src/contributing/grammar-workflow.md) before changes.
 
 ## Zero (Omission) Disambiguation
 
@@ -22,36 +25,38 @@ and syntax highlighting depend on the correct CST structure.
 ### Constraint: `extras: []`
 
 The CHAT grammar uses `extras: $ => []`, **no implicit whitespace**.
-Whitespace is explicit (`$.whitespaces`, `$.space`) and appears as named
-nodes in the CST. This means tree-sitter does NOT skip whitespace between
+Whitespace is explicit (`$.whitespaces`, `$.space`) rather than globally
+discarded; this does not mean every byte has its own named CST node.
+Tree-sitter does NOT skip whitespace as an implicit extra between
 tokens. This is critical for the zero disambiguation:
 
 - `0die`: `zero` and `word_body` are adjacent → standalone_word matches
 - `0 die`: space between `zero` and `die` → standalone_word can't match
   (word_body requires immediate adjacency), so `zero` falls to `nonword`
 
-### Constraint: Precedence Doesn't Propagate Through Intermediate Rules
+### Constraint: Keep the Competing Zero Alternatives Direct
 
-**Proven empirically.** When `zero` is referenced through an intermediate
-rule (`word_prefix`), tree-sitter's shift-reduce resolution ignores the
-outer rule's precedence. The parser always reduces `zero` to `nonword`
-instead of shifting it into `word_prefix → standalone_word`.
+The historical experiment compared direct `zero` selection with an
+intermediate `word_prefix`. It motivated the direct alternative retained in
+the current grammar. This is a decision about those competing productions,
+not a theorem that precedence never propagates or that a lexer always makes
+the same decision independently of parsing context.
 
-Minimal proof grammar (works, zero directly in word):
+Historical schematic control (zero directly in word):
 ```javascript
 word: $ => prec(6, seq(optional($.zero), $.word_body)),
 action: $ => prec(1, $.zero),
 ```
 
-Same grammar with indirection (BROKEN, action always wins):
+Historical schematic comparison (the reported experiment preferred action):
 ```javascript
 word: $ => prec(6, seq(optional($.word_prefix), $.word_body)),
 word_prefix: $ => $.zero,  // indirection breaks prec propagation
 action: $ => prec(1, $.zero),
 ```
 
-The full proof grammar is at `/tmp/tree-sitter-zero-test/grammar.js`
-(experiments 1-5).
+The old temporary experiment is not a durable reproducibility artifact.
+Do not cite it as a current parser proof or recreate its output as golden CHAT.
 
 ### Solution
 
@@ -74,24 +79,25 @@ nonword: $ => prec(1, choice($.event, $.zero)),
 - `&-`, `&~`, `&+` stay in `word_prefix` (no conflict, `&` is excluded
   from `word_segment`)
 
-### Data validation
+### Evidence boundary
 
-Standalone `0` in real CHAT data (from `data/*-data/`):
-- **~18.7M** utterance-initial (`*CHI:\t0 .`)
-- **~15.5K** mid-utterance (`yeah 0 [=! pops mouth]`)
-- Appears after linkers: `+" 0 [% makes knocking sound]`
-- **Not** restricted to utterance-initial position
+Earlier corpus observations motivated investigating standalone zero in several
+positions. Frequency or absence in that population is not a validity rule or
+an impossibility proof. Use authored controls and the current format policy
+to decide whether a particular position is supported; do not repeat production
+corpus scans merely to support these design notes.
 
 ## Word Segment Purity Invariant
 
-**`word_segment` contains ONLY pure spoken text.** No structural markers,
-no control characters, no prosodic annotations. Everything else is a
-separate typed child in `word_body`.
+The grammar excludes its declared structural markers from `word_segment`
+and gives them separate word-body nodes. This does not prove that a retained
+lexical segment is valid, spoken or free of every unsupported character.
 
-This is a hard invariant, enforced by:
+Its source and evidence owners are:
 1. **Grammar:** Character exclusions in `word_segment` regex
 2. **TDD gate:** per-construct corpus tests under `grammar/test/corpus/word/`, `*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt` (the consolidated `word_segment_purity.txt` was retired in commit `fdceeac2`; current layout splits the same coverage across per-construct files generated by the current `spec/tools` pipeline)
-3. **Model (planned):** `WordText::new()` will reject banned characters
+3. **Typed model and validation:** imported values and recovery retain their
+   own lexical/admission checks; grammar structure does not certify them.
 
 ### Character Exclusion Source of Truth
 
@@ -125,7 +131,9 @@ const WORD_SEGMENT_FORBIDDEN_REST = WORD_SEGMENT_FORBIDDEN_REST_BASE
 ### First-char-only exclusion
 
 `0` is excluded from the first character only (omission prefix).
-`200`, `h0me` are valid because `0` can appear in non-initial positions.
+`200` and `h0me` can be recognized as lexical segments because `0` can occur
+in non-initial positions. Recognition is not validity: digit/language policy
+has its own [E220 specification](../../spec/errors/E220.md).
 
 ### Historical note
 
@@ -152,135 +160,88 @@ source_file: $ => choice(
 ),
 ```
 
-This enables parsing any CHAT fragment (line, word, tier) directly
-without constructing a synthetic `@UTF8...@Begin...@End` wrapper.
-
-**Cost:** +1.3% parser size. **Benefit:** eliminates all synthetic
-document wrappers from `parse_word`, `parse_main_tier`, etc.
+This provides roots for the listed fragment categories, not every possible
+substring. Public fragment adapters still own context, wrapper scaffolding
+where needed, full-input consumption and diagnostic projection. The historical
+parser-size observation is not a current size or performance guarantee, and
+multi-root syntax does not establish that every wrapper has been eliminated.
 
 ## DFA Token Precedence Changes
 
-The structured word grammar introduced `lengthening` at `prec(5)`:
-
-```javascript
-lengthening: $ => token(prec(5, /:{1,}/)),
-colon: $ => ':',  // prec 0
-```
-
-In ERROR recovery contexts, tree-sitter's DFA now produces `lengthening`
-instead of `colon` for `:` characters. This affects error test
-expectations (e.g., E307 participants header error) but not correct
-parsing.
+The current `lengthening` token uses lexical precedence 5, while `colon`
+is a literal. Earlier recovery investigations observed lengthening tokens in
+places where a colon separator had been expected. The two declarations alone
+do not prove which token will be selected in every parsing or recovery state.
+Adjudicate the actual CST and the applicable syntax/validation rule before
+changing a diagnostic expectation.
 
 ## Colon Disambiguation: Parser-Level Filtering
 
 ### Problem
 
-`:` means both "lengthening" inside words (`no::`) and "separator" between
-words (`hello : world`). The DFA always produces `lengthening` (prec 5)
-for `:`, regardless of context.
+Colon is represented separately from lexical segments: lengthening can occur
+inside words, while a content-level colon has a separator role. A static
+shadow warning is a reason to inspect the competing positions, not proof
+that all occurrences are either wrong or harmless.
 
 ### Solution: Constrain the parser, not the DFA
 
-Don't fight the DFA token choice. Instead, restrict the grammar rules so
-`lengthening` is only accepted where it makes linguistic sense:
+The ordinary `word_body` branch requires a lexical segment, shortening or
+stress marker first. Its separate marker-initial branch accepts one or more
+selected structural markers followed by one of those required elements.
+Neither branch starts with a bare lengthening or compound marker. Review
+both branches when changing admissible word shapes; a copied excerpt of only
+the ordinary branch is not the full grammar.
 
-```javascript
-// word_body MUST start with word_segment, shortening, or stress_marker.
-// lengthening and + cannot be first.
-word_body: $ => prec.right(seq(
-  choice($.word_segment, $.shortening, $.stress_marker),  // required first
-  repeat(choice($.word_segment, $.shortening, $.stress_marker, $.lengthening, '+')),
-)),
-```
-
-When the DFA produces `lengthening` for standalone `:`, the parser tries
-`standalone_word(word_body(lengthening))`. But `word_body` rejects
-`lengthening` as a first element → `standalone_word` fails → parser falls
-through to `separator(colon)`.
-
-For `no::`, `word_segment("no")` starts the word body, so
-`lengthening("::")` follows naturally in the `repeat(...)`.
+For `no::`, lexical text precedes lengthening. Space-separated `hello : world`
+uses the content separator position. These are distinct shapes, not evidence
+of a universal lexer fallback algorithm. Header colons have their own
+structural role.
 
 ### General Pattern
 
-**When a DFA token has multiple meanings depending on position:**
-1. Let the DFA produce whichever token wins by precedence
-2. Constrain the PARSER rules so the token is only accepted in valid positions
-3. The parser's structural rules act as a filter on the DFA's token choice
-
-This is the same principle behind the zero disambiguation: the DFA always
-produces `zero` for `0`, but the parser structure determines whether it
-becomes `standalone_word(zero, word_body)` or `nonword(zero)`.
+Keep lexical selection, grammar position, recovery and semantic validation
+separate. Use the actual compiled parser and authored controls to investigate
+a proposed change. A clean example, a static warning or absence of an observed
+failure cannot establish behavior for every supported context.
 
 ### Validated cases
 
-| Input | Result | Why |
-|-------|--------|-----|
-| `no::` | `word_segment("no") + lengthening("::")` | word_segment starts body |
-| `hello : world` | `separator(colon)` | `:` can't start word_body |
-| `ˈhello` | `stress_marker + word_segment` | stress_marker can start body |
-| `(be)cause` | `shortening + word_segment` | shortening can start body |
-| `°↑ho:v°` | `ca_delimiter + ca_element + word_segment + lengthening + word_segment + ca_delimiter` | marker-initial path; `:` is lengthening inside word |
-| `*CHI:` | speaker `colon` | different grammar path entirely |
+The historical examples included lengthening after text, standalone
+separators, initial stress/shortening and stacked CA markers. Current selected
+examples and their model boundaries are documented in
+[Tokenization Rules](tokenization-rules.md) and
+[Word Internals](../../book/src/chat-format/word-internals.md).
+Their existence is not a new test-execution receipt.
 
 ### Lint Investigation
 
-The static grammar linter correctly reports that `lengthening` (prec 5,
-`:{1,}`) shadows `colon` (prec 0, `:`) at the DFA level. The corpus
-analysis confirmed 414,244 `:` tokens classified as `lengthening` in
-`word_body`.
-
-**Conclusion: behaviorally benign.** All 414,244 are correct; they are
-real prosodic lengthening inside words (`ho:v`, `he:em`, `stja:l`, etc.).
-The shadow cannot cause incorrect behavior because:
-
-1. `lengthening` can never start a `word_body` (required first element is
-   `word_segment`, `shortening`, `stress_marker`, or structural marker)
-2. Standalone `:` fails `word_body` → falls through to `separator(colon)`
-3. The ERROR nodes in the corpus report were from the stacked CA marker
-   bug (now fixed), not from colon misclassification
-
-The DFA shadow is real but harmless, the parser-level rules filter it.
+The earlier log classified the lengthening/colon shadow as benign after
+inspecting corpus occurrences. That population-specific observation is
+retained as historical rationale, not a proof that the shadow cannot affect
+recovery or another grammatical context. Corpus counts without a retained,
+source-bound measurement must not be reused as current acceptance evidence.
 
 ## Full Linter Investigation Summary
 
-Static grammar lint (`tree-sitter-grammar-utils lint`) reported 34
-high-severity findings. Corpus analysis (`corpus-analyze`) on 99,907
-files confirmed empirical impact. Investigation results:
+The historical investigation grouped findings into token shadows, degenerate
+rules and precedence through intermediate rules. It also reported repairs
+for overlap index 1 and stacked marker-initial words. Those reports explain
+why the rules were examined; they do not certify the current whole grammar.
 
-### Token Shadows (6 warnings)
+In particular:
 
-| Finding | Verdict | Reason |
-|---------|---------|--------|
-| `lengthening` shadows `colon` | **Benign** | Parser-level rules filter; 414K correct lengthening in corpus, 0 misclassified colons |
-| `zero` shadows `sin_word`/`speaker` | **Benign** | No speaker `0` or %sin word `0` in 99,907-file corpus |
-| `ethnicity_value`/`ses_code_value` shadow `generic_id_ses` | **Intentional** | Strict+catch-all pattern by design |
-| `x_dependent_tier` shadows `unsupported_dependent_tier` | **Intentional** | Strict+catch-all pattern by design |
+- No observed zero speaker or sign-tier word does not prove that a conflicting
+  token path is unreachable.
+- No observed bare continuation does not establish its grammar or validity
+  policy.
+- A strict alternative plus a catch-all still needs full-token, attachment and
+  refusal controls; calling the pattern intentional is not its verification.
+- The current marker-initial branch uses `repeat1`, but finite stacked-marker
+  controls do not prove every recovery state correct.
 
-### Degenerate Rules (5 warnings)
-
-| Finding | Verdict | Reason |
-|---------|---------|--------|
-| `contents` matches bare `overlap_point` | **Acceptable** | CA transcription can have `⌈` as sole content; structural overlap marking |
-| `free_text` matches bare `continuation` | **Benign** | No real-data occurrences |
-| `header_gap` matches bare space/tab | **Correct** | A header gap IS just whitespace |
-| `text_with_bullets` / `text_with_bullets_and_pics` | **Benign** | No real-data occurrences of bare continuation |
-
-### Precedence Non-Propagation (23 warnings)
-
-| Finding | Verdict | Reason |
-|---------|---------|--------|
-| `standalone_word`(prec 6) → `word_body` (21) | **Harmless** | prec(6) is for rule-level zero disambiguation only; word_body children use token(prec(10)) for DFA disambiguation; GLR conflicts declared in `conflicts` array |
-| `nonword`(prec 1) → `event` (2) | **Harmless** | `event_marker` (`&=`) is structurally distinct; no competing rules |
-
-### Bugs Found and Fixed
-
-| Finding | Fix |
-|---------|-----|
-| `overlap_point` regex `[2-9]?` excluded digit 1 | Changed to `[1-9]?`; E373 validates range |
-| `word_body` marker-initial path: single marker only | Changed to `repeat1`; stacked CA markers (°↑, °°) now parse correctly |
-
-These two grammar bugs caused 75 of 76 samtale-data validation failures
-(3,806 ERROR nodes). After the fixes, only 2 files have errors across all
-data repos (both data quality issues, not grammar bugs).
+The former global error totals and data-quality verdicts were historical
+observations, not a durable current corpus-acceptance record. Do not rerun a
+production corpus or classify remaining transcripts from this note. Preserve
+the original observations in Git history and use the current spec/reference
+contracts for a scoped grammar change.

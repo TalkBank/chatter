@@ -89,6 +89,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 mod format;
+pub(crate) use format::{location_of, unknown_alignment_warning};
 mod gra;
 pub mod helpers;
 /// Typed index-space newtypes for `%mor`/`%gra` alignment.

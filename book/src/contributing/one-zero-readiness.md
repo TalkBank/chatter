@@ -3,7 +3,9 @@
 **Status:** Current
 **Last updated:** {{git-dates:page}}
 
-This is the current readiness record.
+This is the public readiness contract, not a certificate that its conditions
+have been met. Candidate acceptance requires revision-bound results for each
+applicable condition; source descriptions and test names below are not receipts.
 Version 1.0 means a documented compatibility contract and reproducible evidence,
 not merely a release-number change. No date is promised here.
 
@@ -42,13 +44,35 @@ criteria. This readiness record does not maintain a second CHECK status.
   are not required. See the [backend contract](../architecture/parser-backends.md#backend-compatibility-mandate).
 - Keep generated artifacts current and reader-facing documentation consistent
   with actual commands, validation behavior and release mechanics.
+- Reach 100% handwritten primary parser/model/validation/transform line, region
+  and branch coverage through canonical public workflows. Report generated
+  code separately and prove source/feature completeness independently. Approved
+  fault-injection or boundary evidence is a separate track, not a substitute
+  for canonical coverage. A zero-hit recovery branch needs an actual invariant
+  argument before removal; measurements alone do not prove unreachability.
+- Verify registry-resolved `cargo install` for CLI and LSP as well as binary
+  artifacts, supported platforms, current stable Rust and the chosen API
+  compatibility surfaces. There is no older-compiler or fixed-MSRV promise;
+  record the exact Rust toolchain used for candidate verification.
+  Local path installs do not establish registry resolution or clean-machine
+  installation. Include LSP protocol and native desktop workflows, not only
+  compilation or transport-double checks.
+- Review all public documentation by its owner, including runnable tutorials,
+  expected outcomes and safe recovery. Have an independent operator perform
+  contributor and release/recovery drills; an author-run exercise on an already
+  provisioned machine is not independent handover evidence.
+- Complete the approved name-pseudonymizer scope after higher-priority re2c
+  obligations. Partial implementation does not waive its CLI, policy and
+  documentation acceptance; real-data operation has separate authorization.
 - Pass the established release gate and platform jobs on the exact release
   commit. Verify packaged artifacts and deployment using the release runbook.
 
 ## Evidence boundaries already in place
 
-These are properties of the code that the release conditions build on; each is
-a typed or gated boundary rather than a convention.
+These are implemented mechanisms on which the release conditions build.
+Constructor, policy, wire-format and real public-boundary evidence still needs
+to match the candidate. A private constructor or named gate is not proof that
+its admission logic or test instrument is complete.
 
 - **CHECK mapping audit.** It reads the compiled spec registry, renders only
   mapping evidence (unmapped or nonempty curated states) and has a

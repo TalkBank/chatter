@@ -234,13 +234,9 @@ fn lex_fixture_header_activities() {
 #[test]
 fn trailing_ca_no_break_stays_separator_in_model_conversion() {
     let input = "*CHI:\tno break ≈\n";
-    let (ast, src) = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
+    let line = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let main_tier = main_tier_to_model(
-        &ast,
-        talkbank_parser_re2c::source_text::SourceText::new(src),
-        &conversion_errors,
-    );
+    let main_tier = main_tier_to_model(&line.main_tier, line.source, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
 
     assert!(
@@ -256,13 +252,9 @@ fn trailing_ca_no_break_stays_separator_in_model_conversion() {
 #[test]
 fn trailing_ca_technical_break_stays_separator_in_model_conversion() {
     let input = "*CHI:\ttechnical break ≋\n";
-    let (ast, src) = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
+    let line = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let main_tier = main_tier_to_model(
-        &ast,
-        talkbank_parser_re2c::source_text::SourceText::new(src),
-        &conversion_errors,
-    );
+    let main_tier = main_tier_to_model(&line.main_tier, line.source, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
 
     assert!(
@@ -428,9 +420,6 @@ fn snapshot_parsed_mor_samples() {
 #[test]
 fn parse_all_gra_fixtures() {
     let entries = load_fixture("tier_gra");
-    if entries.is_empty() {
-        return;
-    }
 
     let mut parsed = 0;
     for entry in &entries {
@@ -440,15 +429,18 @@ fn parse_all_gra_fixtures() {
         } else {
             format!("{body}\n")
         };
-        // `parse_gra_tier` DECLINES a body it cannot parse now, where it used
-        // to return a tier of no relations, so this counts what parsed rather
-        // than what came back non-empty. Same number on a corpus that parses;
-        // a different one, and an honest one, the day something does not.
+        // Native rejection and an empty recovered tier both fail this retained
+        // fixture contract. A printed success count alone is not acceptance.
         if parser::parse_gra_tier(&input).is_some_and(|tier| !tier.relations.is_empty()) {
             parsed += 1;
         }
     }
     eprintln!("  %gra: {parsed}/{} parsed", entries.len());
+    assert_eq!(
+        parsed,
+        entries.len(),
+        "every GRA fixture must retain relations"
+    );
 }
 
 #[test]
@@ -702,7 +694,7 @@ fn parse_single_compound_word() {
     assert!(
         w.body
             .iter()
-            .any(|t| matches!(t, WordBodyItem::CompoundMarker))
+            .any(|t| matches!(t, WordBodyItem::CompoundMarker(_)))
     );
 }
 
@@ -729,9 +721,6 @@ fn parse_single_gra_relation() {
 #[test]
 fn parse_all_pho_fixtures() {
     let entries = load_fixture("tier_pho");
-    if entries.is_empty() {
-        return;
-    }
     let mut parsed = 0;
     for entry in &entries {
         let body = entry
@@ -749,6 +738,11 @@ fn parse_all_pho_fixtures() {
         }
     }
     eprintln!("  %pho: {parsed}/{} with words", entries.len());
+    assert_eq!(
+        parsed,
+        entries.len(),
+        "every phonology fixture must retain items"
+    );
 }
 
 #[test]
@@ -779,9 +773,6 @@ fn snapshot_parsed_pho_samples() {
 #[test]
 fn parse_all_com_fixtures() {
     let entries = load_fixture("tier_com");
-    if entries.is_empty() {
-        return;
-    }
     let mut parsed = 0;
     for entry in &entries {
         let body = entry.strip_prefix("%com:\t").unwrap_or(entry);
@@ -796,7 +787,11 @@ fn parse_all_com_fixtures() {
         }
     }
     eprintln!("  %com: {parsed}/{} with segments", entries.len());
-    assert!(parsed > 0);
+    assert_eq!(
+        parsed,
+        entries.len(),
+        "every comment fixture must retain segments"
+    );
 }
 
 #[test]
@@ -1009,7 +1004,7 @@ fn convert_gra_to_model() {
         talkbank_parser_re2c::source_text::SourceText::new(input),
         &errors,
     )
-    .tier_without_health();
+    .tier_without_health(talkbank_model::Location::Unlocated);
     assert!(errors.into_vec().is_empty());
     assert_eq!(model_tier.relations().len(), 3);
     assert_eq!(model_tier.relations()[0].index, 1);

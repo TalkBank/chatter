@@ -156,6 +156,7 @@ pub fn pho_tier_parser<'tokens, 'a: 'tokens>()
             pho_word_parser()
                 .padded_by(ws())
                 .repeated()
+                .at_least(1)
                 .collect::<Vec<_>>(),
         )
         .then_ignore(group_end)
@@ -198,7 +199,13 @@ pub fn sin_tier_parser<'tokens, 'a: 'tokens>()
     let group_end = select! { Token::SinGroupEnd(_) => () };
 
     let sin_group = group_begin
-        .ignore_then(sin_word.padded_by(ws()).repeated().collect::<Vec<_>>())
+        .ignore_then(
+            sin_word
+                .padded_by(ws())
+                .repeated()
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
         .then_ignore(group_end)
         .map(SinItemParsed::Group);
 
@@ -229,28 +236,30 @@ impl<'source> AdmittedTextTierTokens<'source> {
                 errors.report(talkbank_model::ParseError::new(
                     talkbank_model::ErrorCode::UnparsableContent,
                     talkbank_model::Severity::Error,
-                    talkbank_model::SourceLocation::from_offsets(span.start, span.end),
-                    talkbank_model::ErrorContext::new(lexed.source(), span, "dependent_content"),
+                    talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
+                    talkbank_model::ErrorContext::new(
+                        lexed.source(),
+                        talkbank_model::Span::new(span.start, span.end),
+                        "dependent_content",
+                    ),
                     context,
                 ));
-            } else if let Token::MediaBullet {
-                start_time,
-                end_time,
-                ..
-            } = token
-                && let Some(message) = match (start_time.parse::<u64>(), end_time.parse::<u64>()) {
-                    (Ok(0), Ok(0)) => Some("Invalid bullet: both start and end timestamps are 0"),
-                    (Err(_), _) | (_, Err(_)) => {
-                        Some("Invalid bullet: timestamp cannot be represented as milliseconds")
-                    }
+            } else if let Token::MediaBullet { bullet } = token
+                && let Some(message) = match bullet.times().map(|times| times.pair()) {
+                    Some((0, 0)) => Some("Invalid bullet: both start and end timestamps are 0"),
+                    None => Some("Invalid bullet: timestamp cannot be represented as milliseconds"),
                     _ => None,
                 }
             {
                 errors.report(talkbank_model::ParseError::new(
                     talkbank_model::ErrorCode::InvalidMediaBullet,
                     talkbank_model::Severity::Error,
-                    talkbank_model::SourceLocation::from_offsets(span.start, span.end),
-                    talkbank_model::ErrorContext::new(lexed.source(), span.start..span.end, ""),
+                    talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
+                    talkbank_model::ErrorContext::new(
+                        lexed.source(),
+                        talkbank_model::Span::new(span.start, span.end),
+                        "",
+                    ),
                     message,
                 ));
             } else {
@@ -274,7 +283,7 @@ pub fn text_tier_parser<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, TextTierParsed<'a>> + Clone {
     let segment = select! {
         Token::TextSegment(s) => TextTierSegment::Text(s),
-        tok @ Token::MediaBullet { .. } => TextTierSegment::Bullet(tok),
+        Token::MediaBullet { bullet } => TextTierSegment::Bullet(bullet),
         tok @ Token::InlinePic(_) => TextTierSegment::Pic(tok),
         // Continuation is structural, skip
     };
@@ -297,20 +306,19 @@ pub fn text_tier_parser<'tokens, 'a: 'tokens>()
 // %wor tier, words with optional inline timing bullets
 // ═══════════════════════════════════════════════════════════
 
-/// Parse a timing bullet and extract (start_ms, end_ms).
+/// Keep the timing token, admitted or rejected, associated with its source
+/// word; the converter places the bullet at the token's own bytes.
 fn timing_bullet<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, (u64, u64)> + Clone {
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, crate::token::MediaBulletToken<'a>> + Clone {
     select! {
-        Token::MediaBullet { start_time, end_time, .. } => {
-            let (s, e) = crate::convert::bullet_times(start_time, end_time);
-            (s, e)
-        },
+        Token::MediaBullet { bullet } => bullet,
     }
 }
 
 /// Parse a `%wor` tier body: words with optional timing bullets.
-pub fn wor_tier_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, WorTierParsed<'a>> + Clone {
+pub fn wor_tier_parser<'tokens, 'a: 'tokens>(
+    source: crate::source_text::SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, WorTierParsed<'a>> + Clone {
     let terminator = select! {
         tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
     };
@@ -321,75 +329,89 @@ pub fn wor_tier_parser<'tokens, 'a: 'tokens>()
     // Chinese and bilingual corpora). Without this the whole tier failed to
     // parse: 510 E316 across 8 of 2,158 sampled files, every one of which
     // tree-sitter reads cleanly. Same shape as `main_tier::tier_body_parser`.
-    let langcode = select! { tok @ Token::Langcode(_) => tok }.then_ignore(ws());
+    let langcode = select! { Token::Langcode(code) => code }.then_ignore(ws());
 
     // Same owner as the main tier: `SeparatorKindParsed::from_token`. This used
     // to gate on `classify::is_separator`, a second copy of the same fifteen
     // tokens, whose drift would have surfaced as an E316 on valid CHAT.
     let separator = any().try_map(|tok: Token<'a>, _span| {
         SeparatorKindParsed::from_token(&tok)
-            .map(WorItemParsed::Separator)
+            .map(|kind| WorItemParsed::Separator {
+                kind,
+                text: tok.text(),
+            })
             .ok_or_else(Default::default)
     });
 
     /// A `%wor` entry with no word behind it: a placeholder, not a parsed word.
-    fn placeholder_word(bullet: Option<(u64, u64)>) -> WorItemParsed<'static> {
+    fn placeholder_word<'a>(
+        bullet: Option<crate::token::MediaBulletToken<'a>>,
+    ) -> WorItemParsed<'a> {
         WorItemParsed::Word {
-            word: WordWithAnnotations::default(),
+            word: Box::new(WordWithAnnotations::default()),
             bullet,
         }
     }
 
     // A word (rich or legacy) followed by optional timing bullet
-    let word_with_bullet = choice((main_tier::rich_word(), main_tier::subtoken_word()))
-        .then(ws().ignore_then(timing_bullet()).or_not())
-        .map(|(content_item, bullet)| {
-            match content_item {
-                ContentItem::Word(w) => WorItemParsed::Word { word: w, bullet },
-                // If it parsed as a retrace or action, wrap the inner word
-                ContentItem::Retrace(r) => {
-                    if let Some(ContentItem::Word(w)) = r.content.into_iter().next() {
-                        WorItemParsed::Word { word: w, bullet }
-                    } else {
-                        placeholder_word(bullet)
+    let word_with_bullet = choice((
+        main_tier::rich_word(source),
+        main_tier::subtoken_word(source),
+    ))
+    .then(ws().ignore_then(timing_bullet()).or_not())
+    .map(|(content_item, bullet)| {
+        match content_item {
+            ContentItem::Word(w) => WorItemParsed::Word {
+                word: Box::new(w),
+                bullet,
+            },
+            // If it parsed as a retrace or action, wrap the inner word
+            ContentItem::Retrace(r) => {
+                if let Some(ContentItem::Word(w)) = r.body.into_items().into_iter().next() {
+                    WorItemParsed::Word {
+                        word: Box::new(w),
+                        bullet,
                     }
+                } else {
+                    placeholder_word(bullet)
                 }
-                ContentItem::Action { zero, .. } => WorItemParsed::Word {
-                    word: WordWithAnnotations {
-                        category: Some(WordCategory::Omission),
-                        raw_text: zero.into(),
-                        ..WordWithAnnotations::default()
-                    },
-                    bullet,
-                },
-                // Unreachable: `choice((rich_word(), subtoken_word()))` has range
-                // `Word | Retrace | Action`, all handled above. Spelled out so a
-                // widening of that range is a compile error here. The real fix is
-                // narrowing what those parsers RETURN, which would delete this
-                // list and `placeholder_word` with it; `classify.rs`'s `Chain` is
-                // the in-repo precedent for exactly that.
-                ContentItem::Pause(_)
-                | ContentItem::Freecode(_)
-                | ContentItem::OrphanAnnotation(_)
-                | ContentItem::Separator { .. }
-                | ContentItem::OverlapPoint { .. }
-                | ContentItem::Group(_)
-                | ContentItem::Quotation(_)
-                | ContentItem::Event(_)
-                | ContentItem::AnnotatedEvent { .. }
-                | ContentItem::MediaBullet { .. }
-                | ContentItem::UnderlineBegin
-                | ContentItem::UnderlineEnd
-                | ContentItem::OtherSpokenEvent { .. }
-                | ContentItem::PhoGroup(_)
-                | ContentItem::SinGroup(_)
-                | ContentItem::LongFeatureBegin(_)
-                | ContentItem::LongFeatureEnd(_)
-                | ContentItem::NonvocalBegin(_)
-                | ContentItem::NonvocalEnd(_)
-                | ContentItem::NonvocalSimple(_) => placeholder_word(bullet),
             }
-        });
+            ContentItem::Action { zero, .. } => WorItemParsed::Word {
+                word: Box::new(WordWithAnnotations {
+                    category: Some(WordCategory::Omission),
+                    raw_text: zero,
+                    ..WordWithAnnotations::default()
+                }),
+                bullet,
+            },
+            // Unreachable: `choice((rich_word(), subtoken_word()))` has range
+            // `Word | Retrace | Action`, all handled above. Spelled out so a
+            // widening of that range is a compile error here. The real fix is
+            // narrowing what those parsers RETURN, which would delete this
+            // list and `placeholder_word` with it; `classify.rs`'s `Chain` is
+            // the in-repo precedent for exactly that.
+            ContentItem::Pause(_)
+            | ContentItem::Freecode(_)
+            | ContentItem::OrphanAnnotation(_)
+            | ContentItem::Separator { .. }
+            | ContentItem::OverlapPoint { .. }
+            | ContentItem::Group(_)
+            | ContentItem::Quotation(_)
+            | ContentItem::Event(_)
+            | ContentItem::AnnotatedEvent { .. }
+            | ContentItem::MediaBullet { .. }
+            | ContentItem::UnderlineBegin(_)
+            | ContentItem::UnderlineEnd(_)
+            | ContentItem::OtherSpokenEvent { .. }
+            | ContentItem::PhoGroup(_)
+            | ContentItem::SinGroup(_)
+            | ContentItem::LongFeatureBegin(_)
+            | ContentItem::LongFeatureEnd(_)
+            | ContentItem::NonvocalBegin(_)
+            | ContentItem::NonvocalEnd(_)
+            | ContentItem::NonvocalSimple(_) => placeholder_word(bullet),
+        }
+    });
 
     // Skip orphan bullets
     let skip_bullet = select! { Token::MediaBullet { .. } => () };

@@ -409,7 +409,7 @@ pub enum OperatorDecision {
 
 /// Operator-supplied input to the adjudication tool. Implementations:
 /// `ScriptedPrompter` for tests and scripted operator workflows;
-/// `TerminalPrompter` (not yet implemented) for interactive use.
+/// the CLI's `TerminalPrompter` for interactive use.
 pub trait Prompter {
     /// Prompt the operator for a decision on `entry`. Implementations
     /// should produce a decision whose shape is compatible with
@@ -465,13 +465,44 @@ impl ScriptedPrompter {
 /// authoritative format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ScriptedDecisions {
-    /// Schema version of the scripted-decisions file format.
-    // Deserialized from the scripted-decisions file format; not read in logic.
-    #[allow(dead_code)]
-    schema_version: u32,
+    /// Admission occurs during deserialization, before decisions are exposed.
+    #[serde(rename = "schema_version")]
+    _schema_version: ScriptedSchemaVersion,
     /// Operator decisions to apply, matched to pending entries by
     /// session_id in document order.
     decisions: Vec<ScriptedDecisionEntry>,
+}
+
+/// Both retained scripted formats use the current choice representation.
+/// Their versions are independent of the pending-file schema version.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+enum ScriptedSchemaVersion {
+    V1,
+    V2,
+}
+
+impl TryFrom<u32> for ScriptedSchemaVersion {
+    type Error = String;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::V1),
+            2 => Ok(Self::V2),
+            other => Err(format!(
+                "unsupported scripted-decisions schema_version {other}; supported versions are 1 and 2"
+            )),
+        }
+    }
+}
+
+impl From<ScriptedSchemaVersion> for u32 {
+    fn from(version: ScriptedSchemaVersion) -> Self {
+        match version {
+            ScriptedSchemaVersion::V1 => 1,
+            ScriptedSchemaVersion::V2 => 2,
+        }
+    }
 }
 
 /// One scripted decision entry. `kind` documents which adjudication

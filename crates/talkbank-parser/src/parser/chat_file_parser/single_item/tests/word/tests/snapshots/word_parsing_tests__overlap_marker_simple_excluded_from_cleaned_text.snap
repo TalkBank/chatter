@@ -1,13 +1,16 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
+assertion_line: 12
 expression: result
 ---
 Ok(
     Word {
-        span: Span {
-            start: 0,
-            end: 12,
-        },
+        location: Located(
+            Span {
+                start: 0,
+                end: 12,
+            },
+        ),
         word_id: None,
         content: WordContents(
             [
@@ -22,7 +25,7 @@ Ok(
                     OverlapPoint {
                         kind: BottomOverlapEnd,
                         index: None,
-                        span: Some(
+                        location: Located(
                             Span {
                                 start: 4,
                                 end: 7,
@@ -38,7 +41,7 @@ Ok(
                                 2,
                             ),
                         ),
-                        span: Some(
+                        location: Located(
                             Span {
                                 start: 7,
                                 end: 11,
@@ -49,7 +52,7 @@ Ok(
                 Lengthening(
                     WordLengthening {
                         count: 1,
-                        span: Some(
+                        location: Located(
                             Span {
                                 start: 11,
                                 end: 12,

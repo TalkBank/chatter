@@ -30,7 +30,7 @@
 
 use super::{FileUtterances, UtterancePosition};
 use crate::model::{LinkerKind, Terminator, Utterance};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 use std::collections::{HashMap, hash_map::Entry};
 
 /// Single-use evidence issued only for a typed interruption terminator.
@@ -72,15 +72,10 @@ pub(super) fn check_self_completion_all(utterances: &FileUtterances<'_>, errors:
                 Err(CompletionRefusal::NoPendingInterruption) => {
                     // E352: prior turns exist, but no unconsumed interruption remains.
                     errors.report(
-                        ParseError::new(
+                        ParseError::at_location(
                             ErrorCode::MissingQuoteEnd,
                             Severity::Error,
-                            SourceLocation::new(utterance.main.span),
-                            ErrorContext::new(
-                                format!("*{}: +, ...", speaker),
-                                utterance.main.span,
-                                "self-completion linker",
-                            ),
+                            utterance.main.location,
                             format!(
                                 "Self-completion linker (+,) but preceding same-speaker utterance doesn't end with +/. (interruption terminator) from speaker {}",
                                 speaker
@@ -92,15 +87,10 @@ pub(super) fn check_self_completion_all(utterances: &FileUtterances<'_>, errors:
                 Err(CompletionRefusal::NoPriorTurn) => {
                     // E351: no prior utterance from this speaker at all.
                     errors.report(
-                        ParseError::new(
+                        ParseError::at_location(
                             ErrorCode::MissingQuoteBegin,
                             Severity::Error,
-                            SourceLocation::new(utterance.main.span),
-                            ErrorContext::new(
-                                format!("*{}: +, ...", speaker),
-                                utterance.main.span,
-                                "self-completion linker",
-                            ),
+                            utterance.main.location,
                             format!(
                                 "Self-completion linker (+,) without any preceding utterance from same speaker ({})",
                                 speaker
@@ -146,15 +136,10 @@ pub(super) fn check_other_completion(position: &UtterancePosition<'_, '_>) -> Ve
     // Check if there's any preceding utterance at all
     let Some(prev_utt) = position.preceding().next() else {
         errors.push(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::MissingOtherCompletionContext,
                 Severity::Error,
-                SourceLocation::new(utterance.main.span),
-                ErrorContext::new(
-                    format!("*{}: ++ ...", speaker),
-                    utterance.main.span,
-                    "other-completion linker",
-                ),
+                utterance.main.location,
                 "Other-completion linker (++) without any preceding utterance from different speaker",
             )
             .with_suggestion("Other-completion is used to finish another speaker's incomplete thought; ensure there's a prior incomplete utterance with +... terminator from a different speaker")
@@ -165,15 +150,10 @@ pub(super) fn check_other_completion(position: &UtterancePosition<'_, '_>) -> Ve
     // Check if same speaker - should use +, instead
     if prev_utt.main.speaker.as_str() == speaker {
         errors.push(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::InterleavedContentAnnotations,
                 Severity::Error,
-                SourceLocation::new(utterance.main.span),
-                ErrorContext::new(
-                    format!("*{}: ++ ...", speaker),
-                    utterance.main.span,
-                    "other-completion linker",
-                ),
+                utterance.main.location,
                 format!(
                     "Other-completion linker (++) but preceding utterance is from same speaker ({}); use +, for self-completion",
                     speaker
@@ -194,15 +174,10 @@ pub(super) fn check_other_completion(position: &UtterancePosition<'_, '_>) -> Ve
     if !has_trailing_off {
         let prev_speaker = prev_utt.main.speaker.as_str();
         errors.push(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::MissingTrailingOffTerminator,
                 Severity::Error,
-                SourceLocation::new(utterance.main.span),
-                ErrorContext::new(
-                    format!("*{}: ++ ...", speaker),
-                    utterance.main.span,
-                    "other-completion linker",
-                ),
+                utterance.main.location,
                 format!(
                     "Other-completion linker (++) but preceding different-speaker utterance (by {}) doesn't end with +... (trailing off terminator)",
                     prev_speaker

@@ -5,22 +5,29 @@ use super::visitor_word_range_admission::check_retained;
 use std::collections::BTreeSet;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser::generated_traversal::{
-    AsRawNode, CompiledLanguage, MorContentNode, MorContentsChild0Choice, MorContentsNode,
-    MorDependentTierNode, MorPostCliticNode, NodeSlot, ReadableSlot,
+    AsRawNode, CompiledLanguage, MorContentChildrenRule, MorContentNode, MorContentsChild0Choice,
+    MorContentsNode, MorDependentTierNode, MorPostCliticNode, NodeSlot, ReadableSlot, SlotView,
 };
 
 #[test]
 fn reference_mor_tier_ranges_retain_fields_and_count_selected_work() {
-    // SAFETY: both static exports use the linked grammar's parser header,
-    // matching production compiled-kind admission.
+    // SAFETY: all static bridge exports use the linked grammar's parser header
+    // and reviewed engine, matching production admission.
     let grammar = unsafe {
         CompiledLanguage::from_bridge(
             tree_sitter_talkbank::LANGUAGE.into(),
             tree_sitter_talkbank::LANGUAGE_METADATA_BRIDGE,
+            talkbank_parser::generated_traversal::RequiredPresenceBridge {
+                create: tree_sitter_talkbank::REQUIRED_GRAPH_NEW,
+                destroy: tree_sitter_talkbank::REQUIRED_GRAPH_DROP,
+                check: tree_sitter_talkbank::REQUIRED_RULE,
+                prefix: tree_sitter_talkbank::REQUIRED_PREFIX,
+            },
         )
     }
     .admit_generated()
     .unwrap();
+    let content_rule = grammar.required_rule::<MorContentChildrenRule>().unwrap();
     let parser = TreeSitterParser::new().unwrap();
     let mut counts = [0; 5];
     let mut tier_costs = BTreeSet::new();
@@ -145,7 +152,7 @@ fn reference_mor_tier_ranges_retain_fields_and_count_selected_work() {
             if let Some(item) = node.typed::<MorContentNode>() {
                 counts[2] += 1;
                 assert!(foreign.bind(item.raw_node()).is_err());
-                let selected = item.extract_admitted(&grammar).unwrap();
+                let selected = item.extract_required(&content_rule).unwrap();
                 let raw = selected.children();
                 assert!(raw.unexpected.is_empty() && raw.trailing_extras.is_empty());
                 let checks = 1 + raw.post_clitics.slot().len();
@@ -162,9 +169,7 @@ fn reference_mor_tier_ranges_retain_fields_and_count_selected_work() {
                     fields.post_clitics.slot.first().map(std::mem::size_of_val),
                 ));
                 for _ in 0..100 {
-                    let ReadableSlot::Present(main) = &fields.main.slot else {
-                        panic!("reference main")
-                    };
+                    let SlotView::Present(main) = fields.main.slot.view();
                     check_retained(*main, source);
                     for clitic in &fields.post_clitics.slot {
                         let ReadableSlot::Present(clitic) = &clitic.slot else {

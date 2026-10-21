@@ -339,12 +339,12 @@ fn is_boundary(source: &str, offset: Option<usize>) -> bool {
 }
 
 /// Classify a mark's glue from the source bytes immediately outside its span.
-fn glue_of(source: &str, span: Option<talkbank_model::Span>) -> Glue {
-    let Some(span) = span.filter(|span| *span != talkbank_model::Span::DUMMY) else {
+fn glue_of(source: &str, location: talkbank_model::Location) -> Glue {
+    let Some(span) = location.span() else {
         return Glue::Unknown;
     };
-    let start = span.start as usize;
-    let end = span.end as usize;
+    let start = span.start();
+    let end = span.end();
     let left_free = is_boundary(source, start.checked_sub(1));
     let right_free = is_boundary(source, Some(end));
     match (left_free, right_free) {
@@ -369,7 +369,9 @@ fn census_word(
         match content {
             WordContent::CAElement(element) => {
                 let CAElement {
-                    element_type, span, ..
+                    element_type,
+                    location: span,
+                    ..
                 } = element;
                 let name = format!("{element_type:?}");
                 let key = format!("element:{name}");
@@ -386,7 +388,7 @@ fn census_word(
             WordContent::CADelimiter(delimiter) => {
                 let CADelimiter {
                     delimiter_type,
-                    span,
+                    location: span,
                     ..
                 } = delimiter;
                 let name = format!("{delimiter_type:?}");
@@ -419,21 +421,28 @@ fn census_file(
         // In-order recursive traversal is the project's definition of
         // adjacency (design rule 4), so the neighbour of a mark inside a
         // group is the item that really precedes it in the source.
-        let mut stream: Vec<(&'static str, Option<talkbank_model::Span>, Option<MarkRef>)> =
-            Vec::new();
+        let mut stream: Vec<(
+            &'static str,
+            Option<talkbank_model::Location>,
+            Option<MarkRef>,
+        )> = Vec::new();
         walk_content(
             utterance.main.content.content.as_slice(),
             None,
             &mut |item| {
                 let mark = match &item {
                     ContentItem::Separator(separator) => {
-                        Some(MarkRef::Separator(separator.span(), {
+                        Some(MarkRef::Separator(separator.location(), {
                             let (name, symbol) = separator_identity(separator);
                             (name, symbol)
                         }))
                     }
                     ContentItem::OverlapPoint(point) => {
-                        let OverlapPoint { kind, span, .. } = point;
+                        let OverlapPoint {
+                            kind,
+                            location: span,
+                            ..
+                        } = point;
                         Some(MarkRef::Overlap(*span, overlap_identity(*kind)))
                     }
                     _ => None,
@@ -442,10 +451,10 @@ fn census_file(
                     census_word(word, source, file, marks);
                 }
                 let span = match &item {
-                    ContentItem::Word(word) => Some(word.span),
-                    ContentItem::Separator(separator) => Some(separator.span()),
-                    ContentItem::Pause(pause) => Some(pause.span),
-                    ContentItem::OverlapPoint(point) => point.span,
+                    ContentItem::Word(word) => Some(word.location),
+                    ContentItem::Separator(separator) => Some(separator.location()),
+                    ContentItem::Pause(pause) => Some(pause.location),
+                    ContentItem::OverlapPoint(point) => Some(point.location),
                     _ => None,
                 };
                 stream.push((item_kind(&item), span, mark));
@@ -471,7 +480,7 @@ fn census_file(
                     Role::TopLevelOverlapPoint,
                     format!("overlap:{name}"),
                     symbol,
-                    span,
+                    Some(span),
                 ),
             };
             found = true;
@@ -479,7 +488,7 @@ fn census_file(
                 role,
                 symbol,
                 slot,
-                glue_of(source, span),
+                glue_of(source, span.unwrap_or(talkbank_model::Location::Unlocated)),
                 left,
                 right,
                 file,
@@ -492,8 +501,8 @@ fn census_file(
 /// A CA mark spotted during the walk, carried until its neighbours are known.
 #[derive(Clone, Copy)]
 enum MarkRef {
-    Separator(talkbank_model::Span, (&'static str, &'static str)),
-    Overlap(Option<talkbank_model::Span>, (&'static str, &'static str)),
+    Separator(talkbank_model::Location, (&'static str, &'static str)),
+    Overlap(talkbank_model::Location, (&'static str, &'static str)),
 }
 
 /// The corpus label for a path: the first component below `data_root`.

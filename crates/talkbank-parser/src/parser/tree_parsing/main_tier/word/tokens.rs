@@ -3,11 +3,12 @@
 //! lexical/registry validity remains separate from canonical tree admission.
 
 use super::super::content::report_tree_shape;
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, FormMarkerNode, NamedKind, PosTagNode, RepeatedFormMarkerNode, SourceBound,
     SourceBoundKind, WordPrefixNode,
 };
+use crate::parser::node_span::span_of;
 use talkbank_model::content::word::{FormMarkerPayload, FormType, WordCategory};
 
 /// A closed association between a generated token kind and its leading marker.
@@ -36,8 +37,8 @@ fn after_marker<'tree, 'source, T: MarkedToken<'tree>>(
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(token.source(), node.byte_range(), T::KIND.name()),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(token.source(), span_of(node), T::KIND.name()),
             format!("{} does not begin with '{}'", T::LABEL, T::MARKER),
         ));
         return None;
@@ -74,8 +75,8 @@ fn at_suffix_error<'tree, T: SourceBoundKind<'tree>>(
     ParseError::new(
         ErrorCode::InvalidFormType,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(token.source(), node.byte_range(), ""),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(token.source(), span_of(node), ""),
         message,
     )
     .with_suggestion(suggestion)
@@ -116,10 +117,10 @@ pub(super) fn repeated_form_marker<'tree>(
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            DiagnosticLocation::new(span_of(node)),
             ErrorContext::new(
                 token.source(),
-                node.byte_range(),
+                span_of(node),
                 RepeatedFormMarkerNode::KIND.name(),
             ),
             format!("repeated form marker token has no leading '@': {text:?}"),

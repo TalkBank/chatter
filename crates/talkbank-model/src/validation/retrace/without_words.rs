@@ -78,7 +78,7 @@ pub(super) fn report_if_no_words_retraced(retrace: &Retrace, errors: &impl Error
 
     errors.report(super::retrace_error(
         ErrorCode::RetraceWithoutWords,
-        retrace.span,
+        retrace.location,
         format!(
             "the {} marker retraces material with no words in it; a marker \
              retraces the words to its left",

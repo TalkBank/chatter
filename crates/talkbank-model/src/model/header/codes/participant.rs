@@ -62,22 +62,29 @@ impl crate::validation::Validate for ParticipantEntry {
     /// Validates speaker-code formatting and role membership against CHAT role vocabulary.
     fn validate(
         &self,
-        _context: &crate::validation::ValidationContext,
+        context: &crate::validation::ValidationContext,
         errors: &impl crate::ErrorSink,
     ) {
+        // The entry has no location of its own; the header validator narrows
+        // the context to its line.
+        let location = context.field_diagnostic_location();
         if self.speaker_code.as_str().is_empty() {
             errors.report(crate::ParseError::new(
                 crate::ErrorCode::EmptyParticipantCode,
                 crate::Severity::Error,
-                crate::SourceLocation::at_offset(0),
-                crate::ErrorContext::new(self.speaker_code.as_str(), 0..0, "speaker_code"),
+                location,
+                crate::ErrorContext::new(
+                    self.speaker_code.as_str(),
+                    crate::Span::new(0, 0),
+                    "speaker_code",
+                ),
                 "Participant speaker code cannot be empty",
             ));
         }
 
         crate::validation::header::check_speaker_id(
             self.speaker_code.as_str(),
-            crate::Span::DUMMY,
+            context.field_location,
             errors,
         );
 
@@ -85,8 +92,8 @@ impl crate::validation::Validate for ParticipantEntry {
             errors.report(crate::ParseError::new(
                 crate::ErrorCode::EmptyParticipantRole,
                 crate::Severity::Error,
-                crate::SourceLocation::at_offset(0),
-                crate::ErrorContext::new(self.role.as_str(), 0..0, "role"),
+                location,
+                crate::ErrorContext::new(self.role.as_str(), crate::Span::new(0, 0), "role"),
                 "Participant role cannot be empty",
             ));
         } else if !crate::validation::header::participant::is_allowed_participant_role(
@@ -98,8 +105,8 @@ impl crate::validation::Validate for ParticipantEntry {
                 crate::ParseError::new(
                     crate::ErrorCode::InvalidParticipantRole,
                     crate::Severity::Error,
-                    crate::SourceLocation::at_offset(0),
-                    crate::ErrorContext::new(self.role.as_str(), 0..0, "role"),
+                    location,
+                    crate::ErrorContext::new(self.role.as_str(), crate::Span::new(0, 0), "role"),
                     format!("Invalid participant role: '{}'", self.role.as_str()),
                 )
                 .with_suggestion(format!("Use a valid CHAT role such as: {}", suggested)),

@@ -1,7 +1,6 @@
 //! Per-child `%wor` partition and the main-tier timing it can still measure.
 use talkbank_model::alignment::{
-    WorTimingBinding, WorTimingCorrespondence, WorTimingSequence, assess_wor_timing_sequence,
-    bind_wor_timing, corroborate_wor_timing,
+    WorTimingCorrespondence, WorTimingSequence, assess_wor_timing_sequence, corroborate_wor_timing,
 };
 use talkbank_model::model::dependent_tier::wor::WorItem;
 use talkbank_model::model::{Bullet, MainTier, WorTier};
@@ -23,18 +22,14 @@ pub(super) fn partition_wor_tier<Affiliation>(
     content_groups: &ContentItemGroups<'_, Affiliation>,
 ) -> Option<PartitionedWorTiers> {
     let main = &content_groups.source().main;
-    let count_matched = match bind_wor_timing(main, Some(parent)) {
-        WorTimingBinding::CountMatched(count_matched) => count_matched,
-        WorTimingBinding::Drifted(drift) => {
+    let count_matched = match main.wor_projection().bind_present_timing(parent) {
+        Ok(count_matched) => count_matched,
+        Err(drift) => {
             tracing::debug!(
                 parent_wor_words = drift.wor_count().get(),
                 main_eligible_words = drift.main_count().get(),
                 "%wor count mismatch on split, dropping tier (stale %wor expected after prior edits)"
             );
-            return None;
-        }
-        WorTimingBinding::Missing(_) => {
-            tracing::debug!("%wor binding unexpectedly reported a missing tier during split");
             return None;
         }
     };
@@ -93,9 +88,8 @@ pub(super) fn partition_wor_tier<Affiliation>(
                 // Each child tier is derived from the parent tier, so it
                 // carries the parent's span as a coarse source pointer
                 // rather than a zero span indistinguishable from byte 0.
-                WorTier::new(items)
+                WorTier::new(parent.location, items)
                     .with_language_code(parent.language_code.clone())
-                    .with_span(parent.span)
             })
             .collect(),
     ))
@@ -144,9 +138,9 @@ pub(super) enum SplitMainTimingEvidence {
 /// makes this return `None` and leaves the whole split unmeasured. Min/max is intentional: it encloses all admitted word spans even if
 /// their serialized order contains a local timing inversion.
 fn complete_wor_timing_hull(main: &MainTier, wor: &WorTier) -> Option<Bullet> {
-    let count_matched = match bind_wor_timing(main, Some(wor)) {
-        WorTimingBinding::CountMatched(count_matched) => count_matched,
-        WorTimingBinding::Missing(_) | WorTimingBinding::Drifted(_) => return None,
+    let count_matched = match main.wor_projection().bind_present_timing(wor) {
+        Ok(matched) => matched,
+        Err(_) => return None,
     };
     let corroborated = match corroborate_wor_timing(count_matched) {
         WorTimingCorrespondence::Corroborated(corroborated) => corroborated,
@@ -157,7 +151,11 @@ fn complete_wor_timing_hull(main: &MainTier, wor: &WorTier) -> Option<Bullet> {
         WorTimingSequence::Empty(_) | WorTimingSequence::Rejected(_) => return None,
     };
     let hull = complete.hull();
-    Some(Bullet::new(hull.start().get(), hull.end().get()))
+    Some(Bullet::new(
+        talkbank_model::Location::Unlocated,
+        hull.start().get(),
+        hull.end().get(),
+    ))
 }
 
 pub(super) fn split_main_timing_evidence(children: &RebuiltChildren) -> SplitMainTimingEvidence {

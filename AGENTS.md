@@ -5,6 +5,28 @@
 Canonical guidance for all coding agents. Read applicable nested guidance and
 the task-relevant references below.
 
+## First principle: typestate
+
+Typestate and type-driven design are a firm mandate for every change, in every
+language and every repository: new code, old code, fixes, refactors, tests and
+test harnesses alike. Nothing below overrides this. Every project here is
+long-term, never a one-off: a type is paid for once, while a bug the
+architecture permits recurs for the life of the project.
+
+- Before writing code or a test, ask which type change makes the defect
+  unrepresentable, and make it. The compiler is the first test.
+- Give each distinct meaning its own type and each step a transition
+  `fn(Previous) -> Result<Next>` that consumes the earlier state. Put every
+  check on the edge that is the only way to make the next state; consumers
+  never re-check it.
+- No sentinels, bare flags or catch-alls. A closed set is an enum matched
+  exhaustively; a flag that chooses between behaviors is an enum; a field that
+  only some states use belongs to those states.
+- After each type change, count what it removed (checks, branches, panics,
+  tests). If it removed nothing, the defect was moved, not eliminated.
+- Every review checks for typestate opportunities explicitly. A fix that could
+  have been a type is not finished.
+
 ## Scope and safety
 
 - This is the canonical, self-contained CHAT format implementation. Keep
@@ -65,44 +87,71 @@ This entry point resolves workflow conflicts in the references. Dated examples
 are evidence, not current version or deployment claims. Generic skills do not
 create extra approval gates or authorize publishing.
 
-<!-- graft:start -->
-## Graft — repo context graph
+## Nested guidance
 
-This repo is indexed in `graft/`: small linked markdown nodes that explain each
+Each file below adds the ownership and boundary rules of its tree. None
+defines another gate, approval step or release workflow; this file and the
+references above own those. Read the one for the tree you are editing.
+
+| Tree | Guidance | What it adds |
+| --- | --- | --- |
+| `grammar/` | [grammar/AGENTS.md](grammar/AGENTS.md) | Grammar source and generated-output ownership, strict plus catch-all |
+| `spec/`, `spec/tools/` | [spec/AGENTS.md](spec/AGENTS.md), [spec/tools/AGENTS.md](spec/tools/AGENTS.md) | Authored inputs, generated artifacts, claims, generator boundaries |
+| `crates/talkbank-model/` | [AGENTS.md](crates/talkbank-model/AGENTS.md) | The typed AST, locations, validation context, alignment owners, what cannot be tested here |
+| `crates/talkbank-parser/` | [AGENTS.md](crates/talkbank-parser/AGENTS.md) | Typed CST traversal, `span_of`, fragment rebasing, zero unlocated values |
+| `crates/talkbank-parser-re2c/` | [AGENTS.md](crates/talkbank-parser-re2c/AGENTS.md) | Second backend, compatibility mandate, located and unlocated items |
+| `crates/talkbank-parser-tests/` | [AGENTS.md](crates/talkbank-parser-tests/AGENTS.md) | Where tests live, the gates and ratchets, how a ceiling is lowered |
+| `crates/talkbank-transform/` | [AGENTS.md](crates/talkbank-transform/AGENTS.md) | Pipelines, checked rewrites, splice, pseudonymizer, shared rendering |
+| `crates/chatter/` | [AGENTS.md](crates/chatter/AGENTS.md) | CLI surface, exit codes, stdout, the program thread, the TUI as reference |
+| `crates/talkbank-lsp/` | [AGENTS.md](crates/talkbank-lsp/AGENTS.md) | Protocol adapter over model-owned relationships; index spaces |
+| `apps/chatter-desktop/` | [AGENTS.md](apps/chatter-desktop/AGENTS.md) | Desktop app; TUI parity mandate; no desktop-local domain logic |
+
+Two rules cut across every tree and are stated once, in the design reference:
+a model value's `Location` is set at construction and never defaulted, and a
+validation rule fires on a construct's presence while its location only
+decides where the diagnostic points. The ratchet gates in
+`crates/talkbank-parser-tests` (fabrications, parser-minted unlocated values,
+content catch-alls, undemonstrated codes) may only fall, and a ceiling is
+lowered in the commit that earned it.
+
+<!-- trail:start -->
+## Trail: repo context graph
+
+This repo is indexed in `.trail/cache/`: small linked markdown nodes that explain each
 system and carry exact file:line spans, kept in sync with the code through git.
 
-For ANY task here — understanding how something works, finding where code lives,
-or scoping a change — get context from the graph before grepping or opening
+For ANY task here, understanding how something works, finding where code lives,
+or scoping a change, get context from the graph before grepping or opening
 source files. Re-ask freely (it's cheap) and reuse literal identifiers you
 already have (symbol, error string, file name) as the query. New to this repo?
-Run `graft map` first — a token-budgeted orientation (dir clusters, hubs,
+Run `trail map` first: a token-budgeted orientation (dir clusters, hubs,
 hotspots), no LLM, no key.
 
-- Run `graft ask "<your question>" --source` → ranked nodes with the relevant
+- Run `trail ask "<your question>" --source` → ranked nodes with the relevant
   code spans inlined (each hit's ≤8-line crux by default; `--full` for whole
   definitions when the crux isn't enough). Match the tool to the task shape:
-  for understanding or editing, the top node IS the answer — cite its
+  for understanding or editing, the top node IS the answer; cite its
   `covers:` file:line spans and edit straight from `--source`. For
   exhaustive tasks ("every occurrence / every caller of this pattern"), ranked
-  results are top-N, not complete — run `graft grep "<literal>"` instead
+  results are top-N, not complete; run `trail grep "<literal>"` instead
   (exhaustive over indexed files, grouped by enclosing symbol), falling back
   to raw `grep -rn` only for unindexed files.
-- `graft skeleton <file>` → every definition's signature + span, ~10× cheaper
+- `trail skeleton <file>` → every definition's signature + span, ~10× cheaper
   than reading the file; use it to skim an API surface.
-- `graft callers <symbol>` gives precomputed, exact edges — who calls this.
+- `trail callers <symbol>` gives precomputed, exact edges: who calls this.
   Add `--direction out` for what it calls, or `--depth N` to walk
   transitively for the full blast radius. For structural questions, skip
   ranking and use this directly.
-- Or browse: `graft/INDEX.md` lists every node; follow the links.
-- Monorepos and folders of multiple repos rank fairly across sub-projects —
+- Or browse: `.trail/cache/INDEX.md` lists every node; follow the links.
+- Monorepos and folders of multiple repos rank fairly across sub-projects;
   hits carry `[scope/]` labels naming which one they're from. Narrow with
-  `graft ask "<task>" --in <scope>/` once you know where you're working.
+  `trail ask "<task>" --in <scope>/` once you know where you're working.
 
 If a returned span is truncated ("+N more lines"), open the file at that exact
 range before finalizing. Only open source files when a node genuinely lacks a
-needed detail, and then at the exact file:line the node points to — never
+needed detail, and then at the exact file:line the node points to; never
 re-read whole files.
 
-After big code changes, refresh the graph with `graft build` (deterministic,
+After big code changes, refresh the graph with `trail build` (deterministic,
 no API key, $0).
-<!-- graft:end -->
+<!-- trail:end -->

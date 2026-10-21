@@ -38,16 +38,19 @@ impl Control {
             .iter()
             .find(|entry| tier.matches(entry))
             .expect("selected tier");
-        let span = entry.span();
+        let span = entry.location();
         let body = entry.content_span().expect("admitted nonempty body");
-        assert!(span.start <= body.start && body.end < span.end);
-        let range = body.start as usize..body.end as usize;
+        assert!(
+            span.span().expect("located").start() <= body.start()
+                && body.end() < span.span().expect("located").end()
+        );
+        let range = body.start()..body.end();
         assert!(CONTROL.get(range.clone()).is_some());
         Edit {
             control: self,
             tier,
             range,
-            span,
+            span: span.span().expect("located"),
         }
     }
 }
@@ -74,10 +77,15 @@ impl<'control> Edit<'control> {
         let replacement_end = self.range.start + replacement.len();
         assert_eq!(&source[..self.range.start], &CONTROL[..self.range.start]);
         assert_eq!(&source[replacement_end..], &CONTROL[self.range.end..]);
-        let delta = i32::try_from(replacement.len()).expect("small replacement")
-            - i32::try_from(self.range.len()).expect("small original body");
-        let mut span = self.span;
-        span.end = span.end.checked_add_signed(delta).expect("edited tier end");
+        let delta = isize::try_from(replacement.len()).expect("small replacement")
+            - isize::try_from(self.range.len()).expect("small original body");
+        let span = Span::new(
+            self.span.start(),
+            self.span
+                .end()
+                .checked_add_signed(delta)
+                .expect("edited tier end"),
+        );
         Candidate {
             control: self.control,
             tier: self.tier,
@@ -94,7 +102,7 @@ pub(super) struct Candidate<'control> {
     tier: Tier,
     source: String,
     range: Range<usize>,
-    delta: i32,
+    delta: isize,
     span: Span,
 }
 
@@ -111,24 +119,25 @@ impl Candidate<'_> {
     pub(super) fn span(&self) -> Span {
         self.span
     }
-    pub(super) fn translated(&self, mut span: Span) -> Span {
-        if span.start as usize >= self.range.end {
-            span.start = span
-                .start
-                .checked_add_signed(self.delta)
-                .expect("translated start");
-        }
-        if span.end as usize >= self.range.end {
-            span.end = span
-                .end
-                .checked_add_signed(self.delta)
-                .expect("translated end");
-        }
-        span
+    pub(super) fn translated(&self, location: talkbank_model::Location) -> Span {
+        let shift = |offset: usize, what: &str| {
+            if offset >= self.range.end {
+                offset.checked_add_signed(self.delta).expect(what)
+            } else {
+                offset
+            }
+        };
+        Span::new(
+            shift(
+                location.span().expect("located").start(),
+                "translated start",
+            ),
+            shift(location.span().expect("located").end(), "translated end"),
+        )
     }
     pub(super) fn tier_input(&self) -> &str {
         self.source
-            .get(self.span.start as usize..self.span.end as usize)
+            .get(self.span.to_range())
             .expect("edited tier range")
     }
 }

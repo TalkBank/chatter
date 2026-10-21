@@ -1,7 +1,7 @@
 # talkbank-transform
 
 **Status:** Current
-**Last modified:** 2026-09-09 07:46 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-transform/README.md)
 
 Transformation pipelines for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html) (CHAT to JSON, normalization, validation).
 
@@ -13,29 +13,42 @@ entry point for applications that need to process `.cha` files end-to-end.
 
 Key capabilities:
 
-- **Parse + validate**: `parse_and_validate()` combines parsing with
-  multi-layer validation (structural, alignment, semantic) in a single call.
-- **CHAT to JSON**: `chat_to_json()` converts CHAT files to validated JSON
-  conforming to the [CHAT JSON Schema](https://talkbank.org/schemas/v0.1/chat-file.json).
-- **Normalization**: `normalize_chat()` produces canonical CHAT output.
+- **Parse + optional validation**: `parse_and_validate()` returns a mutable
+  `ChatFile`; `ParseValidateOptions` determines whether model validation runs
+  and whether it includes tier alignment. Use `parse_validated_with_parser()`
+  when the caller needs a retained `ValidChatFile` capability instead.
+- **CHAT to JSON**: `chat_to_json()` checks serialized JSON against the
+  embedded schema. CHAT validation remains a separate option; schema success
+  does not establish CHAT validity, parser provenance or original source bytes.
+- **Normalization**: `normalize_chat()` returns a checked `Rewrite`, not a
+  string. Its source-loss check can refuse serialization even when CHAT is
+  valid; it is not a universal byte-preservation or safe-overwrite guarantee.
 - **Caching**: `UnifiedCache` provides SQLite-based caching for validation
   and round-trip results for large file collections.
-- **Parallel validation**: `validate_directory_streaming()` validates
-  entire directories with concurrent file processing.
+- **Parallel validation**: `validate_directory_streaming()` takes a
+  `ValidationRun` and returns an event receiver and cancellation handle.
+  Inspect terminal outcomes as well as individual file results; receiving
+  events does not establish that every file completed. Streaming here means
+  progress/results, not incremental parsing of a file's input bytes.
 
 ## Usage
 
-```rust,no_run
-// `ParseValidateOptions` comes from `talkbank_model`.
-use talkbank_model::ParseValidateOptions;
-use talkbank_transform::{PipelineError, parse_and_validate};
+Start with the [library recipes](../../book/src/chatter/integrating/library-usage.md)
+for dependency setup, parsing, validation, traversal and serialization. Their
+examples are included from compiled test source rather than copied into this
+README. Keep the model, parser and transform dependencies at one coherent
+repository revision.
 
-let content = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
-    @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
-let options = ParseValidateOptions::default().with_validation();
-let chat_file = parse_and_validate(content, options).unwrap();
-assert_eq!(chat_file.utterances().count(), 1);
-```
+Content-only convenience functions use anonymous transcript identity. If input
+came from a file, use the path-aware or named entry point so checks involving
+the transcript name are not silently omitted. Parsing failures, internal faults,
+model validation failures and incomplete provenance remain distinct outcomes.
+Do not discard diagnostics or convert all failures into a successful model.
+
+The [transform pipeline guide](../../book/src/architecture/transform-pipeline.md)
+describes mutable models, retained admission, rewrite limits and runner/cache
+ownership. Use fresh output destinations when learning conversion; a returned
+model, JSON string or rewrite does not by itself authorize replacing the input.
 
 ## License
 

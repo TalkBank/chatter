@@ -1,9 +1,11 @@
 # Grammar
 
 **Status:** Current
-**Last updated:** 2026-03-24 00:01 EDT
+**Last updated:** {{git-dates:page}}
 
-The CHAT grammar is defined in `grammar/grammar.js` using the [tree-sitter](https://tree-sitter.github.io/) parser generator. It produces a GLR parser that handles the full CHAT format with error recovery.
+The CHAT grammar is defined in `grammar/grammar.js` using the Tree-sitter
+parser generator. It recognizes document and fragment syntax with error
+recovery. Recognition is not proof of complete CHAT support or semantic validity.
 
 ## Design Principles
 
@@ -25,17 +27,25 @@ The grammar has two structural levels:
 
 ### Opaque Lemmas
 
-In the `%mor` tier rules, lemmas are parsed as opaque Unicode strings. The grammar does not attempt to decompose lemma content, that happens in the model layer. This follows the "parse, don't validate" principle.
+In the `%mor` tier rules, lemmas are constrained lexical strings retained as
+opaque model values. Neither the grammar nor the model decomposes them into
+typed compound boundaries or translation glosses. POS, lemma and feature
+boundaries are separate syntax. See [MOR](../chat-format/mor-tier.md).
 
 ## Key Grammar Rules
 
 ### Document Structure
 
 ```text
-document → utf8_header, begin_header, lines..., end_header
+source_file → full_document | utterance | main_tier | dependent_tier | header | pre_begin_header | standalone_word
+full_document → utf8_header?, pre_begin_header*, begin_header, line*, end_header
 line → header | utterance
 utterance → main_tier, dependent_tiers...
 ```
+
+These are schematic summaries, not a second grammar. The actual root is
+`source_file`. Missing required headers may be represented through recovery
+and diagnosed later; this does not make their absence valid.
 
 ### Main Tier
 
@@ -55,27 +65,29 @@ mor_post_clitic → tilde, mor_word
 mor_feature → hyphen, mor_feature_value
 ```
 
-POS tags are simple identifiers (no subcategories). Lemmas are opaque strings. Features are hyphen-separated values that may contain `=` for Key=Value pairs and `,` for multi-value features.
+POS tags may contain colon-separated refinements such as `pro:sub`. Lemmas
+remain opaque strings. Features are hyphen-separated values that may contain
+`=` for key/value pairs and `,` within a multi-value spelling; the model does
+not infer a UD feature set from the latter.
 
 ## Grammar Change Workflow
 
 `parser.c` is generated from `grammar.js`, never edit it directly.
 
-After any change to `grammar.js`:
-
-1. `cd grammar && tree-sitter generate`
-2. `tree-sitter test` (160 tests)
-3. `cargo test -p talkbank-parser`
-4. `cargo test -p talkbank-parser-tests` (reference corpus equivalence, per-file)
-5. Verify the 78-file reference corpus passes at 100%
+Use `just regen` for the consolidated generation batch, review generated
+changes and diagnostic observations, then run affected grammar/parser/model
+contracts. The [Grammar Workflow](../contributing/grammar-workflow.md) owns the
+details, including the pinned external traversal generator and its current
+public-bootstrap limitations. A finite reference sweep is not completeness
+evidence; do not copy old test or corpus counts into acceptance criteria.
 
 ## Conflict Resolution
 
-The grammar uses tree-sitter's precedence and conflict mechanisms to handle ambiguities:
-
-- Word tokens use `prec(5)` to win over separators
-- Inline bullets use `prec(10)` for their delimiters
-- CA (conversation analysis) symbols use `prec(3)` for colon disambiguation
+The grammar uses lexical/syntactic precedence and explicit conflicts. Inspect
+the owning rule rather than relying on copied numeric precedence values.
+A change can alter which token the compiled lexer selects, especially for a
+strict prefix versus a longer malformed value. See
+[token governance](grammar-governance.md#date-and-time-token-selection).
 
 ## Generated Artifacts
 
@@ -88,7 +100,7 @@ Running `tree-sitter generate` produces:
 for the per-constant doc comments:
 
 ```sh
-just node-types-check   # regenerate and fail if the committed output moved
+just node-types-check   # generate to staging and compare; do not rewrite the tracked file
 ```
 
 The doc file is the hand-written half and the only part a human edits; the kind

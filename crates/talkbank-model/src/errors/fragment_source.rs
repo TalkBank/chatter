@@ -2,63 +2,76 @@
 
 use super::{ErrorCode, ErrorSink, ParseError, Severity, Span, SpanShift};
 
-/// The requested source range cannot be represented by model coordinates.
-#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("Fragment document range exceeds the 32-bit source coordinate space")]
-pub struct FragmentRangeError;
+/// The largest input a parser accepts: tree-sitter stores byte offsets as
+/// `uint32_t`, so a longer input cannot be parsed faithfully.
+pub const MAX_PARSER_INPUT_BYTES: usize = u32::MAX as usize;
+
+/// Why a fragment cannot be admitted. Two distinct facts, never conflated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum FragmentRangeError {
+    /// The input is longer than a parser can represent.
+    #[error("input of {len} bytes exceeds the {MAX_PARSER_INPUT_BYTES}-byte parser input limit")]
+    InputTooLarge {
+        /// Length of the offered input in bytes.
+        len: usize,
+    },
+    /// `origin + len` does not exist as a byte offset.
+    #[error("document range starting at {origin} with length {len} overflows")]
+    RangeOverflows {
+        /// Requested document origin.
+        origin: usize,
+        /// Length of the offered input in bytes.
+        len: usize,
+    },
+}
 
 impl FragmentRangeError {
-    /// Does a document range of `len` bytes starting at `origin` fit the
-    /// model's 32-bit byte coordinates?
+    /// Can `len` bytes placed at `origin` be parsed and located?
     ///
     /// # Why the arithmetic is separate from the value it guards
     ///
-    /// So it can be TESTED. The only way to reach the failing case through
-    /// [`FragmentSource::new`] at origin zero, which is what a whole-file
-    /// parse passes, is to hold four gibibytes of text; a test that allocates
-    /// that is a test nobody runs. Split out, the case is
-    /// `check(0, u32::MAX as usize + 1)` and costs nothing.
+    /// So it can be TESTED. The failing input-size case through
+    /// [`FragmentSource::new`] needs four gibibytes of text; split out, it is
+    /// `check(0, MAX_PARSER_INPUT_BYTES + 1)` and costs nothing.
     ///
     /// # Errors
     ///
-    /// When `origin + len` overflows or exceeds [`u32::MAX`].
+    /// [`InputTooLarge`](Self::InputTooLarge) when the input exceeds the parser
+    /// limit; [`RangeOverflows`](Self::RangeOverflows) when its end offset does
+    /// not exist.
     pub const fn check(origin: usize, len: usize) -> Result<(), Self> {
+        if len > MAX_PARSER_INPUT_BYTES {
+            return Err(Self::InputTooLarge { len });
+        }
         match origin.checked_add(len) {
-            Some(end) if end <= u32::MAX as usize => Ok(()),
-            // Both arms are the same refusal, written out rather than joined
-            // by an `is_none_or`, because they are different facts: the first
-            // is a range that does not fit, the second a range whose END
-            // cannot even be computed.
-            Some(_) | None => Err(Self),
+            Some(_) => Ok(()),
+            None => Err(Self::RangeOverflows { origin, len }),
         }
     }
 
     /// No document location can be fabricated for an unrepresentable range.
     pub fn into_diagnostic(self) -> ParseError {
-        ParseError::at_span(
+        ParseError::at_location(
             ErrorCode::ParseFailed,
             Severity::Error,
-            Span::DUMMY,
+            crate::DiagnosticLocation::Unlocated,
             self.to_string(),
         )
     }
 }
 
-/// A fragment whose complete document range fits the model's byte coordinates.
+/// A fragment that a parser can read and whose document range exists.
 #[derive(Clone, Copy)]
 pub struct FragmentSource<'a> {
     input: &'a str,
-    origin: u32,
+    origin: usize,
 }
 
 impl<'a> FragmentSource<'a> {
-    /// Reject an unrepresentable range before invoking a parser or narrowing offsets.
+    /// Reject an unparseable or unlocatable range before invoking a parser.
     pub fn new(input: &'a str, origin: usize) -> Result<Self, FragmentRangeError> {
         FragmentRangeError::check(origin, input.len())?;
-        Ok(Self {
-            input,
-            origin: origin as u32,
-        })
+        Ok(Self { input, origin })
     }
 
     /// Admit at a streaming parser boundary, reporting failure exactly once.
@@ -85,7 +98,8 @@ impl<'a> FragmentSource<'a> {
     /// Unlike generic model-span shifting, this comes from source admission
     /// rather than interpreting the legacy unknown-span sentinel.
     pub fn whole_span(self) -> Span {
-        Span::new(self.origin, self.origin + self.input.len() as u32)
+        // Admission proved `origin + len` exists.
+        Span::new(self.origin, self.origin + self.input.len())
     }
 
     /// Source admission, not a generic span, knows an empty caller's point.
@@ -106,13 +120,22 @@ impl<'a> FragmentSource<'a> {
     /// Project spans from an admitted synthetic source whose input starts here.
     /// Combining wrapper removal with the origin avoids an intermediate zero
     /// position being mistaken for the legacy unknown-span sentinel.
-    pub fn rebase_from<T: SpanShift>(self, mut value: T, input_start: u32) -> T {
-        let mut remaining = i64::from(self.origin) - i64::from(input_start);
-        // At most three bounded edit steps; neither direction wraps an i32.
+    pub fn rebase_from<T: SpanShift>(self, mut value: T, input_start: usize) -> T {
+        // Move by the signed distance `origin - input_start` in steps that fit
+        // `isize`; at most a few steps even for the largest offsets.
+        let (mut remaining, forward) = match self.origin.checked_sub(input_start) {
+            Some(distance) => (distance, true),
+            None => (input_start - self.origin, false),
+        };
         while remaining != 0 {
-            let step = remaining.clamp(-i64::from(i32::MAX), i64::from(i32::MAX)) as i32;
-            value.shift_spans_after(0, step);
-            remaining -= i64::from(step);
+            let step = remaining.min(isize::MAX as usize);
+            let signed = if forward {
+                step as isize
+            } else {
+                -(step as isize)
+            };
+            value.shift_spans_after(0, signed);
+            remaining -= step;
         }
         value
     }
@@ -133,7 +156,9 @@ struct FragmentSink<'a, 's, S> {
 
 impl<S: ErrorSink> ErrorSink for FragmentSink<'_, '_, S> {
     fn report(&self, mut error: ParseError) {
-        error.location.span = self.source.diagnostic_span(error.location.span);
+        error.location = error
+            .location
+            .rebased(|span| self.source.diagnostic_span(span));
         for label in &mut error.labels {
             label.span = self.source.diagnostic_span(label.span);
         }
@@ -145,41 +170,45 @@ impl<S: ErrorSink> ErrorSink for FragmentSink<'_, '_, S> {
 mod tests {
     use super::*;
 
-    /// A document larger than the coordinate space is refused, at origin zero.
+    /// An input longer than the parser limit is refused, at origin zero.
     ///
-    /// SURVIVES a type change, and says which category: this is ARITHMETIC.
-    /// No signature relates a `usize` length to a `u32` coordinate space, and
-    /// the check is the only thing that does.
-    ///
-    /// Origin zero is the whole-file case, and it is the one that had no
-    /// caller: every FRAGMENT entry point admitted its input through
-    /// `FragmentSource`, and `parse_chat_file_streaming` did not, so a
-    /// four-gibibyte transcript reached tree-sitter unchecked. The reason that
-    /// went unnoticed is in this test's own shape: reaching it through
-    /// `FragmentSource::new` needs four gibibytes of text, so nobody wrote it.
+    /// SURVIVES the type change to `usize` spans: this is the tree-sitter
+    /// input limit, which no span type expresses. Origin zero is the
+    /// whole-file case that `parse_chat_file_streaming` admits.
     #[test]
-    fn a_document_past_the_coordinate_space_is_refused() {
-        assert!(FragmentRangeError::check(0, u32::MAX as usize).is_ok());
-        assert!(FragmentRangeError::check(0, u32::MAX as usize + 1).is_err());
+    fn an_input_past_the_parser_limit_is_refused() {
+        assert!(FragmentRangeError::check(0, MAX_PARSER_INPUT_BYTES).is_ok());
+        assert_eq!(
+            FragmentRangeError::check(0, MAX_PARSER_INPUT_BYTES + 1),
+            Err(FragmentRangeError::InputTooLarge {
+                len: MAX_PARSER_INPUT_BYTES + 1
+            })
+        );
     }
 
-    /// A fragment whose ORIGIN pushes it past the space is refused too.
-    ///
-    /// The case the fragment API always had, kept because the split that made
-    /// the test above possible must not lose it.
+    /// A large ORIGIN no longer matters: document offsets are `usize`.
     #[test]
-    fn a_fragment_placed_past_the_coordinate_space_is_refused() {
-        assert!(FragmentRangeError::check(u32::MAX as usize - 4, 4).is_ok());
-        assert!(FragmentRangeError::check(u32::MAX as usize - 4, 5).is_err());
+    fn a_fragment_placed_far_into_a_document_is_admitted() {
+        assert!(FragmentRangeError::check(MAX_PARSER_INPUT_BYTES * 2, 5).is_ok());
     }
 
     /// A range whose end cannot be computed at all is refused, not wrapped.
-    ///
-    /// `usize::MAX` plus anything overflows. Before the check was factored out
-    /// this arm was an `is_none_or`, where the two facts (a range that does
-    /// not fit, and a range whose end does not exist) shared one expression.
     #[test]
     fn a_range_whose_end_overflows_is_refused() {
-        assert!(FragmentRangeError::check(usize::MAX, 1).is_err());
+        assert_eq!(
+            FragmentRangeError::check(usize::MAX, 1),
+            Err(FragmentRangeError::RangeOverflows {
+                origin: usize::MAX,
+                len: 1
+            })
+        );
+    }
+
+    /// Rebasing moves spans by the full signed distance, in both directions.
+    #[test]
+    fn rebasing_moves_spans_by_the_signed_distance() {
+        let source = FragmentSource::new("abc", 10).expect("admitted");
+        assert_eq!(source.rebase(Span::new(1, 2)), Span::new(11, 12));
+        assert_eq!(source.rebase_from(Span::new(15, 16), 12), Span::new(13, 14));
     }
 }

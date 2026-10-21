@@ -3,19 +3,20 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, RangeAdmittedChildren, Ranged, ReadableSlot, SelectedKindSlot, SourceBound,
-    SourceSlice, TextWithBulletsNode,
+    AsRawNode, RangeAdmittedChildren, Ranged, ReadableSlot, SelectedNonMissingKindSlot,
+    SourceBound, SourceSlice, TextWithBulletsNode,
 };
 use crate::model::NonEmptyString;
 use crate::model::TextTier;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::analyze_dependent_tier_error;
 use talkbank_model::ParseOutcome;
 
 /// The optional body shape of the range-admitted simple text-like tier carriers.
 pub(super) type OptionalTierBodySlot<'tree, 'source> = Option<
-    SelectedKindSlot<
+    SelectedNonMissingKindSlot<
         'tree,
         SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
         Ranged<'source>,
@@ -53,8 +54,8 @@ pub(super) trait OptionalTierBody<'tree, 'source> {
 ///   `Parsed`; an empty text reports "Tier has empty content" at the tier-node
 ///   span. Source failure has already refused admission with E001 before this
 ///   reader can run; it cannot become empty content.
-/// - `Missing` is diagnosed and rejected; source admission cannot turn a
-///   recovered nonterminal into readable tier content.
+/// - Compiled kind admission excludes `Missing` at this composite body slot.
+///   Range admission alone would not establish that fact.
 /// - `Error`: the recovery node is reported first, in the dependent-tier
 ///   analyzer's words (E316 for text nothing could parse), then "Tier is
 ///   missing content node" at the tier-node span: E330.md's pair. Until
@@ -69,7 +70,7 @@ pub(super) trait OptionalTierBody<'tree, 'source> {
 /// retaining the body-versus-outside-body diagnostic order.
 fn read_tier_body_text<'tree, 'source>(
     tier: SourceSlice<'tree, 'source>,
-    body: &SelectedKindSlot<
+    body: &SelectedNonMissingKindSlot<
         'tree,
         SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
         Ranged<'source>,
@@ -83,16 +84,7 @@ fn read_tier_body_text<'tree, 'source>(
             report_missing_content_node(tier, errors);
             ParseOutcome::rejected()
         }
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "dependent_tier",
-            );
-            report_missing_content_node(tier, errors);
-            ParseOutcome::rejected()
-        }
+        ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     }
 }
@@ -104,8 +96,8 @@ fn report_missing_content_node(tier: SourceSlice<'_, '_>, errors: &impl ErrorSin
     errors.report(ParseError::new(
         ErrorCode::TreeParsingError,
         Severity::Error,
-        SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-        ErrorContext::new(tier.source(), tier_node.byte_range(), "tier"),
+        DiagnosticLocation::new(span_of(tier_node)),
+        ErrorContext::new(tier.source(), span_of(tier_node), "tier"),
         "Tier is missing content node",
     ));
 }
@@ -121,13 +113,14 @@ fn report_missing_content_node(tier: SourceSlice<'_, '_>, errors: &impl ErrorSin
 ///
 /// The empty case lowers to [`TextTier::empty`] rather than reporting from the
 /// parse path, because recovery is not validity: the parser says what the file
-/// contains and `DependentTier::empty_content_span` lets the validator judge
+/// contains and `DependentTier::empty_content_location` lets the validator judge
 /// it. That also keeps the tier in the model, so the line survives a roundtrip.
 ///
 /// `TextTier::empty` is called here and in the re2c converter's own lowering;
 /// both are parsers saying what the file contains, which is what that
 /// constructor's doc asks for.
 pub(super) fn read_optional_tier_body_text<'tree, 'source, C>(
+    location: impl Into<talkbank_model::Location>,
     tier: &RangeAdmittedChildren<'tree, 'source, C>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<TextTier>
@@ -138,9 +131,10 @@ where
     // absent-body policy (report nothing, return a
     // payload that says it is empty) is stated in exactly one place. Two copies
     // thirty lines apart would agree only by inspection.
+    let location: talkbank_model::Location = location.into();
     read_optional_tier_body_raw_text(tier, errors).map(|content| match content {
-        Some(text) => TextTier::new(text),
-        None => TextTier::empty(),
+        Some(text) => TextTier::new(location, text),
+        None => TextTier::empty(location),
     })
 }
 
@@ -154,7 +148,7 @@ where
 /// Phon tiers run their own fallible content parsers. So this returns the
 /// question rather than an answer, and each caller says what an absent body
 /// means IN ITS OWN TYPE (`TimTier::empty`, or the Phon tiers' empty word
-/// lists), which is the state `DependentTier::empty_content_span` then reads.
+/// lists), which is the state `DependentTier::empty_content_location` then reads.
 ///
 /// `Parsed(None)` is an absent body, NOT a failure: the outer [`ParseOutcome`]
 /// says whether the body could be read, the inner [`Option`] says whether there
@@ -187,8 +181,8 @@ fn decode_body_text<'tree, 'source>(
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
-                SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(tier.source(), tier_node.byte_range(), "tier"),
+                DiagnosticLocation::new(span_of(tier_node)),
+                ErrorContext::new(tier.source(), span_of(tier_node), "tier"),
                 "Tier has empty content",
             ));
             ParseOutcome::rejected()

@@ -1,5 +1,6 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
+assertion_line: 92
 expression: result.unwrap()
 ---
 speaker:
@@ -45,19 +46,21 @@ tier_body:
         annotations: []
         raw_text: 里面
     - Retrace:
-        content:
-          - Word:
-              category: ~
-              body:
-                - Text: 这个
-              form_marker: ~
-              lang: ~
-              pos_tag: ~
-              annotations: []
-              raw_text: 这个
+        body:
+          Enclosed:
+            - open: "<"
+              close: ">"
+            - - Word:
+                  category: ~
+                  body:
+                    - Text: 这个
+                  form_marker: ~
+                  lang: ~
+                  pos_tag: ~
+                  annotations: []
+                  raw_text: 这个
         kind: Complete
-        is_group: true
-        synthesized_missing_annotation: false
+        marker: "[//]"
         annotations: []
     - Word:
         category: Nonword
@@ -69,28 +72,30 @@ tier_body:
         annotations: []
         raw_text: "&~xi"
     - Retrace:
-        content:
-          - Word:
-              category: ~
-              body:
-                - Text: 那
-              form_marker: ~
-              lang: ~
-              pos_tag: ~
-              annotations: []
-              raw_text: 那
-          - Word:
-              category: ~
-              body:
-                - Text: 个
-              form_marker: ~
-              lang: ~
-              pos_tag: ~
-              annotations: []
-              raw_text: 个
+        body:
+          Enclosed:
+            - open: "<"
+              close: ">"
+            - - Word:
+                  category: ~
+                  body:
+                    - Text: 那
+                  form_marker: ~
+                  lang: ~
+                  pos_tag: ~
+                  annotations: []
+                  raw_text: 那
+              - Word:
+                  category: ~
+                  body:
+                    - Text: 个
+                  form_marker: ~
+                  lang: ~
+                  pos_tag: ~
+                  annotations: []
+                  raw_text: 个
         kind: Partial
-        is_group: true
-        synthesized_missing_annotation: false
+        marker: "[/]"
         annotations: []
     - Word:
         category: ~
@@ -123,7 +128,6 @@ tier_body:
     Period: "."
   postcodes: []
   media_bullet:
-    MediaBullet:
-      raw_text: "\u0015428510_429651\u0015"
-      start_time: "428510"
-      end_time: "429651"
+    raw_text: "\u0015428510_429651\u0015"
+    start_time: "428510"
+    end_time: "429651"

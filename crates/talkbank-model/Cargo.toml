@@ -24,7 +24,6 @@ serde_json = { workspace = true }
 smallvec = { workspace = true }
 smol_str = { workspace = true }
 talkbank-derive = { workspace = true }
-text-size = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["rt", "sync"] }

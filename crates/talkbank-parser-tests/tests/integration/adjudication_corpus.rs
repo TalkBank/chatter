@@ -406,7 +406,7 @@ fn reference_sanity_scan_requires_operator_acceptance_before_mapping_replay() {
                         &file,
                         &original,
                         &SpeakerCode::new("CHI"),
-                        SanityScanThreshold(2.0)
+                        SanityScanThreshold::new(2.0).expect("finite positive scan threshold")
                     )
                     .is_none()
                 );

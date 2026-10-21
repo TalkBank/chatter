@@ -8,7 +8,7 @@ use talkbank_model::model::{
 /// Tests com tier construction.
 #[test]
 fn test_com_tier_construction() {
-    let tier = ComTier::from_text("This is a comment");
+    let tier = ComTier::from_text(talkbank_model::Location::Unlocated, "This is a comment");
     assert!(!tier.content.is_empty());
     assert_eq!(tier.to_chat_string(), "%com:\tThis is a comment");
 }
@@ -16,7 +16,7 @@ fn test_com_tier_construction() {
 /// Tests exp tier construction.
 #[test]
 fn test_exp_tier_construction() {
-    let tier = ExpTier::from_text("Explanation text");
+    let tier = ExpTier::from_text(talkbank_model::Location::Unlocated, "Explanation text");
     assert!(!tier.content.is_empty());
     assert_eq!(tier.to_chat_string(), "%exp:\tExplanation text");
 }
@@ -24,7 +24,7 @@ fn test_exp_tier_construction() {
 /// Tests add tier construction.
 #[test]
 fn test_add_tier_construction() {
-    let tier = AddTier::from_text("MOT");
+    let tier = AddTier::from_text(talkbank_model::Location::Unlocated, "MOT");
     assert!(!tier.content.is_empty());
     assert_eq!(tier.to_chat_string(), "%add:\tMOT");
 }
@@ -32,7 +32,7 @@ fn test_add_tier_construction() {
 /// Tests spa tier construction.
 #[test]
 fn test_spa_tier_construction() {
-    let tier = SpaTier::from_text("$DIS");
+    let tier = SpaTier::from_text(talkbank_model::Location::Unlocated, "$DIS");
     assert!(!tier.content.is_empty());
     assert_eq!(tier.to_chat_string(), "%spa:\t$DIS");
 }
@@ -40,7 +40,7 @@ fn test_spa_tier_construction() {
 /// Tests sit tier construction.
 #[test]
 fn test_sit_tier_construction() {
-    let tier = SitTier::from_text("at home");
+    let tier = SitTier::from_text(talkbank_model::Location::Unlocated, "at home");
     assert!(!tier.content.is_empty());
     assert_eq!(tier.to_chat_string(), "%sit:\tat home");
 }
@@ -48,7 +48,7 @@ fn test_sit_tier_construction() {
 /// Tests gpx tier construction.
 #[test]
 fn test_gpx_tier_construction() {
-    let tier = GpxTier::from_text("1.5");
+    let tier = GpxTier::from_text(talkbank_model::Location::Unlocated, "1.5");
     assert!(!tier.content.is_empty());
     assert_eq!(tier.to_chat_string(), "%gpx:\t1.5");
 }
@@ -56,7 +56,7 @@ fn test_gpx_tier_construction() {
 /// Tests int tier construction.
 #[test]
 fn test_int_tier_construction() {
-    let tier = IntTier::from_text("rising");
+    let tier = IntTier::from_text(talkbank_model::Location::Unlocated, "rising");
     assert!(!tier.content.is_empty());
     assert_eq!(tier.to_chat_string(), "%int:\trising");
 }

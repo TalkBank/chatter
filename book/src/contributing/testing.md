@@ -8,6 +8,20 @@ routinely, and what each costs, are in
 [Developer Verification Checks](dev-checks.md); how they relate to CI is in
 [Testing and Quality Gates](quality-gates.md).
 
+Start with [test targets and name filters](#test-targets-and-name-filters) and
+[what to run when](#what-to-run-when). For interpretation, see
+[the test layers](#the-layers), [gate verdicts](#the-gate-registry), and
+[coverage scope](#coverage-scope-and-completeness).
+The detailed contracts below describe distinct obligations and their limits;
+they are not an instruction to rerun every population after each edit.
+
+The shared `talkbank_parser_tests::test_error::strict_parse` adapter admits
+the complete diagnostic batch before applying severity policy. Internal faults
+reject even when downgraded to warnings; ordinary warnings may accompany a
+successful model, while error-severity findings and unbuildable products reject.
+Rejection retains every diagnostic. This is test-instrument admission, not model
+validation or a proof that a production parser emits the injected fault cases.
+
 ## Canonical output boundary contracts
 
 The authored `E370_split_retrace` specimens pair complete repetitions and
@@ -151,7 +165,7 @@ mapping parser only inserts through a vacant map entry, never replacing an
 earlier assignment. This is not a claim that
 mapping syntax admission validates speaker identities or full output validity.
 
-## Build artifact hygiene and runner choice
+## Validation and incremental contracts
 
 The E344 paired specimens change only an intervening speaker code. They pin
 the nearest-same-speaker boundary under opt-in strict quotation validation,
@@ -406,14 +420,13 @@ CLI filesystem tests compare NFC and NFD aliases with directory traversal on
 normalization-insensitive filesystems. They also verify that fixing content
 does not rename a file or normalize a media URL.
 
-The W109 catalog uses the generated, source-bound `MediaHeaderNode` fields to
-admit one clean filename token. `catalog_fix` consumes a borrowed `ParsedSource`
-retained by `parse_chat_file_with_source`, rather than an independently supplied
-string. The CLI retains this owner from its original parse; catalog planning
-does not create a parser or reparse unchanged input. Missing source ownership
-refuses planning, while changed output still undergoes verification. Diagnostics
-must still come from that input: the capability binds CST and source, not an
-arbitrary diagnostic to its producer. Its private header-edit capability does not
+The W109 catalog uses generated, source-bound `MediaHeaderNode` fields to
+admit one clean filename token. Public callers resolve a `FixFinding` issued
+by `FixDiagnosis`, which owns the actual parse, findings, policy and transcript
+name. The internal `catalog_fix` resolver is not a public independent
+diagnostic/CST API. Selection consumes that diagnosis and cannot accept findings
+from another owner. Missing source ownership refuses planning, while changed
+output still undergoes verification. Its private header-edit capability does not
 license arbitrary header edits or recovered headers. Canonical corpus tests
 compare the repaired bytes with the authored NFC control, then revalidate
 under the same transcript identity: a remaining file-only warning is expected
@@ -907,74 +920,29 @@ source provenance for free-string conversion. Parsed content separators supply
 the refusal cases. This complements file roundtripping without maintaining a
 second hand-written inventory of terminator spellings in the test.
 
+## Build artifact hygiene and runner choice
+
 Both Cargo workspaces set `split-debuginfo = "off"` for development and test
-profiles. Line tables stay in the linked artifacts, so diagnostics and stack
-traces retain source locations without macOS's default `unpacked` layout
-leaving one `.rcgu.o` file per codegen unit in `target/debug/deps`.
+profiles. This is a build configuration, not a promise about artifact counts,
+startup time or performance on every platform. Existing artifacts may have
+been produced with different settings.
 
-The setting is based on a measured failure analysis, not a cosmetic
-preference. Under the default layout the root workspace had 55,141 entries in
-`target/debug/deps`; the generator-heavy specification workspace had 842,704
-entries, occupied 40 GB, and took 29.3 seconds merely to enumerate with
-`os.scandir`. The exact spec
-test executable itself started, listed its tests and exited in 0.00 seconds,
-while a warm `cargo test --manifest-path spec/Cargo.toml --workspace --quiet`
-took 46.7 seconds. The file layout, rather than the test harness executable,
-was the first bottleneck to remove.
+Before changing runners or cleaning build output, distinguish compilation,
+artifact discovery, process startup and test execution. Libtest's execution
+time is not the total command time. Retain the selected source, compiler,
+features, target, command and cold/warm state with a performance observation;
+a historical benchmark is not a current universal budget or runner verdict.
 
-To reproduce the diagnosis without running tests:
+The maintained recipes use Cargo. A runner change needs scoped evidence for
+discovery, failure reporting, prerequisites, isolation and supported platforms,
+not just a faster small-suite result. One repaired concurrency bug does not
+prove that all tests are independent of process or scheduling behavior.
 
-```bash
-python3 - <<'PY'
-import os
-import time
-
-for path in ("target/debug/deps", "spec/target/debug/deps"):
-    started = time.perf_counter()
-    entries = sum(1 for _ in os.scandir(path))
-    elapsed = time.perf_counter() - started
-    print(path, entries, f"{elapsed:.3f}s")
-PY
-du -sh target spec/target
-```
-
-A target directory built without this setting holds unpacked artifacts;
-remove them once with
-`cargo clean` and `cargo clean --manifest-path spec/Cargo.toml`. Both commands
-delete derived build output only. A warm run should then be measured with
-`/usr/bin/time -p just test-spec` rather than inferred from the per-test times
-printed by libtest.
-
-With the setting in effect, a clean `spec/target` holds no `.rcgu.o` files and
-the deps directory has a few hundred entries rather than hundreds of
-thousands. Its three generator commands and six runtime
-commands are declared with `test = false`, because their behavior is already
-covered by library and integration tests and their binary sources contain no
-tests. This avoids compiling and launching nine empty harnesses.
-
-The project uses plain `cargo test`. Whole-workspace nextest is not used: its
-eager test enumeration launches dozens of new binaries at once and repeatedly
-wedges macOS `syspolicyd`. The cache migration race is closed at its source, so
-no test needs process isolation. A future runner change
-needs measurements on a clean and a warm target and must demonstrate that it
-does not recreate that first-execution burst. Full Disk Access is unrelated to
-repository build artifacts, and Developer Tools permission is not a remedy for
-an oversized Cargo target directory.
-
-On a small suite (the generators library's 51 tests, one binary, four
-workers, warm) nextest is slower than Cargo, so it gives no reason to change the default runner; that says nothing about
-the full workspace or newly compiled binaries. Reproduce the comparison by
-alternating:
-
-```bash
-/usr/bin/time -p cargo test --manifest-path spec/Cargo.toml -p generators --lib --locked
-/usr/bin/time -p cargo nextest run --manifest-path spec/Cargo.toml -p generators --lib --locked --test-threads 4 --status-level fail --final-status-level fail
-```
-
-The [nextest macOS guide](https://www.nexte.st/docs/installation/macos/)
-separately describes XProtect startup overhead and Developer Tools permission.
-That mechanism matters when launching even trivial tests is slow; it does not
-explain time spent enumerating hundreds of thousands of build artifacts.
+Do not use blanket `cargo clean` as a routine diagnostic step. It deletes build
+output and invalidates reusable binaries. Identify the exact target directory,
+preserve required artifacts and receipts, and coordinate with active builds or
+runs before deciding that removal is necessary. Source correctness and native
+platform behavior still require their own checks; artifact cleanup proves neither.
 
 ## Exercise the owned behavior
 
@@ -988,51 +956,45 @@ identity, alignment mode, overwrites, and clearing.
 
 ## Regeneration must preserve unchanged outputs
 
-The generators stage command output, publish only changed bytes and prune only
-obsolete files in exclusively owned directories. An unchanged `just regen`
-must leave generated Rust, C and fixture modification times alone, so Cargo
-does not rebuild merely because a generator ran: a no-op regeneration
-preserves bytes and nanosecond modification times of every tracked file and
-compiles nothing, and the following `just test` compiles nothing either. Any
-timing taken this way is a warm measurement, not a clean-build timing.
+The generators stage command output, publish changed bytes and prune obsolete
+files only in their exclusively owned directories. Unchanged outputs should
+retain bytes and modification times. This avoids invalidating consumers merely
+because generation ran; it does not guarantee that generation or a subsequent
+test command compiles nothing. `just regen` invokes compiled generators and a
+schema-generation test, whose own artifacts and dependencies may need building.
 
-To reproduce the preservation check, snapshot tracked files before and after
-`just regen` without editing or staging files between the snapshots:
+For an intentional no-change verification, hold source inputs and tools fixed,
+record the producer-owned output inventory before and after generation, and
+compare path membership, bytes and modification times. Checking only the old
+path list would miss newly created files. Separate expected additions/deletions
+after a source change from unexpected churn on unchanged inputs. Preserve
+unrelated work rather than resetting the checkout to obtain a clean comparison.
+Use [Grammar Workflow](grammar-workflow.md) and [Spec Workflow](spec-workflow.md)
+for the owning commands, dependencies and generated-output review. A successful
+generation command does not itself prove artifact correctness or test success.
 
-```bash
-python3 - <<'PY'
-import hashlib
-from pathlib import Path
-import subprocess
+<a id="one-integration-binary-per-crate"></a>
 
-paths = [Path(p) for p in subprocess.check_output(
-    ["git", "ls-files", "-z"]).decode().split("\0") if p and Path(p).is_file()]
-def snapshot():
-    return {p: (hashlib.sha256(p.read_bytes()).digest(), p.stat().st_mtime_ns)
-            for p in paths}
-before = snapshot()
-subprocess.run(["just", "regen"], check=True)
-after = snapshot()
-changed = [str(p) for p in paths if before[p] != after[p]]
-assert not changed, changed
-print(f"Preserved contents and modification times of {len(paths)} files")
-PY
-/usr/bin/time -p just test
-```
+## Test targets and name filters
 
-## One integration binary per crate
-
-Each crate has a SINGLE integration test binary (`tests/integration/`), so
-tests are selected by NAME FILTER, never by target name:
+Many regression modules share a target named `integration`, but this is not a
+one-target-per-crate invariant. For example, `talkbank-parser-tests` also has
+`parser_suite`, and the cache crate has separate runtime-boundary targets.
+Inspect Cargo metadata or the package manifest rather than deriving a target
+name from a source filename.
 
 ```bash
-cargo test -p talkbank-parser-tests --tests <filter>     # correct
-cargo test -p talkbank-parser-tests --test  <name>       # fails: no such target
+cargo test -p talkbank-parser-tests --test integration --locked -- --list
+cargo test -p talkbank-parser-tests --test integration catalog_api_boundaries:: --locked
 ```
 
-`--test <name>` names a compilation target, and per-file targets do not exist. It does not fall back to filtering: it errors with
-`available test targets: integration, parser_suite`. Every command on this page
-was checked by running it.
+The first command builds if necessary and lists that target's test names; it
+does not execute their assertions. The second selects the target and filters
+its test names. `--tests` instead selects compiled test targets more broadly.
+A nonexistent target is an error, while an unmatched name filter can select
+zero tests. Require the intended names and a nonzero executed count before
+claiming verification. The examples describe current routing, not evidence
+that every command on this page was run on the current checkout.
 
 ## Test generation pipeline
 
@@ -1080,9 +1042,10 @@ commands and writes each one out; they are not repeated here.
 
 ## Never-regress gates
 
-These guard behaviour a successor cannot easily re-derive. Any commit touching
-the grammar, parser, model, validation, serialization or alignment runs the
-matching gates and keeps them green.
+These guard behaviour a successor cannot easily re-derive. Select the contracts
+affected by a coherent change and reuse applicable retained results. They are
+explicit verification tools, not automatic per-commit gates. The final reviewed
+publication candidate receives the separate `just gate` check.
 
 **A red gate is a bug until proven otherwise**, never a test expectation to
 quietly update. That cuts both ways: a diagnostic that looks BETTER after a
@@ -1094,7 +1057,7 @@ change earns the same scrutiny as one that looks worse.
 | One-way backend error detection | `cargo test -p talkbank-parser-re2c --test integration error_parity::backends_report_every_tree_sitter_error` | Measures every authored error-spec example, including legal/deferred claims. A tree-sitter error requires some re2c error; warning-only output and silence fail, and internal failure refuses measurement. Codes and rejection stage may differ. This is finite file-level evidence, not fragment or specification completeness. |
 | Reference corpus parses | `cargo test -p talkbank-parser-tests --tests reference_corpus_parses` | Every reference file parses cleanly with the tree-sitter parser. Checks parser acceptance, not cross-parser equivalence. |
 | Reference transform workflows | `cargo test -p talkbank-parser-tests --test integration transform_corpus::` | Public normalization admits a loss-checked `Rewrite`, preserves typed semantics and is idempotent. Compact and pretty CHAT-to-JSON output deserialize into semantically equivalent typed models. These wire tests do not imply optional model validation or JSON-schema admission. |
-| Roundtrip idempotency, and reference coverage | `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for EVERY reference file. One test carries both guarantees: it iterates the whole corpus (coverage) and checks semantic equality on each (idempotency). |
+| Reference semantic roundtrip | `cargo test -p talkbank-parser-tests --test integration roundtrip_reference_corpus::` | Parse, serialize and reparse must yield a semantically equal model for each discovered reference file. This is semantic preservation over that fixture population, not byte-exact output, full model validity or compiler-code coverage. |
 | Generated spec tests | `cargo test -p talkbank-parser-tests --tests generated_tests` | Every construct spec still parses cleanly. (Error specs do not feed this: string-based error tests would be strictly weaker than the fixture corpus plus the observation snapshot.) |
 | Validation error corpus | `cargo test -p talkbank-parser-tests --tests validation_error_corpus` | Every ERROR-spec example (both stages) still satisfies its CLAIM against its generated `.cha` fixture, absences included. |
 | The gate registry | `cargo test -p talkbank-parser-tests --tests gates` | Runs every gate registered in `gate::ALL`. Ask the registry what that is rather than a list here: `cargo run -p talkbank-parser-tests --bin audit_gate_probes` names each gate, runs every probe against it, and prints the rules no probe reaches. |
@@ -1462,7 +1425,7 @@ part cannot license a partial rewrite. Existing language-specific composers
 remain separate. Preservation is not certification of CHAT validity.
 
 Dutch ordinal API controls cover authored irregular/compound spellings, every
-rank 1–1000 with all four accepted lowercase suffixes, and exact preservation
+rank 1-1000 with all four accepted lowercase suffixes, and exact preservation
 outside the supported whole-token ASCII domain. A private admitted rank owns
 the boundary; missing cardinal-table evidence cannot create a guessed word.
 Leading zeros and superscript `ᵉ` are explicit compatibility policies rather
@@ -1882,9 +1845,9 @@ text. Missing lines remain optional values until rendering; present lines are
 quoted, so literal `<missing>` text cannot masquerade as absence. These are
 report-format boundaries, not a claim that valid reference CHAT fails roundtrip.
 
-File and test counts deliberately appear nowhere on this page. They change
-weekly; ask the tree (`rg --files -g '*.cha' corpus/reference | wc -l`) rather
-than trusting a number in prose.
+Counts describing a particular contract are not a current whole-suite inventory.
+Use the selected binary's test listing and execution summary to establish what
+ran. A source-file count alone does not prove test discovery or execution.
 
 ## The gate registry
 
@@ -1896,25 +1859,29 @@ invalid words" and returns `Ok(())`, a coverage percentage compared to
 nothing. Every one of those type-checks, because `()` and `Ok(())` are
 perfectly good return types for "I printed something".
 
-So a gate implements the `Gate` trait in
-`crates/talkbank-parser-tests/src/gate.rs`, whose only output is a verdict:
-there is no method that yields findings without one, so "compute the list and
-forget to act on it" is not expressible. Registration in `ALL` is the whole
-mechanism, and a second gate checks the registry against the `impl Gate for`
-declarations in the sources, in both directions, so a gate that is written and
-not listed is a failure rather than a silence.
+Registered checks implement the `Gate` trait in
+`crates/talkbank-parser-tests/src/gate.rs`. Its `check` method returns an
+`Outcome`: clean, failed or unavailable. The integration harness consumes that
+verdict; a clean result also carries evidence of reads through its supplied
+tree. This does not prove that the check recognized every violation or chose
+the correct verdict. Keep the refusal probes, legal controls and documented
+unproven rules. A separate integration test compares `ALL` with the source
+`impl Gate for` declarations in both directions, catching unregistered checks
+and entries without implementations.
 
-**Two checks are not yet gates** and are named in that module: `verify_error_coverage.rs` still prints a coverage percentage
-and compares it to nothing, and `validate_golden_words.rs` keeps a path whose
-only caller is its own `main`. A `[[bin]]` in that crate sets `test = false`,
-which is target selection, so such a binary is excluded from `--tests` as well
-as never being run by CI. If you are citing a check as a gate, run it, then
-break it on purpose and watch it fail, before believing the citation.
+Standalone inspection binaries are not automatically registered gates.
+`verify_error_coverage` and `validate_golden_words`, for example, have
+`test = false` in the crate manifest. Running compiled test targets does not
+execute their `main` functions. Establish the actual caller, failure behavior
+and selected population before citing a tool as enforced coverage; a printed
+percentage or an available executable is not that evidence.
 
 ### The ratchets among them, and how you lower one
 
 Three gates hold reviewed baselines: `fabricated_ast` (a per-crate
-`CEILING` on `new_unchecked` and `Span::DUMMY`), `error_code_demonstration` (an
+`CEILING` on `new_unchecked` and `from_checked_literal`, and a
+`PARSER_UNLOCATED_CEILING` on production `Location::Unlocated` in the parser
+crates), `error_code_demonstration` (an
 `UNDEMONSTRATED` list of identities absent from the canonical file snapshot), and `content_catch_alls` (an
 `UNPROTECTED` list). Each baseline is a `const` in its own module, so lowering
 one is an edit in the commit that earned it, reviewed like any other line.
@@ -1940,9 +1907,18 @@ semantics; retain the functional assertions and review same-count substitutions.
 They need a Rust build:
 
 ```bash
-cargo test -p talkbank-parser-tests --tests gates   # every gate, verdicts only
-cargo run  -p talkbank-parser-tests --bin audit_gate_probes   # + can each fail?
+cargo test -p talkbank-parser-tests --test integration gates:: --locked
+cargo run -p talkbank-parser-tests --bin audit_gate_probes --locked
 ```
+
+The first command selects the gate integration module, including its registry
+and probe contracts. The second narrates the registered probes and returns
+their aggregate verdict; its mutations use in-memory overlays, not checkout
+edits. Review the selected/passed counts and prerequisite outcomes. Direct
+execution defaults to the strict `pre-push` tier unless
+`CHATTER_GATE_TIER` overrides it; `just test` deliberately selects `inner-loop`,
+where some unavailable prerequisites can be reported without failing the run.
+Neither kind of unavailable result proves that the affected check passed.
 
 ## The layers
 
@@ -1957,9 +1933,13 @@ flowchart TD
     unit --> specgen --> grammar --> ref --> gates
 ```
 
-**Unit and integration.** `just test` (`cargo test --workspace --tests`).
-Doctests are separate and are NOT run by `cargo test`; run
+**Unit and integration.** `just test` selects compiled test targets with
+`cargo test --workspace --tests --locked --no-fail-fast` at the inner-loop tier.
+The `--tests` selection omits doctests; bare `cargo test` also runs doctests.
+Run
 `cargo test --doc --workspace` when you change public API examples.
+`just test-all` combines strict workspace tests, the separate spec workspace,
+doctests and derive UI tests. It is still not the whole publication gate.
 
 **Grammar corpus.** `cd grammar && tree-sitter test`, the right gate for
 grammar structure changes. It does NOT detect a stale `parser.c`; see
@@ -2029,9 +2009,9 @@ internal-failure identity. These injected locations are not parser recovery
 specimens or evidence that any CHAT construct generates such offsets.
 The public dependent-tier parser is checked separately from the range helper:
 MOR/GRA, PHO and SIN slices from reference CHAT preserve their payload and exact
-tier span across `i32::MAX` and at the last representable `u32` byte extent.
-Moving the same slice one byte beyond that extent must refuse admission with
-one location-free diagnostic, without entering ordinary parser recovery.
+tier span across `i32::MAX` and past the former 32-bit byte extent. A range
+whose end overflows `usize` must refuse admission with one location-free
+diagnostic, without entering ordinary parser recovery.
 The same track checks that mixed input findings and internal failures retain
 their order and payload, reject completion regardless of severity or validation
 profile, and propagate truncated diagnostic-output failures.
@@ -2072,18 +2052,40 @@ consumers separately: workspace feature unification can conceal a missing
 feature guard. Do not blend these checks or internal unit-test profiles into
 canonical coverage totals. Generated code must remain separately identified.
 
+Configuration review must also follow conditions that are not Cargo features:
+
+- Trace parent modules before treating a condition as production code. The
+  async module's `all(test, feature = "async")` controls, runner fault-injection
+  variants and pointer-width checks inside test modules are test-only surfaces.
+- `docsrs`, `doc` and `doctest` select documentation/compiler support; they do
+  not establish runtime platform behavior.
+- The directory walk in `paths.rs` identifies directories by device/inode on
+  Unix and by canonicalized path on non-Unix targets. A Unix symlink/cycle
+  test does not exercise the other implementation or establish Windows behavior.
+- Generated traversal has `debug_assertions`-gated memo-query instrumentation.
+  Audit generated conditions through their source owner and actual output,
+  separately from handwritten code. A feature matrix alone does not prove
+  equivalence between debug and release builds.
+
+The syntax classifier intentionally leaves macro expansion and inherited
+configuration unresolved. Inspect its source-bound attribute ranges and their
+owners; neither an indexed search nor a count of attributes is a completeness
+certificate for compiler-expanded code or external build inputs.
+
 Report three distinct evidence tracks: canonical spec/reference workflows,
 API/internal-failure boundaries, and their combined coverage. The initial
 boundary population reuses `closed_newtype_consumer_view` and
 `public_error_types`; these are API contracts, not additional CHAT specimens.
-Its catalog-boundary module deliberately supplies independent diagnostics:
-typed-node fixes must refuse out-of-source locations, and unsupported repair
-requests cannot infer missing participant/language facts from a code or span.
-Codes attached to ordinary words, canonical media names and URL headers must
-not manufacture a repair. Real marker/comma spec diagnostics are positive
-controls against an always-refuse implementation. These synthetic requests
-belong only to the boundary track; they are not parser-emitted CHAT findings
-and do not establish that every diagnostic is bound to its original parse.
+Its catalog-boundary module now consumes actual `FixDiagnosis` findings:
+callers cannot construct a `FixFinding` from an independent diagnostic code
+and location. Valid words and canonical/URL media headers do not issue the
+selected repair findings. An actual unsupported grammar finding remains
+unsupported, while authored marker/comma findings provide positive controls
+against an always-refuse catalog. Compile-fail controls separately check
+forbidden construction and association. Keep these API-boundary obligations
+distinct from canonical repair workflows; moving ownership into types does not
+turn compiler refusals into additional malformed-CHAT coverage or eliminate
+the need to test diagnosis and repair policy.
 The JSON-export boundary module supplies a deliberately failing downstream
 serializer to each compact/pretty, schema-checked/unchecked API. Each must
 invoke it once, return no output, and retain the underlying serialization
@@ -2225,47 +2227,48 @@ cargo.
 | LSP | `cargo test -p talkbank-lsp` |
 | Spec files | regenerate per [Spec Workflow](spec-workflow.md), then `just test-spec` and the gate registry |
 | Either registry (symbols, form markers) | `just test-spec`, which includes the drift gates |
-| Anything, before pushing | `just gate`, or `just push` which runs it |
+| Final reviewed publication candidate | `just gate`; `just push` runs it and then pushes, so use that wrapper only with publication authorization |
 
 ## Mutation testing
 
-`cargo-mutants` finds code that can be changed without any test failing, which
-is the real coverage question. It is not part of CI; run it periodically after
-significant changes.
+Mutation testing is an optional, explicitly scoped investigation, not part of
+the configured CI or a routine post-change requirement. It complements rather
+than replaces canonical coverage, boundary controls and source/feature proof.
 
-```bash
-cargo install cargo-mutants
-cargo mutants -p talkbank-model --file 'src/validation/**' --timeout 180
-cat mutants.out/missed.txt    # mutations no test caught
-```
+Before a run, identify the behavioral obligation and review the selected tests,
+mutations and exclusions. A surviving mutation is a review candidate, not proof
+that a validation rule can be silently disabled: establish whether it changes
+supported behavior, whether the selected tests reach it, and whether their
+assertions distinguish the changed result. Equivalent changes and execution
+failures need separate dispositions; neither is a missing CHAT specimen.
 
-**Scope it, and read the result as a work list rather than a score.** The
-validation tree is the highest-value target: `chatter validate` is the
-authority on CHAT validity, so a mutant that survives there is a rule that can
-be silently disabled. Running `-p talkbank-parser` unscoped spends most of its budget on `src/generated_traversal.rs`,
-over half that crate and generated, where a survivor indicts the generator
-rather than this repository. To see the size of a target before committing an
-evening to it, use `cargo mutants --list --file '<glob>'`.
+The root `mutants.toml` excludes the generated traversal file and selected
+functions. Those exclusions limit what the experiment can establish; they do
+not prove the excluded behavior correct. Review generator inputs and consumer
+contracts when investigating generated behavior. Do not hand-edit generated
+code or infer generator correctness from an excluded population.
 
-Each job runs a full workspace build peaking around 8 GB, and the failure mode
-is an out-of-memory kill during overlapping linker phases rather than steady
-state, so measure peak memory at a small `--jobs` before raising it. A fixed
-`--jobs 1` is not a property of the tool; the right value depends on the machine.
-
-Configuration is `mutants.toml` at the repo root.
+Choose build scope and concurrency for the selected experiment and available
+resources. Retain actual timing and peak-memory observations with its source,
+tool and configuration identity; an old workspace memory estimate is not a
+universal per-job budget. No mutation run is required merely to edit this guide.
 
 ## Adding tests, and when not to
 
-Before writing a test, ask whether a TYPE could make the bad value
-unrepresentable instead. A test guarding an invariant is a standing admission
-that nothing enforces it; changing the type deletes the test, covers callers
-the test never enumerated, and fails at the point of the mistake rather than in
-CI. Reducing the test count this way is an explicit pre-1.0 goal.
+Before writing a test, ask whether ownership, a validated constructor or a
+consuming phase transition can make the bad state unavailable to callers.
+Then test the boundary that establishes that invariant. A private field does
+not prove its constructor checks the right condition, and a deserializer or
+conversion can accidentally bypass admission.
 
-What legitimately survives that question: wire formats, roundtrips between a
-formatter and a parser that are two separate functions, measurements, policy
-choices with real alternatives, and behaviour a signature cannot describe. A
-surviving test says which of those it is, in its own docstring.
+Keep constructor rejection and legal-boundary controls, wire-format tests,
+policy tests, parser/formatter roundtrips and public-boundary regressions.
+Compile-fail controls can verify that forbidden transitions are unavailable;
+runtime controls verify the admission and behavior that types alone do not
+establish. State each test's obligation rather than optimizing test counts.
+Remove a test only when its specific obligation is genuinely redundant after
+the refactor, explaining which owner or retained proof replaces it. Never
+delete a boundary test merely because its successful result has a newtype.
 
 When a test is the right answer:
 
@@ -2273,5 +2276,6 @@ When a test is the right answer:
   module.
 - **Grammar shape or validation contract**: add or update a SPEC and
   regenerate. A parser bug fixed without a spec will regress.
-- **A repository-wide invariant**: implement `Gate` and register it, rather
-  than writing a binary that prints findings.
+- **A repository-wide invariant**: use its existing owner and verification
+  surface. A new automatic gate is a workflow change, not the default answer
+  to a missing test; obtain the required approval before adding one.

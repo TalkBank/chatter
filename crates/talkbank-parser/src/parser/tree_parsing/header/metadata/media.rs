@@ -5,10 +5,11 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Linking>
 
 use crate::generated_traversal::{
-    AsRawNode, MediaHeaderNode, NoChild, ReadableSlot, SourceBound, SourceSlotView,
+    AsRawNode, MediaHeaderNode, ReadableSlot, SourceBound, SourceSlotView,
 };
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::ErrorSink;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::{
     ContentSlot, HeaderSite, read_admitted_content, surface_displaced,
 };
@@ -28,33 +29,11 @@ pub fn parse_media_header<'tree>(
 ) -> Result<Header, CstFailure> {
     let source = typed.source();
     let site = HeaderSite::bound(typed);
-    let node = site.actual();
 
-    // Only a present body enters lowering; missing/error/absent body states
-    // retain the existing header-level diagnostic and Unknown recovery.
-    let header_children = typed.extract();
-    let contents = match header_children.field_child_2().slot().view() {
-        SourceSlotView::Present(contents) => Some(contents),
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
-            None
-        }
-    };
-    let Some(contents) = contents else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), "media_header"),
-            "Missing media_contents in @Media header",
-        ));
-        surface_displaced(
-            &header_children.children().unexpected,
-            "media_header",
-            source,
-            errors,
-        );
-        return Ok(site.unknown("Missing media_contents in @Media header", Some(MEDIA_FIX)));
-    };
+    // The envelope proves its composite body present, not the validity of
+    // the filename, media kind or other nested fields.
+    let header_children = crate::parser::typed_cst::extract_envelope(typed)?;
+    let SourceSlotView::Present(contents) = header_children.field_child_2().slot().view();
     surface_displaced(
         &header_children.children().unexpected,
         "media_header",
@@ -88,10 +67,7 @@ pub fn parse_media_header<'tree>(
     let whitespace_before_comma = match contents_children.child_1.slot.as_ref() {
         Some(ReadableSlot::Present(space_node)) => {
             let raw = space_node.raw_node();
-            Some(crate::error::Span::new(
-                raw.start_byte() as u32,
-                raw.end_byte() as u32,
-            ))
+            Some(span_of(raw))
         }
         None | Some(ReadableSlot::Missing(_) | ReadableSlot::Error(_)) => None,
         Some(ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never)) => match *never {},

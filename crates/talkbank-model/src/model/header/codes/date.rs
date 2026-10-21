@@ -5,7 +5,7 @@
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#Date_Header>
 
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorContext, ParseError, Severity};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
@@ -134,7 +134,7 @@ pub enum ChatDate {
 /// Date components admitted together with their original spelling.
 ///
 /// Obtain this payload through [`ChatDate::from_text`]. Admission checks format
-/// and the day range 01–31, not calendar or leap-year validity.
+/// and the day range 01-31, not calendar or leap-year validity.
 /// Components cannot be changed independently of the stored text.
 ///
 /// ```compile_fail,E0616
@@ -166,7 +166,7 @@ pub struct CheckedChatDate {
 }
 
 impl CheckedChatDate {
-    /// Admitted day of month, in 1–31.
+    /// Admitted day of month, in 1-31.
     pub fn day(&self) -> u8 {
         self.day
     }
@@ -176,7 +176,7 @@ impl CheckedChatDate {
         self.month
     }
 
-    /// Admitted four-digit year, in 0–9999.
+    /// Admitted four-digit year, in 0-9999.
     pub fn year(&self) -> u16 {
         self.year
     }
@@ -299,14 +299,14 @@ impl From<&str> for ChatDate {
 
 impl Validate for ChatDate {
     /// Reports `InvalidDateFormat` for `Unsupported` dates.
-    fn validate(&self, _context: &ValidationContext, errors: &impl crate::ErrorSink) {
+    fn validate(&self, context: &ValidationContext, errors: &impl crate::ErrorSink) {
         if let Self::Unsupported(raw) = self {
             errors.report(
                 ParseError::new(
                     ErrorCode::InvalidDateFormat,
                     Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new(raw, 0..raw.len(), raw.as_str()),
+                    context.field_diagnostic_location(),
+                    ErrorContext::new(raw, crate::Span::new(0, raw.len()), raw.as_str()),
                     format!("Invalid @Date format '{}': expected DD-MMM-YYYY", raw),
                 )
                 .with_suggestion(

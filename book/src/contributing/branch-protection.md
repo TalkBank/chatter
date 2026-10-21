@@ -3,38 +3,44 @@
 **Status:** Current
 **Last updated:** {{git-dates:page}}
 
-This page defines the required status checks and protection policy for `main`.
+This page describes the branch-protection settings configured for `main` and
+the CI checks that pull requests must pass. The live settings live in the
+repository's GitHub configuration and are changed there by a maintainer;
+editing this page changes nothing on GitHub.
 
-## Branch Protection Policy
-Enable branch protection for `main` with:
-- Require pull request before merge.
-- Require approvals (minimum 1; maintainers may set higher).
-- Require conversation resolution before merge.
-- Require status checks to pass before merge.
-- Restrict force pushes and branch deletions.
+## Branch Protection Settings
+`main` is configured with:
+- A pull request before merge, with at least one approving review; stale
+  approvals are dismissed when new commits are pushed.
+- Conversation resolution before merge.
+- The required status checks below. Branches need not be up to date with
+  `main` before merging.
+- No force pushes and no branch deletion.
+
+Administrators are not subject to these rules, so maintainers can push
+directly to `main`. A maintainer push still runs every CI job afterwards.
 
 ## Required Status Checks
-Configure these CI checks as required. The names are the GitHub check names,
-which come from each job's `name:` in `.github/workflows/ci.yml`; that
-workflow runs on every pull request to `main`. This is every job that
-workflow defines, so the required set and the workflow do not drift apart:
+Three checks are required. The names are GitHub check names, taken from each
+job's `name:` in `.github/workflows/ci.yml`:
 
 - `Rust build + test`
-- `wasm32 check (model + re2c parser)`
 - `mdBook build`
 - `Rust version pins in sync`
+
+Every other job in `ci.yml` also runs on every pull request to `main`; a red
+result is a defect to fix before merging, but GitHub does not block the merge
+on it:
+
+- `wasm32 check (model + re2c parser)`
 - `App version in sync`
 - `Shell scripts (shellcheck, strictest)`
 - `Grammar (generate staleness, tree-sitter test, queries)`
 - `Dependency policy (cargo-deny)`
 
-A required-check list that silently omits jobs is worse than no
-list, because it reads as a deliberate selection rather than an oversight.
-**When you add a job to `ci.yml`, add it here in the same commit.**
-
-Note that this page states the INTENDED required set; the live setting lives
-in the repository's branch-protection configuration on GitHub and is changed
-there by a maintainer, not by editing this file.
+When you add a job to `ci.yml`, list it in one of these two groups in the same
+commit. Making a job required is a settings change by a maintainer; update the
+lists here when that setting changes.
 
 One other workflow is deliberately NOT in the required set:
 - `cross-platform.yml` (the Ubuntu + macOS + Windows matrix) runs on push to
@@ -44,6 +50,7 @@ One other workflow is deliberately NOT in the required set:
   `pull_request` trigger first if you want it required.
 
 ## Optional Hardening
+Not configured today; possible later:
 - Require branches to be up to date before merging.
 - Enable merge queue if PR volume increases.
 - Restrict who can dismiss stale reviews.

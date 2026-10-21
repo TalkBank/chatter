@@ -2,7 +2,7 @@
 //!
 //! # Why the six count-mismatch tests left
 //!
-//! They built a `MainTier` with `Span::from_usize(0, 20)` and a trailing
+//! They built a `MainTier` with `Span::new(0, 20)` and a trailing
 //! comment reading `// *CHI: one two .`, then asserted the error landed at
 //! 0..20. The span and the comment are two statements of one fact joined by
 //! nothing, and the number is only meaningful against bytes the test does not
@@ -53,18 +53,29 @@ fn simple_mor(pos: &str, lemma: &str) -> Mor {
 #[test]
 fn test_mor_alignment_errors_have_no_bogus_context() {
     let main = MainTier::new(
+        crate::MainTierLocations {
+            line: Span::new(0, 15).into(),
+            speaker: crate::Location::Unlocated,
+            content: crate::Location::Unlocated,
+        },
         "CHI",
-        vec![UtteranceContent::Word(Box::new(Word::new_unchecked("one")))],
-        Terminator::Period { span: Span::DUMMY },
-    )
-    .with_span(Span::from_usize(0, 15));
+        vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
+            crate::Location::Unlocated,
+            "one",
+        )))],
+        Terminator::Period {
+            location: crate::Location::Unlocated,
+        },
+    );
 
     let mor = MorTier::new(
+        Span::new(16, 40),
         MorTierType::Mor,
         vec![simple_mor("num", "one"), simple_mor("num", "two")],
-        Terminator::Period { span: Span::DUMMY },
-    )
-    .with_span(Span::from_usize(16, 40));
+        Terminator::Period {
+            location: crate::Location::Unlocated,
+        },
+    );
 
     let alignment = align_main_to_mor(&main, &mor);
 

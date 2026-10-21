@@ -58,12 +58,9 @@ fn collect(
             retrace_checks.push(RetraceCheck {
                 // The marker's own bytes when recorded; otherwise the whole
                 // retrace as the wrapper locates it (annotations included),
-                // a wider but true location, or a dummy one that suppresses
+                // a wider but true location, or unlocated, which suppresses
                 // the label. Never an invented offset.
-                marker_span: match retrace.inner().marker_span {
-                    Some(marker) => marker,
-                    None => retrace.span(),
-                },
+                marker_location: retrace.inner().marker_location.or(retrace.location()),
                 after_leaf_index: leaf_kinds.len(),
             });
         }

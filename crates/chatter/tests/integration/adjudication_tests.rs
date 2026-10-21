@@ -53,6 +53,73 @@ kind = "speaker-id-low-confidence"
 choice = { kind = "accept-suggested" }
 "#;
 
+/// Script versions are admitted before either persistent document can change.
+#[test]
+fn adjudicate_script_schema_admission_preserves_files() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let pending = dir.path().join("pending.toml");
+    let scripted = dir.path().join("scripted.toml");
+    let overrides = dir.path().join("overrides.toml");
+    let existing = "# retain this evidence on refusal\nschema_version = 2\n";
+
+    for version in ["0", "3", "4294967295", "-1", "\"2\"", "missing"] {
+        fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
+        fs::write(&overrides, existing)?;
+        let header = match version {
+            "missing" => String::new(),
+            _ => format!("schema_version = {version}"),
+        };
+        fs::write(
+            &scripted,
+            FIX_SCRIPTED_ACCEPT_SUGGESTED.replacen("schema_version = 1", &header, 1),
+        )?;
+        harness
+            .chatter_cmd()
+            .arg("adjudicate")
+            .arg(&pending)
+            .arg("--override-file")
+            .arg(&overrides)
+            .arg("--scripted")
+            .arg(&scripted)
+            .assert()
+            .code(1)
+            .stderr(predicates::str::contains("scripted-decisions"));
+        assert_eq!(fs::read_to_string(&pending)?, FIX_PENDING_ONE_SPEAKER_ID);
+        assert_eq!(fs::read_to_string(&overrides)?, existing);
+    }
+
+    for version in [1, 2] {
+        fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
+        fs::write(&overrides, existing)?;
+        fs::write(
+            &scripted,
+            FIX_SCRIPTED_ACCEPT_SUGGESTED.replacen(
+                "schema_version = 1",
+                &format!("schema_version = {version}"),
+                1,
+            ),
+        )?;
+        harness
+            .chatter_cmd()
+            .arg("adjudicate")
+            .arg(&pending)
+            .arg("--override-file")
+            .arg(&overrides)
+            .arg("--scripted")
+            .arg(&scripted)
+            .assert()
+            .success();
+        let result = talkbank_transform::adjudication::PendingAdjudications::read(&pending)
+            .expect("accepted pending output");
+        assert!(result.entries.is_empty(), "supported version {version}");
+        let result = talkbank_transform::speaker_id::OverrideFile::read_or_default(&overrides)
+            .expect("accepted override output");
+        assert!(result.get("session-102-t1").is_some());
+    }
+    Ok(())
+}
+
 /// Wire-boundary refusal must not publish a decision lacking a rename role.
 #[test]
 fn adjudicate_missing_role_preserves_files() -> Result<(), TestError> {

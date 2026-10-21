@@ -23,15 +23,19 @@ flowchart TD
     cli --> sel
     sel -->|"tree-sitter (default)"| ts
     sel -->|"re2c"| re2c
-    ts -->|"ParserDispatch::TreeSitter\n(worker.rs) implements"| trait
-    re2c -->|"ParserDispatch::Re2c\n(worker.rs) implements"| trait
+    ts -->|"implements"| trait
+    re2c -->|"implements"| trait
     trait --> model
 ```
 
-`ParserDispatch::new(kind)` (in `validation_runner/worker.rs`) is the single
-place that constructs the chosen backend from a `ParserKind`; both variants
-wrap a `ChatParser` implementor, so the validation runner never branches on
-backend again.
+In the validation runner, `ParserDispatch::new(kind)` (in
+`validation_runner/worker.rs`) constructs the selected backend. The private
+enum does not itself implement `ChatParser`: its inherent streaming adapter
+matches the variant for each file. It calls Tree-sitter's inherent streaming
+method or re2c's trait file method at offset zero; a rejected re2c outcome
+becomes an empty recovery model while diagnostics remain in the supplied sink.
+The runner's diagnostic admission, not the presence of that model, decides
+whether the attempt completed. Other consumers can use the trait directly.
 
 ## The shared `ChatParser` trait
 
@@ -95,6 +99,12 @@ incremental LSP backend. The re2c requirement does not waive truthful diagnostic
 or authorize architecture-distorting workarounds. Retain valid controls and
 isolated invalid variants so an unrelated error cannot conceal a missed fault.
 
+For an unannotated angle group, re2c retains its native `Group` and emits a
+missing-required-element error over the containing main tier's lexer region.
+It does not invent a retrace marker. The same dispatcher serves the sink-bearing
+file, utterance and main-tier APIs, including nested groups. A retained bare
+group is recovery content, not proof that its original source was valid.
+
 ### API shape
 
 Both backends implement `talkbank_model::ChatParser` directly (the
@@ -103,8 +113,11 @@ tree-sitter impl landed 2026-07-24 in
 from the start). The trait is the parser-agnostic API for every
 granularity: whole files, headers, utterances, main tiers, `%mor`/`%gra`
 and the other dependent tiers, down to single words and relations. Each
-method takes `(input, offset, errors)` and returns a `ParseOutcome`;
-diagnostics stream through the caller's `ErrorSink`.
+base parse method takes `(input, offset, errors)` and returns a `ParseOutcome`;
+context-aware methods additionally take `FragmentSemanticContext`. Diagnostics
+stream through the caller's `ErrorSink`; `Parsed` alone does not prove validity.
+Do not confuse this trait file method with Tree-sitter's single-argument
+inherent file method, which returns `ParseProduct`.
 
 Downstream consumers should bind on the trait, not on a concrete backend:
 
@@ -115,19 +128,69 @@ fn analyze<P: ChatParser>(parser: &P, text: &str) { /* ... */ }
 selects the backend with one generic bound, including cross-target setups
 (tree-sitter natively, pure-Rust re2c on wasm, where compiling
 tree-sitter's C runtime is undesirable). No facade or cfg-gated dispatch
-module is needed on the consumer side. The wasm half of that contract is
-pinned in CI: the `wasm` job in `ci.yml` checks `talkbank-model` and
-`talkbank-parser-re2c` for `wasm32-unknown-unknown` on every push.
+module is required merely to express that generic bound. Target-specific
+dependency selection still belongs to the consumer. The `wasm` job in
+`ci.yml` is configured to run `just wasm-check` for `talkbank-model` and
+`talkbank-parser-re2c` on pushes and pull requests targeting `main`.
+That is a compilation check for `wasm32-unknown-unknown`, not execution in a
+browser or a current successful CI receipt.
 
 Two notes on the trait's shape:
 
 - The trait has generic methods (`errors: &impl ErrorSink`), so it is not
   dyn-compatible; runtime backend selection uses a small enum such as
   `ParserDispatch` rather than `Box<dyn ChatParser>`.
-- On `TreeSitterParser`, every trait method delegates to the matching
-  inherent `parse_*_fragment` method, so trait-path and inherent-path
-  behavior are identical by construction. The conformance gate is
-  `talkbank-parser/tests/chat_parser_trait.rs`.
+- Tree-sitter's base parse methods delegate to inherent fragment methods.
+  Context-aware overrides forward context for words, main tiers and utterances;
+  other context-aware methods can inherit the trait's context-ignoring default.
+  Do not infer that every fragment applies every context field. The trait
+  conformance tests live in
+  `crates/talkbank-parser/tests/integration/chat_parser_trait.rs`.
+
+## Where values are placed
+
+Both backends place every model value by one convention, and the cross-backend
+deck (`equivalence_container_locations` in the re2c crate's equivalence tests)
+holds them to it. The convention is the rule "a location is exactly the item":
+
+- A **line** (header, main tier, dependent tier) includes its line ending when
+  the source has one. **Main-tier content** starts after the separator's colon,
+  so the tab is content; `MainTierLocations` documents this once.
+- A **word** is its text as written. A word the re2c lexer could not read as
+  one token is assembled from subtokens and takes the source slice from its
+  first token through its last, so it is placed like any other word; that
+  slice is the source as written, including a curly quote the file parser
+  stripped and reported between two subtokens.
+- A **group** is its brackets, `<` through `>`; a **quotation** its two marks;
+  an **event**, **freecode**, **marker** or **bullet** its own lexeme.
+- A **retrace** runs from its content (the brackets it took from a bare group,
+  or the one item it wraps) through its marker. `Retrace::marker_location` is
+  the marker alone.
+- A **replaced word** runs from the word through its last annotation, the
+  replacement's `]` included.
+- An **`Annotated<T>` wrapper** runs from its construct through its own last
+  annotation. In a chain such as `a [?] [/] [!]` the inner annotated word
+  ends at `[?]`, the retrace at `[/]`, and the outer wrapper at `[!]`; the
+  outermost wrapper therefore ends at the chain's final `]`, which the
+  glued-code rule (E757) relies on.
+- A **hull** that cannot place one of its parts is `Unlocated`, never a span
+  that stops short of the construct; `Unlocated` is otherwise reached only for
+  a slice that is not from the source being converted, which is a programming
+  error.
+
+Two policies follow from this and are rulings, not conventions:
+
+- **Diagnostics are owned by the model's rules, never mirrored by a parser.**
+  A parser-side token scan that exists to emit a specific diagnostic (the re2c
+  backend carried one for E757 while its wrappers were unlocated) fires beside
+  the rule once the typed path reaches the construct, and encodes the message
+  rather than the fact. When a diagnostic seems missing on one backend, place
+  the construct so the rule reaches it; do not add text-level scanning to
+  produce the code.
+- **One flagged error is enough.** A line already reported malformed at a byte
+  (an orphan `[/]` opening an utterance, E759) does not also get the glued-code
+  error there to match CLAN's count; CHECK parity for a second message on the
+  same bytes is not a goal.
 
 ## TreeSitterParser (default)
 
@@ -161,26 +224,31 @@ does not infer file options: callers that know them should supply the context.
 - **Grammar:** `grammar/grammar.js` → generated C parser
 - **Strengths:** Incremental reparsing (LSP), robust error recovery (GLR),
   CST-level diagnostics
-- **Weaknesses:** Slower on batch workloads, `!Send + !Sync` (one parser per thread)
+- **Concurrency:** Reuse one parser handle per worker; its mutable parser
+  state is internally borrowed and is not shared concurrently.
 
-Used by the LSP, the default CLI, and all production validation.
+Used by the LSP and the default CLI validation path.
 
 ## Re2cParser
 
 - **Crate:** `talkbank-parser-re2c`
 - **Technology:** [re2c](https://re2c.org/) DFA lexer + [chumsky](https://docs.rs/chumsky/1.0.0-alpha.8) parser combinators
-- **Grammar:** Translated from `grammar.js` rules → re2c conditions + chumsky combinators
-- **Strengths:** 4-8x faster, `Send + Sync`, zero constructor cost, independent experimental implementation
-- **Weaknesses:** No incremental reparsing, incomplete diagnostic parity, and
-  **it is not ready to judge CHAT validity** (see below)
+- **Grammar:** Independently maintained re2c conditions and chumsky combinators,
+  reviewed against the shared syntax contracts; not generated from `grammar.js`
+- **Design:** Stateless parser handle, DFA lexing and independent native
+  parsing/recovery. Measure performance for the intended workload.
+- **Limits:** No incremental reparsing. Full specification and backend
+  completeness remain unproven; finite passing comparisons do not establish
+  1.0 readiness. Exact diagnostic identity is not a requirement.
 
 Used for parser parity testing and performance benchmarking.
 
 ### Source ownership and participant recovery
 
-Parsed values borrow the caller's source; token storage and temporary
-recovery buffers are released after parsing. The backend leaks no memory
-(no `Box::leak`).
+The native intermediate AST borrows caller source. Conversion produces the
+owned shared model; do not confuse an intermediate AST's lifetime with the
+public `ChatFile` lifetime. Source borrowing and scoped token storage are
+ownership choices, not a general proof of leak freedom or a memory bound.
 
 File parsing receives a `LexedSource` that privately owns tokens and their
 lexer locations alongside the borrowed source. Its only constructor lexes
@@ -231,8 +299,22 @@ rejects replacements glued to rich or reconstructed words with E375/E316, matchi
 test compares both backends against the violation and its spaced legal control.
 Canonical closing-bracket recovery excludes absorbed trailing whitespace from
 its highlight and builds its context from the original source. The internal AST snapshot
-changes to show the category, while reference-corpus model equivalence guards
-serialized CHAT behavior.
+changes to show the category. Reference-corpus equivalence checks shared-model
+semantics; byte-exact CHAT serialization needs its own roundtrip controls.
+
+### Numeric bullet admission
+
+The native lexer retains each bullet's original spelling together with checked
+numeric admission. Main-tier terminal slots, inline/nested content, header and
+text-tier segments, and WOR words consume that result; conversion never turns
+overflow into zero timing. Rejected timing is distinct from an absent source
+slot, so dropping it cannot promote an earlier inline bullet into terminal
+timing. Surrounding content remains available as recovery, not valid source.
+
+Numeric representability does not establish leading-zero spelling, inline
+all-zero policy, chronological ordering or alignment validity. Those checks
+retain their own owners. Both backends report WOR numeric overflow through
+whole-file and fragment APIs; native fragment diagnostics retain caller offsets.
 
 ### Postcode admission and diagnostic offsets
 
@@ -248,8 +330,8 @@ The re2c trait implementation streams diagnostics through one offset adapter.
 File diagnostics, utterance fragments, main-tier lowering and header/participant
 fragments therefore use the same rebasing operation as their models. This
 removes temporary diagnostic collection in header fragments and the discarded
-utterance diagnostics. Remaining fragment entry points that do not yet produce
-diagnostics are still a separate parity gap. The postcode boundary test loads
+utterance diagnostics. The dated parity report distinguishes the finite fragment detection checks
+from broader completeness obligations. The postcode boundary test loads
 the authored E363 examples and checks actual token spans, nonzero offsets,
 recovered tier content and canonical-parser normalization.
 
@@ -298,8 +380,9 @@ records that API change.
 
 The grammar admits a nonempty run of colons with no 255-character limit.
 `WordLengthening::count` and the re2c AST carry `NonZeroUsize`, measured at the
-parser boundary. Neither backend narrows source length to `u8`, so a run of
-any length neither overflows nor silently wraps. A zero count cannot be constructed or decoded
+parser boundary. Neither backend narrows source length to `u8`; the count is
+bounded by addressable input length rather than 255. This does not promise
+unbounded memory or parser capacity. A zero count cannot be constructed or decoded
 from JSON, and both the default constructor and omitted JSON count mean one
 colon. Serialization does not repair zero counts with `max(1)`.
 
@@ -312,8 +395,9 @@ backends to lose the same information.
 ### Remaining parity limits
 
 The [dated re2c measurements](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-parser-re2c/docs/parity-report.md)
-include known silent invalid cases; do not treat zero-silence results as
-guarantees. A clean `--parser re2c` run is not a general validity
+include historical silent invalid cases and subsequent finite repairs. Do not
+treat either old failures as a current defect list or passing results as
+completeness guarantees. A clean `--parser re2c` run is not a general validity
 guarantee. Differences in diagnostic specificity, additional diagnostics,
 source locations and recovery remain permissible. Missed errors do not.
 Run the one-way comparison for the complete authored-example failure inventory;
@@ -322,6 +406,14 @@ a historical diagnostic-set baseline cannot waive the requirement.
 Both backends feed the shared model validator, but source information discarded
 before lowering cannot be checked there. Rejected morphology preserves taint;
 other recovery paths and remaining dummy diagnostic locations still need review.
+
+Re2c's file dispatcher reports lexical faults at the original token region:
+leading-zero bullet spelling, angle-edge whitespace, illegal curly quotes and
+misplaced linkers retain their lexer locations through caller-offset rebasing.
+Structural failures use the source owner's enclosing region: a missing group
+annotation highlights its main tier, and an orphan dependent tier its own line.
+These are truthful native locations, not a promise to match tree-sitter's
+recovery point or diagnostic extent.
 
 ## CLI Usage
 
@@ -341,7 +433,13 @@ are parser-specific, switching parsers does not invalidate the other's cache.
 
 ## Parity Status
 
-The reference comparison checks error-free acceptance and shared-model semantics.
+`equivalence_tests::equivalence_reference_corpus` checks each reference file
+as authored and with CRLF and lone-CR transport newlines. Each backend's own
+parse observation must produce a model without error-severity or internal
+diagnostics before `SemanticEq` comparison. Ordinary warnings need not agree.
+The batch retains failures and rejects an empty comparison population.
+This does not run complete shared-model validation, compare serialized bytes,
+or compare each transport's model against that backend's authored-input model.
 The error-spec comparison `backends_report_every_tree_sitter_error` measures every
 declared example, including legal claims and deferred codes. It retains parsing
 and shared-validation findings separately, and rejects silence or warning-only
@@ -365,24 +463,29 @@ the current build rather than relying on a stored number.
 
 Run benchmarks: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 
+Inspect the selected operation before comparing numbers. The suite separates
+Tree-sitter construction from reuse, fixed reference-file batches, fragments
+and lexing. Native free-function cases return intermediate AST results, while
+Tree-sitter file cases produce shared models; these are not uniformly equivalent
+end-to-end operations. The benchmark is not a validity/equivalence test or a
+measurement of complete CLI validation, cache use, I/O or diagnostics rendering.
+
 ## When to Use Which
 
 | Use Case | Recommended Parser | Why |
 |----------|-------------------|-----|
 | LSP / editor integration | tree-sitter | Incremental reparsing |
-| Batch validation (>100 files) | tree-sitter | re2c is faster but is not a validity authority |
-| CI validation | tree-sitter | The two backends are not interchangeable validity authorities |
-| Error diagnostics (user-facing) | tree-sitter | More specific E3xx codes |
+| Batch validation | tree-sitter by default | Production default; measure workload performance separately |
+| CI validation | tree-sitter by default | Default validation policy; compare both backends when changing shared language support |
+| Error diagnostics (user-facing) | tree-sitter by default | Default user workflow; specificity and recovery may differ by backend |
 | Parser comparison testing | Both | Disagreements require adjudication against the specs; neither backend is an oracle |
-| Profiling / benchmarking | re2c | DFA lexer gives a performance floor |
+| Profiling / benchmarking | Both | Measure the selected operation, input set and build; neither supplies a universal performance bound |
 
 ## Shared Model Infrastructure
 
-Both parsers convert to the same `talkbank_model::ChatFile` type and share
-post-hoc promotion logic:
-
-- `TierContent::extract_terminal_bullet()`: trailing InternalBullet → utterance bullet
-- `parse_bullet_node_timestamps()`: structured bullet CST → (start_ms, end_ms)
+Both parsers convert to the same `talkbank_model::ChatFile` type and use shared
+model validation and alignment. Backend-specific token/CST lowering remains
+separate; a Tree-sitter node helper is not a shared re2c parsing primitive.
 
 CA intonation arrows are not promoted to terminators at the
 parser/model boundary; both parsers leave them as `Separator` items.
@@ -391,4 +494,5 @@ See [CA Terminator Resolution](parser-and-grammar/ca-terminator-resolution.md).
 ## Detailed Parity Report
 
 See [`crates/talkbank-parser-re2c/docs/parity-report.md`](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-parser-re2c/docs/parity-report.md)
-for the full gap analysis, divergence categories, and remaining work items.
+for retained measurements, divergence categories and their stated limits.
+Its historical entries are not an authoritative current defect queue.

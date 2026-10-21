@@ -1,32 +1,30 @@
-//! `chatter debug linker`, linker-consistency audit.
+//! `chatter debug linker-audit`, exploratory linker-consistency audit.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use talkbank_model::errors::NullErrorSink;
 
+use super::report::OpenReport;
 use super::*;
 
 /// Run the linker-audit debug command.
 ///
 /// When `anomalies_path` is provided, emits one JSON-lines record per anomaly
-/// with file path, line number, anomaly type, speaker, preceding context, the
-/// utterance text, and suggested fix. This JSON is the persistent dataset for
-/// all downstream analysis and fix planning.
-pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
+/// with file path, utterance index, anomaly type, speaker, preceding context, the
+/// utterance text, and suggested fix. These are exploratory findings, not
+/// validation or repair authority. Existing report paths are refused; I/O
+/// failures retain any new partial report and return an error.
+pub fn run_linker_audit(
+    paths: &[PathBuf],
+    anomalies_path: Option<&Path>,
+) -> Result<(), AuditError> {
     use std::collections::HashMap;
 
     use talkbank_model::model::{Line, Linker, LinkerKind, Terminator};
 
-    let mut anomaly_writer: Option<std::io::BufWriter<std::fs::File>> = anomalies_path.map(|p| {
-        let file = std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("ERROR: cannot create anomalies file {}: {e}", p.display());
-            std::process::exit(1);
-        });
-        std::io::BufWriter::new(file)
-    });
-
     let (cha_files, parser) = super::transcripts_and_parser(paths);
+    let mut anomaly_writer = anomalies_path.map(OpenReport::create).transpose()?;
+
     let total_files = cha_files.len();
     eprintln!("Analyzing {total_files} .cha files...");
 
@@ -127,13 +125,10 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
             eprintln!("  ...{file_idx}/{total_files} files");
         }
 
-        let source = match std::fs::read_to_string(path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("ERROR: cannot read {}: {e}", path.display());
-                continue;
-            }
-        };
+        let source = std::fs::read_to_string(path).map_err(|source| AuditError::Read {
+            path: path.clone(),
+            source,
+        })?;
 
         let chat = parser.parse_chat_file_streaming(&source, &NullErrorSink);
         let utterances: Vec<&talkbank_model::Utterance> = chat
@@ -216,19 +211,15 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                 if idx == 0 {
                     pp_first += 1;
                     file_anomalies += 1;
-                    if let Some(ref mut w) = anomaly_writer {
-                        let _ = writeln!(
-                            w,
-                            "{}",
-                            serde_json::json!({
-                                "file": file_str, "utt_index": idx,
-                                "type": "pp_first_utterance",
-                                "severity": "error",
-                                "speaker": speaker,
-                                "text": utt_text(utt),
-                                "suggested_fix": "Remove ++ or add preceding utterance",
-                            })
-                        );
+                    if let Some(writer) = anomaly_writer {
+                        anomaly_writer = Some(writer.record(&serde_json::json!({
+                            "file": file_str, "utt_index": idx,
+                            "type": "pp_first_utterance",
+                            "severity": "error",
+                            "speaker": speaker,
+                            "text": utt_text(utt),
+                            "suggested_fix": "Remove ++ or add preceding utterance",
+                        }))?);
                     }
                 } else if let Some(ps) = prev_speaker {
                     let ptl = prev_term_label.unwrap_or("(none)");
@@ -236,11 +227,8 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                     if ps == speaker {
                         pp_same_speaker += 1;
                         file_anomalies += 1;
-                        if let Some(ref mut w) = anomaly_writer {
-                            let _ = writeln!(
-                                w,
-                                "{}",
-                                serde_json::json!({
+                        if let Some(writer) = anomaly_writer {
+                            anomaly_writer = Some(writer.record(&serde_json::json!({
                                     "file": file_str, "utt_index": idx,
                                     "type": "pp_same_speaker",
                                     "severity": "auto_fixable",
@@ -250,19 +238,15 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                                     "prev_text": utt_text(utterances[idx - 1]),
                                     "text": utt_text(utt),
                                     "suggested_fix": {"action": "replace_linker", "old": "++", "new": "+,"},
-                                })
-                            );
+                                }))?);
                         }
                     } else if prev_term.is_some_and(is_trailing_off) {
                         pp_correct += 1;
                     } else {
                         pp_wrong_term += 1;
                         file_anomalies += 1;
-                        if let Some(ref mut w) = anomaly_writer {
-                            let _ = writeln!(
-                                w,
-                                "{}",
-                                serde_json::json!({
+                        if let Some(writer) = anomaly_writer {
+                            anomaly_writer = Some(writer.record(&serde_json::json!({
                                     "file": file_str, "utt_index": idx,
                                     "type": "pp_wrong_terminator",
                                     "severity": "review",
@@ -272,8 +256,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                                     "prev_text": utt_text(utterances[idx - 1]),
                                     "text": utt_text(utt),
                                     "suggested_fix": {"action": "change_prev_terminator", "old": ptl, "new": "+..."},
-                                })
-                            );
+                                }))?);
                         }
                     }
                 }
@@ -289,19 +272,15 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                         sc_no_prior += 1;
                         *sc_prev_term_dist.entry("(no_prior)").or_default() += 1;
                         file_anomalies += 1;
-                        if let Some(ref mut w) = anomaly_writer {
-                            let _ = writeln!(
-                                w,
-                                "{}",
-                                serde_json::json!({
+                        if let Some(writer) = anomaly_writer {
+                            anomaly_writer = Some(writer.record(&serde_json::json!({
                                     "file": file_str, "utt_index": idx,
                                     "type": "sc_no_prior",
                                     "severity": "error",
                                     "speaker": speaker,
                                     "text": utt_text(utt),
                                     "suggested_fix": "Remove +, or add preceding same-speaker utterance",
-                                })
-                            );
+                                }))?);
                         }
                     }
                     Some(&tl) => {
@@ -311,11 +290,8 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                         } else {
                             sc_wrong_term += 1;
                             file_anomalies += 1;
-                            if let Some(ref mut w) = anomaly_writer {
-                                let _ = writeln!(
-                                    w,
-                                    "{}",
-                                    serde_json::json!({
+                            if let Some(writer) = anomaly_writer {
+                                anomaly_writer = Some(writer.record(&serde_json::json!({
                                         "file": file_str, "utt_index": idx,
                                         "type": "sc_wrong_terminator",
                                         "severity": "review",
@@ -323,8 +299,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                                         "prev_same_speaker_terminator": tl,
                                         "text": utt_text(utt),
                                         "suggested_fix": {"action": "change_prev_terminator", "old": tl, "new": "+/."},
-                                    })
-                                );
+                                    }))?);
                             }
                         }
                     }
@@ -340,19 +315,15 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                     None => {
                         qf_no_prior += 1;
                         file_anomalies += 1;
-                        if let Some(ref mut w) = anomaly_writer {
-                            let _ = writeln!(
-                                w,
-                                "{}",
-                                serde_json::json!({
+                        if let Some(writer) = anomaly_writer {
+                            anomaly_writer = Some(writer.record(&serde_json::json!({
                                     "file": file_str, "utt_index": idx,
                                     "type": "qf_no_prior",
                                     "severity": "error",
                                     "speaker": speaker,
                                     "text": utt_text(utt),
                                     "suggested_fix": "Remove +\" or add preceding same-speaker utterance with +\"/.  terminator",
-                                })
-                            );
+                                }))?);
                         }
                     }
                     Some(&"+\"/.") => qf_correct += 1,
@@ -367,11 +338,8 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                         } else {
                             qf_wrong_term += 1;
                             file_anomalies += 1;
-                            if let Some(ref mut w) = anomaly_writer {
-                                let _ = writeln!(
-                                    w,
-                                    "{}",
-                                    serde_json::json!({
+                            if let Some(writer) = anomaly_writer {
+                                anomaly_writer = Some(writer.record(&serde_json::json!({
                                         "file": file_str, "utt_index": idx,
                                         "type": "qf_wrong_terminator",
                                         "severity": "review",
@@ -379,8 +347,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
                                         "prev_same_speaker_terminator": prev_tl,
                                         "text": utt_text(utt),
                                         "suggested_fix": {"action": "change_prev_terminator", "old": prev_tl, "new": "+\"/."},
-                                    })
-                                );
+                                    }))?);
                             }
                         }
                     }
@@ -522,6 +489,8 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
         files_processed += 1;
     }
 
+    let finished = anomaly_writer.map(OpenReport::finish).transpose()?;
+
     // ── Print summary ──────────────────────────────────────────────
     outln!("=== LINKER AUDIT RESULTS ===");
     outln!();
@@ -645,7 +614,8 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
         interruption_total - interruption_followed
     );
 
-    if let Some(path) = anomalies_path {
-        eprintln!("\nAnomalies written: {}", path.display());
+    if let Some(report) = finished {
+        eprintln!("\nAnomalies written: {}", report.path().display());
     }
+    Ok(())
 }

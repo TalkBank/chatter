@@ -1,7 +1,21 @@
 # Source-spacing validation on ground truth: removing the E758 constant-offset proxy
 
-**Status:** Draft (main-tier phase implemented; header/dependent-tier phase awaiting a design nod)
-**Last modified:** 2026-08-27 00:33 EDT
+**Status:** Historical proposal; superseded by shared separator provenance
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/proposals/2026-07-18-source-spacing-ground-truth.md)
+
+The implemented E758 contract is owned by [its specification](../../spec/errors/E758.md)
+and `check_separator_trailing_space` in
+[`checks.rs`](../../crates/talkbank-model/src/model/file/chat_file/validate/checks.rs).
+The validator reads `TierSeparator` from main tiers, dependent-tier entries and
+headers; it does not reconstruct a gap from the first content element.
+The [backend architecture](../../book/src/architecture/parser-backends.md#separator-provenance-belongs-to-lexical-admission)
+describes native lexical admission of the same provenance.
+
+The alternatives, phase statuses, scan counts and gating plan below are dated
+design history. They are not an outstanding approval request, a current failure
+inventory or instructions to add another source scan or model wrapper. Preserve
+the existing CA rule and authored controls; this record authorizes no new
+semantic change or corpus execution.
 
 ## Summary
 

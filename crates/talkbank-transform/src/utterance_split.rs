@@ -398,8 +398,8 @@ fn rebuild_split<'source, Affiliation>(
     // The parent's main-tier bullet is not carried: it measures no child of a
     // split (see `SplitMainTimingEvidence::Unmeasured`).
 
-    let parent_main_span = utt.main.span;
-    let parent_speaker_span = utt.main.speaker_span;
+    let parent_main_span = utt.main.location;
+    let parent_speaker_span = utt.main.speaker_location;
 
     // Compute per-child %wor item lists only when the parent tier is count-
     // matched and lexically corroborated against the typed main tier. None
@@ -422,12 +422,13 @@ fn rebuild_split<'source, Affiliation>(
         .and_then(|wor| partition_wor_tier(wor, content_groups));
     let mut result = content_groups.rebuild(|position, group| {
         let mut main = MainTier::new(
+            talkbank_model::MainTierLocations::UNLOCATED,
             speaker(group),
             group.cloned_content(),
             // Earlier children need a derived ending with a parent source
             // pointer. Positional metadata below replaces the last ending.
             Terminator::Period {
-                span: parent_main_span,
+                location: parent_main_span,
             },
         );
         // Language code applies to every child (utterance-scope), set
@@ -438,8 +439,8 @@ fn rebuild_split<'source, Affiliation>(
         }
         // Source spans: inherit the parent's so children retain a
         // useful (if coarse) source pointer instead of `Span::DUMMY`.
-        main.span = parent_main_span;
-        main.speaker_span = parent_speaker_span;
+        main.location = parent_main_span;
+        main.speaker_location = parent_speaker_span;
         let mut child = Utterance::new(main);
         match position {
             ChildPosition::First => {

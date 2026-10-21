@@ -10,10 +10,13 @@ pub(crate) fn impl_semantic_eq(input: &InputPlan<Semantic>) -> TokenStream {
     let name = &input.name;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let body = match &input.body {
+        BodyPlan::Enum(variants) if variants.is_empty() => {
+            quote! { let _ = other; match *self {} }
+        }
         BodyPlan::Struct(fields) => {
             let comparisons = fields.active().map(|field| {
                 let member = &field.member;
-                quote! { self.#member.semantic_eq(&other.#member) }
+                quote! { crate::model::SemanticEq::semantic_eq(&self.#member, &other.#member) }
             });
             quote! { true #(&& #comparisons)* }
         }
@@ -24,7 +27,7 @@ pub(crate) fn impl_semantic_eq(input: &InputPlan<Semantic>) -> TokenStream {
                 let comparisons = variant.fields.active().map(|field| {
                     let left = &field.left;
                     let right = &field.right;
-                    quote! { #left.semantic_eq(#right) }
+                    quote! { crate::model::SemanticEq::semantic_eq(#left, #right) }
                 });
                 quote! { (#left, #right) => true #(&& #comparisons)* }
             });

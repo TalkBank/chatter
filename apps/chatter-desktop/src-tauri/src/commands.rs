@@ -304,10 +304,17 @@ pub fn resolve_open_in_clan(request: &OpenInClanRequest) -> Result<ResolvedClanT
             source,
         })?;
 
-    let location = talkbank_model::SourceLocation {
-        span: talkbank_model::Span::new(request.byte_offset, request.byte_offset),
-        line: (request.line >= 1).then_some(request.line as usize),
-        column: (request.col >= 1).then_some(request.col as usize),
+    // The frontend sends its line and column as signed numbers; only a
+    // one-based pair is a position, otherwise CLAN coordinates are computed
+    // from the byte offset.
+    let span = talkbank_model::Span::at(request.byte_offset);
+    let position = usize::try_from(request.line)
+        .ok()
+        .zip(usize::try_from(request.col).ok())
+        .and_then(|(line, column)| talkbank_model::LineColumn::one_based(line, column));
+    let location = match position {
+        Some(position) => talkbank_model::DiagnosticLocation::known_at(span, position),
+        None => talkbank_model::DiagnosticLocation::new(span),
     };
 
     let clan_loc = talkbank_model::resolve_clan_location(&location, &source)?;

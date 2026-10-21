@@ -1,94 +1,53 @@
 # Writing Error Specs, Quick Reference
 
-**Last modified:** 2026-08-21 11:03 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/spec/docs/WRITING_ERROR_SPECS.md)
 
-See [ERROR_SPEC_FORMAT.md](ERROR_SPEC_FORMAT.md) for the complete format
-reference. This page covers the practical workflow.
+Use [Spec Workflow](../../book/src/contributing/spec-workflow.md#adding-an-error-spec)
+for the complete authoring and new-code bootstrap procedure, and
+[Error Spec Format](ERROR_SPEC_FORMAT.md) for the format owners.
 
-## Adding a New Error Spec
+## Authoring sequence
 
-1. **Create the file**: `spec/errors/E{NNN}.md` or `E{NNN}_{suffix}.md`
+1. Identify the rule and its existing code in `spec/codes/error-codes.toml`.
+   For a new code, add its registry entry and follow the bootstrap sequence
+   before writing Rust that references its generated variant.
+2. Create `spec/errors/E{NNN}.md` or `E{NNN}_{suffix}.md`. Declare
+   `code` and `name` in TOML frontmatter; each `[[example]]` declares
+   its own `level`, required `claim` and complete CHAT `chat` block.
+   Copy the current example structure from the canonical workflow.
+3. Retain a legal control and a focused failing example. Justify the claim
+   from the rule or a reviewed ruling, not merely from what the current
+   implementation emits. Explain interactions and subsumption in prose.
+4. Regenerate through the canonical workflow and inspect actual parser and
+   validator observations separately from the authored claim. Run the
+   affected behavioral checks; artifact currency alone is not correctness.
 
-2. **Write the spec**: `+++` TOML frontmatter for everything declared, then
-   markdown prose. The complete field list, with types and requiredness, is
-   `talkbank_spec_vocabulary::frontmatter`; an unrecognised key is a load
-   error, so the schema tells you when you get it wrong.
+There is no `layer` field. `kind` and `status` belong to the code registry,
+not the spec frontmatter. `level` belongs to each example, not the whole spec.
+Unknown fields are load errors.
 
-   ````markdown
-   +++
-   code = 'E999'
-   name = 'ErrorName'
-   kind = 'Invalidity'
-   status = 'not_implemented'
-   level = 'utterance'
+## Claims and diagnosis
 
-   [[example]]
-   claim = 'violates'
-   chat = '''
-   @UTF8
-   @Begin
-   @Languages:	eng
-   @Participants:	CHI Child
-   @ID:	eng|corpus|CHI|||||Child|||
-   *CHI:	the bad input here .
-   @End
-   '''
-   +++
+- `claim = 'violates'`: the spec's own code must fire.
+- `claim = 'legal'`: that code must not fire; this is not a declaration
+  that every other rule accepts the transcript.
+- `claim = { subsumed_by = 'E316' }`: the named alternative must fire
+  and this spec's own code must not. The target here illustrates syntax;
+  choose the actual target only from reviewed evidence.
 
-   ## Description
+If the observation contradicts the claim, investigate the rule, fixture and
+implementation. Do not relabel the example or mark the code unimplemented to
+make a test pass. Registry deferral does not exempt legal or subsumption
+claims from their regression obligations.
 
-   What this error means.
+An optional example `source` supplies the transcript stem used by
+filename-sensitive checks. Preserve that identity when it matters.
 
-   ## Notes
+## Commands and acceptance
 
-   - Any implementation notes.
-   ````
-
-   The claim is required: `violates` asserts the spec's own code fires,
-   `legal` asserts it does not, `subsumed_by <code(s)>` asserts the named
-   codes fire and the spec's own does not.
-
-3. **There is no layer to choose.** Which stage catches the rule is observed
-   when the artifacts regenerate, recorded per example in
-   `spec/observations/`, and corpus membership follows the observation.
-
-4. **Verify the example triggers the right code**:
-   ```bash
-   chatter validate /tmp/test.cha --force
-   ```
-
-5. **Regenerate tests**:
-   ```bash
-   just spec-gen      # every artifact derived from spec/
-   just spec-check    # or: is the committed copy current?
-   ```
-
-6. **Run tests**:
-   ```bash
-   cargo test -p talkbank-parser-tests --release
-   ```
-
-## Common Mistakes
-
-| Mistake | Symptom | Fix |
-|---------|---------|-----|
-| Example triggers a different code | Test fails naming the code it actually emitted | `claim = { subsumed_by = 'E{actual}' }` (the honest worklist entry), or fix the example |
-| The rule is not wired up yet | Test runs and fails | `status = 'not_implemented'`, which defers the example |
-| A misspelled or invented key | The spec does not load, naming the key | The schema lists every key: unrecognised ones are refused, not ignored |
-
-Three mistakes that were in this table and are no longer possible: a
-declaration written below its fence (there is no fence), a wrong fence info
-string (there is no info string), and a missing `status` producing a test that
-runs anyway (a spec without one does not load).
-
-## Validating Specs
-
-```bash
-# Check all spec format/layer correctness
-cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.toml
-
-# Check coverage (all error codes have specs)
-just spec-coverage
-```
-
----
+From the repository root, `just spec-validate-examples` checks live example
+claims and `just spec-coverage` reports spec/code coverage. They answer
+different questions; neither proves complete CHAT coverage. Use the root
+guidance and [Spec Workflow](../../book/src/contributing/spec-workflow.md)
+for regeneration and proportional verification. Do not create an unrelated
+temporary CHAT file as a substitute for the retained spec example.

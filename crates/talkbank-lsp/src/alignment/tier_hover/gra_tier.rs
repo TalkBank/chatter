@@ -30,7 +30,7 @@ pub fn find_gra_tier_hover_info(
         .and_then(|alignments| alignments.gra.as_ref());
 
     let offset = position_to_offset(document, position);
-    let gra_idx = find_gra_item_index_at_offset(tree, gra_tier.span, offset)?;
+    let gra_idx = find_gra_item_index_at_offset(tree, gra_tier.location.span()?, offset)?;
 
     // Get the gra relation
     let gra_relation = gra_tier.relations().get(gra_idx)?;

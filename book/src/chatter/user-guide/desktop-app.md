@@ -11,6 +11,7 @@ experience without a terminal.
 ## When to use Chatter Desktop
 
 Chatter Desktop (`apps/chatter-desktop/`) is the right tool when you want to:
+
 - Validate CHAT files through a graphical interface, no terminal required
 - Drag and drop a file or folder and read errors with source snippets
 - Work on the desktop without setting up a terminal workflow
@@ -82,6 +83,26 @@ use a released desktop app. CLAN is optional and needed only for **Open in CLAN*
 
 Validation does not edit or rename your transcripts. The desktop app is not a
 CHAT editor or an automatic repair interface.
+
+### Practice without touching research data
+
+Download a copy of the [minimal reference transcript](https://raw.githubusercontent.com/TalkBank/chatter/v0.30.0/corpus/reference/edge-cases/empty-and-minimal.cha)
+into a practice folder, or use `practice.cha` from the
+[CLI tutorial](quick-start.md). The minimal example has no media dependency.
+
+1. Choose that file in Chatter and wait for a completed valid result. A valid
+   file without diagnostics need not appear in the problem tree.
+2. In a separate plain-text editor, remove only the final period from the
+   `*CHI:` utterance and save. Do not change the tab after the speaker label.
+3. Return to Chatter and choose **Re-validate**. Expect an E305 diagnostic for
+   the missing terminator; select the file to read it.
+4. Restore the period in the editor, save and revalidate. The error should
+   clear. Use **Export** if you want to retain a report before closing the app.
+
+The app reads saved files, not unsaved editor buffers. If you want diagnostics
+while typing, use the [editor integration](editor-integration.md) instead.
+Passing this practice exercise demonstrates the format-check workflow, not the
+accuracy of a real transcript's words, speakers or timing.
 
 ### Build from source
 
@@ -156,7 +177,9 @@ The main window has three areas:
 
 A compact filter bar appears above the error cards when a file has diagnostics:
 
-- **Code filter**: type "E7" to show only alignment errors, "W" for warnings, etc.
+- **Code filter**: a case-insensitive substring match on the code. For example,
+  "E7" selects codes containing those characters; it is not an alignment-category
+  filter. Use the severity toggle to select warnings.
 - **Severity toggle**: switch between All / Errors / Warnings
 
 The file header updates to show filtered vs. total count (e.g., "3 errors (7 total)").
@@ -165,7 +188,7 @@ The file header updates to show filtered vs. total count (e.g., "3 errors (7 tot
 
 Each error card has a clickable header that toggles between expanded and
 collapsed view. Collapsed cards show only the error code and first line of the
-message. When a file has 5 or more errors, an **Expand All / Collapse All**
+message. When the current filter shows 5 or more diagnostics, an **Expand All / Collapse All**
 button appears.
 
 ### Validation settings
@@ -214,12 +237,14 @@ detail panel shows the reason. A roundtrip failure is likewise a failed check,
 not “No errors.” Report unexpected roundtrip failures rather than editing the
 data merely to silence an internal mismatch.
 
-“All files valid” requires a completed, non-cancelled, nonempty run with every
-file accounted for as valid and no visible diagnostics or roundtrip failures.
-Cancelling, losing files during a run, or failing to read a file cannot earn
-that summary. An empty folder means **No CHAT files found**, not a successful
-validation population. The title, notification and status bar share the same
-completion summary.
+The title and status bar can say "All N files valid" for a completed, passing
+run with warnings, adding the warning count. Warning-bearing files remain in
+the problem tree; its separate all-valid empty-state message appears only when
+there are no files with diagnostics or failures to display. Cancelling, losing
+files during a run, or failing to read a file cannot earn a passing completion
+summary. An empty folder means **No CHAT files found**, not a successful
+validation population. The title, notification and status bar use the same
+finished-run summary.
 
 Warning-only files remain visible even though a warning is not a hard error.
 For example, W109 identifies a nonstandard Unicode spelling in the `@Media`
@@ -260,8 +285,10 @@ messages.
 | **Copy** | Per-error button | Copies the plain-text error to clipboard |
 | **Reveal in file manager** | File name heading | Opens the file's parent directory |
 
-"Open in CLAN" only appears when the CLAN application is detected on your
-system (macOS and Windows only). It adjusts line numbers to account for headers
+"Open in CLAN" requires both a detected CLAN application (macOS and Windows
+only) and available checked source context for that diagnostic. An unavailable
+source context does not prevent reading or copying the diagnostic, but the app
+does not invent an editor location. It adjusts line numbers to account for headers
 that CLAN hides (`@UTF8`, `@PID`, `@Font`, `@ColorWords`, `@Window`).
 
 ### Exporting results
@@ -311,16 +338,17 @@ The last two are failures, and they never claim anything about your whole
 folder. **Incomplete** means the validator finished but some files were
 never opened, so the counts it shows describe only the rest; you will see
 how many were missed, and re-validating is the right response.
-**Stopped** means the run died without producing results at all. Neither
-one can show "All N files valid", because that sentence is a claim about
-every file and neither run examined every file.
+**Stopped** ("Run stopped unexpectedly") means no normal completion was
+obtained, for example because the backend event stream ended unexpectedly.
+Results received before the interruption may remain visible; they do not prove
+that the whole target was checked. Neither state can show "All N files valid".
 
 "Starting" and "Discovering" are different states, and the difference is worth
 knowing if you ever need to report a problem. **Starting** means the app has
-asked the validator to begin and has not heard back; nothing has been scanned
-yet, so a run stuck there is a fault in start-up rather than anything about
-your files. **Discovering** means the validator is walking the folder, which
-legitimately takes time on a large one. If the app sits on "Starting" for more
+asked the validator to begin and has not received a backend phase event. That
+silence alone cannot tell whether the backend has begun scanning or whether
+communication failed. **Discovering** means the backend has reported file
+discovery, which can take time on a large folder. If the app sits on "Starting" for more
 than a few seconds it says so in the status bar, and that message is worth
 quoting in a bug report.
 
@@ -331,8 +359,10 @@ time remaining (e.g., "~2m 30s remaining"). The estimate updates every second.
 
 ### Notifications
 
-When validation finishes while the app is not focused, a system notification
-shows the summary ("Validation complete, 14 errors in 3 files").
+When validation finishes while the app is not focused, it attempts a system
+notification with the finished-run summary. This requires notification support
+and permission; when permission has not yet been decided, the app requests it.
+No notification is not evidence that validation failed or never finished.
 
 ### First launch
 
@@ -352,7 +382,7 @@ future work, not a prerequisite for using desktop validation.
 
 | Symptom | What to check |
 | --- | --- |
-| Stuck on Starting | Quote the startup message; this is before file discovery. |
+| Stuck on Starting | Quote the startup message; the frontend has not received a backend phase event. |
 | Discovering takes time | Large or network folders can be slow. Try one local file to isolate the issue. |
 | Read error | Confirm the file still exists and the app can read it; check volume availability and permissions. |
 | No CHAT files found | Select the intended folder and check that transcripts have `.cha` extensions. |
@@ -418,8 +448,8 @@ desktop service object.
 | File selection | CLI arguments | Drag-and-drop, file picker |
 | Navigation | Keyboard (Tab, arrows) | Mouse click |
 | Error display | Two-pane terminal UI | Scrollable panels with source snippets |
-| Error filtering |, | Code filter + severity toggle |
-| Copy error |, | Copy button per error |
+| Error filtering | See the TUI's available controls | Code filter + severity toggle |
+| Copy error | Terminal selection/copy | Copy button per error |
 | Open in CLAN | `c` key | Button per error |
 | Export | `--format json` or `--audit FILE` | Save dialog (JSON or text) |
 | Streaming progress | Progress bar | Progress bar + ETA |
@@ -427,7 +457,9 @@ desktop service object.
 | Caching | Same engine | Same engine |
 | Who it's for | Power users, CI | Researchers, linguists |
 
-Both use the identical validation engine and produce the same error codes.
+Both share the validation engine. Compare results using the same release,
+saved input and validation settings; sharing an engine alone does not establish
+equivalence between different installed versions or configurations.
 
 ## When to Use Which Tool
 

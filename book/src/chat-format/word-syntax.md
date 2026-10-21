@@ -206,5 +206,10 @@ Groups followed by retrace markers indicate speech disfluencies:
 
 - `[/]`: partial retrace (speaker repeats the same words)
 - `[//]`: full retrace (speaker restarts with different words)
-- `[///]`: multiple retracing (multiple false starts)
-- `[/-]`: reformulation (speaker rephrases with different structure)
+- `[///]`: reformulation of the message
+- `[/-]`: an abandoned start followed by a different direction, without retracing
+
+These meanings follow the [CHAT manual](https://talkbank.org/0info/manuals/CHAT.html).
+The Rust variants `Multiple` and `Reformulation` are historical names for
+`[///]` and `[/-]`, respectively; do not infer transcription semantics from
+those enum names.

@@ -22,8 +22,9 @@ use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use clap::Parser;
+use generators::artifacts::BOOTSTRAP_ARTIFACTS;
 use generators::repo_paths::RepoRoot;
-use spec_runtime_tools::artifacts::all;
+use spec_runtime_tools::artifacts::{after_bootstrap, all};
 
 /// CLI arguments.
 #[derive(Parser)]
@@ -50,14 +51,31 @@ fn main() -> Result<()> {
     // that newtype exists, and an `unwrap_or_else` here used to flatten both
     // branches back to a bare path to make their types agree.
     let root = RepoRoot::resolve(args.repo_root)?;
+    // Updating a source file cannot update code already linked into this process.
+    // Refuse before observing or writing any downstream artifact.
+    if !args.check {
+        for artifact in BOOTSTRAP_ARTIFACTS {
+            if !artifact.check(root.as_path())?.is_empty() {
+                bail!(
+                    "bootstrap sources are stale; run `just spec-gen` to regenerate them before rebuilding the runtime generator"
+                );
+            }
+        }
+    }
     let artifacts: Vec<_> = match args.artifact_root.as_deref() {
         Some(selected) => {
+            if !args.check && BOOTSTRAP_ARTIFACTS.iter().any(|a| a.root == selected) {
+                bail!(
+                    "bootstrap sources are owned by `just model-sources-gen`, not the runtime writer"
+                );
+            }
             let artifact = all()
                 .find(|artifact| artifact.root == selected)
                 .ok_or_else(|| anyhow::anyhow!("no artifact owns root {selected:?}"))?;
             vec![artifact]
         }
-        None => all().collect(),
+        None if args.check => all().collect(),
+        None => after_bootstrap().collect(),
     };
 
     if args.check {

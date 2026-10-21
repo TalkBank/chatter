@@ -7,12 +7,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, RangeAdmittedChildren, Ranged, ReadableSlot,
-    SinDependentTierChildren, SinDependentTierNode, SinGroupNode, SinGroupsChildren, SinGroupsNode,
-    SourceBound, SourceChildren,
+    AdmittedSinGroupsChildren, AsRawNode, NoChild, RangeAdmittedChildren, Ranged, ReadableSlot,
+    SinDependentTierChildren, SinDependentTierNode, SinGroupNode, SinGroupsNode, SourceBound,
+    SourceChildren,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::{ParsedDependentTier, dependent_tier_separator};
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ErrorSink;
 use talkbank_model::model::{SinItem, SinTier, TierSeparator};
 
@@ -28,8 +29,8 @@ use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 /// ```
 ///
 /// Source-bound extraction retains ownership through body, groups and tokens.
-/// Missing composite bodies are diagnosed; Error/Absent
-/// retain the existing empty-tier policy. Unexpected is uninhabited in the slot.
+/// Per-rule admission proves the ordinary composite body present. Nested
+/// group/token recovery remains broad and is not certified by the envelope.
 /// Source/reconstruction failures propagate as `CstFailure` rather than empty
 /// content. Source ownership does not prove remaining recovery impossible.
 pub fn parse_sin_tier<'tree>(
@@ -42,15 +43,32 @@ pub fn parse_sin_tier<'tree>(
 /// One selected root extraction supplies both payload and separator provenance.
 #[must_use]
 struct SinTierReading<'tree, 'source> {
-    children: SourceChildren<'tree, 'source, SinDependentTierChildren<'tree>>,
+    children: SourceChildren<
+        'tree,
+        'source,
+        SinDependentTierChildren<
+            'tree,
+            crate::generated_traversal::KindAdmitted,
+            crate::generated_traversal::Raw,
+            crate::generated_traversal::RequiredPresence,
+        >,
+    >,
     separator: TierSeparator,
 }
 
 /// Consuming range admission retains the same root and its metadata.
 #[must_use]
 struct RangedSinTier<'tree, 'source> {
-    children:
-        RangeAdmittedChildren<'tree, 'source, SinDependentTierChildren<'tree, Ranged<'source>>>,
+    children: RangeAdmittedChildren<
+        'tree,
+        'source,
+        SinDependentTierChildren<
+            'tree,
+            crate::generated_traversal::KindAdmitted,
+            Ranged<'source>,
+            crate::generated_traversal::RequiredPresence,
+        >,
+    >,
     separator: TierSeparator,
 }
 
@@ -58,8 +76,8 @@ impl<'tree, 'source> SinTierReading<'tree, 'source> {
     fn extract(
         typed: SourceBound<'tree, 'source, SinDependentTierNode<'tree>>,
     ) -> Result<Self, crate::CstFailure> {
-        let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
-        let separator = dependent_tier_separator(children.children().child_1.slot());
+        let children = crate::parser::typed_cst::extract_envelope(typed)?;
+        let separator = dependent_tier_separator(children.children().child_1.slot())?;
         Ok(Self {
             children,
             separator,
@@ -104,30 +122,19 @@ fn lower_sin_tier<'tree, 'source>(
     children: &RangeAdmittedChildren<
         'tree,
         'source,
-        SinDependentTierChildren<'tree, Ranged<'source>>,
+        SinDependentTierChildren<
+            'tree,
+            crate::generated_traversal::KindAdmitted,
+            Ranged<'source>,
+            crate::generated_traversal::RequiredPresence,
+        >,
     >,
     errors: &impl ErrorSink,
 ) -> Result<SinTier, crate::CstFailure> {
     let span = span_of(children.parent().raw_node());
-    Ok(match &children.children().child_2.slot {
-        ReadableSlot::Present(groups) => {
-            let items = parse_sin_groups(*groups, errors)?;
-            SinTier::new(items).with_span(span)
-        }
-        ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
-            SinTier::new(Vec::new()).with_span(span)
-        }
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "sin_dependent_tier",
-            );
-            SinTier::new(Vec::new()).with_span(span)
-        }
-        ReadableSlot::Unexpected(never) => match *never {},
-    })
+    let crate::generated_traversal::SlotView::Present(groups) =
+        children.children().child_2.slot.view();
+    Ok(SinTier::new(span, parse_sin_groups(*groups, errors)?))
 }
 
 /// Decode every `sin_group` under a `sin_groups` node into gesture/sign items,
@@ -146,14 +153,16 @@ fn parse_sin_groups<'tree>(
     typed: SourceBound<'tree, '_, SinGroupsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<Vec<SinItem>, crate::CstFailure> {
-    let groups = typed
-        .extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?
-        .admit_ranges()?;
+    let groups = typed.extract_canonical()?.admit_ranges()?;
     lower_sin_groups(&groups, errors)
 }
 
 fn lower_sin_groups<'tree, 'source>(
-    groups: &RangeAdmittedChildren<'tree, 'source, SinGroupsChildren<'tree, Ranged<'source>>>,
+    groups: &RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedSinGroupsChildren<'tree, Ranged<'source>>,
+    >,
     errors: &impl ErrorSink,
 ) -> Result<Vec<SinItem>, crate::CstFailure> {
     let mut items = Vec::with_capacity(groups.children().child_1.slot.len() + 1);
@@ -185,11 +194,15 @@ fn lower_sin_groups<'tree, 'source>(
 
 /// Decode one `sin_group` slot, extending `items` with its gesture/sign items.
 ///
-/// Missing composite groups are diagnosed; Error and Absent remain independent.
+/// Compiled admission excludes MISSING groups; Error and Absent remain independent.
 /// Present groups retain flat/grouped decoding; Error is diagnosed and Absent
 /// emits nothing. Source failures propagate independently of CHAT recovery.
 fn push_sin_group<'tree, 'source>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, SinGroupNode<'tree>>, Ranged<'source>>,
+    slot: &crate::generated_traversal::NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, SinGroupNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
     items: &mut Vec<SinItem>,
 ) -> Result<(), crate::CstFailure> {
@@ -205,14 +218,7 @@ fn push_sin_group<'tree, 'source>(
             ));
         }
         ReadableSlot::Absent(NoChild) => {}
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "sin_groups",
-            );
-        }
+        ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
     }
     Ok(())
@@ -296,7 +302,12 @@ mod range_tests {
                         Err(SourceBindingError::ForeignTree)
                     ));
                     let reading = SinTierReading::extract(tier).expect("kind-admitted root");
-                    let before = match reading.children.field_child_2().slot().view() {
+                    let broad = tier
+                        .extract_admitted(
+                            crate::parser::typed_cst::canonical_grammar().expect("binding"),
+                        )
+                        .expect("broad root observation");
+                    let before = match broad.field_child_2().slot().view() {
                         SourceSlotView::Present(_) => 0,
                         SourceSlotView::Missing(_) => 3,
                         SourceSlotView::Error(_) => 1,
@@ -304,13 +315,9 @@ mod range_tests {
                     };
                     let separator = reading.separator;
                     let ranged = reading.admit_ranges().expect("selected root ranges");
-                    let after = match &ranged.children.children().child_2.slot {
-                        ReadableSlot::Present(_) => 0,
-                        ReadableSlot::Error(_) => 1,
-                        ReadableSlot::Absent(NoChild) => 2,
-                        ReadableSlot::Missing(_) => 3,
-                        ReadableSlot::Unexpected(never) => match *never {},
-                    };
+                    let crate::generated_traversal::SlotView::Present(_) =
+                        ranged.children.children().child_2.slot.view();
+                    let after = 0;
                     assert_eq!(after, before);
                     body_states[after] += 1;
                     assert_eq!(ranged.children.parent().raw_node(), tier.raw_node());
@@ -326,7 +333,10 @@ mod range_tests {
                         .parse(&errors)
                         .expect("native lowering")
                         .into_entry(DependentTier::Sin);
-                    assert_eq!(entry.span(), span_of(tier.raw_node()));
+                    assert_eq!(
+                        entry.location(),
+                        talkbank_model::Location::Located(span_of(tier.raw_node()))
+                    );
                     assert_eq!(entry.separator, separator);
                     assert!(errors.is_empty(), "legal authored roots: {name}");
                 }

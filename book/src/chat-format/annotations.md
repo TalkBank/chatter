@@ -16,7 +16,7 @@ construct always carries at least one.
 
 ## What can be annotated
 
-Each of these constructs has exactly two spellings. The list is the count; stating a number beside it is one more thing to keep true, and this line said five above six rows.
+These constructs have separate bare and annotated model variants:
 
 | Construct | Bare | Annotated |
 |---|---|---|
@@ -84,9 +84,11 @@ CHAT, and an empty bracket is a parse error. The reasoning is recorded in
 
 ## What an annotation attaches to when constructs nest
 
-Scoping follows the innermost construct. In `<the big dog> [//] [* m]` both
-annotations attach to the group. In `<the [//] dog>` the marker attaches to the
-word inside it, because that is what precedes it.
+Markers are applied in source order. In `<the big dog> [//] [* m]`, `[//]`
+wraps the group in a retrace, and `[* m]` annotates that retrace. Moving the
+error marker before `[//]` instead annotates the material being retraced.
+In `<the [//] dog>` the retrace wraps the word inside the group. See
+[retraces](retraces.md#where-the-annotations-live) for the model distinction.
 
 One consequence matters for anything reading language: a `<...> [@s:spa]` group
 opens a code-switch scope for the words inside it, and a retrace does not open

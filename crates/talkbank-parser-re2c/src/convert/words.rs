@@ -6,25 +6,35 @@ use crate::ast::{CaDelimiterKind, CaElementKind, OverlapKind, StressKind, WordBo
 use crate::source_text::SourceText;
 use talkbank_model::model::*;
 
-/// Convert a typed word body item to a model WordContent.
-pub(crate) fn body_item_to_word_content(item: &WordBodyItem<'_>) -> WordContent {
+/// Convert a typed word body item to a model WordContent, placing each
+/// marker at its lexeme in `source` (unlocated when the lexeme is not a
+/// slice of this source).
+pub(crate) fn body_item_to_word_content(
+    item: &WordBodyItem<'_>,
+    source: SourceText<'_>,
+) -> WordContent {
     match item {
         WordBodyItem::Text(s) => WordContent::Text(WordText::new_unchecked(s)),
         WordBodyItem::Shortening(s) => WordContent::Shortening(WordShortening::new_unchecked(s)),
-        WordBodyItem::Lengthening(count) => {
-            WordContent::Lengthening(WordLengthening::with_count(*count))
+        WordBodyItem::Lengthening(run) => WordContent::Lengthening(WordLengthening::with_count(
+            super::locate(source, run.text()),
+            run.count(),
+        )),
+        WordBodyItem::CompoundMarker(s) => {
+            WordContent::CompoundMarker(WordCompoundMarker::new(super::locate(source, s)))
         }
-        WordBodyItem::CompoundMarker => WordContent::CompoundMarker(WordCompoundMarker::new()),
-        WordBodyItem::Stress(StressKind::Primary) => {
-            WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary))
+        WordBodyItem::Stress(StressKind::Primary, s) => WordContent::StressMarker(
+            WordStressMarker::new(super::locate(source, s), WordStressMarkerType::Primary),
+        ),
+        WordBodyItem::Stress(StressKind::Secondary, s) => WordContent::StressMarker(
+            WordStressMarker::new(super::locate(source, s), WordStressMarkerType::Secondary),
+        ),
+        WordBodyItem::SyllablePause(s) => {
+            WordContent::SyllablePause(WordSyllablePause::new(super::locate(source, s)))
         }
-        WordBodyItem::Stress(StressKind::Secondary) => {
-            WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Secondary))
-        }
-        WordBodyItem::SyllablePause => WordContent::SyllablePause(WordSyllablePause::new()),
-        WordBodyItem::CliticBoundary => {
-            WordContent::CliticBoundary(talkbank_model::model::WordCliticBoundary::new())
-        }
+        WordBodyItem::CliticBoundary(s) => WordContent::CliticBoundary(
+            talkbank_model::model::WordCliticBoundary::new(super::locate(source, s)),
+        ),
         WordBodyItem::OverlapPoint(kind, s) => {
             let model_kind = match kind {
                 OverlapKind::TopBegin => OverlapPointKind::TopOverlapBegin,
@@ -37,9 +47,13 @@ pub(crate) fn body_item_to_word_content(item: &WordBodyItem<'_>) -> WordContent 
                 .nth(1)
                 .and_then(|c| c.to_digit(10))
                 .map(OverlapIndex::new);
-            WordContent::OverlapPoint(OverlapPoint::new(model_kind, index))
+            WordContent::OverlapPoint(OverlapPoint::new(
+                super::locate(source, s),
+                model_kind,
+                index,
+            ))
         }
-        WordBodyItem::CaElement(kind) => {
+        WordBodyItem::CaElement(kind, s) => {
             let t = match kind {
                 CaElementKind::BlockedSegments => CAElementType::BlockedSegments,
                 CaElementKind::Constriction => CAElementType::Constriction,
@@ -52,15 +66,15 @@ pub(crate) fn body_item_to_word_content(item: &WordBodyItem<'_>) -> WordContent 
                 CaElementKind::PitchUp => CAElementType::PitchUp,
                 CaElementKind::SuddenStop => CAElementType::SuddenStop,
             };
-            WordContent::CAElement(CAElement::new(t))
+            WordContent::CAElement(CAElement::new(super::locate(source, s), t))
         }
-        WordBodyItem::UnderlineBegin => {
-            WordContent::UnderlineBegin(talkbank_model::model::UnderlineMarker::new())
-        }
-        WordBodyItem::UnderlineEnd => {
-            WordContent::UnderlineEnd(talkbank_model::model::UnderlineMarker::new())
-        }
-        WordBodyItem::CaDelimiter(kind) => {
+        WordBodyItem::UnderlineBegin(s) => WordContent::UnderlineBegin(
+            talkbank_model::model::UnderlineMarker::new(super::locate(source, s)),
+        ),
+        WordBodyItem::UnderlineEnd(s) => WordContent::UnderlineEnd(
+            talkbank_model::model::UnderlineMarker::new(super::locate(source, s)),
+        ),
+        WordBodyItem::CaDelimiter(kind, s) => {
             let t = match kind {
                 CaDelimiterKind::Unsure => CADelimiterType::Unsure,
                 CaDelimiterKind::Precise => CADelimiterType::Precise,
@@ -78,7 +92,7 @@ pub(crate) fn body_item_to_word_content(item: &WordBodyItem<'_>) -> WordContent 
                 CaDelimiterKind::BreathyVoice => CADelimiterType::BreathyVoice,
                 CaDelimiterKind::Yawn => CADelimiterType::Yawn,
             };
-            WordContent::CADelimiter(CADelimiter::new(t))
+            WordContent::CADelimiter(CADelimiter::new(super::locate(source, s), t))
         }
     }
 }
@@ -95,7 +109,7 @@ pub(crate) fn compute_cleaned_text(body: &[WordBodyItem<'_>]) -> String {
     let mut in_segment_repetition = false;
     for item in body {
         match item {
-            WordBodyItem::CaDelimiter(CaDelimiterKind::SegmentRepetition) => {
+            WordBodyItem::CaDelimiter(CaDelimiterKind::SegmentRepetition, _) => {
                 in_segment_repetition = !in_segment_repetition;
             }
             WordBodyItem::Text(s) if !in_segment_repetition => cleaned.push_str(s),
@@ -133,16 +147,27 @@ fn fold_phonetic(content_items: Vec<WordContent>) -> Vec<WordContent> {
 // WordWithAnnotations → Word
 // ═══════════════════════════════════════════════════════════════
 
-/// Convert a parsed word to the model Word type.
-/// `raw_text` is the word's slice of `source` on the rich-word path, so
-/// `span_of` places it. A word built by `subtoken_word` reconstructs its
-/// `raw_text` into a FRESH allocation, so it cannot be placed and keeps
-/// `Span::DUMMY`; see the note at the span assignment below.
+/// Where a parsed word sits in `source`: `raw_text` IS the word's slice of
+/// the source on both parse paths, so `None` means only that the caller
+/// paired this word with a source it did not come from. One owner: the model
+/// word and the hulls that contain it both ask here.
+pub(crate) fn word_span(
+    w: &ast::WordWithAnnotations<'_>,
+    source: SourceText<'_>,
+) -> Option<talkbank_model::Span> {
+    source.span_of(w.raw_text)
+}
+
+/// Convert a parsed word to the model Word type, placed at `word_span`.
 pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>) -> Word {
-    let raw = w.raw_text.as_ref();
+    let raw = w.raw_text;
     let cleaned = compute_cleaned_text(&w.body);
 
-    let content_items: Vec<WordContent> = w.body.iter().map(body_item_to_word_content).collect();
+    let content_items: Vec<WordContent> = w
+        .body
+        .iter()
+        .map(|item| body_item_to_word_content(item, source))
+        .collect();
 
     // A `@u` word's content is a PHONETIC transcription (UNIBET/IPA), not
     // orthography: fold the lexed pieces into one opaque phonetic node,
@@ -160,7 +185,7 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>
     };
 
     let cleaned_for_model = if cleaned.is_empty() { raw } else { &cleaned };
-    let mut word = Word::new_unchecked(cleaned_for_model)
+    let mut word = Word::new_unchecked(super::located(word_span(w, source)), cleaned_for_model)
         .with_content(WordContents::new(content_items.into_iter().collect()));
 
     // Category from typed enum, no token scanning
@@ -210,24 +235,6 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>
     // POS tag, tag-extracted content
     if let Some(tag) = w.pos_tag {
         word = word.with_part_of_speech(tag);
-    }
-
-    // On the rich-word path `raw_text` IS the word's slice of the source, so
-    // its position is recoverable; nothing recovered it, and every re2c word
-    // reached the model at `Span::DUMMY`.
-    //
-    // `None` has TWO causes and only one of them is a caller error. The caller
-    // may have paired this word with a source it did not come from; or the
-    // word came from `subtoken_word`, which rebuilds `raw_text` as an owned
-    // concatenation of its tokens' display forms, so the string is a
-    // different allocation and can never be placed. The second is a real gap:
-    // such words keep `Span::DUMMY`, which silently disables span-keyed rules
-    // and renders surviving diagnostics at byte 0 of the FILE. Fixing it needs
-    // the lexer's own byte range, which `parser/mod.rs` discards; pointer
-    // arithmetic cannot reach it. Leaving the span untouched is the honest
-    // answer here, not a fabricated position.
-    if let Some(span) = source.span_of(w.raw_text.as_ref()) {
-        word = word.with_span(span);
     }
 
     word

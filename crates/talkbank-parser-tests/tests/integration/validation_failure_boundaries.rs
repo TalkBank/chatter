@@ -61,7 +61,10 @@ fn structure_admission_retains_tool_failure_through_reporting_and_refused_reject
     };
     assert_eq!(warning.code.as_str(), "W110");
     assert_eq!(warning.severity, Severity::Warning);
-    assert!(!warning.location.span.is_dummy());
+    assert!(matches!(
+        warning.location,
+        talkbank_model::DiagnosticLocation::Known { .. }
+    ));
     assert_eq!(observed.to_vec(), valid.diagnostics());
     let warning = warning.clone();
     let span = baseline
@@ -69,13 +72,15 @@ fn structure_admission_retains_tool_failure_through_reporting_and_refused_reject
         .next()
         .expect("reference speech")
         .main
-        .span;
+        .location
+        .span()
+        .expect("located main tier");
 
     for fault_severity in [Severity::Error, Severity::Warning] {
         for finding_severity in [Severity::Error, Severity::Warning] {
             let mut fault = ParseError::internal("independent producer failure", span);
             fault.severity = fault_severity;
-            let finding = ParseError::at_span(
+            let finding = ParseError::at_location(
                 ErrorCode::SyntaxError,
                 finding_severity,
                 span,
@@ -130,7 +135,7 @@ fn structure_admission_retains_tool_failure_through_reporting_and_refused_reject
     }
 
     // The discriminator is not simply "any diagnostic is a tool failure".
-    let finding = ParseError::at_span(
+    let finding = ParseError::at_location(
         ErrorCode::SyntaxError,
         Severity::Error,
         span,

@@ -77,7 +77,11 @@ pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
     for utt in chat_file.utterances() {
         let main = &utt.main;
         // 0-indexed → 1-indexed for display
-        let line_num = line_map.line_of(main.span.start) + 1;
+        // 0 marks an utterance with no source position (a parsed file has none).
+        let line_num = main
+            .location
+            .span()
+            .map_or(0, |span| line_map.line_of(span.start()) + 1);
         let speaker = main.speaker.to_string();
 
         let mut words = Vec::new();

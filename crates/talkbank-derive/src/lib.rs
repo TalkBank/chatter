@@ -209,7 +209,7 @@ pub fn derive_semantic_eq(input: TokenStream) -> TokenStream {
 
 /// Derive macro for the `SpanShift` trait (defined in `talkbank_model`).
 ///
-/// Generates `shift_spans_after(&mut self, offset: u32, delta: i32)` which
+/// Generates `shift_spans_after(&mut self, offset: usize, delta: isize)` which
 /// recursively walks all fields and shifts any `Span` values whose start is at
 /// or after `offset` by `delta` bytes. This is essential for incremental editing
 /// in the LSP: when the user types into a CHAT file, all spans after the edit
@@ -222,6 +222,9 @@ pub fn derive_semantic_eq(input: TokenStream) -> TokenStream {
 ///
 /// Works on structs and enums. For container types (`Vec<T>`, `Option<T>`),
 /// the generated code recurses into each element.
+/// Inferred type-parameter bounds come from participating field types;
+/// a parameter used only in skipped fields needs no `SpanShift` implementation.
+/// Opaque type macros conservatively retain bounds on all type parameters.
 ///
 /// # Attributes
 ///
@@ -330,6 +333,24 @@ pub fn derive_validation_tagged(input: TokenStream) -> TokenStream {
 /// Absence means Active; malformed or duplicate metadata is a compile error.
 /// Codes must ascend by their existing parsed prefix/numeric key, and the enum
 /// must contain `UnknownError`. Code spelling is never normalized.
+///
+/// Variant `cfg` and nested `cfg_attr` predicates also govern generated match
+/// arms and array lengths. Rust evaluates them for the consuming target; the
+/// macro does not guess target features from its host. Code/status metadata
+/// and ordering are checked across all declarations seen by the macro, before
+/// configuration filtering. `UnknownError` must remain enabled:
+///
+/// ```compile_fail
+/// use talkbank_derive::error_code_enum;
+/// #[error_code_enum]
+/// enum MissingSentinel {
+///     #[code("E001")]
+///     Known,
+///     #[cfg(any())]
+///     #[code("E999")]
+///     UnknownError,
+/// }
+/// ```
 ///
 /// # Example
 ///

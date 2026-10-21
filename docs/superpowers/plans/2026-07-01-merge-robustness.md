@@ -1,8 +1,47 @@
 # Merge Robustness Implementation Plan
 
+**Status:** Historical execution plan; not an active work queue
 **Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/superpowers/plans/2026-07-01-merge-robustness.md)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+This is the original task breakdown, not a statement of remaining work.
+Unchecked boxes, source locations, commands and constraints below describe the
+historical plan. They do not override [current contributor guidance](../../../AGENTS.md)
+or authorize delegation, per-task gates, commits, data regeneration or execution.
+See the [design's current routing](../specs/2026-07-01-merge-robustness-design.md#current-routing-and-limits)
+and maintained [Merge Architecture](../../../book/src/architecture/merge-architecture.md)
+before using this material. The `merge`, `pipeline` and `batch` CLI commands
+are removed; examples mentioning them are not current operator instructions.
+
+## Known superseded examples
+
+The body is retained as a design-time record, including incomplete drafts and
+predicted outcomes. Do not copy its code or commands into current work:
+
+- Part 2's `disambiguate_adult_roles` sketch panics beyond four same-role
+  adults. The maintained implementation groups owned entries and enumerates
+  them, using numeric labels after its named ordinals; it does not perform the
+  sketch's sibling lookup or panic on that boundary.
+- Part 4's `to_mapping_spec` sketch treats a missing role as an unreachable
+  invariant violation. Public records and wire input can express that mismatch.
+  The current API returns `Result<MappingSpec, SpeakerIdError>` and preserves
+  `OverrideRenameMissingRole`; the panic justification below is superseded.
+- Phase 1's implementation sketch checks roles but omits the design's name
+  comparison. Current participant deduplication compares names when both are
+  present. Phase 2's bare language-list sketch is also superseded by
+  `DeclaredLanguages` admission of nonempty, unique declarations.
+- Repeated `cargo test ... -E` snippets mix Cargo with nextest filter syntax,
+  and the separate integration-target paths predate test consolidation. Use
+  the maintained [testing guide](../../../book/src/contributing/testing.md)
+  rather than interpreting these snippets as runnable verification recipes.
+- Intermediate broken commits, repeated per-task gates, broad `git add -A`,
+  hand-stamped book dates and the final predicted "all implemented" sentence
+  are not current workflow instructions or evidence of acceptance.
+
+The current source owners above establish these differences, not a fresh test
+receipt for every scenario in this plan. The design goals remain distinct
+from recording identity, operator approval and release qualification.
+
+## Original plan
 
 **Goal:** Fix three independent gaps in chatter's merge/speaker-id pipeline found during a corpus-scale merge: silent-dedupe an already-declared participant on merge insert, relax `@Languages` matching to a subset check, and let the LLM holistic-judgment path represent multiple distinct adult speakers instead of refusing.
 

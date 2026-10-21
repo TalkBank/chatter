@@ -2,12 +2,15 @@
 //! Delimiters belong to the grammar; no comma-splitting decoder mirrors it here.
 
 use crate::CstFailure;
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, IdLanguageChoiceSourceView, IdLanguageNode, IdLanguagesChild0ChoiceSourceView,
     IdLanguagesChild1ChoiceSourceView, IdLanguagesNode, NoChild, SourceBound, SourceSlotView,
 };
+use crate::node_types::{ID_LANGUAGE, ID_LANGUAGES};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::{GeneratedPosition, report_cst_failure};
 use talkbank_model::{
     ParseOutcome,
     model::{LanguageCode, LanguageCodes},
@@ -37,7 +40,7 @@ fn component<'tree>(
     let children = typed.extract();
     surface_displaced(
         &children.children().unexpected,
-        "id_language",
+        ID_LANGUAGE,
         typed.source(),
         errors,
     );
@@ -67,24 +70,43 @@ fn component<'tree>(
                 }
             }
         },
-        SourceSlotView::Missing(node) | SourceSlotView::Error(node) => {
+        SourceSlotView::Missing(placeholder) => {
+            report_recovery(placeholder.raw_node(), typed.source(), errors);
+            ParseOutcome::Rejected
+        }
+        SourceSlotView::Error(node) => {
             report_recovery(node.raw_node(), typed.source(), errors);
             ParseOutcome::Rejected
         }
+        // The component's content is a required choice; the walk cannot leave
+        // it empty. Until 2026-10-19 this arm reported E510 for a component
+        // nobody read.
         SourceSlotView::Absent(NoChild) => {
-            report_recovery(typed.raw_node(), typed.source(), errors);
+            report_cst_failure(
+                typed.raw_node(),
+                typed.source(),
+                CstFailure::AbsentRequiredPosition {
+                    rule: ID_LANGUAGE,
+                    position: GeneratedPosition::new("IdLanguageChildren.content"),
+                },
+                errors,
+            );
             ParseOutcome::Rejected
         }
         SourceSlotView::Unexpected(never) => match never {},
     })
 }
 
+/// E510 at a recovery node inside the language list: a list-shape fault,
+/// reported under the code of the construct it broke. Reached by no authored
+/// file (module doc of the ID parser); it stays for the states the slot types
+/// admit.
 fn report_recovery(node: tree_sitter::Node<'_>, source: &str, errors: &impl ErrorSink) {
     errors.report(ParseError::new(
         ErrorCode::EmptyIDLanguage,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.byte_range(), "id_languages"),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), ID_LANGUAGES),
         "Malformed language component in @ID header",
     ));
 }
@@ -104,12 +126,27 @@ pub(crate) fn parse_id_languages<'tree>(
             | IdLanguagesChild0ChoiceSourceView::Space(_)
             | IdLanguagesChild0ChoiceSourceView::Tab(_) => {}
         },
-        SourceSlotView::Missing(node) | SourceSlotView::Error(node) => {
+        SourceSlotView::Missing(placeholder) => {
+            report_recovery(placeholder.raw_node(), typed.source(), errors);
+            codes = ParseOutcome::Rejected;
+        }
+        SourceSlotView::Error(node) => {
             report_recovery(node.raw_node(), typed.source(), errors);
             codes = ParseOutcome::Rejected;
         }
+        // The list head is a required position (`repeat1`); the walk cannot
+        // leave it empty. Until 2026-10-19 this arm reported E510 for a list
+        // nobody read.
         SourceSlotView::Absent(NoChild) => {
-            report_recovery(typed.raw_node(), typed.source(), errors);
+            report_cst_failure(
+                typed.raw_node(),
+                typed.source(),
+                CstFailure::AbsentRequiredPosition {
+                    rule: ID_LANGUAGES,
+                    position: GeneratedPosition::new("IdLanguagesChildren.child_0"),
+                },
+                errors,
+            );
             codes = ParseOutcome::Rejected;
         }
         SourceSlotView::Unexpected(never) => match never {},
@@ -124,7 +161,11 @@ pub(crate) fn parse_id_languages<'tree>(
                 | IdLanguagesChild1ChoiceSourceView::Space(_)
                 | IdLanguagesChild1ChoiceSourceView::Tab(_) => {}
             },
-            SourceSlotView::Missing(node) | SourceSlotView::Error(node) => {
+            SourceSlotView::Missing(placeholder) => {
+                report_recovery(placeholder.raw_node(), typed.source(), errors);
+                codes = ParseOutcome::Rejected;
+            }
+            SourceSlotView::Error(node) => {
                 report_recovery(node.raw_node(), typed.source(), errors);
                 codes = ParseOutcome::Rejected;
             }
@@ -133,7 +174,7 @@ pub(crate) fn parse_id_languages<'tree>(
     }
     surface_displaced(
         &children.children().unexpected,
-        "id_languages",
+        ID_LANGUAGES,
         typed.source(),
         errors,
     );

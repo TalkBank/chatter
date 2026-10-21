@@ -8,7 +8,6 @@
 //! - [Interposed Words](https://talkbank.org/0info/manuals/CHAT.html#InterposedWords)
 
 use super::{SpeakerCode, WriteChat};
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -43,10 +42,10 @@ pub struct OtherSpokenEvent {
     pub text: smol_str::SmolStr,
 
     /// Source location metadata for diagnostics.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl OtherSpokenEvent {
@@ -54,26 +53,15 @@ impl OtherSpokenEvent {
     ///
     /// This is the common constructor for parser output prior to span attachment
     /// and for unit tests focused on serialization behavior.
-    pub fn new(speaker: impl Into<SpeakerCode>, text: impl Into<smol_str::SmolStr>) -> Self {
-        Self {
-            speaker: speaker.into(),
-            text: text.into(),
-            span: Span::DUMMY,
-        }
-    }
-
-    /// Build an interposed event with explicit source span metadata.
-    ///
-    /// Use this constructor when caller code already owns exact source offsets.
-    pub fn with_span(
+    pub fn new(
+        location: impl Into<crate::Location>,
         speaker: impl Into<SpeakerCode>,
         text: impl Into<smol_str::SmolStr>,
-        span: Span,
     ) -> Self {
         Self {
             speaker: speaker.into(),
             text: text.into(),
-            span,
+            location: location.into(),
         }
     }
 }

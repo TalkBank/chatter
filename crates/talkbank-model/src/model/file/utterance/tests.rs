@@ -5,21 +5,24 @@
 
 use super::*;
 use crate::model::{MainTier, ReplacedWord, Replacement, Terminator, UtteranceContent, Word};
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
 /// Utterance JSON serialization includes speaker and replacement payload fields.
 ///
 /// This is a smoke test for serde coverage on a nested replaced-word structure.
 #[test]
 fn demo_utterance_json_serialization() -> Result<(), String> {
-    let word = Word::simple("hello");
-    let replacement = Replacement::from_word(Word::simple("world"));
-    let replaced_word = ReplacedWord::new(word, replacement);
+    let word = Word::simple(crate::Location::Unlocated, "hello");
+    let replacement = Replacement::from_word(Word::simple(crate::Location::Unlocated, "world"));
+    let replaced_word = ReplacedWord::new(crate::Location::Unlocated, word, replacement);
 
     let main = MainTier::new(
+        crate::MainTierLocations::UNLOCATED,
         "CHI",
         vec![UtteranceContent::ReplacedWord(Box::new(replaced_word))],
-        Terminator::Period { span: Span::DUMMY },
+        Terminator::Period {
+            location: crate::Location::Unlocated,
+        },
     );
 
     let utterance = Utterance::new(main);
@@ -41,8 +44,8 @@ fn demo_error_json_serialization() -> Result<(), String> {
     let error = ParseError::new(
         ErrorCode::SpeakerNotFoundInParticipants,
         Severity::Warning,
-        SourceLocation::from_offsets(1, 3),
-        ErrorContext::new("*MO: how are you ?", 1..3, "MO")
+        DiagnosticLocation::from_offsets(1, 3),
+        ErrorContext::new("*MO: how are you ?", crate::Span::new(1, 3), "MO")
             .with_expected(vec!["CHI".to_string(), "MOT".to_string()]),
         "Speaker 'MO' not found in @Participants header",
     )

@@ -2,7 +2,7 @@
 
 use crate::token::Token;
 use serde::Serialize;
-use talkbank_model::{ErrorCode, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use talkbank_model::{DiagnosticLocation, ErrorCode, ErrorSink, ParseError, Severity, Span};
 
 /// A rejected tier retains its lexical input for AST inspection. Construction
 /// streams its diagnostic; model conversion must not fabricate a supported or
@@ -23,7 +23,7 @@ impl<'a> RejectedMorTier<'a> {
         errors.report(ParseError::new(
             ErrorCode::TierValidationError,
             Severity::Error,
-            SourceLocation::new(span),
+            DiagnosticLocation::new(span),
             None,
             "Could not fully parse morphological tier",
         ));

@@ -19,11 +19,12 @@ cargo test -p <crate> --tests <name filter>
 cd grammar && tree-sitter test        # grammar-only edits
 ```
 
-**Do not run `cargo check` before `cargo test`.** `cargo test` type-checks
-everything `check` would, and the two are DIFFERENT cargo units: `check` emits
-only `.rmeta` while `test` emits full `.rlib` with codegen, so nothing is
-reused and alternating them recompiles the whole dependency graph twice. If a crate has no tests, run
-`cargo test -p <crate>` anyway; it compiles and reports zero tests.
+If the needed result is a test run, do not reflexively precede it with
+`cargo check`: check-only metadata and test code generation are different build
+units, so that can duplicate work. Select the required package, features and
+target once. A check-only build is useful when compilation itself is the missing
+fact; it does not establish runtime behavior. A zero-test result likewise proves
+no behavioral contract. Confirm the expected test names actually ran.
 
 ## Deterministic tests and native-platform feedback
 
@@ -94,8 +95,9 @@ without a bypass variable or automatic commit gate. In this repo a **spec file
 counts as the failing test**: a construct or parser bug is fixed by writing the spec first,
 and `just regen` turns it into fixtures.
 
-`just evidence-gate-test` and `just breaking-changelog-test` prove both gates
-fire, in both directions; both run in `just gate`.
+`just evidence-gate-test` and `just breaking-changelog-test` exercise the
+retained standalone review-check scripts in both directions; both remain in
+`just gate`. Their presence does not reinstall automatic commit hooks.
 
 ## Before pushing
 
@@ -103,37 +105,41 @@ fire, in both directions; both run in `just gate`.
 just gate          # static checks plus every test CI runs; the pre-push gate
 ```
 
-Or `just push`, which runs `gate` and then pushes.
+After maintainer authorization for the reviewed candidate, `just push` runs
+`gate` and then pushes. Do not use it as a local-only verification command.
 
 `just release-lint` is separate and is NOT part of this: clippy over both
 workspaces plus the feature-off build, run once before a release. Each is its
 own cargo unit that recompiles the workspace, and none of them is a thing a
 per-push gate needs to know.
 
-`gate` puts every cheap check ahead of every expensive one, so a workflow typo
-or a stale version pin fails in seconds rather than after the test suite.
+`gate` starts with locked metadata and several static checks before its later
+build/test stages. It also includes checks that compile or invoke generators;
+do not assume every prerequisite failure is cheap. The recipe owns ordering.
 
 **Do not assemble this by hand from the list below.** A green `just test` is
 not a green gate: `just test` is `--tests`, and doctests are a separate
 compilation it cannot see.
 
-What `gate` runs, and why each is not covered by the others:
+Examples of distinct checks in `gate` (not an exhaustive or executable checklist;
+the current `justfile` owns membership):
 
 | Step | Catches what nothing else does |
 |---|---|
 | `just fmt-check` | `cargo test` does not run rustfmt; CI does |
 | `just grammar-generate-check` | a stale `parser.c`. The traversal staleness guard hashes `grammar.json` and `node-types.json`, so a regeneration touching only `parser.c` passes it correctly; a tree-sitter version bump does exactly that |
-| `just test` | the compiled test suite |
+| `just test-workspace` | the compiled test suite with strict prerequisite admission |
 | `cargo test --doc --workspace` | doctests, invisible to `--tests` |
 | `just test-spec` | the `spec/` workspace, which `--workspace` does not reach |
-| `just book` | the book builds and its links resolve |
-| `just doc-dates` | a `Last modified` header older than the file |
+| `just book` | the book renders, publication metadata is present, and offline/internal links resolve; external links are excluded |
+| `just doc-dates` | publication metadata follows the repository's Git-derived/header policy |
 | `just actionlint`, the two sync checks | workflow syntax and version pins |
 
 Clippy is deliberately absent, and so is the feature-off build: both are
-`just release-lint`, which per-push CI does not run either. Nothing in CI
-goes red on something the local gate did not run; that equivalence is what
-`scripts/check_ci_gate_sync.py` enforces.
+`just release-lint`, which per-push CI does not run either.
+`scripts/check_ci_gate_sync.py` checks declared recipe coverage and selected
+workflow provisioning conventions. It cannot prove a different operating
+system's behavior, service availability or arbitrary CI configuration correct.
 
 `just test-all` is the TEST half of the gate (both workspaces, doctests, the
 proc-macro UI suite) and is what `gate` delegates to. Useful on its own when you
@@ -145,7 +151,8 @@ stayed green.
 
 ## By surface
 
-**Parser, model, alignment, serialization, roundtrip** (mandatory):
+**Parser, model, alignment, serialization, roundtrip** (select the affected
+contracts; retain the final gate separately):
 
 ```bash
 cargo test -p talkbank-parser-tests --tests reference_corpus_parses
@@ -180,8 +187,12 @@ and it takes under a second.
 **Docs:**
 
 ```bash
-just doc-dates     # a `Last modified` header older than the file fails
+just book          # render, metadata checks and offline/internal links
 ```
+
+Use `just doc-dates` for the broader publication-metadata policy when needed.
+Review examples against their source owners; a passing link check does not
+establish that a command works or a behavioral claim is true.
 
 ## Dependency updates
 
@@ -232,7 +243,9 @@ second filesystem name during concurrent launches. Windows uses a temporary
 same-filesystem hard link because its command API has no `arg0` override.
 
 
-A failing check blocks the change. If a failure is unrelated and pre-existing,
-verify that by running against a clean checkout, say so, and fix it anyway
-rather than routing around it: pre-existing defects linger precisely because
-each person who meets them decides they belong to somebody else.
+A relevant failing check blocks acceptance of the claim it tests. Distinguish
+implementation defects, missing prerequisites and unrelated existing failures
+using retained receipts and scoped source/history inspection. Preserve unrelated
+work; do not reset, stash or create another checkout merely to obtain a green
+run. Fix defects within the authorized scope, or state the unresolved cause and
+required decision. Never turn a failed or skipped check into a passing receipt.

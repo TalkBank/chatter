@@ -4,7 +4,7 @@
 use super::*;
 use std::collections::{VecDeque, vec_deque::IntoIter};
 use std::iter::Peekable;
-use talkbank_model::{Span, TierSeparator};
+use talkbank_model::TierSeparator;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Placement {
@@ -33,7 +33,7 @@ impl OrderBounds {
 
 struct HeaderEvent {
     header: Box<Header>,
-    span: Span,
+    location: talkbank_model::Location,
     separator: TierSeparator,
 }
 
@@ -41,7 +41,7 @@ impl HeaderEvent {
     fn into_line(self) -> Line {
         Line::Header {
             header: self.header,
-            span: self.span,
+            location: self.location,
             separator: self.separator,
         }
     }
@@ -496,10 +496,14 @@ impl AdmittedMerge {
     }
 }
 
-fn copied_header(header: &Header, span: Span, separator: TierSeparator) -> HeaderEvent {
+fn copied_header(
+    header: &Header,
+    location: talkbank_model::Location,
+    separator: TierSeparator,
+) -> HeaderEvent {
     HeaderEvent {
         header: Box::new(header.clone()),
-        span,
+        location,
         separator,
     }
 }
@@ -526,7 +530,7 @@ impl OpeningAdditions {
         for line in donor.lines.iter().take_while(|line| !starts_body(line)) {
             if let Line::Header {
                 header,
-                span,
+                location: span,
                 separator,
             } = line
             {
@@ -609,7 +613,7 @@ pub(super) fn merge(
         match line {
             Line::Header {
                 header,
-                span,
+                location: span,
                 separator,
             } => {
                 let mut event = copied_header(header, *span, *separator);
@@ -664,7 +668,7 @@ pub(super) fn merge(
         match line {
             Line::Header {
                 header,
-                span,
+                location: span,
                 separator,
             } => {
                 // The first utterance ends opening-metadata reconciliation,
@@ -748,7 +752,7 @@ mod section_order_tests {
         let boundary = |previous_end, next_start| {
             let Line::Header {
                 header,
-                span,
+                location: span,
                 separator,
             } = header.clone()
             else {
@@ -757,7 +761,7 @@ mod section_order_tests {
             SectionBoundary {
                 header: HeaderEvent {
                     header,
-                    span,
+                    location: span,
                     separator,
                 },
                 previous_end: Some(previous_end),

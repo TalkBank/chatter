@@ -1,7 +1,7 @@
 # talkbank-parser
 
 **Status:** Current
-**Last modified:** 2026-08-27 01:00 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-parser/README.md)
 
 Parsing implementations for CHAT format using tree-sitter.
 
@@ -9,8 +9,8 @@ Parsing implementations for CHAT format using tree-sitter.
 
 This crate is the canonical parser for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html),
 converting source text into the `ChatFile` AST defined by
-[talkbank-model](https://crates.io/crates/talkbank-model). It uses the
-[tree-sitter-talkbank](https://crates.io/crates/tree-sitter-talkbank) grammar
+[talkbank-model](../talkbank-model/README.md). It uses the
+[tree-sitter-talkbank](../../grammar/README.md) grammar
 crate from the same repository to produce a concrete syntax tree (CST), then
 converts it into the model's abstract types.
 
@@ -26,23 +26,23 @@ Key features:
 
 ## Usage
 
-```rust
-use talkbank_parser::TreeSitterParser;
+Start with the [compiled library recipes](../../book/src/chatter/integrating/library-usage.md)
+for dependency setup, parsing, validation, traversal and serialization.
 
-let parser = TreeSitterParser::new().expect("parser init");
+`TreeSitterParser::new()` is fallible. Its inherent `parse_chat_file()` returns
+a `ParseProduct`: `Built` retains both a model and its diagnostics, while
+`Unbuildable` retains diagnostics without a model. Match both variants and
+inspect the diagnostics; building a model is not source acceptance. The
+`expect_built()` helper is for tests, panics on `Unbuildable`, and discards
+diagnostics on `Built`. It is not a production validation shortcut.
 
-let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
-    @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
-
-// Parse a complete CHAT file. `parse_chat_file` returns a `ParseProduct`,
-// not a bare `Result`: a document that builds a model always hands the
-// model back, even alongside diagnostics.
-let chat_file = parser.parse_chat_file(source).expect_built();
-
-// Parse a fragment with offset adjustment and streaming errors:
-let errors = talkbank_model::ErrorCollector::new();
-let outcome = parser.parse_word_fragment("hello", 0, &errors);
-```
+The shared `ChatParser` trait and fragment APIs instead return `ParseOutcome`
+and stream diagnostics to an `ErrorSink`. Fragment origins and option context
+must describe the actual caller input. See
+[parser backends](../../book/src/architecture/parser-backends.md) for the
+API distinction and compatibility contract. Use the transform crate's checked
+pipeline when the consumer needs admitted source and model validity rather
+than recovery-oriented parsing.
 
 ## License
 

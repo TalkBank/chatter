@@ -1,7 +1,19 @@
 # Adjudication: an annotation that opens an utterance
 
-**Status:** Current
-**Last modified:** 2026-08-27 13:44 EDT
+**Status:** Historical adjudication; source and measurements are version-bound
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md)
+
+The findings below retain their original inputs, observations and causal
+analysis. They do not describe the current generator, diagnostic set or test
+selection, and do not authorize a corpus sweep. Current CHECK assessment lives
+in the [manifest-backed book view](../../book/src/architecture/errors-and-validation/check-parity-audit.md).
+Backend comparisons follow the [compatibility mandate](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate),
+not the historical `KNOWN_DIVERGENCES` baseline or diagnostic-code equality.
+
+CHECK and either parser supply evidence, not an independent definition of CHAT.
+The retained finite absence observations are not proof of unreachability and
+cannot justify deleting a recovery state. Follow current contributor checks;
+the old observation-snapshot and pre-push statements below are historical.
 
 An adjudication of how the two parsers read `[: ...]` at the start of an
 utterance, grounded against real CLAN CHECK. It found one defect in each parser.

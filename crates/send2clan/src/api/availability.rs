@@ -15,9 +15,7 @@ use crate::ffi;
 /// Call this function early in your application to provide clear error messages
 /// on unsupported platforms, rather than receiving errors at runtime.
 ///
-/// # Performance
-///
-/// Extremely fast (< 1µs) - just checks compile-time constants.
+/// This is a build-target flag, not a test of installed CLAN or message delivery.
 ///
 /// # Examples
 ///
@@ -29,7 +27,7 @@ use crate::ffi;
 ///     std::process::exit(1);
 /// }
 ///
-/// // Safe to proceed with send2clan operations
+/// // Sending can still fail; inspect the actual operation's result.
 /// ```
 pub fn is_platform_supported() -> bool {
     // Safety:
@@ -40,19 +38,20 @@ pub fn is_platform_supported() -> bool {
 
 /// Check if CLAN application is installed and available.
 ///
-/// Checks at runtime whether the CLAN application can be found
-/// on the system. This may involve filesystem or registry access and can take
-/// 10-100ms on first call.
+/// Queries platform installation-location heuristics. A positive answer does
+/// not prove that launching or sending succeeds; a cached answer can become stale.
 ///
 /// # Platform-Specific Detection
 ///
-/// * **macOS**: Searches for bundle ID "org.talkbank.clanc" via Launch Services
-/// * **Windows**: Checks registry key and default installation paths
+/// * **macOS**: Queries Launch Services with the C implementation's `CLANc` identifier.
+/// * **Windows**: Reads `InstallPath` under `HKEY_LOCAL_MACHINE\Software\TalkBank\CLAN`
+///   or uses the compiled default path only when that key does not exist.
 ///
-/// # Performance
-///
-/// * Typical: 10-100ms (filesystem or registry access)
-/// * Consider caching the result for repeated calls
+/// On Windows the C bridge admits the registry value before using it: an
+/// unopenable key or an unreadable, non-`REG_SZ`, empty, embedded-NUL or
+/// over-long value yields `false` without probing any file. That admission is
+/// verified against Win32 test doubles (`just send2clan-win32-doubles`), not on
+/// native Windows; this boolean is not a launch guarantee.
 ///
 /// # Examples
 ///
@@ -65,7 +64,7 @@ pub fn is_platform_supported() -> bool {
 ///     std::process::exit(1);
 /// }
 ///
-/// // CLAN is available, safe to call send_to_clan()
+/// // Availability is only a hint; sending still has independent failure modes.
 /// ```
 ///
 /// # Example with caching

@@ -1,164 +1,242 @@
 # CHAT Grammar Architecture
 
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/grammar/GRAMMAR.md)
+
 A guide to the tree-sitter grammar for the [CHAT transcription format](https://talkbank.org/0info/manuals/CHAT.html).
+`grammar.js` owns the executable syntax. This page explains its overall shape
+and the design patterns a contributor meets first; it is not a second copy of
+the rules. When this page and `grammar.js` disagree, `grammar.js` is current.
+Procedure lives in the [Grammar Workflow](../book/src/contributing/grammar-workflow.md),
+precedence rationale in [precedence decisions](docs/precedence-decisions.md)
+and token boundaries in [tokenization rules](docs/tokenization-rules.md).
 
 ## Overview
 
-This grammar produces a **concrete syntax tree** (CST), not an abstract syntax tree. Every byte of the input is represented in the tree, whitespace, delimiters, and continuation lines are all explicit nodes. Downstream consumers (the Rust parser in `crates/talkbank-parser`) walk the CST to build a semantic AST.
+The grammar produces a **concrete syntax tree** (CST). Whitespace is never
+skipped implicitly: separators, spaces and continuation lines are matched by
+explicit rules. That does not mean every byte has its own named node; some
+spans are anonymous tokens (for example the body of an unsupported dependent
+tier). Downstream, `crates/talkbank-parser` consumes a generated typed traversal
+of this CST and lowers it into the `talkbank-model` data model.
 
-**Design philosophy: "Parse, don't validate."** The grammar accepts all plausible CHAT input. Invalid values (wrong date formats, unknown option names, etc.) parse successfully into the CST and are flagged by the Rust validator. This means the grammar never rejects a file that a human could plausibly have written.
+**Recognition is not validation.** The grammar deliberately recognizes many
+shapes that CHAT forbids, such as unknown header values, a missing `@UTF8` line
+or trailing spaces after a tier separator, so that the model can report a
+specific diagnostic instead of a generic parse failure. It does not accept all
+input: text it cannot fit produces tree-sitter `ERROR` or `MISSING` recovery
+nodes, which the parser reports. A clean parse is not a validity verdict; see
+the book's [grammar chapter](../book/src/architecture/grammar.md) and
+[leniency policy](../book/src/architecture/leniency-policy.md).
 
 ## Architecture
 
-### Three tiers of rules
+### Kinds of rules
 
-1. **Leaf tokens**: atomic regex or string matches (`standalone_word`, `inline_bullet`, `pause_token`, terminators). These are opaque to tree-sitter; internal structure is parsed downstream.
-
-2. **Structural compositions**: `seq()`, `repeat()`, `choice()` rules that combine leaf tokens into CHAT constructs (`utterance`, `mor_word`, `id_contents`).
-
-3. **Supertypes**: abstract `choice()` rules that group related node types for query convenience:
+1. **Leaf tokens**: regex or literal matches such as header and tier prefixes
+   (`token('@Location')`, `token('%cod')`), terminators, `zero` and
+   `event_segment`.
+2. **Structural compositions**: `seq()`, `repeat()` and `choice()` rules that
+   build CHAT constructs (`utterance`, `main_tier`, `standalone_word`,
+   `mor_word`, `id_contents`).
+3. **Supertypes**: abstract `choice()` rules declared in `supertypes`, so a
+   query or consumer can match a whole category:
 
 | Supertype | Groups |
 |-----------|--------|
-| `terminator` | `.` `?` `!` `+...` `+/.` `+//.` etc. (13 variants) |
-| `linker` | `++` `+<` `+^` `+"` `+,` `+≈` `+≋` |
-| `base_annotation` | `[!]` `[?]` `[//]` `[= ...]` `[* ...]` etc. (17 variants) |
-| `dependent_tier` | `%mor` `%gra` `%pho` `%sin` `%com` etc. (26 variants) |
-| `header` | `@Languages` `@Participants` `@ID` `@Date` etc. (30 variants) |
-| `pre_begin_header` | `@PID` `@Color words` `@Window` `@Font` |
+| `terminator` | utterance-ending punctuation (`.`, `?`, `!`, `+...`, `+/.` and others) |
+| `linker` | discourse linkers (`++`, `+<`, `+^`, `+"`, `+,`, `+≈`, `+≋`) |
+| `base_annotation` | bracket annotations such as `[!]`, `[?]`, `[//]`, `[= ...]`, `[* ...]`, `[<]` |
+| `dependent_tier` | `%mor`, `%gra`, `%pho`, `%com` and the other tiers, plus `unsupported_dependent_tier` |
+| `header` | `@Languages`, `@Participants`, `@ID`, `@Date` and the other headers, plus `unsupported_header` |
+| `pre_begin_header` | `@PID`, `@Color words`, `@Window`, `@Font` |
+
+The member lists are in `grammar.js`; this page intentionally does not repeat
+their counts, which change whenever a construct is added.
 
 ### The `extras: []` decision
 
-Tree-sitter normally auto-skips whitespace via `extras`. This grammar sets `extras: []` and handles all whitespace explicitly through `whitespaces`, `continuation`, `space`, and `tab` tokens. This is necessary because:
+Tree-sitter normally skips whitespace through `extras`. This grammar sets
+`extras: []` and threads whitespace through rules such as `whitespaces`,
+`continuation`, `space`, `tab` and the separator rules. This is necessary
+because:
 
-- CHAT uses tab characters structurally (header separator, tier separator)
-- Continuation lines (newline + tab) are meaningful; they indicate multi-line content
-- Whitespace between content items must be preserved for roundtrip serialization
+- CHAT uses tab characters structurally (header and tier separators).
+- A continuation (line break followed by a tab) continues the same header or
+  tier value.
+- Content-separating whitespace is needed for faithful serialization and for
+  diagnostics such as trailing separator spaces.
 
 ### Conflict declarations
 
-Five rules require explicit `conflicts` declarations because tree-sitter's GLR parser needs guidance on ambiguous sequences:
-
-- `contents`: a content item followed by whitespace could be the start of another item or trailing whitespace before a terminator
-- `word_with_optional_annotations` / `nonword_with_optional_annotations`, bracket annotations after a word could belong to the word or be a separate content item
-- `base_annotations`: multiple annotations in sequence create shift-reduce ambiguity
-- `final_codes`: postcodes after terminators have similar ambiguity
+The `conflicts` array lists the rule sets where the GLR parser must keep more
+than one interpretation alive until a later token decides. Most concern
+whitespace after a content item: it may separate the next item or begin that
+item's bracket annotations (`contents`, the three `*_with_optional_annotations`
+rules, `base_annotations`, `final_codes`). Others concern markers that can be
+standalone content or word-internal structure (`word_body` alongside
+`contents` and `base_content_item`). Each entry carries a comment in
+`grammar.js`; add a conflict only with the same kind of justification.
 
 ## Document Structure
 
+`source_file` is the root. It is a choice, so the same grammar can parse a
+whole file or a fragment:
+
 ```
-document
-├── utf8_header              "@UTF8\n"
-├── pre_begin_header*        "@PID", "@Font", "@Window", "@Color words"
-├── begin_header             "@Begin\n"
+source_file
+├── full_document              complete file (highest precedence)
+├── utterance                  main tier plus dependent tiers
+├── main_tier                  a single main tier
+├── dependent_tier             a single dependent tier
+├── header                     a single header
+├── pre_begin_header           @PID, @Font, @Window, @Color words
+└── standalone_word            a single word
+
+full_document
+├── utf8_header?               "@UTF8"; optional so its absence can be diagnosed
+├── pre_begin_header*          any order; ordering is checked downstream
+├── begin_header               "@Begin"
 ├── line*
-│   ├── header               "@Languages:\teng\n", "@Date:\t01-JAN-2000\n"
+│   ├── header                 "@Languages:\teng", "@Date:\t01-JAN-2000"
 │   ├── utterance
-│   │   ├── main_tier        "*CHI:\twant more cookie ."
-│   │   │   ├── star, speaker, colon, tab
+│   │   ├── main_tier          "*CHI:\twant more cookie ."
+│   │   │   ├── star, speaker, colon, tab, sep_trailing_space?
 │   │   │   └── tier_body
 │   │   │       ├── linkers?
-│   │   │       ├── contents     (words, events, groups, pauses, annotations)
-│   │   │       └── utterance_end (terminator, postcodes, media_url, newline)
-│   │   └── dependent_tier*  "%mor:\tv|want qn|more n|cookie"
-│   └── unsupported_line     catch-all for unrecognized lines
-└── end_header               "@End\n"
+│   │   │       ├── language code?   leading "[- lang]"
+│   │   │       ├── contents         words, events, groups, pauses, annotations
+│   │   │       └── utterance_end    terminator?, postcodes?, bullet?, newline
+│   │   └── dependent_tier*    "%mor:\tv|want qn|more n|cookie"
+│   ├── blank_line
+│   └── unsupported_line       catch-all for lines not starting with *, @ or %
+└── end_header                 "@End"
 ```
 
 ## Design Patterns
 
-### Opaque word tokens
+### Structured words
 
-Word-internal structure (prosody markers, CA features, shortenings, compound markers, form/language suffixes) is **not** parsed by the grammar. The `standalone_word` rule captures everything between word boundaries as a single opaque token. The Rust direct parser then analyzes word internals via `parse_word_impl()`.
+Words are **not** opaque tokens. `standalone_word` is a sequence of an
+optional prefix (`&-`, `&~`, `&+`) or omission `zero`, a `word_body`, and
+optional form marker, language suffix and part-of-speech tag. `word_body`
+alternates typed children: `word_segment` text, shortenings, stress markers
+and structural markers such as overlap points, CA elements and delimiters,
+and underline boundaries. The symbol registry supplies the character classes
+that keep those markers out of `word_segment`. The
+[tokenization rules](docs/tokenization-rules.md) and the book's
+[word syntax](../book/src/chat-format/word-syntax.md) describe the contract.
 
-**Rationale:** Word-internal syntax is too complex and context-dependent for tree-sitter's lexer. A separate parsing pass can use full backtracking and richer error recovery.
+### Bracket annotations
 
-### Atomic annotation tokens
+Simple annotations are single tokens, for example `[!]`, `[?]` and the error
+marker `[* ...]`. Annotations with free-text payloads are sequences whose
+opening token wins the lexer with `prec(8)` and whose payload is a field: for
+example `explanation_annotation` is `[=`, a space, `field('text', annotation_content)`
+and `]`. Consumers read the field rather than slicing bracket text.
 
-Bracket annotations like `[= text]`, `[! text]`, `[* code]` are single `token()` rules. The grammar captures the complete bracket contents; the Rust parser extracts the payload text.
+### Recognized values with a catch-all
 
-**Rationale:** Annotation internals are simple enough to extract with string operations. Making them atomic avoids state explosion from nested bracket disambiguation.
-
-### Strict + catch-all (10 rules)
-
-For header fields with a closed set of valid values, the grammar provides both strict matches and a generic catch-all:
+Several closed header vocabularies offer the known values together with a
+generic alternative:
 
 ```javascript
 option_name: $ => choice('CA', 'NoAlign', $.generic_option_name),
 generic_option_name: $ => /[^\s,\r\n\t]+/,
 ```
 
-Tree-sitter's DFA gives string literals priority over regexes at the same length, so known values win automatically. Unknown values fall through to the catch-all and are flagged by the Rust validator. This pattern applies to: `option_name`, `media_type`, `media_status`, `recording_quality_option`, `transcription_option`, `number_option`, `date_contents`, `time_duration_contents`, `id_sex`, `id_ses`.
-
-Note: `id_ses` uses `token(prec(1, regex))` instead of string literals to avoid keyword conflicts, ethnicity words like White, Black, Native appear in utterance text.
+Tree-sitter's lexer prefers a string literal over a regex match of the same
+length, so known values win. An unknown value is still recognized and is
+reported by the model rather than becoming a parse error. Some vocabularies
+use structured alternatives rather than plain literals (`id_ses`, for
+example, distinguishes combined, code and ethnicity values from a generic
+value); consult each rule before assuming the simple pattern.
 
 ### Explicit whitespace and continuation
 
-With `extras: []`, the grammar must thread whitespace tokens through every rule that allows spaces. The `whitespaces` token matches `repeat1(choice(' ', /[\r\n]+\t/))`, either spaces or continuation sequences (newline + tab). This means a multi-line header value like:
+The `whitespaces` token matches runs of spaces and continuation sequences (line
+break followed by a tab). Free-text header values use `free_text`, a repetition
+of `rest_of_line` and `continuation`, so a multi-line value such as
 
 ```
 @Location:	Room 5
 	Building A
 ```
 
-is parsed as a single `free_text` node containing `rest_of_line` + `continuation` + `rest_of_line`.
+parses as one `free_text` node. Spaces after a header or tier separator are a
+distinct `sep_trailing_space` node, so they can be diagnosed (E758) and dropped
+on serialization instead of becoming content.
 
-## Precedence Strategy
+## Precedence
 
-The grammar uses four precedence tiers to resolve tokenization ambiguity:
-
-| Level | Used by | Beats |
-|-------|---------|-------|
-| **prec(10)** | Terminators (`+...`, `+/.`), linkers (`++`, `+<`), CA markers, group delimiters | Everything; these are structural tokens that must never be consumed as word content |
-| **prec(8)** | Bracket annotations (`[= ...]`, `[=! ...]`), `langcode` | standalone_word, but not structural tokens |
-| **prec(5)** | `standalone_word`, overlap points | Event segments, generic catch-alls |
-| **prec(1)** | `event_segment` | Nothing, lowest priority, only matches when nothing else does |
-
-Additional: `zero` uses prec(3) to beat `natural_number` (prec 2) for the character `0`.
+Precedence resolves lexical ambiguity: structural tokens such as terminators
+and linkers must win over word content, annotation openers over words, and
+the event-segment catch-all only when nothing else matches. The numeric levels
+and the reasoning behind each non-obvious choice are recorded in
+[precedence decisions](docs/precedence-decisions.md). That record is design
+rationale with historical observations, not a proof over every parser state.
 
 ## Downstream Integration
 
-### CST → AST pipeline
+### From CST to validated model
 
-1. **tree-sitter** parses CHAT source → CST (this grammar)
-2. **`talkbank-parser`** walks CST → `ChatFile` AST (Rust data model)
-3. **`talkbank-model`** validates the AST (error codes, cross-tier alignment)
-4. **`talkbank-transform`** orchestrates parse + validate pipelines, CHAT↔JSON roundtrip
+1. **tree-sitter** parses CHAT source into a CST with this grammar.
+2. **Generated typed traversal** (`crates/talkbank-parser/src/generated_traversal.rs`
+   and the C metadata bridge in `bindings/rust/`) gives the parser typed access
+   to each node's children. It is regenerated from the grammar by the pinned
+   traversal recipe, never edited by hand.
+3. **`talkbank-parser`** lowers the typed CST into a `ChatFile` and reports
+   recovery nodes as diagnostics.
+4. **`talkbank-model`** validates the model (error codes, cross-tier alignment).
+5. **`talkbank-transform`** orchestrates parse and validation pipelines and
+   CHAT/JSON conversion.
 
-### `node_types.rs` generation
+The independent re2c backend (`talkbank-parser-re2c`) does not use this grammar.
 
-The grammar generates `src/node-types.json`. The Rust constants file
-`node_types.rs` is generated from this grammar output:
+### Generated consumers
 
-```bash
-node scripts/generate-node-types.js > crates/talkbank-parser/src/node_types.rs
-```
+`src/node-types.json` and the Rust node-kind constants in
+`crates/talkbank-parser/src/node_types.rs` are generated, as are the traversal,
+metadata bridge and conformance inventory. `just regen` (from the repository
+root) regenerates all of them in dependency order; the ownership table in
+[grammar agent guidance](AGENTS.md#source-and-output-ownership) names the
+owner of each file.
 
 ### Editor queries
 
-The `queries/` directory provides the minimal boilerplate query set expected by the language bindings: syntax highlighting, injections, locals, and tags.
-
-Additional query families (for example folds/indents/textobjects) remain post-v1 TODO work.
+`queries/` provides the minimal query set expected by the language bindings:
+highlights, injections, locals and tags. `just grammar-test` checks that each
+query compiles against a reference file; it does not verify highlight results.
+Additional query families (folds, indents, text objects) remain post-v1 work.
 
 ## Adding New Constructs
 
+Every addition follows the [Grammar Workflow](../book/src/contributing/grammar-workflow.md):
+edit `grammar.js`, run `just regen`, review the generated changes, add typed
+lowering in `talkbank-parser`, and add authored examples under `spec/constructs/`
+or `spec/errors/`. The grammar-level steps for common cases are:
+
 ### New header
 
-1. Add a `token()` prefix rule (e.g., `my_header_prefix: $ => token('@MyHeader')`)
-2. Add a header rule using `seq(prefix, header_sep, content, newline)`
-3. Add it to the `header` supertype choice
-4. Run `tree-sitter generate && tree-sitter test`
-5. Add a downstream parser in `talkbank-parser`
+1. Add a prefix token with the other prefixes, for example
+   `my_header_prefix: $ => token('@MyHeader')`.
+2. Add a header rule in the usual shape,
+   `seq($.my_header_prefix, $.header_sep, content, $.newline)`.
+3. Add it to the `header` supertype choice. Until then, `unsupported_header`
+   recognizes the line.
 
 ### New dependent tier
 
-1. Add a `token()` tier prefix (e.g., `my_tier_prefix: $ => token('%myt')`)
-2. Add a tier rule using `seq(prefix, tier_sep, content, newline)`
-3. Add it to the `dependent_tier` supertype choice
-4. Existing `unsupported_dependent_tier` catch-all will handle it until the parser is updated
+1. Add a tier prefix token, for example `my_tier_prefix: $ => token('%myt')`.
+2. Add a tier rule, `seq($.my_tier_prefix, $.tier_sep, body, $.newline)`.
+3. Add it to the `dependent_tier` supertype choice. Until then,
+   `unsupported_dependent_tier` recognizes unknown `%label` tiers, and
+   `x_dependent_tier` already covers user-defined `%x...` tiers.
 
 ### New annotation type
 
-1. Add a `token()` rule with the bracket pattern (use `prec(8)` to beat `standalone_word`)
-2. Add it to the `base_annotation` supertype choice
-3. Ensure the regex doesn't conflict with existing bracket patterns
+1. Add a token, or a sequence starting with a token, whose opener uses
+   `prec(8)` so it beats word content.
+2. Add it to the `base_annotation` supertype choice.
+3. Check that its pattern does not overlap an existing bracket opener, and
+   record any non-obvious precedence choice in
+   [precedence decisions](docs/precedence-decisions.md).

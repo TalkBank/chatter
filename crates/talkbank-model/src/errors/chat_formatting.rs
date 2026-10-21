@@ -133,6 +133,31 @@ pub struct PlainDisplayResult {
     offset_map: Vec<(usize, usize)>,
 }
 
+/// Ordered UTF-8 endpoints produced by, and borrowed from, one display owner.
+/// Only this module can construct the range; the lifetime keeps it from
+/// outliving or being applied to a different display text.
+pub(super) struct ProjectedDisplayRange<'a> {
+    start: usize,
+    end: usize,
+    owner: std::marker::PhantomData<&'a str>,
+}
+
+impl ProjectedDisplayRange<'_> {
+    pub(super) fn start(&self) -> usize {
+        self.start
+    }
+
+    pub(super) fn end(&self) -> usize {
+        self.end
+    }
+
+    /// Preserve an insertion point at the already admitted start boundary.
+    pub(super) fn collapsed(mut self) -> Self {
+        self.end = self.start;
+        self
+    }
+}
+
 impl PlainDisplayResult {
     /// Keep raw display text and its identity offset map under the same owner.
     pub(crate) fn unformatted(text: &str) -> Self {
@@ -174,6 +199,12 @@ impl PlainDisplayResult {
     /// A collapsed span highlights the next complete character when available;
     /// empty text and end-of-text locations remain zero-width insertion points.
     pub fn map_span(&self, start: usize, end: usize) -> (usize, usize) {
+        let projected = self.project_range(start, end);
+        (projected.start, projected.end)
+    }
+
+    /// Retain the range invariant for internal diagnostic construction.
+    pub(super) fn project_range(&self, start: usize, end: usize) -> ProjectedDisplayRange<'_> {
         // The final event records source EOF. With no events, this is an
         // identity map and the owned display supplies the same extent.
         // Bound source coordinates before interpolation, not after arithmetic
@@ -198,7 +229,11 @@ impl PlainDisplayResult {
         } else {
             de
         };
-        (ds, de)
+        ProjectedDisplayRange {
+            start: ds,
+            end: de,
+            owner: std::marker::PhantomData,
+        }
     }
 }
 

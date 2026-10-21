@@ -4,6 +4,7 @@ mod fix_s;
 mod join_retrace;
 mod linker;
 mod overlap;
+mod report;
 mod retag_language;
 mod sanitize;
 
@@ -11,6 +12,7 @@ pub use fix_s::*;
 pub use join_retrace::*;
 pub use linker::*;
 pub use overlap::*;
+pub use report::AuditError;
 pub use retag_language::*;
 pub use sanitize::*;
 

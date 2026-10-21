@@ -1,60 +1,48 @@
-# Curating Construct Specs from Mined Data
+# Curating Construct Specs from Candidate Data
 
-**Last modified:** 2026-05-29 18:36 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/spec/docs/CURATION_WORKFLOW.md)
 
-This project uses a strict two-stage pipeline:
+Candidate discovery and public spec authoring are separate steps. A corpus
+occurrence, successful parser recovery or candidate-tool result is not a
+standalone validity oracle.
 
-1. Mine candidate files from corpus data directory (staging only).
-2. Curate small constructed examples into `spec/constructs/` (source of truth).
+## Discovery
 
-Do not copy mined `.cha` files directly into release corpus outputs.
+Use `just spec-corpus-candidates` with an explicitly selected input scope;
+inspect its current help for available options. Do not assume a sibling data
+directory exists or run an unbounded corpus search. Keep candidate outputs
+outside authored and generated release trees.
 
-## Why
+Use only material authorized for inspection. Private corpus content and
+identifiers must not be copied into public specs, fixtures or documentation.
+Retain any required provenance in its appropriate authorized location.
 
-- Mined files are useful for discovery, not for stable publishable tests.
-- Curated specs stay small, understandable, and reviewable.
-- Generated tree-sitter tests are reproducible from specs only.
+## Review and promotion
 
-## Workflow
+1. Identify the relevant construct and justify its intended behavior against
+   the specification or a reviewed ruling.
+2. Write a small synthetic example under `spec/constructs/` that preserves
+   the important interaction without copying private transcript content.
+3. Inspect the complete wrapped input's actual CST and review the relevant
+   subtree before writing `Expected CST`. A tree produced by the current
+   parser can still contradict the intended construct.
+4. Follow [Spec Workflow](../../book/src/contributing/spec-workflow.md) for
+   generation and focused verification.
 
-1. Mine candidates:
+The emitter currently derives a fragment's full-document CST from parsing;
+it does not automatically compare that result with the authored fragment
+expectation. Keep that manual correspondence review explicit.
 
-```bash
-cargo run --bin extract_corpus_candidates --manifest-path spec/runtime-tools/Cargo.toml -- \
-  --data-dir ../data \
-  --languages eng \
-  --node-types grammar/src/node-types.json \
-  --max-lines 200 \
-  --max-files 20000 \
-  --top 50 \
-  --require-rust-parse=true \
-  --require-rust-validation=true \
-  --validate-alignment=true \
-  --json \
-  --output spec/tmp/mined/candidates.eng.json
-```
+Mutation candidates follow the separate
+[seed and claim review](../../book/src/contributing/spec-workflow.md#mutation-candidates-are-not-golden-tests).
+A mutation name does not establish an expected diagnostic.
 
-2. Curate by hand from those candidates:
-- Identify one minimal representative pattern per construct.
-- Write or update markdown files in `spec/constructs/*`.
-- Prefer minimal examples over raw corpus copies.
+## Ownership
 
-3. Regenerate tests:
+- Candidate artifacts are unreviewed discovery material, not release fixtures.
+- `spec/constructs/` and `spec/errors/` hold reviewed authored inputs.
+- `grammar/test/corpus/generated/` is generator-owned.
+- `grammar/test/corpus/manual/` remains hand-maintained.
 
-```bash
-just spec-gen      # every artifact derived from spec/
-just spec-check    # or: is the committed copy current?
-```
-
-4. Verify:
-
-```bash
-cd grammar && tree-sitter test --overview-only
-cargo test -p talkbank-parser-tests
-```
-
-## Staging vs release
-
-- Staging artifacts: `spec/tmp/mined/*` (ephemeral, non-release).
-- Source of truth: `spec/constructs/*` and `spec/errors/*`.
-- Generated release artifacts: `grammar/test/corpus/*`.
+Do not copy candidate CHAT directly into generated outputs, hand-edit those
+outputs, or treat passing generation as full semantic acceptance.

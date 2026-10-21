@@ -15,10 +15,10 @@
 //! three spellings mean the same thing, and a change to how spans are derived
 //! would have to find all of them.
 //!
-//! Roughly 55 call sites still inline `Span::new(node.start_byte() as u32, ...)`
-//! directly. Those are correct and are not a bug; they simply predate this
-//! module. Prefer [`span_of`] in new code, and convert the inline ones when you
-//! are already editing the surrounding region.
+//! Every "span of this node" in the parser now goes through [`span_of`]. Spans
+//! that combine two nodes (a separator's end to a tier's end) still use
+//! [`Span::new`] directly, which panics on an inverted range in every build
+//! profile, so a producer bug fails at its call site instead of travelling on.
 
 use talkbank_model::Span;
 use tree_sitter::Node;
@@ -28,6 +28,7 @@ use tree_sitter::Node;
 /// The offsets come straight from tree-sitter, which reports byte offsets into
 /// the same source text the model's spans index, so no adjustment is needed.
 #[inline]
+#[track_caller]
 pub(crate) fn span_of(node: Node<'_>) -> Span {
-    Span::from_usize(node.start_byte(), node.end_byte())
+    Span::new(node.start_byte(), node.end_byte())
 }

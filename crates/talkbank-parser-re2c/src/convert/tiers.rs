@@ -3,47 +3,50 @@
 
 use crate::ast;
 use crate::source_text::SourceText;
-use crate::token::Token;
 use talkbank_model::ErrorSink;
-use talkbank_model::Span;
 use talkbank_model::model::CaOptionEffect;
+use talkbank_model::model::LanguagePrecode;
 use talkbank_model::model::content::word::ca::normalize_ca_omissions_in_lines;
 use talkbank_model::model::*;
 use talkbank_model::non_empty_literal;
 
 use super::*;
 
+/// Lower a main tier the line machine has placed in `source`.
 pub fn main_tier_to_model(
-    mt: &ast::MainTier<'_>,
+    located: &ast::LocatedMainTier<'_>,
     source: SourceText<'_>,
     errors: &(impl ErrorSink + ?Sized),
 ) -> MainTier {
+    let mt = located.tier();
     let speaker = SpeakerCode::new(mt.speaker.text());
     let content_items: Vec<UtteranceContent> = mt
         .tier_body
         .contents
         .iter()
-        .map(|c| content_item_to_model(c, source))
+        .filter_map(|c| content_item_to_model(c, source))
         .collect();
     let terminator = mt
         .tier_body
         .terminator
         .as_ref()
-        .and_then(|t| token_to_terminator(t));
+        .and_then(|t| token_to_terminator(t, source));
 
-    let mut main_tier = MainTier::new(speaker, content_items, terminator);
+    let mut main_tier = MainTier::new(located.locations(), speaker, content_items, terminator);
 
     // Install the grammar-owned terminal slot before considering a content tail.
-    if let Some(bullet_tok) = &mt.tier_body.media_bullet
-        && let Token::MediaBullet {
-            start_time,
-            end_time,
-            ..
-        } = bullet_tok
-    {
-        main_tier = main_tier.with_bullet(bullet_from_times(start_time, end_time));
+    if let Some(bullet) = mt.tier_body.media_bullet {
+        if let Some(model) = bullet_from_token(bullet, source) {
+            main_tier = main_tier.with_bullet(model);
+        }
+    } else if !matches!(
+        mt.tier_body.contents.last(),
+        Some(ast::ContentItem::MediaBullet { bullet }) if bullet.times().is_none()
+    ) {
+        // Rejected timing still occupies its source position. Removing it must
+        // not promote an earlier inline bullet into the terminal slot.
+        main_tier.content.extract_terminal_bullet();
     }
-    main_tier.content.extract_terminal_bullet();
 
     // Linkers
     if !mt.tier_body.linkers.is_empty() {
@@ -51,26 +54,30 @@ pub fn main_tier_to_model(
             .tier_body
             .linkers
             .iter()
-            .filter_map(|tok| linker_token_to_model(tok))
+            .filter_map(|tok| linker_token_to_model(tok, source))
             .collect();
         main_tier = main_tier.with_linkers(linkers);
     }
 
-    // Language code ([- lang]). The token carries the tag-extracted code
-    // directly ("zho"). Declined rather than `expect`ed on the impossible
-    // empty case: a parser has no business panicking on input, and the
-    // `[- ` lexer rule requires at least one character anyway.
-    if let Some(langcode_tok) = &mt.tier_body.langcode
-        && let Ok(code) = LanguageCode::new(langcode_tok.text())
+    // Language code ([- lang]). The token's payload is the tag-extracted
+    // code ("zho"); its lexeme is the whole `[- zho]`, where the precode is
+    // placed. Declined rather than `expect`ed on the impossible empty case: a
+    // parser has no business panicking on input, and the `[- ` lexer rule
+    // requires at least one character anyway.
+    if let Some(langcode) = mt.tier_body.langcode
+        && let Ok(code) = LanguageCode::new(langcode.text())
     {
-        main_tier = main_tier.with_language_code(code);
+        main_tier = main_tier.with_language_code(LanguagePrecode::new(
+            super::locate(source, langcode.lexeme()),
+            code,
+        ));
     }
 
     main_tier = main_tier.with_postcodes(
         mt.tier_body
             .postcodes
             .iter()
-            .filter_map(|postcode| postcode.to_model(errors))
+            .filter_map(|postcode| postcode.to_model(source, errors))
             .collect(),
     );
 
@@ -100,7 +107,14 @@ pub fn utterance_to_model(
         .dependent_tiers
         .iter()
         .filter_map(|entry| {
-            dependent_tier_to_model(&entry.tier, source, errors, &mut parse_health).map(|tier| {
+            dependent_tier_to_model(
+                &entry.tier,
+                talkbank_model::Location::Located(entry.extent),
+                source,
+                errors,
+                &mut parse_health,
+            )
+            .map(|tier| {
                 let mut lowered = DependentTierEntry::with_separator(tier, entry.separator);
                 if let Some(body) = entry.content_range {
                     lowered.record_content_span(body);
@@ -134,6 +148,7 @@ pub fn utterance_to_model(
 /// divergence, named here rather than left for the next reader to discover.
 pub fn dependent_tier_to_model(
     tier: &ast::DependentTierParsed<'_>,
+    location: talkbank_model::Location,
     source: SourceText<'_>,
     errors: &(impl ErrorSink + ?Sized),
     health: &mut talkbank_model::model::ParseHealth,
@@ -145,7 +160,7 @@ pub fn dependent_tier_to_model(
             health.taint(ParseHealthTier::Mor);
             return None;
         }
-        ast::DependentTierParsed::Mor(mor) => match MorTier::try_from(mor) {
+        ast::DependentTierParsed::Mor(mor) => match mor_tier_to_model(mor, location, source) {
             Ok(mor) => talkbank_model::model::DependentTier::Mor(mor),
             // Was `.ok()?`, which dropped the tier and tainted nothing: the
             // separate taint walk this replaced could only see the AST's own
@@ -157,26 +172,28 @@ pub fn dependent_tier_to_model(
             }
         },
         ast::DependentTierParsed::Gra(gra) => talkbank_model::model::DependentTier::Gra(
-            crate::convert::gra_tier_to_model(gra, source, errors).into_tier(health),
+            crate::convert::gra_tier_to_model(gra, source, errors).into_tier(location, health),
         ),
         ast::DependentTierParsed::Pho(pho) => {
             talkbank_model::model::DependentTier::Pho(convert_pho_tier(
                 pho,
                 talkbank_model::model::dependent_tier::pho::PhoTierType::Pho,
+                location,
             ))
         }
         ast::DependentTierParsed::Mod(pho) => {
             talkbank_model::model::DependentTier::Mod(convert_pho_tier(
                 pho,
                 talkbank_model::model::dependent_tier::pho::PhoTierType::Mod,
+                location,
             ))
         }
         ast::DependentTierParsed::Sin(sin) => {
-            talkbank_model::model::DependentTier::Sin(convert_sin_tier(sin))
+            talkbank_model::model::DependentTier::Sin(convert_sin_tier(sin, location))
         }
-        ast::DependentTierParsed::Wor(wor_parsed) => {
-            talkbank_model::model::DependentTier::Wor(wor_tier_to_model(wor_parsed, source))
-        }
+        ast::DependentTierParsed::Wor(wor_parsed) => talkbank_model::model::DependentTier::Wor(
+            wor_tier_to_model(wor_parsed, source, location),
+        ),
         ast::DependentTierParsed::Text { prefix, content } => {
             let prefix_text = prefix.text();
             // Extract tier label: "%com:\t" → "com", "%xpho:\t" → "xpho"
@@ -200,7 +217,7 @@ pub fn dependent_tier_to_model(
                         // reason, and only because the model had no honest way
                         // to say "this line carried nothing".
                         content: NonEmptyString::new(raw_text.as_str()).ok(),
-                        span: Span::DUMMY,
+                        location,
                     },
                 ));
             }
@@ -214,30 +231,39 @@ pub fn dependent_tier_to_model(
             // that is the one measurable cost in this function.
             match label {
                 "com" => talkbank_model::model::DependentTier::Com(ComTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "act" => talkbank_model::model::DependentTier::Act(ActTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "exp" => talkbank_model::model::DependentTier::Exp(ExpTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "add" => talkbank_model::model::DependentTier::Add(AddTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "gpx" => talkbank_model::model::DependentTier::Gpx(GpxTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "int" => talkbank_model::model::DependentTier::Int(IntTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "spa" => talkbank_model::model::DependentTier::Spa(SpaTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "sit" => talkbank_model::model::DependentTier::Sit(SitTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 "cod" => talkbank_model::model::DependentTier::Cod(CodTier::new(
+                    location,
                     tokens_to_bullet_content(content),
                 )),
                 // TextTier tiers (plain string content)
@@ -250,8 +276,10 @@ pub fn dependent_tier_to_model(
                     // the validator reject it (E756's rule: a tier whose
                     // content is empty declares nothing).
                     let tt = match NonEmptyString::new(raw_text.as_str()) {
-                        Ok(text) => talkbank_model::model::dependent_tier::TextTier::new(text),
-                        Err(_) => talkbank_model::model::dependent_tier::TextTier::empty(),
+                        Ok(text) => {
+                            talkbank_model::model::dependent_tier::TextTier::new(location, text)
+                        }
+                        Err(_) => talkbank_model::model::dependent_tier::TextTier::empty(location),
                     };
                     match label {
                         "alt" => talkbank_model::model::DependentTier::Alt(tt),
@@ -298,10 +326,12 @@ pub fn dependent_tier_to_model(
                     talkbank_model::model::DependentTier::Tim(
                         match NonEmptyString::new(raw_text.as_str()) {
                             Ok(text) if text.as_str().trim().is_empty() => {
-                                talkbank_model::dependent_tier::TimTier::empty()
+                                talkbank_model::dependent_tier::TimTier::empty(location)
                             }
-                            Ok(text) => talkbank_model::dependent_tier::TimTier::from_text(text),
-                            Err(_) => talkbank_model::dependent_tier::TimTier::empty(),
+                            Ok(text) => {
+                                talkbank_model::dependent_tier::TimTier::from_text(location, text)
+                            }
+                            Err(_) => talkbank_model::dependent_tier::TimTier::empty(location),
                         },
                     )
                 }
@@ -318,7 +348,12 @@ pub fn dependent_tier_to_model(
                 // `%wor` tier with no words.
                 "wor" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    match crate::convert::wor_tier_from_input(&raw_text) {
+                    // Original located tokens were diagnosed by the file
+                    // dispatcher; do not emit reconstructed-text coordinates.
+                    match crate::convert::wor_tier_from_input(
+                        &raw_text,
+                        &talkbank_model::NullErrorSink,
+                    ) {
                         Some(wor) => talkbank_model::model::DependentTier::Wor(wor),
                         // Taints for the reason the `%mor` arm above states.
                         // `?` propagated the absence and recorded nothing.
@@ -334,6 +369,7 @@ pub fn dependent_tier_to_model(
                     let words = talkbank_model::dependent_tier::parse_syl_content(&raw_text);
                     talkbank_model::model::DependentTier::Modsyl(
                         talkbank_model::dependent_tier::SylTier::new(
+                            location,
                             talkbank_model::dependent_tier::SylTierType::Modsyl,
                             words,
                         ),
@@ -344,6 +380,7 @@ pub fn dependent_tier_to_model(
                     let words = talkbank_model::dependent_tier::parse_syl_content(&raw_text);
                     talkbank_model::model::DependentTier::Phosyl(
                         talkbank_model::dependent_tier::SylTier::new(
+                            location,
                             talkbank_model::dependent_tier::SylTierType::Phosyl,
                             words,
                         ),
@@ -361,7 +398,7 @@ pub fn dependent_tier_to_model(
                     // means, agreeing with this one only by inspection.
                     match talkbank_model::dependent_tier::parse_phoaln_content(&raw_text) {
                         Ok(words) => talkbank_model::model::DependentTier::Phoaln(
-                            talkbank_model::dependent_tier::PhoalnTier::new(words),
+                            talkbank_model::dependent_tier::PhoalnTier::new(location, words),
                         ),
                         Err(_) => {
                             // No fabrication: a tier that will not parse says so.
@@ -370,7 +407,7 @@ pub fn dependent_tier_to_model(
                                 talkbank_model::model::UserDefinedDependentTier {
                                     label: non_empty_literal!("phoaln"),
                                     content: text,
-                                    span: Span::DUMMY,
+                                    location,
                                 },
                             )
                         }
@@ -385,12 +422,12 @@ pub fn dependent_tier_to_model(
                     // content and the tier loses its identity to E605.
                     if raw_text.trim().is_empty() {
                         talkbank_model::model::DependentTier::Xphoint(
-                            talkbank_model::dependent_tier::XphointTier::new(Vec::new()),
+                            talkbank_model::dependent_tier::XphointTier::new(location, Vec::new()),
                         )
                     } else {
                         match talkbank_model::dependent_tier::parse_xphoint_content(&raw_text) {
                             Ok(groups) => talkbank_model::model::DependentTier::Xphoint(
-                                talkbank_model::dependent_tier::XphointTier::new(groups),
+                                talkbank_model::dependent_tier::XphointTier::new(location, groups),
                             ),
                             Err(_) => {
                                 // No fabrication: a tier that will not parse says so.
@@ -399,7 +436,7 @@ pub fn dependent_tier_to_model(
                                     talkbank_model::model::UserDefinedDependentTier {
                                         label: non_empty_literal!("xphoint"),
                                         content: text,
-                                        span: Span::DUMMY,
+                                        location,
                                     },
                                 )
                             }
@@ -424,7 +461,7 @@ pub fn dependent_tier_to_model(
                                 Err(_) => return None,
                             },
                             content: NonEmptyString::new(raw_text.as_str()).ok(),
-                            span: Span::DUMMY,
+                            location,
                         },
                     )
                 }
@@ -465,8 +502,8 @@ pub fn chat_file_to_model(
                 header: h,
                 provenance,
             } => talkbank_model::model::Line::Header {
-                header: Box::new(crate::convert::header_to_model(h)),
-                span: provenance.span(),
+                header: Box::new(crate::convert::header_to_model(h, source)),
+                location: provenance.span().into(),
                 separator: provenance.separator(),
             },
             ast::Line::Utterance(u) => talkbank_model::model::Line::Utterance(Box::new(
@@ -513,6 +550,7 @@ pub fn chat_file_to_model(
 pub(crate) fn wor_tier_to_model(
     parsed: &ast::WorTierParsed<'_>,
     source: SourceText<'_>,
+    location: talkbank_model::Location,
 ) -> WorTier {
     use talkbank_model::model::dependent_tier::wor::WorItem;
 
@@ -522,31 +560,31 @@ pub(crate) fn wor_tier_to_model(
         .map(|item| match item {
             ast::WorItemParsed::Word { word, bullet } => {
                 let mut w = word_from_parsed(word, source);
-                if let Some((start_ms, end_ms)) = bullet {
-                    w = w.with_inline_bullet(Bullet::new(*start_ms, *end_ms));
+                if let Some(model) = bullet.and_then(|bullet| bullet_from_token(bullet, source)) {
+                    w = w.with_inline_bullet(model);
                 }
                 WorItem::Word(Box::new(w))
             }
-            ast::WorItemParsed::Separator(kind) => WorItem::Separator {
+            ast::WorItemParsed::Separator { kind, text } => WorItem::Separator {
                 text: kind.chat_text().to_string(),
-                span: Span::DUMMY,
+                location: super::locate(source, text),
             },
         })
         .collect();
 
-    let mut wor = WorTier::new(wor_items);
+    let mut wor = WorTier::new(location, wor_items);
     // The lexer hands back the code alone (`zho`); the brackets and the `- `
     // are already stripped by the `[- ` rule's tag capture. That rule requires
     // at least one character, so the empty case cannot arrive; it is declined
     // rather than `expect`ed, because a parser has no business panicking on
     // input and the tier's own diagnostics still fire.
-    if let Some(tok) = &parsed.langcode
-        && let Ok(code) = talkbank_model::model::LanguageCode::new(tok.text())
+    if let Some(langcode) = parsed.langcode
+        && let Ok(code) = talkbank_model::model::LanguageCode::new(langcode.text())
     {
         wor.language_code = Some(code);
     }
     if let Some(t) = &parsed.terminator {
-        wor.terminator = token_to_terminator(t);
+        wor.terminator = token_to_terminator(t, source);
     }
     wor
 }

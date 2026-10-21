@@ -20,6 +20,43 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+/// File transport variants; authored bytes remain a separate observation.
+#[derive(Clone, Copy, Debug)]
+pub enum LineEnding {
+    Authored,
+    CrLf,
+    Cr,
+}
+
+impl LineEnding {
+    pub const ALL: [Self; 3] = [Self::Authored, Self::CrLf, Self::Cr];
+
+    pub fn apply(self, text: &str) -> std::borrow::Cow<'_, str> {
+        let newline = match self {
+            Self::Authored => return text.into(),
+            Self::CrLf => "\r\n",
+            Self::Cr => "\r",
+        };
+        text.replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\n', newline)
+            .into()
+    }
+}
+
+#[test]
+fn transport_variants_preserve_content_and_empty_lines() {
+    let text = "é\r\n\r\n二\rx\ny";
+    assert_eq!(LineEnding::Authored.apply(text), text);
+    assert_eq!(LineEnding::CrLf.apply(text), "é\r\n\r\n二\r\nx\r\ny");
+    assert_eq!(LineEnding::Cr.apply(text), "é\r\r二\rx\ry");
+    for ending in LineEnding::ALL {
+        assert_eq!(ending.apply(""), "");
+    }
+    assert_eq!(LineEnding::CrLf.apply("x\n"), "x\r\n");
+    assert_eq!(LineEnding::Cr.apply("x\n"), "x\r");
+}
+
 /// Workspace root, located by walking up from `CARGO_MANIFEST_DIR` to the
 /// nearest ancestor whose `Cargo.toml` declares `[workspace]`.
 ///

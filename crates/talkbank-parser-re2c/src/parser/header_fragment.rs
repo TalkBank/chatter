@@ -2,11 +2,15 @@
 
 use crate::ast::{HeaderParsed, Line};
 use crate::token::Token;
-use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use talkbank_model::{
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity,
+};
 
 /// Only admission can produce a header accounting for the complete fragment.
 pub(crate) struct HeaderFragment<'source> {
     header: Box<HeaderParsed<'source>>,
+    /// The caller's input, which the header's token slices point into.
+    source: crate::source_text::SourceText<'source>,
 }
 
 impl<'source> HeaderFragment<'source> {
@@ -33,21 +37,24 @@ impl<'source> HeaderFragment<'source> {
         let parsed = super::file::parse_file_with_errors(&lexed, errors);
         let mut lines = parsed.lines.into_iter();
         match (lines.next(), lines.next()) {
-            (Some(Line::Header { header, .. }), None) => Some(Self { header }),
+            (Some(Line::Header { header, .. }), None) => Some(Self {
+                header,
+                source: lexed.source_text(),
+            }),
             _ => Self::reject(input, errors),
         }
     }
 
     pub(crate) fn lower(self) -> talkbank_model::model::Header {
-        crate::convert::header_parsed_to_model(&self.header)
+        crate::convert::header_parsed_to_model(&self.header, self.source)
     }
 
     fn reject(input: &str, errors: &impl ErrorSink) -> Option<Self> {
         errors.report(ParseError::new(
             ErrorCode::TierValidationError,
             Severity::Error,
-            SourceLocation::from_offsets(0, input.len()),
-            ErrorContext::new(input, 0..input.len(), "header"),
+            DiagnosticLocation::from_offsets(0, input.len()),
+            ErrorContext::new(input, talkbank_model::Span::new(0, input.len()), "header"),
             "Expected exactly one complete header fragment",
         ));
         None

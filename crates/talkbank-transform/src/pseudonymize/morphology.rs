@@ -307,9 +307,10 @@ fn lemma_sources<'input>(
 ) -> Result<Vec<SourceBound<'input, 'input, MorLemmaNode<'input>>>, MorphologyRefusal> {
     let refused = MorphologyRefusal::SourceCorrespondence;
     let parsed = input.parsed_source();
+    let span = tier.location.span().ok_or(refused)?;
     let raw = parsed
         .root_node()
-        .named_descendant_for_byte_range(tier.span.start as usize, tier.span.end as usize)
+        .named_descendant_for_byte_range(span.start(), span.end())
         .ok_or(refused)?;
     let bound = parsed.bind(raw).map_err(|_| refused)?;
     let tier_node = bound.typed::<MorDependentTierNode>().ok_or(refused)?;

@@ -3,53 +3,63 @@
 **Status:** Current
 **Last modified:** {{git-dates:page}}
 
-If you depend on chatter, two different things can move under you and they move
-independently:
+If you depend on chatter, distinguish at least two kinds of compatibility:
 
 - the **Rust API**, which decides whether your code still compiles;
 - the **validation verdict**, which decides whether files you already have
   still pass.
 
-A release can be perfectly source-compatible and still change which CHAT files
-`validate` accepts. That is not a defect; it is the point of the project. But
-it means the version number alone cannot tell you whether a bump is safe for
-your corpus, so this page says what each half promises.
+A release can be source-compatible and still change which CHAT files
+`validate` accepts. An intentional rule correction and an unintended regression
+can both change a verdict; compilation alone cannot distinguish them. This page
+records the pre-1.0 policy, not a guarantee that every behavioral difference is
+correct. The [1.0 readiness contract](../../contributing/one-zero-readiness.md)
+still requires the stable surfaces and their compatibility promises to be defined.
 
 ## The Rust API follows SemVer
 
-Ordinary Cargo expectations, with one qualifier: chatter is pre-1.0, so a minor
-bump may break the API. Pin exactly (`=0.10.0`) if you need stability, or track
-the minor and read the changelog.
+Chatter is pre-1.0, so a minor bump may break the Rust API. Pin a release tag or
+commit for Git dependencies and review the changelog before advancing it. For
+registry dependencies, pin the exact published package version when repeatable
+resolution is required; first verify that the package/version actually exists.
+See [Crates.io Publication](../../contributing/crates-io-publication.md) for the
+publication boundary. A version constraint is not evidence of registry availability.
 
 ## The validation verdict follows a different rule
 
 **Any release may change which files validate, including a patch release.**
-Validation is not a stable interface and will not become one before 1.0. The
-project exists to move the boundary of what counts as valid CHAT, and freezing
-verdicts would freeze that.
+Validation verdicts are not frozen before 1.0: parser and validation rules are
+still being corrected against the CHAT specification and reviewed policy.
+That permits corrections; it does not make the tool's verdict its own authority.
 
-What you get instead is a **guarantee that the change is announced**:
+The release-note requirement is:
 
 > Every release whose validation verdicts move opens its `CHANGELOG.md` entry
 > with a bold **Validation behaviour** note, naming the codes that were added,
 > removed, retired or made stricter, and what kind of file is affected.
 
-If a release has no such note, its verdicts did not move. If it has one, read
-it before upgrading a pipeline that gates on `validate`.
+Read that note before upgrading a pipeline that gates on `validate`. Its absence
+is not an exhaustive equivalence proof: a regression or an omitted release note
+can still exist. The requirement to document verdict changes remains; an
+unannounced observed difference needs investigation, not automatic data repair.
 
 ## Which direction a change can go
 
 Both, and they are not symmetric:
 
 - **Stricter** (a new code, or an existing one reaching more inputs) means
-  files that used to pass now fail. This is the common direction, and the
-  failing files are usually genuinely wrong; the corpus they came from has
-  simply not been cleaned yet.
+  files that used to pass now fail. Newly rejected files need adjudication
+  against the CHAT specification and
+  the chosen validation policy. A parser or validator defect must be fixed in
+  the tool, not worked around by changing correct transcript data.
 - **Looser** (a code retired, or a false positive fixed) means files that used
   to fail now pass. Retired codes are never reused for a different rule.
 
-Neither direction is a breaking change in the SemVer sense, because neither
-touches the API.
+Under the pre-1.0 policy above, either direction may occur in a patch release
+without changing Rust signatures. That does not make the change harmless to an
+application: validation verdicts, diagnostics and serialized output can be
+behavioral dependencies. Do not infer a post-1.0 compatibility promise from this
+pre-1.0 rule.
 
 ### Retiring a code is not a clean removal
 
@@ -84,8 +94,12 @@ diagnostic code, count or wording is not the acceptance criterion. See the
 [CHECK assessment](../../architecture/errors-and-validation/check-parity-audit.md)
 for its scope and reopening rules.
 
-If you only consume the parsed model and never call `validate`, only the SemVer
-half applies to you.
+If you consume parsed models without calling `validate`, still review parser,
+recovery and serialization changes that affect your application. A compiling
+adapter can receive different field values or diagnostics. The
+[diagnostic contract](diagnostic-contract.md) and
+[JSON output guide](json-output.md) describe those interfaces; they are not
+substituted by a source-compatibility check.
 
 ## Why this page exists
 

@@ -53,6 +53,11 @@ path = "src/bin/gen_form_markers.rs"
 test = false
 
 [[bin]]
+name = "model_sources_gen"
+path = "src/bin/model_sources_gen.rs"
+test = false
+
+[[bin]]
 name = "perturb_corpus"
 path = "src/bin/perturb_corpus.rs"
 test = false

@@ -24,6 +24,13 @@ unchanged. `enhance_errors_with_source` and `enhance_errors_with_index` now take
 an immutable slice and return an iterator of `SourceDiagnostic`, not a mutation
 of that slice. Collect the iterator when a stored batch is needed.
 
+Raw `ParseError::context` is optional and, when present, uses offsets relative
+to its own text, not the document. AST-only word, punctuation, tier, timing and
+linker checks retain their absolute locations without inventing a source
+snippet. A model-value context can retain auxiliary metadata (such as expected
+speaker codes), but does not establish original-source provenance. Supply the
+producing snapshot to `SourceDiagnostic` for checked display coordinates.
+
 `SourceDiagnostic::presentation()` returns a checked `DiagnosticPresentation`
 or a `DiagnosticSourceError`. Admission checks the primary and every label
 range, including UTF-8 boundaries and zero-width EOF. Reversed, oversized and
@@ -44,10 +51,11 @@ available presentation. Export retains both original evidence and this outcome.
 
 Range admission proves bounds, not origin. A diagnostic and a different
 same-length source may have compatible ranges. Consumers must use the retained
-producing snapshot, not reread an edited file. The legacy `Span::DUMMY` value
-also equals a real `0..0` insertion point; presentation preserves it as zero
-width rather than inventing a first-byte highlight. No new source-origin claim
-is made from that overloaded value.
+producing snapshot, not reread an edited file. A diagnostic with no source
+position is `{"kind":"unlocated"}` and presents as `unavailable`; there is no
+sentinel span, so a `0..0` location is always a real insertion point, which
+presentation preserves as zero width rather than inventing a first-byte
+highlight.
 
 ## `chatter validate ... --format json`
 
@@ -100,10 +108,12 @@ file showed warnings, a `warnings` array; they count among the summary's
 `invalid` files.
 
 Read-failure files use `"status":"read_error"` with an `error` string, and
-count among the summary's `invalid` files. A file the parser cannot make
-sense of is an `invalid` record carrying its parse diagnostics: both parsers
-always produce a model with diagnostics, so there is no separate parse-failure
-status.
+count among the summary's `invalid` files. CHAT parse findings are carried by
+the `invalid` record rather than a separate `parse_failed` wire status.
+This output shape does not imply that a parser always builds a model:
+`ParseProduct` distinguishes `Built` from `Unbuildable`, and a built recovery
+model can still carry errors. Internal producer failures follow the separate
+contract below, not an invalid-CHAT verdict.
 
 Internal tool failures use `"status":"internal_failure"` with an `error`
 string and the retained `errors` array. They do not also emit an `invalid`
@@ -251,9 +261,10 @@ it does not recognise.
   `unprocessed_files`, and for `"max_errors"` `limit`, are stable.
 - `status` values: `valid`, `invalid`, `roundtrip_failed`, `read_error`,
   `internal_failure`. New status values may appear.
-- Errors do not include a byte-offset `location` field in the
-  NDJSON surface; for byte-offset diagnostics use the LSP or the
-  non-JSON renderer.
+- Errors do not include a byte-offset `location` field in this NDJSON
+  surface. For original byte ranges, use the Rust diagnostic API and retain
+  the producing source snapshot. LSP ranges use zero-based UTF-16 positions,
+  not byte offsets; human-rendered snippets are not a byte-range wire format.
 - The `note` field on invalid file records is human-facing
   guidance and may be added or omitted between releases.
 - Exit code `0` means all files validated successfully; exit code

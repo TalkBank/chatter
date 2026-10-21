@@ -10,7 +10,7 @@
 //! yet, and the honest reason is narrower than it first looks. Being
 //! within-utterance rather than across-file, and carrying no label, are both
 //! properties of the ACCUMULATOR, not of the traversal: one is where you reset
-//! the stack, the other is `Vec<Span>` instead of `Vec<(&str, Span)>`.
+//! the stack, the other is `Vec<Span>` instead of `Vec<(&str, crate::Location)>`.
 //!
 //! The real obstacle is that underline markers can appear INSIDE a word, and
 //! [`walk_content`] emits `ContentItem::Word` without descending into
@@ -34,7 +34,7 @@
 
 use super::FileUtterances;
 use crate::alignment::helpers::{ContentItem, walk_content};
-use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// A family of labelled scoped markers whose begins and ends balance over a file.
 ///
@@ -105,7 +105,7 @@ struct ScopeMarker<'a> {
     family: ScopeFamily,
     side: ScopeSide,
     label: &'a str,
-    span: Span,
+    location: crate::Location,
 }
 
 /// Classify a walked content item as a scoped marker, or as not one.
@@ -130,25 +130,25 @@ fn classify<'a>(item: &ContentItem<'a>) -> Option<ScopeMarker<'a>> {
             family: ScopeFamily::LongFeature,
             side: ScopeSide::Begin,
             label: begin.label.as_str(),
-            span: begin.span,
+            location: begin.location,
         }),
         ContentItem::LongFeatureEnd(end) => Some(ScopeMarker {
             family: ScopeFamily::LongFeature,
             side: ScopeSide::End,
             label: end.label.as_str(),
-            span: end.span,
+            location: end.location,
         }),
         ContentItem::NonvocalBegin(begin) => Some(ScopeMarker {
             family: ScopeFamily::Nonvocal,
             side: ScopeSide::Begin,
             label: begin.label.as_str(),
-            span: begin.span,
+            location: begin.location,
         }),
         ContentItem::NonvocalEnd(end) => Some(ScopeMarker {
             family: ScopeFamily::Nonvocal,
             side: ScopeSide::End,
             label: end.label.as_str(),
-            span: end.span,
+            location: end.location,
         }),
         ContentItem::Word(_)
         | ContentItem::ReplacedWord(_)
@@ -178,7 +178,7 @@ fn check_scope_balance<'f>(
 ) {
     // Open scopes for this family, in encounter order, so the unclosed sweep
     // below reports them at their own begin markers.
-    let mut open_scopes: Vec<(&'f str, Span)> = Vec::new();
+    let mut open_scopes: Vec<(&str, crate::Location)> = Vec::new();
 
     for utterance in utterances.iter() {
         walk_content(&utterance.main.content.content, None, &mut |item| {
@@ -186,7 +186,7 @@ fn check_scope_balance<'f>(
                 return;
             };
             match marker.side {
-                ScopeSide::Begin => open_scopes.push((marker.label, marker.span)),
+                ScopeSide::Begin => open_scopes.push((marker.label, marker.location)),
                 ScopeSide::End => {
                     // Last-in-first-out for the same label, so nested scopes
                     // with distinct labels are independent.
@@ -195,10 +195,10 @@ fn check_scope_balance<'f>(
                             open_scopes.remove(pos);
                         }
                         None => errors.report(
-                            ParseError::at_span(
+                            ParseError::at_location(
                                 family.unmatched_end(),
                                 Severity::Error,
-                                marker.span,
+                                marker.location,
                                 format!(
                                     "Unmatched {} end marker for label '{}'",
                                     family.noun(),
@@ -221,7 +221,7 @@ fn check_scope_balance<'f>(
 
     for (label, span) in open_scopes {
         errors.report(
-            ParseError::at_span(
+            ParseError::at_location(
                 family.unmatched_begin(),
                 Severity::Error,
                 span,

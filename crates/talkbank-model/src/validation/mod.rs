@@ -114,7 +114,8 @@ mod tests {
         use crate::model::{MainTier, Terminator, UtteranceContent};
 
         let word = Annotated::with_one(
-            Word::new_unchecked("hello"),
+            crate::Location::Unlocated,
+            Word::new_unchecked(crate::Location::Unlocated, "hello"),
             ContentAnnotation::Unknown(crate::model::ScopedUnknown {
                 marker: ":::".into(),
                 text: "stuff".into(),
@@ -124,6 +125,7 @@ mod tests {
         // below, and building one here would test the terminator model rather
         // than this rule.
         let main = MainTier::new(
+            crate::MainTierLocations::UNLOCATED,
             "CHI",
             vec![UtteranceContent::AnnotatedWord(Box::new(word))],
             Option::<Terminator>::None,
@@ -157,7 +159,7 @@ mod tests {
     fn test_word_validation_no_errors() {
         // Build valid word programmatically
         // Note: Don't wrap in Annotated unless there are actual annotations,
-        let word = Word::simple("hello");
+        let word = Word::simple(crate::Location::Unlocated, "hello");
 
         let errors = ErrorCollector::new();
         let context = ValidationContext::new();

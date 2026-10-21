@@ -10,9 +10,10 @@ contributors or unsupported platforms).
 
 ## Prebuilt binaries (recommended)
 
-Every [GitHub Release](https://github.com/TalkBank/chatter/releases)
-attaches prebuilt binaries for macOS (Apple Silicon and Intel), Linux
-(x86_64 and ARM64), and Windows (x64), plus desktop-app installers.
+Choose a [GitHub Release](https://github.com/TalkBank/chatter/releases) and
+inspect its assets. CLI builds target macOS (Apple Silicon and Intel), Linux
+(x86_64 and ARM64), and Windows (x64); desktop installers are separate downloads.
+An archive's presence does not establish compatibility with every OS version.
 
 ### chatter CLI
 
@@ -28,19 +29,26 @@ it on your PATH):
 - **Windows (PowerShell):**
 
   ```powershell
-  powershell -ExecutionPolicy Bypass -c "irm https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.ps1 | iex"
+  irm https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.ps1 | iex
   ```
 
-On Windows the binary is not yet code-signed, so SmartScreen may warn on
-first run: choose **More info**, then **Run anyway**. The macOS binaries
-are codesigned, and the installer above does not set the quarantine
-attribute, so Gatekeeper does not prompt.
+These commands download and execute the project's installer. If you need to
+review it first, download the script from the release page and inspect it
+before running it. Use your organization's approved installation method where
+applicable; do not weaken a machine-wide execution or security policy.
+
+Windows binaries are not yet code-signed, so SmartScreen may warn on first run.
+Verify the official source and intended release before proceeding. Official
+macOS releases are signed; treat an unexpected security warning as a reason to
+check the download, not an instruction to bypass verification.
 
 Prefer a manual download? Grab the archive for your platform from the
 [latest release](https://github.com/TalkBank/chatter/releases/latest)
-and extract `chatter` onto your PATH. (On macOS, a browser-downloaded
-archive is quarantined; right-click the binary and choose **Open** once,
-or run `xattr -d com.apple.quarantine ./chatter`.)
+and extract `chatter` into a directory on your PATH. CLI archive names begin
+with `talkbank-chatter-`; the extracted executable is still `chatter`.
+The release provides `.sha256` checksum files for the archives. Verify the
+selected archive against its matching checksum before executing it; a checksum
+checks the bytes against that release record, not an independent trust source.
 
 Verify:
 
@@ -48,6 +56,18 @@ Verify:
 chatter --version
 chatter --help
 ```
+
+Then follow the [practice tutorial](quick-start.md). If the command cannot be
+found, open a new terminal after installation and check which executable your
+shell selects:
+
+```sh
+command -v chatter
+```
+
+In PowerShell, use `Get-Command chatter`. Multiple source, package-manager and
+installer copies can coexist; an old version often means PATH selected a
+different copy. Check that location before reinstalling or deleting anything.
 
 ### chatter desktop app
 
@@ -57,14 +77,17 @@ terminal. Download the installer for your platform from the
 
 - **macOS:** the `.dmg` is signed and notarized; open it and drag the app
   to Applications. No Gatekeeper override is required.
-- **Windows:** the installer is not yet signed (same SmartScreen note as
-  above: **More info** then **Run anyway**).
+- **Windows:** the installer is not yet signed; verify the source and follow
+  your organization's policy if SmartScreen warns.
 - **Linux:** an AppImage and a `.deb` are provided.
+
+The [desktop guide](desktop-app.md) explains choosing a file, interpreting the
+completed result and revalidating after edits. Install `talkbank-lsp` separately
+for [live feedback in an editor](editor-integration.md).
 
 ## Updating chatter
 
-`chatter` keeps itself current so you do not have to track releases by
-hand.
+Update through the method that installed the selected executable:
 
 - **CLI:** run
 
@@ -87,7 +110,8 @@ Building from source needs the workspace-selected stable **Rust** toolchain
 (install via [rustup](https://rustup.rs/)), native build tools (C compiler and
 linker), and SQLite development headers where required by the platform.
 See [contributor setup](../../contributing/setup.md) for the platform prerequisites.
-This is not a declared minimum Rust-version promise.
+Chatter 1.0 supports current stable Rust, with no older-compiler or fixed-MSRV
+promise. Run `rustup update stable` if your installed stable toolchain is old.
 Node.js and the Tree-sitter CLI are needed only when working on the grammar
 or generated artifacts. Use the Node version in `grammar/.nvmrc`, then run
 `npm ci` in `grammar/`; its lockfile pins the CLI so regeneration
@@ -130,13 +154,13 @@ If you are developing with the Rust crates directly, from your chatter
 checkout root:
 
 ```bash
-cargo build --workspace --all-targets --locked
-cargo test --workspace --locked
-cargo clippy --all-targets -- -D warnings
+cargo build -p talkbank-model --locked
 ```
 
-See the [contributor setup](../../contributing/setup.md) for additional
-commands.
+Select the package your change affects. See [Library Usage](../integrating/library-usage.md)
+for API examples and [contributor setup](../../contributing/setup.md) for the
+deliberate test, lint and final publication workflow; a source installation is
+not a reason to run every workspace check.
 
 ## Directory layout
 

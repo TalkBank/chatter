@@ -35,9 +35,8 @@ fn repo_root() -> RepoRoot {
 
 /// Every committed generated artifact is what the current specs produce.
 ///
-/// Iterates both halves of the registry, which is the same list `spec_gen`
-/// writes from, so the gate cannot check a different set of artifacts from the
-/// set that is produced.
+/// Iterates both bootstrap and runtime artifacts. The `just spec-gen` recipe
+/// writes these in separate build phases; currency covers their combined set.
 #[test]
 fn every_generated_artifact_is_current() {
     let root = repo_root();

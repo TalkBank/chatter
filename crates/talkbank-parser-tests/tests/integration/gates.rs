@@ -102,6 +102,14 @@ const UNPROVEN_RECORD: &[(&str, &str)] = &[
         "BLOCK COMMENTS, which `blank_literals` does not handle",
     ),
     (
+        "fabricated-AST construction",
+        "SPELLING: the unlocated-mint count is textual",
+    ),
+    (
+        "fabricated-AST construction",
+        "PLACEMENT of `#[cfg(test)]`, which ends the production text",
+    ),
+    (
         "reference-corpus combination coverage",
         "R4: a policy name that is not a grammar node kind",
     ),

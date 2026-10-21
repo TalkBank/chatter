@@ -10,7 +10,7 @@ use crate::model::{CodeSwitchSpan, Separator, Word};
 use crate::validation::word::language::{
     LanguageResolutionOutcome, resolve_marker_at, resolve_without_marker,
 };
-use crate::{LanguageCode, LanguageSource, Span, UtteranceLanguage, WordLanguageMarker};
+use crate::{LanguageCode, LanguageSource, UtteranceLanguage, WordLanguageMarker};
 
 /// Which mark governs a word's language, decided ONCE.
 ///
@@ -81,7 +81,7 @@ impl<'a> GoverningMarker<'a> {
         tier_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
     ) -> LanguageResolutionOutcome {
-        self.resolve_at(word.span, tier_language, declared_languages)
+        self.resolve_at(word.location, tier_language, declared_languages)
     }
 
     /// Resolve at a SPAN rather than from a `Word`.
@@ -93,12 +93,17 @@ impl<'a> GoverningMarker<'a> {
     /// what lets that fabrication be deleted.
     pub(crate) fn resolve_at(
         &self,
-        span: crate::Span,
+        location: crate::Location,
         tier_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
     ) -> LanguageResolutionOutcome {
         let marker = self.marker();
-        resolve_marker_at(marker.as_deref(), span, tier_language, declared_languages)
+        resolve_marker_at(
+            marker.as_deref(),
+            location,
+            tier_language,
+            declared_languages,
+        )
     }
 
     /// The marker the resolver should apply.
@@ -198,8 +203,8 @@ pub struct GoverningMark {
 /// recorded. Now the sentinel has nowhere to go.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Mark {
-    Own(WordLanguageMarker, Span),
-    Span(CodeSwitchSpan, Span),
+    Own(WordLanguageMarker, crate::Location),
+    Span(CodeSwitchSpan, crate::Location),
     /// No marker, and therefore no span: nothing here can place a diagnostic.
     Utterance,
 }
@@ -224,8 +229,8 @@ impl GoverningMark {
     #[must_use]
     pub fn of(word: &Word, enclosing: Option<&CodeSwitchSpan>) -> Self {
         let mark = match GoverningMarker::of(word, enclosing) {
-            GoverningMarker::Own(own) => Mark::Own(own.clone(), word.span),
-            GoverningMarker::Span(span) => Mark::Span(span.clone(), word.span),
+            GoverningMarker::Own(own) => Mark::Own(own.clone(), word.location),
+            GoverningMarker::Span(span) => Mark::Span(span.clone(), word.location),
             GoverningMarker::Utterance => Mark::Utterance,
         };
         Self { mark }
@@ -248,7 +253,7 @@ impl GoverningMark {
     #[must_use]
     pub fn of_separator(separator: &Separator, enclosing: Option<&CodeSwitchSpan>) -> Self {
         let mark = match enclosing {
-            Some(enclosing) => Mark::Span(enclosing.clone(), separator.span()),
+            Some(enclosing) => Mark::Span(enclosing.clone(), separator.location()),
             None => Mark::Utterance,
         };
         Self { mark }
@@ -274,12 +279,14 @@ impl GoverningMark {
         match &self.mark {
             // A marked position anchors its diagnostics at the span it was born
             // with; the pairing is structural, not a parameter to get wrong.
-            Mark::Own(own, span) => {
-                GoverningMarker::Own(own).resolve_at(*span, tier_language, declared_languages)
+            Mark::Own(own, location) => {
+                GoverningMarker::Own(own).resolve_at(*location, tier_language, declared_languages)
             }
-            Mark::Span(marker, span) => {
-                GoverningMarker::Span(marker).resolve_at(*span, tier_language, declared_languages)
-            }
+            Mark::Span(marker, location) => GoverningMarker::Span(marker).resolve_at(
+                *location,
+                tier_language,
+                declared_languages,
+            ),
             // No marker, so no diagnostic and no span to place one at.
             Mark::Utterance => resolve_without_marker(tier_language),
         }

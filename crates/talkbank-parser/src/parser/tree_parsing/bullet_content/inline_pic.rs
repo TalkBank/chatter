@@ -4,8 +4,9 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, InlinePicNode, SourceBound};
+use crate::parser::node_span::span_of;
 use talkbank_model::{ParseOutcome, model::BulletContentSegment};
 
 /// A nonempty filename admitted from delimited inline-picture text.
@@ -57,8 +58,8 @@ pub(super) fn parse_inline_pic<'tree, 'source>(
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), "inline_pic"),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, span_of(node), "inline_pic"),
                 "Missing filename in inline picture reference".to_string(),
             ));
             ParseOutcome::rejected()

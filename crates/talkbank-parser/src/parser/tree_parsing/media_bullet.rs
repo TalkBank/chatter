@@ -18,8 +18,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, BulletNode, NoChild, SourceBound, SourceSlotView};
+use crate::parser::node_span::span_of;
 use talkbank_model::model::Bullet;
 use tree_sitter::Node;
 
@@ -56,8 +57,8 @@ impl<'text> LeadingZeroTime<'text> {
         errors.report(ParseError::new(
             ErrorCode::LeadingZeroBulletTime,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), component),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), component),
             format!(
                 "Bullet {which} time '{component}' has a leading zero; \
                      bullet times are plain millisecond integers"
@@ -153,8 +154,8 @@ pub(crate) fn report_bullet_rejection(
     errors.report(ParseError::new(
         ErrorCode::InvalidMediaBullet,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), bullet_text),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), bullet_text),
         format!("Invalid media bullet: {}", rejection.describe()),
     ));
 }
@@ -170,7 +171,7 @@ pub(crate) fn parse_bullet_node<'tree>(
 ) -> Result<Bullet, BulletRejection> {
     let span = crate::parser::node_span::span_of(typed.raw_node());
     let (start_ms, end_ms) = parse_bullet_node_timestamps(typed, errors)?;
-    Ok(Bullet::new(start_ms, end_ms).with_span(span))
+    Ok(Bullet::new(span, start_ms, end_ms))
 }
 
 /// Extract `(start_ms, end_ms)` from a structured `bullet` CST node.

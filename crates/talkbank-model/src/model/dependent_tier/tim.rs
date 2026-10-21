@@ -47,7 +47,7 @@ pub enum TimTier {
         content: NonEmptyString,
         /// Source span for error reporting.
         #[semantic_eq(skip)]
-        span: crate::Span,
+        location: crate::Location,
     },
     /// Non-time content (free text like "afternoon session").
     Unsupported {
@@ -56,7 +56,7 @@ pub enum TimTier {
         content: NonEmptyString,
         /// Source span for error reporting.
         #[semantic_eq(skip)]
-        span: crate::Span,
+        location: crate::Location,
     },
     /// A `%tim:` line with nothing after the separator.
     ///
@@ -78,7 +78,7 @@ pub enum TimTier {
     Empty {
         /// Source span for error reporting.
         #[semantic_eq(skip)]
-        span: crate::Span,
+        location: crate::Location,
     },
 }
 
@@ -94,9 +94,9 @@ impl TimTier {
     /// recovery is not validity, and a parser that cannot express what the file
     /// says is a parser that will invent something instead.
     #[must_use]
-    pub fn empty() -> Self {
+    pub fn empty(location: impl Into<crate::Location>) -> Self {
         Self::Empty {
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
     }
 
@@ -104,7 +104,7 @@ impl TimTier {
     ///
     /// Distinct from [`Self::as_str`], which flattens the empty case to `""` so
     /// `Display` and the serializer have something to write. This accessor is
-    /// what `DependentTier::empty_content_span` asks, so the "declared nothing"
+    /// what `DependentTier::empty_content_location` asks, so the "declared nothing"
     /// question is answered by the type rather than re-derived from a string.
     #[must_use]
     pub fn declared_content(&self) -> Option<&str> {
@@ -120,29 +120,19 @@ impl TimTier {
     ///
     /// Cannot produce [`Self::Empty`]: the argument is a [`NonEmptyString`], so
     /// a caller with nothing to hand over reaches for [`Self::empty`] instead.
-    pub fn from_text(content: NonEmptyString) -> Self {
+    pub fn from_text(location: impl Into<crate::Location>, content: NonEmptyString) -> Self {
         if let Some(segments) = parse_tim_segments(content.as_str()) {
             Self::Parsed {
                 segments,
                 content,
-                span: crate::Span::DUMMY,
+                location: location.into(),
             }
         } else {
             Self::Unsupported {
                 content,
-                span: crate::Span::DUMMY,
+                location: location.into(),
             }
         }
-    }
-
-    /// Sets the source span.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        match &mut self {
-            Self::Parsed { span: s, .. } => *s = span,
-            Self::Unsupported { span: s, .. } => *s = span,
-            Self::Empty { span: s } => *s = span,
-        }
-        self
     }
 
     /// Returns the raw text content, `""` for [`Self::Empty`].
@@ -159,12 +149,24 @@ impl TimTier {
         }
     }
 
-    /// Returns the source span.
-    pub fn span(&self) -> crate::Span {
+    /// The same tier with its span re-expressed through `project` (a fragment
+    /// owner's coordinate re-projection; see `DependentTier::map_location`).
+    #[must_use]
+    pub fn map_location(mut self, project: impl FnOnce(crate::Span) -> crate::Span) -> Self {
+        match &mut self {
+            Self::Parsed { location: own, .. }
+            | Self::Unsupported { location: own, .. }
+            | Self::Empty { location: own } => *own = own.map(project),
+        }
+        self
+    }
+
+    /// Returns the source location.
+    pub fn location(&self) -> crate::Location {
         match self {
-            Self::Parsed { span, .. } => *span,
-            Self::Unsupported { span, .. } => *span,
-            Self::Empty { span } => *span,
+            Self::Parsed { location, .. } => *location,
+            Self::Unsupported { location, .. } => *location,
+            Self::Empty { location } => *location,
         }
     }
 
@@ -229,8 +231,8 @@ impl<'de> Deserialize<'de> for TimTier {
         // state exists; it used to be rejected because it was unrepresentable.
         let s = String::deserialize(deserializer)?;
         Ok(match NonEmptyString::new(&s) {
-            Ok(content) => Self::from_text(content),
-            Err(_) => Self::empty(),
+            Ok(content) => Self::from_text(crate::Location::Unlocated, content),
+            Err(_) => Self::empty(crate::Location::Unlocated),
         })
     }
 }
@@ -252,7 +254,7 @@ mod tests {
     #[test]
     fn parsed_single_time() {
         let content = NonEmptyString::new("7:55").unwrap();
-        let tim = TimTier::from_text(content);
+        let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert!(matches!(tim, TimTier::Parsed { .. }));
         assert_eq!(tim.segments().len(), 1);
         match &tim.segments()[0] {
@@ -266,7 +268,7 @@ mod tests {
     #[test]
     fn parsed_range() {
         let content = NonEmptyString::new("00:01:30-00:02:00").unwrap();
-        let tim = TimTier::from_text(content);
+        let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert_eq!(tim.segments().len(), 1);
         assert!(matches!(tim.segments()[0], TimSegment::Range { .. }));
     }
@@ -274,14 +276,14 @@ mod tests {
     #[test]
     fn parsed_multiple_tokens() {
         let content = NonEmptyString::new("7:55 00:01:30-00:02:00").unwrap();
-        let tim = TimTier::from_text(content);
+        let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert_eq!(tim.segments().len(), 2);
     }
 
     #[test]
     fn parsed_bare_seconds() {
         let content = NonEmptyString::new("45").unwrap();
-        let tim = TimTier::from_text(content);
+        let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert!(matches!(tim, TimTier::Parsed { .. }));
         assert_eq!(tim.segments().len(), 1);
         match &tim.segments()[0] {
@@ -295,7 +297,7 @@ mod tests {
     #[test]
     fn unsupported_free_text() {
         let content = NonEmptyString::new("afternoon session").unwrap();
-        let tim = TimTier::from_text(content);
+        let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert!(matches!(tim, TimTier::Unsupported { .. }));
         assert_eq!(tim.segments().len(), 0);
     }
@@ -304,7 +306,7 @@ mod tests {
     fn roundtrip_text() {
         let input = "00:01:30-00:02:00";
         let content = NonEmptyString::new(input).unwrap();
-        let tim = TimTier::from_text(content);
+        let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert_eq!(tim.as_str(), input);
     }
 }

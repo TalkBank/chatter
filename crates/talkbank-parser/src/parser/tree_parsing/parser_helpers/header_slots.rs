@@ -3,12 +3,13 @@
 //! special header families, the pre-`@Begin` headers and `@Media` had each
 //! written for themselves.
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, NamedKind, Never, NoChild, ReadableSlot, SourceBindingError, SourceBound,
-    SourceBoundKind, SourceField, SourceRecovery, SourceSlotView,
+    AsRawNode, NamedKind, Never, ReadableSlot, SourceBindingError, SourceBound, SourceBoundKind,
+    SourceField, SourceRecovery, SourceSlotView,
 };
 use crate::model::{Header, WarningText};
+use crate::parser::node_span::span_of;
 use crate::parser::typed_cst::CstFailure;
 use crate::parser::typed_cst::{AnyKindSlot, AnySelectedKindSlot};
 use talkbank_model::ParseOutcome;
@@ -209,8 +210,8 @@ impl<'w> ContentSlot<'w> {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(site.input(), node.byte_range(), site.kind()),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(site.input(), span_of(node), site.kind()),
             format!("Missing expected {child_kind} node in {}", site.kind()),
         ));
         Refused(self)
@@ -225,42 +226,41 @@ impl<'w> ContentSlot<'w> {
 /// placeholder refuses like any other non-present state and is never read, so
 /// one body serves a slot that can be MISSING and a narrowed one under either
 /// kind proof.
-pub(crate) fn read_source_content<'value, 'tree: 'value, 'source, 'w, T, M>(
+pub(crate) fn read_source_content<'value, 'tree: 'value, 'source, 'w, T, M, E, A>(
     site: &HeaderSite<'tree, '_>,
-    content_slot: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, T, M>>,
+    content_slot: SourceField<'value, 'tree, 'source, AnyKindSlot<T, M, E, A>>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
 ) -> Result<&'source str, ContentReadError<'w>>
 where
     T: SourceBoundKind<'tree> + NamedKind,
     M: SourceRecovery<'value, 'tree, 'source>,
+    E: SourceRecovery<'value, 'tree, 'source>,
+    A: crate::generated_traversal::Absence,
 {
     match content_slot.view() {
         SourceSlotView::Present(content) => content
             .read()
             .map(|bound| bound.text())
             .map_err(|error| ContentReadError::Producer(error.into())),
-        SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) | SourceSlotView::Error(_) => {
-            Err(ContentReadError::Recovery(words.refuse(
-                site,
-                T::KIND.name(),
-                errors,
-            )))
-        }
+        SourceSlotView::Missing(_) | SourceSlotView::Absent(_) | SourceSlotView::Error(_) => Err(
+            ContentReadError::Recovery(words.refuse(site, T::KIND.name(), errors)),
+        ),
     }
 }
 
 /// Read a grammar-optional payload. Only the outer `None` means omission;
 /// ERROR/MISSING slots refuse, and source-binding faults remain producer failures.
-pub(crate) fn read_optional_source_content<'value, 'tree: 'value, 'source, 'w, T, M>(
+pub(crate) fn read_optional_source_content<'value, 'tree: 'value, 'source, 'w, T, M, E>(
     site: &HeaderSite<'tree, '_>,
-    content_slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<'tree, T, M>>>,
+    content_slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<T, M, E>>>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
 ) -> Result<Option<&'source str>, ContentReadError<'w>>
 where
     T: SourceBoundKind<'tree> + NamedKind,
     M: SourceRecovery<'value, 'tree, 'source>,
+    E: SourceRecovery<'value, 'tree, 'source>,
 {
     let Some(slot) = content_slot.optional() else {
         return Ok(None);
@@ -288,16 +288,18 @@ pub(crate) fn read_admitted_content<
     'w,
     T: SourceBoundKind<'tree> + NamedKind,
     M,
+    E,
+    A,
 >(
     site: &HeaderSite<'tree, '_>,
-    slot: &ReadableSlot<'tree, 'source, SourceBound<'tree, 'source, T>, M, Never, NoChild>,
+    slot: &ReadableSlot<SourceBound<'tree, 'source, T>, M, E, Never, A>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
 ) -> Result<&'source str, Refused<'w>> {
     match slot {
         ReadableSlot::Present(content) => Ok(content.text()),
         ReadableSlot::Unexpected(never) => match *never {},
-        ReadableSlot::Missing(_) | ReadableSlot::Absent(NoChild) | ReadableSlot::Error(_) => {
+        ReadableSlot::Missing(_) | ReadableSlot::Absent(_) | ReadableSlot::Error(_) => {
             Err(words.refuse(site, T::KIND.name(), errors))
         }
     }

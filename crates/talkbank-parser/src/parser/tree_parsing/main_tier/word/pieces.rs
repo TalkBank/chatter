@@ -3,7 +3,7 @@
 //! choices, and the one conversion of a piece to its `WordContent`.
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::{Absence, Never, NodeSlot};
+use crate::generated_traversal::{Absence, Never, NodeSlot, SourceRecovery};
 use crate::generated_traversal::{
     AsRawNode, CaDelimiterNode, CaElementNode, LengtheningNode, OverlapPointNode, PlusNode,
     ShorteningNode, SourceBound, SourceBoundKind, SourceField, SourceSlotView, StressMarkerNode,
@@ -15,6 +15,7 @@ use crate::generated_traversal::{
     WordBodyWordSegmentChild0Choice, WordBodyWordSegmentChild0ChoiceBoundView,
     WordBodyWordSegmentChild1Choice, WordBodyWordSegmentChild1ChoiceBoundView, WordSegmentNode,
 };
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::content::{
     parse_overlap_point_token, report_tree_shape,
 };
@@ -29,7 +30,6 @@ use talkbank_model::content::word::{
     WordUnderlineEnd,
 };
 use talkbank_model::model::EmptyText;
-use tree_sitter::Node;
 
 /// One piece of a word body, whichever of the grammar's positions it came
 /// through.
@@ -157,11 +157,14 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild3
 }
 
 /// One typed body position: its piece, if the position holds one.
-pub(super) fn push_slot<'a, 'tree: 'a, 'source: 'a, C: SourceBoundKind<'tree> + 'a, A: Absence>(
-    slot: SourceField<'a, 'tree, 'source, NodeSlot<'tree, C, tree_sitter::Node<'tree>, Never, A>>,
+pub(super) fn push_slot<'a, 'tree: 'a, 'source: 'a, C, M, A>(
+    slot: SourceField<'a, 'tree, 'source, NodeSlot<C, M, tree_sitter::Node<'tree>, Never, A>>,
     errors: &impl ErrorSink,
     items: &mut SmallVec<[WordContent; 2]>,
 ) where
+    C: SourceBoundKind<'tree> + 'a,
+    M: SourceRecovery<'a, 'tree, 'source>,
+    A: Absence,
     SourceBound<'tree, 'source, C>: Into<Piece<'tree, 'source>>,
 {
     match slot.view() {
@@ -173,11 +176,6 @@ pub(super) fn push_slot<'a, 'tree: 'a, 'source: 'a, C: SourceBoundKind<'tree> + 
         SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {}
         SourceSlotView::Unexpected(never) => match never {},
     }
-}
-
-/// The span of a leaf token.
-fn span_of(node: Node) -> talkbank_model::Span {
-    talkbank_model::Span::from_usize(node.start_byte(), node.end_byte())
 }
 
 /// Convert one word piece to its `WordContent`, or report why it has none.
@@ -268,7 +266,7 @@ fn push_piece(
             };
             items.push(WordContent::StressMarker(WordStressMarker {
                 marker_type,
-                span: Some(span_of(raw)),
+                location: span_of(raw).into(),
             }));
         }
         Piece::Lengthening(node) => {
@@ -278,9 +276,10 @@ fn push_piece(
             // failed extraction already reports its error; do not turn its
             // empty fallback into an invented one-colon marker.
             if let Some(count) = std::num::NonZeroUsize::new(text.len()) {
-                items.push(WordContent::Lengthening(
-                    WordLengthening::with_count(count).with_span(span_of(raw)),
-                ));
+                items.push(WordContent::Lengthening(WordLengthening::with_count(
+                    span_of(raw),
+                    count,
+                )));
             }
         }
         Piece::Overlap(node) => {
@@ -301,19 +300,19 @@ fn push_piece(
             }
         }
         Piece::UnderlineBegin(node) => items.push(WordContent::UnderlineBegin(
-            WordUnderlineBegin::from_span(span_of(node.raw_node())),
+            WordUnderlineBegin::new(span_of(node.raw_node())),
         )),
-        Piece::UnderlineEnd(node) => items.push(WordContent::UnderlineEnd(
-            WordUnderlineEnd::from_span(span_of(node.raw_node())),
-        )),
+        Piece::UnderlineEnd(node) => items.push(WordContent::UnderlineEnd(WordUnderlineEnd::new(
+            span_of(node.raw_node()),
+        ))),
         Piece::SyllablePause(node) => items.push(WordContent::SyllablePause(
-            WordSyllablePause::new().with_span(span_of(node.raw_node())),
+            WordSyllablePause::new(span_of(node.raw_node())),
         )),
-        Piece::Tilde(node) => items.push(WordContent::CliticBoundary(
-            WordCliticBoundary::new().with_span(span_of(node.raw_node())),
-        )),
+        Piece::Tilde(node) => items.push(WordContent::CliticBoundary(WordCliticBoundary::new(
+            span_of(node.raw_node()),
+        ))),
         Piece::Plus(node) => items.push(WordContent::CompoundMarker(WordCompoundMarker {
-            span: Some(span_of(node.raw_node())),
+            location: span_of(node.raw_node()).into(),
         })),
     }
 }

@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous>
 
 use crate::model::{LanguageCode, WordLanguageMarker};
-use crate::{ErrorCode, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ParseError, Severity};
 use talkbank_derive::ValidationTagged;
 
 use super::helpers::{get_other_language, is_tertiary_language};
@@ -47,10 +47,10 @@ impl LanguageResolution {
     /// All candidate codes travel through the same rule owner, regardless of
     /// whether the marker means one, mixed, or ambiguous languages. Resolution
     /// and diagnostics are produced together; no candidate is silently dropped.
-    fn into_word_outcome(self, span: Span) -> LanguageResolutionOutcome {
+    fn into_word_outcome(self, location: crate::Location) -> LanguageResolutionOutcome {
         let mut diagnostics = Vec::new();
         for code in self.languages() {
-            report_word_code_issues(code, span, &mut diagnostics);
+            report_word_code_issues(code, location, &mut diagnostics);
         }
         LanguageResolutionOutcome {
             resolution: self,
@@ -139,15 +139,15 @@ pub struct LanguageResolutionOutcome {
 /// Delegates to the shared [`LanguageCode::report_code_issues`] rule set
 /// (shape, placeholder, ISO 639-3 registry), so header-level and word-level
 /// codes are held to the SAME standard by one implementation; only the
-/// diagnostic anchor differs (the shared rule anchors at offset 0, so each
-/// collected diagnostic is remapped onto the word before being surfaced).
-fn report_word_code_issues(code: &LanguageCode, span: Span, diagnostics: &mut Vec<ParseError>) {
+/// diagnostic anchor differs, and here it is the word.
+fn report_word_code_issues(
+    code: &LanguageCode,
+    location: crate::Location,
+    diagnostics: &mut Vec<ParseError>,
+) {
     let collector = crate::ErrorCollector::new();
-    code.report_code_issues(&collector);
-    diagnostics.extend(collector.into_vec().into_iter().map(|mut error| {
-        error.location = SourceLocation::new(span);
-        error
-    }));
+    code.report_code_issues(DiagnosticLocation::from(location), &collector);
+    diagnostics.extend(collector.into_vec());
 }
 
 // Resolve the effective language set for one word token.
@@ -238,7 +238,7 @@ pub(crate) fn resolve_without_marker(
 /// to reach an accessor is a shape this project bans by name.
 pub(crate) fn resolve_marker_at(
     marker: Option<&WordLanguageMarker>,
-    span: Span,
+    location: crate::Location,
     tier_language: Option<&LanguageCode>,
     declared_languages: &[LanguageCode],
 ) -> LanguageResolutionOutcome {
@@ -256,7 +256,7 @@ pub(crate) fn resolve_marker_at(
                         ParseError::new(
                             ErrorCode::TertiaryLanguageNeedsExplicitCode,
                             Severity::Error,
-                            SourceLocation::new(span),
+                            DiagnosticLocation::from(location),
                             None,
                             format!(
                                 "Language '{}' is tertiary, so @s shortcut needs explicit language code (e.g., @s:eng)",
@@ -273,7 +273,7 @@ pub(crate) fn resolve_marker_at(
                                 ParseError::new(
                                     ErrorCode::MissingLanguageContext,
                                     Severity::Error,
-                                    SourceLocation::new(span),
+                                    DiagnosticLocation::from(location),
                                     None,
                                     "No secondary language available for @s shortcut",
                                 )
@@ -287,7 +287,7 @@ pub(crate) fn resolve_marker_at(
                 diagnostics.push(ParseError::new(
                     ErrorCode::MissingLanguageContext,
                     Severity::Error,
-                    SourceLocation::new(span),
+                    DiagnosticLocation::from(location),
                     None,
                     "Cannot use @s shortcut: no language context available",
                 ));
@@ -305,18 +305,18 @@ pub(crate) fn resolve_marker_at(
             // `[- CODE]` precode, which IS required to be declared (E755).
             // The code must still be a REAL language (part 2 of the ruling):
             // registry validation is what catches typo'd codes.
-            return LanguageResolution::Single(code.clone()).into_word_outcome(span);
+            return LanguageResolution::Single(code.clone()).into_word_outcome(location);
         }
         WordLanguageMarker::Multiple(codes) => {
             // Multiple languages mixed together (code-mixing)
             // Content must be valid in ALL component languages, and every
             // component must be a real ISO 639-3 code (ruling part 2).
-            return LanguageResolution::Multiple(codes.clone()).into_word_outcome(span);
+            return LanguageResolution::Multiple(codes.clone()).into_word_outcome(location);
         }
         WordLanguageMarker::Ambiguous(codes) => {
             // Ambiguous between languages
             // Content must be valid in ALL possibilities
-            return LanguageResolution::Ambiguous(codes.clone()).into_word_outcome(span);
+            return LanguageResolution::Ambiguous(codes.clone()).into_word_outcome(location);
         }
     };
 

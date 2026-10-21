@@ -39,7 +39,7 @@ use indexmap::IndexMap;
 
 use crate::errors::source_location::ErrorVec;
 use crate::model::{ChatDate, Header, IDHeader, Line, Participant, SpeakerCode};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 
 /// The join's result: the participant map, and what was wrong with the
 /// declarations that produced it.
@@ -104,27 +104,30 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
     // sized (tens of entries at most, against 2 to 6 participants), so the
     // lookups below scan them rather than building maps: two hash maps would
     // be more allocation than the scans they replace at these sizes.
-    let mut declaration: Option<(&crate::model::ParticipantEntries, Span)> = None;
-    let mut id_headers: Vec<(&IDHeader, Span)> = Vec::new();
-    let mut births: Vec<(&SpeakerCode, &ChatDate, Span)> = Vec::new();
+    let mut declaration: Option<(&crate::model::ParticipantEntries, crate::Location)> = None;
+    let mut id_headers: Vec<(&IDHeader, crate::Location)> = Vec::new();
+    let mut births: Vec<(&SpeakerCode, &ChatDate, crate::Location)> = Vec::new();
 
     for line in lines {
-        let Line::Header { header, span, .. } = line else {
+        let Line::Header {
+            header, location, ..
+        } = line
+        else {
             continue;
         };
         match header.as_ref() {
             // First declaration wins, matching the single `@Participants`
             // header the format allows.
             Header::Participants { entries } if declaration.is_none() => {
-                declaration = Some((entries, *span));
+                declaration = Some((entries, *location));
             }
-            Header::ID(id) => id_headers.push((id, *span)),
-            Header::Birth { participant, date } => births.push((participant, date, *span)),
+            Header::ID(id) => id_headers.push((id, *location)),
+            Header::Birth { participant, date } => births.push((participant, date, *location)),
             _ => {}
         }
     }
 
-    let Some((entries, participants_span)) = declaration else {
+    let Some((entries, participants_location)) = declaration else {
         return ParticipantJoin {
             participants,
             diagnostics,
@@ -157,8 +160,8 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
                     ParseError::new(
                         ErrorCode::SpeakerNotDefined,
                         Severity::Error,
-                        SourceLocation::new(participants_span),
-                        ErrorContext::new(speaker_str, 0..speaker_str.len(), speaker_str),
+                        DiagnosticLocation::from(participants_location),
+                        ErrorContext::new(speaker_str, crate::Span::new(0, speaker_str.len()), speaker_str),
                         format!(
                             "Speaker '{}' declared in @Participants but has no matching @ID header",
                             speaker_str
@@ -173,15 +176,19 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
         }
     }
 
-    for (id, id_span) in &id_headers {
+    for (id, id_location) in &id_headers {
         if !participants.contains_key(&id.speaker) {
             let speaker_str = id.speaker.to_string();
             diagnostics.push(
                 ParseError::new(
                     ErrorCode::OrphanIDHeader,
                     Severity::Error,
-                    SourceLocation::new(*id_span),
-                    ErrorContext::new(&speaker_str, 0..speaker_str.len(), &speaker_str),
+                    DiagnosticLocation::from(*id_location),
+                    ErrorContext::new(
+                        &speaker_str,
+                        crate::Span::new(0, speaker_str.len()),
+                        &speaker_str,
+                    ),
                     format!(
                         "@ID header for '{}' but speaker not in @Participants",
                         speaker_str
@@ -195,14 +202,18 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
         }
     }
 
-    for (speaker, _, birth_span) in &births {
+    for (speaker, _, birth_location) in &births {
         if !participants.contains_key(*speaker) {
             diagnostics.push(
                 ParseError::new(
                     ErrorCode::BirthUnknownParticipant,
                     Severity::Error,
-                    SourceLocation::new(*birth_span),
-                    ErrorContext::new(speaker.as_str(), 0..speaker.len(), speaker.as_str()),
+                    DiagnosticLocation::from(*birth_location),
+                    ErrorContext::new(
+                        speaker.as_str(),
+                        crate::Span::new(0, speaker.len()),
+                        speaker.as_str(),
+                    ),
                     format!(
                         "@Birth header for '{}' but speaker not a declared participant",
                         speaker

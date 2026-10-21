@@ -21,6 +21,7 @@
 //!
 //! Add a test file by dropping it in this directory and declaring it below.
 
+mod bullet_admission;
 mod categorize_divergences;
 mod corpus_lex_tests;
 mod corpus_root;

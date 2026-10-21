@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
@@ -281,12 +282,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 318,
-                      "start": 317
-                    }
-                  },
+                  "content": {},
                   "type": "lengthening"
                 }
               ],
@@ -347,12 +343,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 341,
-                      "start": 340
-                    }
-                  },
+                  "content": {},
                   "type": "lengthening"
                 }
               ],
@@ -467,11 +458,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "pitch_up",
-                    "span": {
-                      "end": 388,
-                      "start": 385
-                    }
+                    "element_type": "pitch_up"
                   },
                   "type": "ca_element"
                 }
@@ -705,12 +692,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 716,
-                      "start": 715
-                    }
-                  },
+                  "content": {},
                   "type": "lengthening"
                 }
               ],
@@ -737,11 +719,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "pitch_up",
-                    "span": {
-                      "end": 735,
-                      "start": 732
-                    }
+                    "element_type": "pitch_up"
                   },
                   "type": "ca_element"
                 }
@@ -768,12 +746,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 742,
-                      "start": 741
-                    }
-                  },
+                  "content": {},
                   "type": "lengthening"
                 }
               ],
@@ -802,12 +775,7 @@ expression: snapshot
                         "type": "text"
                       },
                       {
-                        "content": {
-                          "span": {
-                            "end": 751,
-                            "start": 750
-                          }
-                        },
+                        "content": {},
                         "type": "lengthening"
                       }
                     ],
@@ -841,12 +809,7 @@ expression: snapshot
                         "type": "text"
                       },
                       {
-                        "content": {
-                          "span": {
-                            "end": 763,
-                            "start": 762
-                          }
-                        },
+                        "content": {},
                         "type": "lengthening"
                       },
                       {
@@ -1199,12 +1162,7 @@ expression: snapshot
                         "type": "text"
                       },
                       {
-                        "content": {
-                          "span": {
-                            "end": 1174,
-                            "start": 1173
-                          }
-                        },
+                        "content": {},
                         "type": "lengthening"
                       }
                     ],
@@ -1257,12 +1215,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 1197,
-                      "start": 1196
-                    }
-                  },
+                  "content": {},
                   "type": "lengthening"
                 }
               ],
@@ -1355,12 +1308,7 @@ expression: snapshot
                         "type": "text"
                       },
                       {
-                        "content": {
-                          "span": {
-                            "end": 1250,
-                            "start": 1249
-                          }
-                        },
+                        "content": {},
                         "type": "lengthening"
                       }
                     ],
@@ -1452,12 +1400,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 1284,
-                      "start": 1283
-                    }
-                  },
+                  "content": {},
                   "type": "lengthening"
                 }
               ],

@@ -55,7 +55,9 @@ const SNAPSHOT: &str = "spec/observations/example-diagnostics.json";
 /// Checked in both directions. Changes require producer/spec adjudication, not
 /// an automatic baseline update. Absence here proves neither dead code nor a
 /// missing validity rule: fragment, model and other-backend boundaries differ.
-/// E309/E319/E321 belong to experimental-backend paths; E324 is fragment-owned.
+/// E309/E319/E321 belong to experimental-backend paths. E324 left this list on
+/// 2026-10-19: a stray character before a dependent tier prefix reaches it
+/// from a whole file (`E324.md`, example 3).
 // September 28 correction: this is an explicit residual inventory of diagnostic
 // identities NOT demonstrated by the canonical whole-file snapshot, not a list
 // of missing CHAT validity rules. The E202/E207/E231/E301/E404/E505/E509/E601/
@@ -65,8 +67,8 @@ const SNAPSHOT: &str = "spec/observations/example-diagnostics.json";
 // E302's former EOF witness now reports E376/E342 without a fragment reparse.
 // E208 is retired and therefore leaves this implemented-code inventory.
 const UNDEMONSTRATED: &[&str] = &[
-    "E202", "E207", "E231", "E301", "E302", "E309", "E319", "E321", "E324", "E404", "E505", "E509",
-    "E601", "E602", "E759", "E760",
+    "E202", "E207", "E231", "E301", "E302", "E309", "E319", "E321", "E404", "E505", "E509", "E601",
+    "E602", "E759", "E760",
 ];
 
 /// Codes the registry calls `not_implemented` whose variant production code
@@ -111,10 +113,11 @@ const UNDEMONSTRATED: &[&str] = &[
 ///   variant list in an LSP TEST mentions it, and the production filter here
 ///   does not read test files. E101 has no production site at all and is fully
 ///   covered by E326 for every stray line shape tried.
-/// - `E304`, `E322`, `E323`: emit sites in `parse_prefix`, all three reached
-///   only for a `main_tier` node with an absent or zero-width speaker or
-///   colon, which the grammar cannot produce: damaged prefixes become a
-///   document-level ERROR and E301 or E316 wins first.
+/// - `E304`, `E322`: emit sites in `parse_prefix`, both reached only for a
+///   `main_tier` node with an absent or zero-width speaker or colon, which the
+///   grammar cannot produce: damaged prefixes become a document-level ERROR
+///   and E301 or E316 wins first. (`E323` left this list when the required-CST
+///   admission removed its last production site.)
 /// - `E364`, `E365`: emit sites exist and every route to them
 ///   is blocked by an earlier diagnostic. Each was traced to the dominating
 ///   code that week.
@@ -125,10 +128,11 @@ const UNDEMONSTRATED: &[&str] = &[
 ///   the next action and wants a ruling on what `implemented` means for a code
 ///   whose only route is a four-gibibyte file.
 /// - `E999`: its two production sites are inside the public fragment API, so
-///   it is reachable from a LIBRARY caller and not from a file. Same shape as
-///   E324, and the same fragment stage in the snapshot would reach both.
+///   it is reachable from a LIBRARY caller and not from a file. E324 had the
+///   same shape until 2026-10-19, when a whole-file route to it was found; a
+///   fragment stage in the snapshot would reach E999.
 const UNIMPLEMENTED_BUT_NAMED: &[&str] = &[
-    "E003", "E304", "E310", "E322", "E323", "E364", "E365", "E729", "E731", "E999",
+    "E003", "E304", "E310", "E322", "E364", "E365", "E729", "E731", "E999",
 ];
 
 /// Every implemented error code is demonstrated, or excused by a status the

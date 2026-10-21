@@ -3,9 +3,11 @@
 **Status:** Current
 **Last modified:** {{git-dates:page}}
 
-`spec/` is the source of truth for what CHAT is and for what chatter rejects.
-Tests, fixtures and error documentation are GENERATED from it. You change the
-spec; you do not hand-edit what it produces.
+`spec/` owns authored construct examples, diagnostic contracts and the code
+registry. These contracts guide implementation; observed output does not define
+CHAT validity. Some tests, fixtures and error documentation are generated from
+them, alongside hand-written tests and reference data. Change a generated
+artifact's owner rather than hand-editing its output.
 
 This chapter is the reference: what the spec files contain, what each field
 does, and what checks them. To make a change, follow
@@ -13,7 +15,7 @@ does, and what checks them. To make a change, follow
 
 ## Start here: ask the system
 
-Before reading further, run:
+For a current derived inventory, use:
 
 ```bash
 just spec-status
@@ -22,8 +24,9 @@ just spec-status
 It reports, derived from the same code the gates use rather than from prose:
 how many specs exist and what status they declare, how many examples are
 verified, how many are deferred, **how many assert nothing at all**, the state
-of CLAN CHECK parity, and which gate checks which artifact. If this page and
-that command ever disagree, the command is right.
+of CLAN CHECK parity, and which check covers which artifact. If this page and
+that command disagree, investigate both against the source contracts. A report
+describes observations; it does not decide whether behavior is correct.
 
 ## The two kinds of spec
 
@@ -72,7 +75,8 @@ Full-document specs supply their authored full CST instead.
 
 ### Error specs, `spec/errors/`
 
-Invalid CHAT, and the codes it must produce. Everything declared lives in
+Diagnostic-rule examples and their claims, including invalid cases, legal
+controls and reviewed subsumption cases. Everything declared lives in
 `+++` TOML frontmatter; everything published as prose lives in the body.
 
 ````markdown
@@ -134,8 +138,9 @@ data maintainer can fix a file without reading the validator's source.
 Both are properties of the CODE, not of a document about it, so a code with
 several spec files has one `kind` and one `status`. They live in
 [`spec/codes/error-codes.toml`](#the-code-registry), one entry per code, and a
-spec reaches them through the code it names. Because there is one copy, there
-is nothing to reconcile: the enum's status and the specs cannot disagree.
+spec reaches them through the code it names. This removes separately authored
+status/kind copies. Generated Rust still needs to be current, and declared
+implementation status still needs behavioral evidence.
 
 ## The code registry
 
@@ -157,8 +162,8 @@ reason = 'renumbered to E756 on 2026-07-16; the warning prefix was the bug'
 
 `crates/talkbank-model/src/errors/codes/generated_error_code.rs` (the
 `ErrorCode` enum) and `generated_diagnostic_kind.rs` are both GENERATED from
-it, and both are under the currency gate, so the enum cannot disagree with the
-specs about which checks run.
+it. The currency check compares those outputs with the registry; it does not
+prove that every declared implemented code has a reachable, correct producer.
 
 The schema, with a reason per field, is
 `talkbank_spec_vocabulary::registry`. It refuses, at load: an unrecognised key,
@@ -198,15 +203,13 @@ part of `subsumed_by` assert that a code is NOT emitted. A spec whose examples
 are all `subsumed_by` is the parser-specificity worklist, verifiable against
 the snapshot; `coverage --errors` lists it.
 
-Reading a spec: a `subsumed_by` claim tells you what chatter emits, not
-necessarily what the rule is. Read the spec's Description and title for the
-rule, and treat a mismatch between the title code and the example's codes as
-an open question rather than as a specification. `subsumed_by E316`
-("unparsable content") means the example does not parse, so the specific rule
-is never reached: a parser gap. A specific other code is usually a wrong
-fixture. When authoring, an example whose input violates the rule should
-produce that rule's code; if it does not, chatter has a gap, and the gap is
-the finding.
+Reading a spec: `subsumed_by` is a reviewed expectation, not an instruction to
+copy whatever the parser currently emits. Read the Description, CHAT Rule and
+recorded rationale. An alternative code may be an intentional architectural
+disposition, a fixture problem or an implementation gap; its presence alone
+does not decide which. Broad parse rejection does not prove a more specific
+rule was checked. Preserve accepted dispositions unless contrary evidence
+reopens them, and adjudicate new mismatches before changing claims or code.
 
 ### There is no `layer` field, and the runner is total
 
@@ -226,7 +229,7 @@ iff it produced parse-stage diagnostics, so there is structure to pin.
 | Value | Effect |
 |-------|--------|
 | `implemented` | Examples are verified. |
-| `not_implemented` | Own-code implementation is DEFERRED and generated tests carry `#[ignore]`; explicit legal/subsumption claims remain checked separately. |
+| `not_implemented` | The default fixture evaluator defers implementation checking; the separate deferred-spec test checks legal/subsumption claims and refuses observed own-code emission. |
 | `deprecated`, `unreachable_from_chat` | Implementation is deferred; legal/subsumption regression claims remain checked. |
 | **absent** | REFUSED: `spec/codes/error-codes.toml` fails to load, naming the entry. |
 
@@ -234,9 +237,10 @@ Declared per CODE, in the registry, with no default: `implemented` means
 someone decided it once for the code, rather than each of its spec files
 claiming it separately.
 
-Changing a spec from `not_implemented` to `implemented` un-`#[ignore]`s its
-generated tests, and those tests may never have run. Regenerate and run them in
-the same change.
+Changing registry status to `implemented` admits its examples to the default
+claim evaluator. There are no generated per-error Rust tests to un-ignore:
+`generated_error_tests_body.rs` is a retired output. Regenerate affected
+artifacts and run the relevant claim contracts in the same change.
 
 Deferred code status is not a count of missing validation rules. Run
 `cargo run --manifest-path spec/Cargo.toml --bin spec_status -- --deferred`
@@ -271,7 +275,8 @@ must distinguish clean parsing from recovery.
 every example of every spec, the exact diagnostic codes the current binary
 produces, split by the stage (parse or validation) that emitted them. It
 covers every spec regardless of `status`, because an observation is not an
-assertion: for an unimplemented rule the honest record is "nothing fires".
+assertion. A deferred rule's own code may be absent while other codes fire;
+record the actual output rather than substituting an empty observation.
 
 It is the regression instrument for the spec suite: **a diff in this file
 is a review event**, and every changed entry is adjudicated INTENDED (the
@@ -282,18 +287,24 @@ question is answered from, observed rather than authored.
 
 ## What is generated, and by what
 
-One command regenerates everything committed: `just spec-gen`. Its registry
-(`spec/tools/src/artifacts.rs`, plus the half in `spec/runtime-tools` that needs
-the live `ErrorCode` enum) is the only place a destination is written down, and
-the same list drives writing, checking and the gate.
+`just spec-gen` regenerates the artifacts in the combined spec registry:
+`spec/tools/src/artifacts.rs` and `spec/runtime-tools/src/artifacts.rs`. The
+runtime half owns live parser/model observations and the combined book table.
+The source-only bootstrap writes model sources before Cargo rebuilds the runtime
+writer. The combined iterator checks both phases; the runtime writer writes only
+post-bootstrap artifacts. These registries do not cover every generated file in
+the repository. The broader `just regen` recipe also
+invokes other producers. See [Spec Tooling](spec-tooling.md) for the compiled
+dependency and bootstrap limits; artifact iteration order alone is not a
+complete dependency proof.
 
 {{#include generated/spec-artifacts.md}}
 
 That table is itself generated from the registry, and the currency gate keeps
 it true.
 
-One generator sits outside it, deliberately: `gen_form_markers` has its own
-registry and its own drift gate (`just form-markers-gen`).
+Other producers sit outside this combined registry, including the separate
+form-marker and symbol registries below, schema, traversal and CHECK assessment.
 
 `docs/errors/*.md` is a tracked, committed registry artifact like any other:
 `just spec-gen` writes it and `just spec-check` compares it.
@@ -321,8 +332,8 @@ regeneration can never destroy hand-mined corpus tests.
 
 | Gate | Checks | Needs |
 |---|---|---|
-| `every_generated_artifact_is_current` | every committed generated artifact against what the specs produce now | |
-| `error_spec_codes` | every example emits the codes it declares | |
+| `every_generated_artifact_is_current` | outputs enumerated by the combined spec artifact registry against current rendering | |
+| `error_spec_codes` | implemented examples satisfy their claims; deferred examples retain legal/subsumption and own-code-absence checks | |
 | `manifest_agrees_with_clan_reference` | parity manifest against `check.cpp` | |
 | `generated_form_marker_sites_are_current` | form-marker outputs against the registry | |
 | `generated_symbol_sets_are_current` | symbol-set outputs against the registry | `node` |

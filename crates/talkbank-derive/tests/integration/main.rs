@@ -14,6 +14,7 @@
 // The derive macros under test expand to `crate::model::...` paths. While
 // each test file was its own crate root, its own `use` satisfied that; as
 // modules of one binary they cannot, so the import belongs here.
+use talkbank_model::Location;
 use talkbank_model::model;
 
 mod enum_admission_tests;

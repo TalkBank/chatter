@@ -205,6 +205,85 @@ fn sanitize_refuses_to_overwrite_its_own_input() -> Result<(), TestError> {
     Ok(())
 }
 
+/// File identity, not path spelling, owns the lossy-source refusal contract.
+#[test]
+fn sanitize_refuses_hard_link_to_input() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+    let input = write_fixture(harness.home_dir(), "source.cha", source)?;
+    let output = harness.home_dir().join("alias.cha");
+    std::fs::hard_link(&input, &output)?;
+    let result = harness.run_output(&[
+        "debug",
+        "sanitize",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+    ])?;
+    assert_eq!(
+        std::fs::read(&input)?,
+        source.as_bytes(),
+        "source changed through its hard link"
+    );
+    assert_eq!(std::fs::read(&output)?, source.as_bytes());
+    assert!(!result.status.success(), "{}", combined_output(&result));
+    assert!(combined_output(&result).contains("own input"));
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn sanitize_refuses_symbolic_link_to_input() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+    let input = write_fixture(harness.home_dir(), "source.cha", source)?;
+    let output = harness.home_dir().join("alias.cha");
+    std::os::unix::fs::symlink(&input, &output)?;
+    let result = harness.run_output(&[
+        "debug",
+        "sanitize",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+    ])?;
+    assert_eq!(std::fs::read(&input)?, source.as_bytes());
+    assert!(!result.status.success(), "{}", combined_output(&result));
+    assert!(combined_output(&result).contains("own input"));
+    Ok(())
+}
+
+/// Distinct existing destinations remain replaceable; fresh output and stdout
+/// must carry the same sanitizer result without changing the reference input.
+#[test]
+fn sanitize_writes_distinct_destinations_and_stdout() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+    let input = write_fixture(harness.home_dir(), "source.cha", source)?;
+    let stdout = harness.run_output(&["debug", "sanitize", input.to_str().unwrap()])?;
+    assert!(stdout.status.success(), "{}", combined_output(&stdout));
+    assert!(!stdout.stdout.is_empty());
+    assert_ne!(stdout.stdout, source.as_bytes());
+    for exists in [false, true] {
+        let output = harness
+            .home_dir()
+            .join(if exists { "existing.cha" } else { "fresh.cha" });
+        if exists {
+            std::fs::write(&output, vec![b'x'; stdout.stdout.len() + 100])?;
+        }
+        let result = harness.run_output(&[
+            "debug",
+            "sanitize",
+            input.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])?;
+        assert!(result.status.success(), "{}", combined_output(&result));
+        assert_eq!(std::fs::read(&output)?, stdout.stdout);
+        assert_eq!(std::fs::read(&input)?, source.as_bytes());
+    }
+    Ok(())
+}
+
 /// The guard must not fire on the rewrites `normalize` is FOR.
 ///
 /// Six reference-corpus files legitimately change under `normalize`, every one

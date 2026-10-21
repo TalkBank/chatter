@@ -92,9 +92,11 @@ pub(super) fn check_fix_result(
         {
             continue;
         }
+        // A same-code diagnostic with no location cannot be shown to lie
+        // elsewhere, so it counts against the fix rather than for it.
         if diagnostics_after
             .iter()
-            .any(|d| d.code == code && d.location.span.overlaps(fix_site))
+            .any(|d| d.code == code && d.location.span().is_none_or(|span| span.overlaps(fix_site)))
         {
             return Err(FixVerificationError::TargetedCodeStillFires { code });
         }

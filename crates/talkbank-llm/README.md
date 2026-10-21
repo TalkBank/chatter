@@ -1,6 +1,6 @@
 # talkbank-llm
 
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-llm/README.md)
 
 HTTP implementation of the `talkbank-transform` judgment-provider interface.
 The Chatter CLI uses this crate for explicitly requested model-assisted work;

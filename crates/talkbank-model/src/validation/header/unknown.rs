@@ -5,7 +5,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Comment_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Warning_Header>
 
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 
 /// Reports unknown or malformed header labels.
 ///
@@ -18,7 +18,7 @@ pub(super) fn check_unknown_header(
     text: &str,
     parse_reason: Option<&str>,
     suggested_fix: Option<&str>,
-    span: Span,
+    location: crate::Location,
     errors: &impl ErrorSink,
 ) {
     let mut message = format!("Unknown or malformed header: {}", text);
@@ -29,11 +29,10 @@ pub(super) fn check_unknown_header(
     let mut error = ParseError::new(
         ErrorCode::UnknownHeader,
         Severity::Error,
-        SourceLocation::at_offset(span.start as usize),
-        ErrorContext::new(text, 0..text.len(), "unknown_header"),
+        DiagnosticLocation::from(location),
+        ErrorContext::new(text, crate::Span::new(0, text.len()), "unknown_header"),
         message,
     );
-    error.location.span = span;
 
     if let Some(fix) = suggested_fix {
         error = error.with_suggestion(fix);

@@ -12,7 +12,7 @@ use super::helpers::{
 use super::indices::{MainWordIndex, MorItemIndex};
 use super::types::AlignmentPair;
 use crate::model::{MainTier, MorTier, WriteChat};
-use crate::{ErrorCode, ErrorLabel, ParseError, Severity};
+use crate::{ErrorCode, ParseError, Severity};
 use schemars::JsonSchema;
 use talkbank_derive::SpanShift;
 
@@ -131,7 +131,7 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
                     main_str, mor_str,
                 ),
                 "The %mor tier terminator must match the main tier terminator exactly",
-                mor.span,
+                mor.location,
             );
             alignment = alignment.with_error(error);
         }
@@ -199,9 +199,9 @@ fn append_position_alignment(
     let detailed_message =
         format_positional_mismatch("Main tier", "%mor tier", &main_items, &mor_items);
 
-    let error = ParseError::at_span(code, Severity::Error, main.span, detailed_message)
-        .with_label(ErrorLabel::new(main.span, "Main tier"))
-        .with_label(ErrorLabel::new(mor.span, "%mor tier"))
+    let error = ParseError::at_location(code, Severity::Error, main.location, detailed_message)
+        .with_label_at(main.location, "Main tier")
+        .with_label_at(mor.location, "%mor tier")
         .with_suggestion(suggestion);
 
     alignment.errors.push(error);
@@ -217,7 +217,7 @@ fn build_alignment_error(
     error_code: ErrorCode,
     message: String,
     suggestion: &str,
-    location_span: crate::Span,
+    location: crate::Location,
 ) -> ParseError {
     let alignment_context = build_alignment_preview(main, mor);
 
@@ -227,21 +227,10 @@ fn build_alignment_error(
         suggestion, alignment_context
     );
 
-    let mut error = ParseError::at_span(error_code, Severity::Error, location_span, message)
-        .with_suggestion(suggestion_text);
-
-    if !main.span.is_dummy() {
-        error
-            .labels
-            .push(crate::ErrorLabel::new(main.span, "Main tier"));
-    }
-    if !mor.span.is_dummy() {
-        error
-            .labels
-            .push(crate::ErrorLabel::new(mor.span, "%mor tier"));
-    }
-
-    error
+    ParseError::at_location(error_code, Severity::Error, location, message)
+        .with_suggestion(suggestion_text)
+        .with_label_at(main.location, "Main tier")
+        .with_label_at(mor.location, "%mor tier")
 }
 
 /// Build a compact side-by-side preview of main vs `%mor` alignable units.

@@ -268,6 +268,11 @@ fn drifted_timings_cannot_expose_partially_zipped_slots() -> Result<(), TestErro
     };
     assert_eq!(drift.main_count().get(), 2);
     assert_eq!(drift.wor_count().get(), 1);
+    let present = utterance.wor_tier().expect("authored WOR tier");
+    assert_eq!(
+        utterance.main.wor_projection().bind_present_timing(present),
+        Err(drift)
+    );
     Ok(())
 }
 
@@ -296,6 +301,11 @@ fn missing_wor_is_not_conflated_with_an_empty_count_matched_tier() -> Result<(),
         ));
     };
     assert_eq!(bound.slot_count().get(), 0);
+    let present = empty.wor_tier().expect("authored empty WOR tier");
+    assert_eq!(
+        empty.main.wor_projection().bind_present_timing(present),
+        Ok(bound)
+    );
     Ok(())
 }
 

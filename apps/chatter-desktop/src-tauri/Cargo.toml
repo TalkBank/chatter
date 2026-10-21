@@ -36,7 +36,12 @@ tauri-plugin-dialog = "2"
 # installs signed update bundles; the process plugin's relaunch() restarts the
 # app into the new version after install. See
 # docs/strategy/distribution-and-signing.md "Auto-update".
-tauri-plugin-updater = "2"
+# Default features minus `zip`: that feature only unpacks the v1 updater
+# formats (zipped Windows bundles, gzipped AppImages). `createUpdaterArtifacts`
+# publishes v2 artifacts (a signed setup.exe, a plain AppImage, and a macOS
+# .app.tar.gz whose tar extraction the plugin always builds), so the zip crate
+# would be dead code carrying its extraction advisories.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

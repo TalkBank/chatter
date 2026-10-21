@@ -40,7 +40,6 @@ tier_body:
     Question: "?"
   postcodes: []
   media_bullet:
-    MediaBullet:
-      raw_text: "\u0015164754_165474\u0015"
-      start_time: "164754"
-      end_time: "165474"
+    raw_text: "\u0015164754_165474\u0015"
+    start_time: "164754"
+    end_time: "165474"

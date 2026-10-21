@@ -9,7 +9,7 @@ use super::indices::{MainWordIndex, SinItemIndex};
 use super::traits::{AlignableTier, TierAlignmentResult, positional_align};
 use super::types::AlignmentPair;
 use crate::model::{MainTier, SinTier};
-use crate::{ErrorCode, ParseError, Span};
+use crate::{ErrorCode, ParseError};
 use schemars::JsonSchema;
 use talkbank_derive::SpanShift;
 
@@ -103,8 +103,8 @@ impl AlignableTier for SinTier {
             .collect()
     }
 
-    fn span(&self) -> Span {
-        self.span
+    fn location(&self) -> crate::Location {
+        self.location
     }
 
     fn error_code_too_few(&self) -> ErrorCode {
@@ -147,14 +147,20 @@ mod sin_alignment_tests {
     //! is E342 at parse, so empty on empty is reachable only from a tier
     //! built by hand, and building it is the only way to reach it.
     use super::*;
-    use crate::Span;
     use crate::model::Terminator;
 
     /// Accepts empty-on-empty alignment without diagnostics.
     #[test]
     fn test_sin_alignment_empty() {
-        let main = MainTier::new("CHI", vec![], Terminator::Period { span: Span::DUMMY });
-        let sin = SinTier::new(vec![]);
+        let main = MainTier::new(
+            crate::MainTierLocations::UNLOCATED,
+            "CHI",
+            vec![],
+            Terminator::Period {
+                location: crate::Location::Unlocated,
+            },
+        );
+        let sin = SinTier::new(crate::Location::Unlocated, vec![]);
 
         let alignment = align_main_to_sin(&main, &sin);
 

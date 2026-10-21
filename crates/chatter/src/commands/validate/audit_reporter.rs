@@ -336,8 +336,8 @@ fn write_error_record(
         code: error.code.as_str(),
         severity: error.severity.into(),
         message: &error.message,
-        line: error.location.line,
-        column: error.location.column,
+        line: error.location.position().map(|p| p.line.get()),
+        column: error.location.position().map(|p| p.column.get()),
     };
     serde_json::to_writer(&mut *writer, &record).map_err(std::io::Error::from)?;
     writeln!(writer)
@@ -351,7 +351,7 @@ mod tests {
     use std::fs;
 
     use serde_json::Value;
-    use talkbank_model::{ErrorCode, ParseError, Severity, SourceLocation};
+    use talkbank_model::{DiagnosticLocation, ErrorCode, ParseError, Severity};
 
     use super::{AuditReporter, AuditStats, SeverityCounts};
 
@@ -498,7 +498,10 @@ mod tests {
         ParseError::new(
             ErrorCode::TestError,
             Severity::Error,
-            SourceLocation::from_offsets_with_position(0, 1, line, column),
+            DiagnosticLocation::known_at(
+                talkbank_model::Span::new(0, 1),
+                talkbank_model::LineColumn::one_based(line, column).expect("one-based position"),
+            ),
             Option::<talkbank_model::ErrorContext>::None,
             message,
         )

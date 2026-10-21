@@ -11,13 +11,12 @@
 //!
 //! # Architecture
 //!
-//! Most tier parsing follows the "minimal wrapper" pattern:
-//! 1. Wrap tier content in a minimal valid CHAT document
-//! 2. Parse the wrapper with tree-sitter
-//! 3. Extract the tier from the parsed file
-//! 4. Adjust spans from wrapper-relative to document-absolute
-//!
-//! This pattern is encapsulated in `parser_impl::wrapper_parse_tier()`.
+//! Most tier parsing follows the "minimal wrapper" pattern: the caller's
+//! admitted `FragmentSource` is wrapped in a minimal valid CHAT document, the
+//! wrapper is parsed, and the tier is lowered from the parse as a
+//! `Synthetic<_>` value that only the wrapper can move into the caller's
+//! coordinates (`api::fragment`). The pattern is encapsulated in
+//! `parser_impl::wrapper_parse_tier()`.
 
 use talkbank_model::dependent_tier::DependentTier;
 use talkbank_model::model::{
@@ -26,11 +25,13 @@ use talkbank_model::model::{
     SinTier, SitTier, SpaTier, Utterance, WorTier, Word,
 };
 use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, ParseErrors, Severity, SourceLocation, Span,
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, ParseErrors, Severity,
 };
 use talkbank_model::{FragmentSemanticContext, ParseOutcome};
 
-use super::parser_impl::{wrapper_parse_generic_tier, wrapper_parse_tier};
+use super::parser_impl::{
+    wrapper_parse_generic_tier, wrapper_parse_tier, wrapper_parse_tier_with_suffix,
+};
 use crate::parser::TreeSitterParser;
 
 /// Report parse errors through an ErrorSink.
@@ -69,8 +70,8 @@ fn reject_item_shape<T>(
     errors.report(ParseError::new(
         ErrorCode::InvalidWordFormat,
         Severity::Error,
-        SourceLocation::from_offsets(0, input.len()),
-        ErrorContext::new(input, 0..input.len(), input),
+        DiagnosticLocation::from_offsets(0, input.len()),
+        ErrorContext::new(input, talkbank_model::Span::new(0, input.len()), input),
         message,
     ));
     ParseOutcome::rejected()
@@ -97,24 +98,31 @@ impl TryFrom<MorTier> for SingleMorWord {
     }
 }
 
+/// Reject a main tier whose CA omission shorthand needs file context the
+/// caller did not supply.
+///
+/// Runs over the INPUT-relative tier, before the fragment source rebases it,
+/// so the word's location is already a snippet coordinate and the sink does
+/// the one move into the caller's document. The shorthand's presence rejects
+/// the fragment; the snippet is quoted only for a located word (every
+/// tree-sitter word is).
 fn report_context_dependent_main_tier_error(
     errors: &impl ErrorSink,
     input: &str,
-    offset: usize,
-    span: Span,
+    location: talkbank_model::Location,
 ) {
-    let start = (span.start as usize)
-        .saturating_sub(offset)
-        .min(input.len());
-    let end = (span.end as usize).saturating_sub(offset).min(input.len());
-    let snippet = input.get(start..end).unwrap_or(input);
+    let context = location.span().and_then(|span| {
+        input
+            .get(span.to_range())
+            .map(|found| ErrorContext::new(input, span, found))
+    });
 
     errors.report(
         ParseError::new(
             ErrorCode::InvalidWordFormat,
             Severity::Error,
-            SourceLocation::new(span),
-            ErrorContext::new(input, start..end.max(start), snippet),
+            DiagnosticLocation::from(location),
+            context,
             "Main-tier fragment requires file context to interpret CA omission shorthand",
         )
         .with_suggestion(
@@ -217,16 +225,13 @@ impl TreeSitterParser {
         let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_main_tier(input) {
             Ok(mut main) => {
-                main = fragment_source.rebase(main);
                 if context.ca_mode() {
                     crate::parser::chat_file_parser::chat_file::normalize::normalize_ca_omissions_main_tier(&mut main);
-                    ParseOutcome::parsed(main)
-                } else if let Some(span) = main.find_context_dependent_ca_omission_span() {
-                    report_context_dependent_main_tier_error(errors, input, offset, span);
-                    ParseOutcome::rejected()
-                } else {
-                    ParseOutcome::parsed(main)
+                } else if let Some(location) = main.find_context_dependent_ca_omission() {
+                    report_context_dependent_main_tier_error(&adjusting_sink, input, location);
+                    return ParseOutcome::rejected();
                 }
+                ParseOutcome::parsed(fragment_source.rebase(main))
             }
             Err(errs) => {
                 report_parse_errors(errs, &adjusting_sink);
@@ -266,17 +271,13 @@ impl TreeSitterParser {
         let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_utterance(input) {
             Ok(mut utterance) => {
-                utterance = fragment_source.rebase(utterance);
                 if context.ca_mode() {
                     crate::parser::chat_file_parser::chat_file::normalize::normalize_ca_omissions_main_tier(&mut utterance.main);
-                    ParseOutcome::parsed(utterance)
-                } else if let Some(span) = utterance.main.find_context_dependent_ca_omission_span()
-                {
-                    report_context_dependent_main_tier_error(errors, input, offset, span);
-                    ParseOutcome::rejected()
-                } else {
-                    ParseOutcome::parsed(utterance)
+                } else if let Some(location) = utterance.main.find_context_dependent_ca_omission() {
+                    report_context_dependent_main_tier_error(&adjusting_sink, input, location);
+                    return ParseOutcome::rejected();
                 }
+                ParseOutcome::parsed(fragment_source.rebase(utterance))
             }
             Err(errs) => {
                 report_parse_errors(errs, &adjusting_sink);
@@ -350,44 +351,55 @@ impl TreeSitterParser {
     }
 
     /// Parse a participant entry with offset adjustment and streaming errors.
+    ///
+    /// One wrapper: the caller's entry sits on a wrapper-supplied
+    /// `@Participants:` line inside the post-preamble document, is lowered
+    /// there and rebased once. (It used to hand its synthetic source to the
+    /// public header API as if it were a document, which wrapped it again.)
     pub fn parse_participant_entry_fragment(
         &self,
         input: &str,
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ParticipantEntry> {
-        let wrapper = super::fragment::WrappedFragment::new(
-            &[PARTICIPANTS_HEADER_PREFIX],
-            input,
-            "\n",
-            offset,
-        );
-        let wrapper = match wrapper {
-            Ok(fragment) => fragment,
-            Err(errors_found) => {
-                errors.report_vec(errors_found.into_error_vec());
-                return ParseOutcome::rejected();
-            }
+        use crate::parser::chat_file_parser::header_dispatch::{
+            HeaderCoverage, POST_BEGIN_HEADER_INDEX, POST_BEGIN_PREFIX, POST_BEGIN_SUFFIX,
         };
-        let adjusting_sink = wrapper.error_sink(errors);
-        let Some(header) = self
-            .parse_header_fragment(wrapper.source(), 0, &adjusting_sink)
-            .into_option()
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };
-        match header {
-            Header::Participants { entries } => {
-                let Ok(SingleItem(entry)) = SingleItem::admit(entries) else {
-                    return reject_item_shape(
-                        wrapper.source(),
-                        &adjusting_sink,
-                        "Expected exactly one participant entry",
-                    );
-                };
-                ParseOutcome::parsed(wrapper.rebase(entry))
+        let ParseOutcome::Parsed(wrapper) = super::parser_impl::admit_wrapper(
+            super::fragment::WrappedFragment::new(
+                &[POST_BEGIN_PREFIX, PARTICIPANTS_HEADER_PREFIX],
+                fragment_source,
+                POST_BEGIN_SUFFIX,
+            ),
+            errors,
+        ) else {
+            return ParseOutcome::rejected();
+        };
+        let header = match self.lower_wrapped_header(
+            &wrapper,
+            POST_BEGIN_HEADER_INDEX,
+            HeaderCoverage::LabelSupplied,
+        ) {
+            Ok(header) => header,
+            Err(found) => {
+                errors.report_vec(found.into_error_vec());
+                return ParseOutcome::rejected();
             }
-            _ => ParseOutcome::rejected(),
+        };
+        let entry = header.try_map(|header| match header {
+            Header::Participants { entries } => SingleItem::admit(entries)
+                .map(|SingleItem(entry)| entry)
+                .map_err(|_| "Expected exactly one participant entry"),
+            _ => Err("Expected a participant entry"),
+        });
+        match entry {
+            Ok(entry) => ParseOutcome::parsed(wrapper.rebase(entry)),
+            Err(message) => reject_item_shape(input, &fragment_source.error_sink(errors), message),
         }
     }
 
@@ -415,24 +427,30 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<MorWord> {
-        // The companion terminator is synthetic too. Its owner must project
-        // diagnostics and snippets before they reach the original caller.
-        let wrapper = match super::fragment::WrappedFragment::new(&[], input, " .", offset) {
-            Ok(wrapper) => wrapper,
-            Err(found) => {
-                errors.report_vec(found.into_error_vec());
-                return ParseOutcome::rejected();
-            }
-        };
-        let document_sink = wrapper.error_sink(errors);
-        let Some(tier) = self
-            .parse_mor_tier_fragment(wrapper.source(), 0, &document_sink)
-            .into_option()
+        // The companion terminator is wrapper-owned text on the tier line; the
+        // one wrapper excludes it from the tier's extent and from every
+        // diagnostic, and the tier arrives already in the caller's coordinates.
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };
-        let word = match SingleMorWord::try_from(tier) {
-            Ok(SingleMorWord(word)) => word,
+        let Some(tier) = wrapper_parse_tier_with_suffix(
+            self,
+            "%mor:\t",
+            fragment_source,
+            " .",
+            errors,
+            |tier| match tier {
+                DependentTier::Mor(tier) => Some(tier),
+                _ => None,
+            },
+        )
+        .into_option() else {
+            return ParseOutcome::rejected();
+        };
+        match SingleMorWord::try_from(tier) {
+            Ok(SingleMorWord(word)) => ParseOutcome::parsed(word),
             Err(reason) => {
                 let message = match reason {
                     MorWordShapeError::ItemCount => "Expected exactly one MOR word",
@@ -440,10 +458,9 @@ impl TreeSitterParser {
                         "A MOR word fragment cannot include post-clitics"
                     }
                 };
-                return reject_item_shape(input, &document_sink, message);
+                reject_item_shape(input, &fragment_source.error_sink(errors), message)
             }
-        };
-        ParseOutcome::parsed(wrapper.rebase(word))
+        }
     }
 
     // =========================================================================

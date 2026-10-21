@@ -271,15 +271,17 @@ fn structured_id_required_field_deletions_preserve_invalid_fragment_payloads() {
         .lines
         .iter()
         .find_map(|line| match line {
-            Line::Header { header, span, .. } if matches!(header.as_ref(), Header::ID(_)) => {
-                Some(*span)
-            }
+            Line::Header {
+                header,
+                location: span,
+                ..
+            } if matches!(header.as_ref(), Header::ID(_)) => Some(*span),
             _ => None,
         })
         .expect("ID line source range");
-    let line_start = line_span.start as usize;
+    let line_start = line_span.span().expect("located").start();
     let original = source
-        .get(line_start..line_span.end as usize)
+        .get(line_start..line_span.span().expect("located").end())
         .expect("original ID line");
     for (name, range, code) in [
         (

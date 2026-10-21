@@ -1161,6 +1161,46 @@ fn test_to_json_prune_does_not_follow_links_out_of_the_output_tree() -> Result<(
     Ok(())
 }
 
+/// Conversion may use an explicitly selected linked output root, but pruning
+/// must leave its target's orphan files and directories intact.
+#[cfg(unix)]
+#[test]
+fn test_to_json_prune_does_not_follow_a_linked_output_root() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    fs::create_dir_all(&input_dir)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+    let elsewhere = dir.path().join("elsewhere");
+    fs::create_dir_all(elsewhere.join("nested"))?;
+    let protected = elsewhere.join("nested/orphan.json");
+    fs::write(&protected, "{\"preserve\":true}")?;
+    let output_link = dir.path().join("json");
+    std::os::unix::fs::symlink(&elsewhere, &output_link)?;
+
+    for output_dir in [
+        output_link.clone(),
+        output_link.join(""),
+        output_link.join("."),
+    ] {
+        crate::common::chatter_cmd()
+            .arg("to-json")
+            .arg(&input_dir)
+            .arg("--output-dir")
+            .arg(&output_dir)
+            .args(["--skip-validation", "--skip-schema-validation", "--prune"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("0 pruned"));
+        assert_eq!(fs::read_to_string(&protected)?, "{\"preserve\":true}");
+        assert!(output_link.symlink_metadata()?.file_type().is_symlink());
+        assert!(
+            elsewhere.join("a.json").is_file(),
+            "conversion remains supported"
+        );
+    }
+    Ok(())
+}
+
 /// Tests directory mode requires --output-dir.
 #[test]
 fn test_to_json_directory_requires_output_dir() -> Result<(), TestError> {
@@ -1632,6 +1672,14 @@ fn empty_replacement_at_eof_is_rejected_with_or_without_newline() -> Result<(), 
 #[test]
 fn list_checks_reports_all_enforcement_states() -> Result<(), TestError> {
     use talkbank_model::{CheckStatus, ErrorCode};
+
+    for help in ["-h", "--help"] {
+        crate::common::chatter_cmd()
+            .args(["validate", help])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Active/Opt-in/Planned"));
+    }
 
     let output = crate::common::chatter_cmd()
         .args(["validate", "--list-checks", "--tui-mode", "disable"])

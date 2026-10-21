@@ -100,9 +100,11 @@ fn authored_annotation_positions_preserve_scope_payload_order_and_wire() {
             .first()
             .expect("scope owner")
             .structure();
-        let span = owner.span().expect("word, group or retrace source span");
+        let span = owner
+            .location()
+            .expect("word, group or retrace source span");
         assert_eq!(
-            source.get(span.start as usize..span.end as usize),
+            source.get(span.span().expect("located").start()..span.span().expect("located").end()),
             Some(scope_text),
             "annotations stay in their producing scope"
         );
@@ -119,11 +121,12 @@ fn authored_annotation_positions_preserve_scope_payload_order_and_wire() {
         assert_eq!(observed, annotations, "{scope_text}");
         match (owner, marker) {
             (ContentStructure::Retrace(retrace), Some(spelling)) => {
-                let span = retrace.inner().marker_span.expect("native marker location");
-                assert_eq!(
-                    source.get(span.start as usize..span.end as usize),
-                    Some(spelling)
-                );
+                let span = retrace
+                    .inner()
+                    .marker_location
+                    .span()
+                    .expect("native marker location");
+                assert_eq!(source.get(span.start()..span.end()), Some(spelling));
             }
             (ContentStructure::Retrace(_), None) | (_, Some(_)) => {
                 panic!("unexpected retrace ownership: {scope_text}");
@@ -194,10 +197,9 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                         match group {
                             GroupRef::Angle(view) => {
                                 assert_eq!(group.kind(), GroupKind::Angle);
-                                assert_eq!(group.span(), Some(view.span));
+                                assert_eq!(group.location(), Some(view.location));
                                 let original = view.group;
-                                let mut rebuilt = Group::new(content.clone())
-                                    .with_span(original.span)
+                                let mut rebuilt = Group::new(original.location, content.clone())
                                     .with_trailing_space("");
                                 assert!(
                                     rebuilt.trailing_space.is_none(),
@@ -206,7 +208,7 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                                 if let Some(space) = &original.trailing_space {
                                     rebuilt = rebuilt.with_trailing_space(space.clone());
                                 }
-                                assert_eq!(rebuilt.span, original.span);
+                                assert_eq!(rebuilt.location, original.location);
                                 assert_eq!(rebuilt.len(), count);
                                 assert_eq!(rebuilt.is_empty(), count == 0);
                                 assert_eq!(rebuilt.to_chat_string(), original.to_chat_string());
@@ -215,11 +217,14 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                             }
                             GroupRef::Quotation(view) => {
                                 assert_eq!(group.kind(), GroupKind::Quotation);
-                                assert_eq!(group.span(), Some(view.span));
-                                let rebuilt = Quotation::new(content.clone());
+                                assert_eq!(group.location(), Some(view.location));
+                                let rebuilt = Quotation::new(
+                                    talkbank_model::Location::Unlocated,
+                                    content.clone(),
+                                );
                                 let located =
-                                    Quotation::with_span(content.clone(), view.quotation.span);
-                                assert_eq!(located.span, view.quotation.span);
+                                    Quotation::new(view.quotation.location, content.clone());
+                                assert_eq!(located.location, view.quotation.location);
                                 assert_eq!(rebuilt.len(), count);
                                 assert_eq!(rebuilt.is_empty(), count == 0);
                                 assert_eq!(
@@ -232,7 +237,7 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                             }
                             GroupRef::Pho(original) => {
                                 assert_eq!(group.kind(), GroupKind::Pho);
-                                assert_eq!(group.span(), None);
+                                assert_eq!(group.location(), None);
                                 let rebuilt = PhoGroup::new(content.clone());
                                 assert_eq!(rebuilt.len(), count);
                                 assert_eq!(rebuilt.is_empty(), count == 0);
@@ -242,7 +247,7 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                             }
                             GroupRef::Sin(original) => {
                                 assert_eq!(group.kind(), GroupKind::Sin);
-                                assert_eq!(group.span(), None);
+                                assert_eq!(group.location(), None);
                                 let rebuilt = SinGroup::new(content.clone());
                                 assert_eq!(rebuilt.len(), count);
                                 assert_eq!(rebuilt.is_empty(), count == 0);

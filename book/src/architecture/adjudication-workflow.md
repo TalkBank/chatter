@@ -1,687 +1,173 @@
 # Adjudication Workflow
 
+**Status:** Current
 **Last modified:** {{git-dates:page}}
 
-> `chatter merge`, `chatter pipeline` and `chatter batch` are not CLI commands.
-> Where this page names them it describes the operation of the structural
-> library in `talkbank-transform`, which is current. See the
-> [removal notice](../chatter/user-guide/merge.md).
+`chatter adjudicate` is an experimental review tool. It consumes pending
+speaker decisions and writes override records; it does not relabel CHAT, merge
+recordings, run alignment or certify a suggestion. The removed `merge`,
+`pipeline` and `batch` commands are not part of this workflow.
 
-**Status:** Draft
+See [Review Tools](../chatter/user-guide/merge-workflow.md) for operator usage,
+[Override File Format](../chatter/integrating/merge-overrides.md) for persistence,
+and [Merge Architecture](merge-architecture.md) for structural assembly.
 
-This page specifies how human-in-the-loop adjudication fits into
-the merge pipeline. Several pipeline stages have decision points
-where the algorithm cannot or should not auto-decide; this
-document specifies how those refusals reach an operator, how the
-operator's decision is recorded, and how the pipeline resumes
-with the decision applied.
+## Supported decisions
 
-The design satisfies two constraints set explicitly upstream:
+The pending kind determines which decisions can be applied:
 
-- **Test the interaction.** Every operator-decision path must be
-  exercisable in automated tests by providing synthetic operator
-  choices. No hardcoded stdin reads in the decision core; a
-  pluggable prompter abstraction is mandatory.
-- **Batch-then-review is the default workflow.** No mid-batch
-  interactive pauses in the main pipeline. The optional
-  `--interactive` flag exists on the adjudication tool only, for
-  small-batch debugging, and rides on the same data contract.
+| Pending kind | Admitted decisions |
+| --- | --- |
+| `speaker-id-low-confidence` | `AcceptSuggested`, `OverrideMapping` |
+| `parent-role-lookup` | `ChooseRole` |
+| `sanity-scan-misclassification` | `AcceptSuggested`, `OverrideMapping` |
 
-Companion documents:
+A role choice supplies `adult_roles` for the pending entry's existing
+`speaker_mapping`; it does not replace that action map.
+An override supplies both the action map and role map.
+Every rename must have role data before the decision can be committed.
 
-- [Merge Override File Format](../chatter/integrating/merge-overrides.md),
-  the on-disk record of decisions.
-- [Domain Types](./merge-domain-types.md): `SpeakerMapping`,
-  `MergeOverride`, etc.
-- [Test Plan](./merge-test-plan.md): where the adjudication
-  tests live.
-- [Crate Architecture](./merge-architecture.md): where the
-  adjudication code lives.
-
-## Why batch-then-review, and not real-time
-
-The finite reference workflow checks the sanity-scan handoff using unchanged
-basic-conversation, regular-group and phonological-group CHAT. The ordinary
-dialogue and regular groups do not trigger the default threshold; the nested
-phonological example has five anchor words and three inserted-speaker words
-and does trigger an advisory suggestion. A higher threshold suppresses it.
-This is a counting and workflow contract, **not evidence of an identity swap**.
-The test persists the pending suggestion, explicitly accepts it through the
-operator interface, admits the recorded mapping, and reparses its CHAT replay.
-It verifies retained content and the requested speaker change. Incomplete roles
-and unsupported mapping shapes yield no suggestion. No scan result silently
-changes the original override or replaces operator review.
-The same reference controls explicitly remove each speaker through the mapping
-wire API and CHAT replay. Retained turns and dependent tiers remain semantically
-unchanged, but the scan must refuse to infer a swap when either observed speaker
-population is absent. Parseable transformed CHAT alone does not establish that
-the heuristic has enough evidence.
-
-Every adjudication point in the pipeline is **per-session local**:
-the operator's decision affects *this session's* output and no
-other session in the same batch. There is no case where an
-operator decision propagates forward to influence how other
-sessions get processed.
-
-The cases that might appear to want real-time interaction are
-better served by sampling:
-
-| Case | Real-time approach | Better approach |
-|---|---|---|
-| Systematic pipeline failure (everything refuses) | Watch each refusal, abort batch | Run a 5-10-session canary first; examine; abort or proceed |
-| Confidence-threshold calibration on a new corpus | Adjust threshold mid-batch | Run canary; pick threshold; full batch |
-| Cross-session pattern (one contributor always has PAR0 = clinician) | Notice during interactive review | Run canary; observe pattern; add per-contributor explicit mapping to orchestrator config |
-| Operator wants per-session progress visibility | Watch each step | `chatter adjudicate --interactive` after a batch run, walking the same pending queue |
-
-TalkBank's operational reality makes batch-then-review strictly
-better:
-
-- Batches are research-scale (hundreds of sessions per donor).
-  Forcing operator presence during the batch run = forcing hours
-  of babysitting.
-- Overnight and batch runs are routine; interactive doesn't work
-  for those.
-- Focused operator review of all refusals together is more
-  efficient than scattered per-batch decisions (less
-  context-switching; easier to spot patterns across sessions).
-- Aligns with the project's "academic research, accuracy is the
-  standard, take however long it takes" rule: operator
-  efficiency dominates wall-clock latency.
-
-The `--interactive` flag is preserved for the small-batch
-debugging case but is explicitly NOT the dominant workflow.
-
-## The known adjudication points
-
-The pipeline has at least five points where adjudication may be
-needed. Each is recorded as one or more entries in the override
-file via the same schema.
-
-| # | Adjudication point | Trigger | Operator's decision | Affects |
-|---|---|---|---|---|
-| 1 | **Speaker-id low confidence** | `chatter speaker-id` Jaccard margin < threshold | Per-speaker mapping (drop/rename) and per-donor-code `adult_roles` | Speaker labeling, drop set, downstream merge |
-| 2 | **Parent role lookup** | Parent-sample session needs `MOT` vs `FAT` decision | `adult_roles[donor_speaker].code` and `.tag` for this session | The merged file's headers + main-tier prefixes |
-| 3 | **Diarization-mix flag** | Operator observes Batchalign collapsed multiple real-world speakers into one label | `flags = ["diarization-mixed"]` plus a note | Downstream consumers know output is imperfect; might gate publication |
-| 4 | **Post-merge sanity scan** | Auto-scan flags retained-speaker utterances with high-text-similarity inserted-speaker utterances nearby (suggesting speaker-id misclassification) | Confirm or override the original speaker-id mapping | Triggers re-run of speaker-id + merge for the session |
-| 5 | **Unbulleted reference file** | Reference CHAT file has no time bullets; merge can't proceed | Either bullet the reference upstream, or request fresh authoritative data | Pipeline blocked for this session pending external fix |
-
-Points 1-4 are handled by the unified `chatter adjudicate` tool
-specified below. Point 5 is an out-of-scope failure mode: the
-adjudication tool records that the session is blocked, but the
-fix lives outside this pipeline (operator contacts the
-contributor or runs forced-alignment first).
-
-## Data flow
-
-```mermaid
-flowchart TD
-    Inputs["Input CHAT files +<br/>reference files"]
-    Orch["Orchestrator<br/>(future: tb subcommand;<br/>now: shell/script)"]
-    SpkId["chatter speaker-id<br/>(per session)"]
-    Merge["chatter merge<br/>(per session)"]
-    Pending["pending-adjudications.toml<br/>(workflow queue)"]
-    Override["overrides.toml<br/>(durable decisions)"]
-    Adj["chatter adjudicate"]
-    Operator((Operator))
-    Final["merged/*.cha"]
-
-    Inputs --> Orch
-    Orch -->|pass 1: speaker-id| SpkId
-    SpkId -->|exit 0 → auto entry| Override
-    SpkId -->|exit 4 → pending entry| Pending
-    Orch -->|pass 1: merge for ok sessions| Merge
-    Merge --> Final
-    Pending --> Adj
-    Override --> Adj
-    Adj <-->|prompter| Operator
-    Adj -->|writes decision| Override
-    Adj -->|removes resolved| Pending
-    Override -->|pass 2| Orch
-    Orch -.->|loop until pending empty| SpkId
-```
-
-The orchestrator runs **two passes**:
-
-**Pass 1**: for every input session, run `chatter speaker-id` in
-reference mode. Successful auto-decides write to the override
-file with `mode = "auto"` and immediately proceed to `chatter
-merge`. Refusals (exit code 4) and other adjudication-requiring
-states write a *pending entry* to `pending-adjudications.toml`
-and the session is skipped for the rest of pass 1.
-
-**Pass 2** (after operator runs `chatter adjudicate`): the
-orchestrator re-runs `chatter speaker-id` for the previously
-skipped sessions, finding decisions in the override file
-(`mode = "override"`). Sessions complete; pending entries are
-removed.
-
-The pipeline is **idempotent**: re-running pass 1 on a partially
-adjudicated batch produces no spurious work, sessions with
-already-recorded decisions skip to merge directly.
+Defer, block, flag-only decisions, diarization-mix adjudication and
+re-adjudication history are not implemented. There is no kind filter,
+skip-on-error, dry-run, save-and-quit command or built-in media player.
+Review recordings and other relevant evidence separately.
 
 ## The pending-adjudications artifact
 
-Separate from the override file, a `pending-adjudications.toml`
-file holds in-flight workflow state. Its purpose is to carry
-the *evidence* the operator needs (per-speaker scores, opening
-utterance previews) from the orchestrator's pass 1 to the
-adjudication tool, without polluting the override file with
-"to-do" entries.
+`PendingAdjudications` is a version-two TOML document with an ordered
+`entries` array. Each entry has `session_id`, `created_at` and a flattened
+`kind` payload. Scores, margin and threshold are optional evidence; engine
+defaults to deterministic and judgment provenance is optional.
 
-### Schema
+The kind-specific payload is:
 
-```toml
-schema_version = 2
+- Low confidence: `suggested.mapping` and `suggested.adult_roles`.
+- Parent role: `donor_speaker` and `speaker_mapping`.
+- Sanity scan: the suggested mapping/roles plus `reason`.
 
-[[entries]]
-session_id = "session-102-t1"
-kind = "speaker-id-low-confidence"
-created_at = "2026-05-27T11:00:00-04:00"
+The current record has no input/reference path, transcript preview or media
+location fields. Do not assume the terminal can recover that context from a
+session ID. A pending file is not an archive: successful adjudication removes
+resolved entries, including evidence not copied into the override record.
+Preserve the original pending input when its full evidence matters.
 
-# Inputs the adjudication tool needs:
-input_path = "asr/session-102-t1.cha"
-reference_path = "chi-only/session-102-t1.cha"
-anchor_speaker = "CHI"
+Both pending readers reject unsupported schema versions.
+`read` requires an existing file; `read_or_default` starts empty only for a
+missing path. These are different contracts.
 
-# Evidence for the operator:
-scores = { PAR0 = 0.6286, PAR1 = 0.3457 }
-margin = 1.82
-threshold_used = 2.0
-
-# Opening turns (first N utterances per speaker) for context:
-preview = """
-*CHI:    they start to bite . [0_1708]
-*PAR0:   They start to bite . [75_1165]
-*PAR1:   They do what . [1515_2245]
-... (further preview)
-"""
-
-# Suggested defaults the operator can accept-as-is:
-suggested = { mapping = { PAR0 = "drop", PAR1 = "rename" }, adult_roles = { PAR1 = { code = "INV", tag = "Investigator" } } }
-
-[[entries]]
-session_id = "session-103-t1-parent"
-kind = "parent-role-lookup"
-# ... different evidence for the MOT-vs-FAT case ...
-```
-
-### Schema characteristics
-
-- **`kind` discriminates the adjudication type** (one of
-  `speaker-id-low-confidence`, `parent-role-lookup`,
-  `diarization-mix-review`, `sanity-scan-misclassification`).
-  Each kind has its own required field set; the adjudication
-  tool dispatches on `kind` to choose the right prompt template
-  and the right validator for the operator's response.
-- **`suggested` carries what the algorithm WOULD have chosen
-  had the threshold been lower** (for speaker-id) or a parsed
-  default (for parent-role). The operator can accept-as-is or
-  override.
-- **Entries are a `[[entries]]` array of tables** (not a
-  session-keyed `[<session_id>]` map) because the same session
-  could conceivably have multiple pending decisions (e.g., a
-  speaker-id refusal AND a parent-role lookup), each a separate
-  array entry.
-
-### Lifecycle
-
-- **Written by**: the orchestrator's pass 1, when `chatter
-  speaker-id` exits with code 4 or when other adjudication
-  triggers fire.
-- **Consumed by**: `chatter adjudicate`, which reads it, prompts
-  the operator entry-by-entry, writes decisions to the override
-  file, and removes resolved entries.
-- **Cleaned up**: an empty `entries` array is the "all clear"
-  state; pass 2 of the orchestrator can proceed.
-
-## `chatter adjudicate`, CLI surface
-
-A new chatter subcommand in `chatter`. Its job is to walk
-a pending-adjudications file and write decisions to an override
-file.
+## Command and terminal behavior
 
 ```text
-chatter adjudicate <PENDING_FILE> --override-file <OVERRIDE_FILE> [OPTIONS]
-
-ARGUMENTS:
-  <PENDING_FILE>   Path to pending-adjudications.toml.
-
-REQUIRED OPTIONS:
-  --override-file <PATH>
-      Path to the override file (created if missing, appended if
-      existing). Decisions go here.
-
-OPTIONS:
-  --interactive
-      (default) Prompt the operator for each pending entry via
-      a terminal UI. This is the only mode for v1; later UI
-      backends may add e.g. --backend=web for web-served prompts.
-
-  --scripted <PATH>
-      Read pre-canned decisions from a TOML file. Used in tests
-      and in automated bulk-decision workflows (e.g., the
-      operator has prepared a decision sheet in advance).
-      Mutually exclusive with --interactive.
-
-  --kind <KIND>
-      Process only pending entries whose `kind` matches. Useful
-      when the operator wants to batch through one class of
-      decision at a time (e.g., do all parent-role lookups
-      first, then all speaker-id refusals).
-
-  --skip-on-error
-      If the operator's response cannot be applied (e.g., they
-      typed an invalid speaker code), log and skip rather than
-      abort. Default: abort on first invalid response.
-
-  --operator <NAME>
-      Operator identifier recorded in override entries.
-      Default: $USER.
-
-  --dry-run
-      Read pending and prompt the operator, but do NOT write to
-      the override file. Useful for previewing what decisions
-      look like before committing.
+chatter adjudicate PENDING.toml --override-file overrides.toml \
+  --scripted decisions.toml --operator operator
 ```
 
-Exit codes:
+Alternatively, select `--interactive`. Exactly one decision source is required;
+interactive mode is not an implicit default.
+The terminal displays the session, kind, relevant mapping/roles or scan reason,
+and available lexical scores/margin. It does not display all stored judgment
+provenance or play audio.
 
-| Code | Meaning |
-|---|---|
-| 0 | All pending entries decided; pending file updated |
-| 1 | I/O error (missing file, unparseable, write failure) |
-| 2 | Operator-supplied decision rejected as invalid (when `--skip-on-error` not set) |
-| 3 | Internal error |
-| 4 | Operator deferred at least one entry (used `:skip` in the prompt); pending file still has entries |
+Terminal input is one line per pending entry:
 
-The `--scripted` mode is the testability seam. A scripted
-decision file looks like:
+- `accept` (also `a` or `accept-suggested`) accepts a suggestion.
+  This parser records no note for accept, even if trailing text is supplied.
+- `choose SPK:CODE:TAG [SPK:CODE:TAG ...] [note...]` supplies roles.
+- `override SPK:CODE:TAG [SPK:CODE:TAG ...] SPK=action [SPK=action ...] [note...]`
+  supplies roles and actions (`rename` or `drop`).
+
+Choose/override notes are reconstructed from whitespace-separated tokens,
+not retained byte-for-byte. Invalid input stops the run; it does not reprompt
+or silently defer the entry. Use scripted accept when an acceptance note
+must be recorded.
+
+## The scripted mode
+
+This illustrative input is synthetic; it records no actual speaker judgment.
+For a pending low-confidence entry named `session-demo`, a matching decision
+file is:
 
 ```toml
 schema_version = 2
 
 [[decisions]]
-session_id = "session-102-t1"
+session_id = "session-demo"
 kind = "speaker-id-low-confidence"
-choice = { kind = "accept-suggested", note = "verified by listening" }
-
-[[decisions]]
-session_id = "session-103-t1-parent"
-kind = "parent-role-lookup"
-choice = { kind = "choose-role", adult_roles = { PAR0 = { code = "FAT", tag = "Father" } }, note = "per contributor data sheet" }
+choice = { kind = "accept-suggested", note = "Synthetic example only" }
 ```
 
-The current library reads decisions in file order and requires each consumed
-decision's `session_id` to match the next pending entry. The pending entry's
-typed kind determines which decision shapes are admissible; the scripted
-entry's `kind` is descriptive metadata, not an additional matching key.
-A missing decision, mismatched next session, or incompatible decision shape
-refuses without consuming that pending request. Do not assume that unconsumed
-trailing scripted decisions are rejected.
+The prompter consumes decisions in file order and checks each consumed session
+ID against the next pending entry. The pending kind, not the scripted entry's
+descriptive kind, determines decision compatibility. Missing decisions and
+out-of-order sessions refuse. Unused trailing scripted decisions are not checked.
+
+The scripted reader admits versions one and two with the current choice
+representation. Other numeric versions, missing versions and incorrectly typed
+versions refuse before a prompter is constructed. This scripted version domain
+is independent of the pending/override readers, which require version two.
+Successful version admission does not prove that the decisions are appropriate
+for the pending entries or that every scripted decision will be consumed.
 
 ## The prompter abstraction (testability)
 
-The adjudication tool's core flow is:
+`Prompter::ask(&PendingEntry)` returns an `OperatorDecision` or
+`AdjudicationError`. The CLI implements `TerminalPrompter`;
+the library provides `ScriptedPrompter::from_decisions` and `read_toml`.
+There is no separate `ScriptedTomlPrompter` or proposed context wrapper in
+the shipped API.
 
-```rust,ignore
-// pseudocode, actual signatures live in talkbank-transform
-pub fn run_adjudication(
-    pending: PendingAdjudications,
-    override_file: &mut OverrideFile,
-    prompter: &mut dyn Prompter,
-    operator: OperatorId,
-) -> Result<AdjudicationOutcome, AdjudicationError> {
-    for entry in pending.entries() {
-        let context = build_context(entry);
-        let decision = prompter.ask(&context)?;
-        apply_decision(override_file, entry, decision, &operator);
-    }
-    Ok(...)
-}
+`run_adjudication` borrows pending and override documents mutably.
+Its private queue owner advances only after prompting and applying a decision
+succeed. On failure it restores the failing entry and later entries in their
+original order; earlier decisions remain in the in-memory override document.
 
-pub trait Prompter {
-    fn ask(&mut self, context: &AdjudicationContext)
-        -> Result<OperatorDecision, PrompterError>;
-}
-```
+A private prepared-decision state checks `to_mapping_spec` before insertion.
+A missing rename role therefore refuses without consuming that pending request.
+This proves conversion readiness, not full CHAT validity, complete speaker
+coverage, unique target codes or correctness of the human decision.
+After an application error, retry the retained queue with a newly prepared
+prompter: the earlier prompter may already have consumed its decision.
 
-Production implementations:
-
-- `TerminalPrompter`: prints `context` to stdout, reads
-  operator response from stdin. Used by `--interactive`.
-
-Test implementations:
-
-- `ScriptedPrompter::from_decisions(Vec<(SessionId, OperatorDecision)>)`,
-  returns each decision in turn, errors if asked for an
-  unprovided session. Used by L2 transform tests.
-- `ScriptedTomlPrompter::read(path)`: reads the same TOML
-  format as `--scripted`. Used by L3 CLI tests so subprocess
-  tests and library-level tests share fixture format.
-
-This means:
-
-- **Every adjudication test path is automated.** No subprocess
-  PTY hackery, no expect-script DSL. Tests construct
-  `ScriptedPrompter`, run the adjudication core, assert on the
-  resulting `OverrideFile`.
-- **The terminal UI is dumb.** All it does is `Display`-format
-  the context and parse the operator's response into an
-  `OperatorDecision`. No business logic in the UI layer.
-- **Future UI backends (VS Code, web) implement `Prompter`** and
-  drop in. The adjudication core is unchanged.
-
-## The `OperatorDecision` type
-
-```rust,ignore
-pub enum OperatorDecision {
-    /// Accept the algorithm's suggested mapping verbatim.
-    AcceptSuggested { note: Option<String> },
-
-    /// Override with an operator-supplied mapping (speaker-id).
-    OverrideMapping {
-        mapping: SpeakerMapping,
-        note: Option<String>,
-    },
-
-    /// Override the inserted role(s) only (parent-role lookup).
-    OverrideInsertedRole {
-        adult_roles: BTreeMap<String, InsertedRoleSpec>,
-        note: Option<String>,
-    },
-
-    /// Add or update flags on an existing entry.
-    Flag { flags: Vec<MergeFlag>, note: Option<String> },
-
-    /// Defer this entry; leave it in pending for later review.
-    Defer { reason: String },
-
-    /// Mark the session as blocked (e.g., unbulleted reference);
-    /// requires upstream action before pipeline can resume.
-    Block { reason: String },
-}
-```
-
-Each variant maps cleanly to one or more adjudication kinds:
-
-| Kind | Allowed `OperatorDecision` variants |
-|---|---|
-| `speaker-id-low-confidence` | `AcceptSuggested`, `OverrideMapping`, `Defer` |
-| `parent-role-lookup` | `AcceptSuggested`, `OverrideInsertedRole`, `Defer` |
-| `diarization-mix-review` | `Flag`, `Defer` |
-| `sanity-scan-misclassification` | `OverrideMapping`, `Flag`, `Defer` |
-| (any) | `Block` is always available |
-
-The kind → allowed-variants mapping is enforced by the
-adjudication tool: a `kind = "parent-role-lookup"` entry that
-gets an `OverrideMapping` decision is rejected with a clear
-error (`AdjudicationError::DecisionKindMismatch`).
-
-## Operator terminal UX (interactive mode)
-
-What the operator sees when running `chatter adjudicate
-pending.toml --override-file overrides.toml --interactive`:
+## Persistence and recovery
 
 ```text
-═══════════════════════════════════════════════════════════════
-ADJUDICATION  [1 / 14]  session-102-t1   kind = speaker-id-low-confidence
-═══════════════════════════════════════════════════════════════
-
-Reference file:  chi-only/session-102-t1.cha
-Donor file:      asr/session-102-t1.cha
-Anchor speaker:  CHI
-
-Per-speaker Jaccard scores against reference's CHI:
-  PAR0 = 0.6286   ◄── higher
-  PAR1 = 0.3457
-  margin = 1.82×   (threshold was 2.00×)
-
-Opening turns side-by-side:
-
-  *CHI    [0_1708]    they start to bite .
-  *PAR0   [75_1165]   They start to bite .
-  *PAR1   [1515_2245] They do what .
-
-  *CHI    [1708_5966] they put up their shields at some point .
-  *PAR0   [2755_4405] They put up those heels .
-  *PAR1   [4865_6045] At some point oh .
-
-  (3 more turns shown; press 'm' for more)
-
-Algorithm-suggested mapping:
-  PAR0 → drop   (winner, matches CHI content)
-  PAR1 → rename to INV:Investigator
-
-Your decision?
-  [a] Accept suggested
-  [o] Override mapping
-  [f] Flag and defer
-  [d] Defer (review later)
-  [b] Block (needs upstream fix)
-  [m] Show more context
-  [p] Play media (uses $TB_MEDIA_PLAYER)
-  [q] Quit (save progress and exit)
-> 
+read pending + overrides
+    -> adjudicate all entries in memory
+    -> write overrides
+    -> write remaining pending
 ```
 
-When the operator types `a` and then is prompted for an
-optional note, the tool writes the decision to the override
-file and advances to the next pending entry.
+The CLI writes only after the entire in-memory run succeeds. An input/decision
+failure before that point writes neither document; earlier answers from that
+invocation are not saved to disk. The library's in-memory resume contract
+does not imply CLI save-on-quit or process-crash recovery.
 
-The `[p] Play media` action is just a wrapper around
-`Command::new($TB_MEDIA_PLAYER).arg(media_path).spawn()`, the
-adjudication tool doesn't bundle an audio player. The operator
-configures their preferred player via the environment.
+Each writer uses a temporary file and rename. The pair is not a transaction:
+override writing can succeed and pending writing can fail. Concurrent writers
+are not coordinated. Existing entries for the same session are replaced, not
+appended to a history; repeated pending session IDs can replace an earlier
+decision in the same run.
 
-## Adjudication contexts beyond speaker-id
+Before real review, retain copies of both files and avoid concurrent writers.
+After a write error, compare both destinations with those retained inputs
+before retrying; do not infer that neither changed from a nonzero exit status.
+Preserve scan reasons, original suggestions and judgment provenance separately
+if needed: operator decisions do not copy every pending field into the override.
 
-The same `chatter adjudicate` tool handles all five adjudication
-points by dispatching on `kind`. For each, the displayed
-context and the allowed decisions differ:
+Exit status is zero on successful completion, one for I/O/TOML/unsupported
+pending-schema errors, and two for decision or mode errors. There is no
+deferred-entry exit-four path in this command.
 
-### parent-role-lookup
+## Evidence and limits
 
-Shown context: the session is a parent sample (basename
-contains `parent`-suffix conventionally, or contributor data
-sheet says so). The merged output needs an inserted-role code
-of `MOT`, `FAT`, or `PAR`. The operator picks.
+The finite canonical-reference workflow exercises pending TOML roundtrip,
+schema refusal, explicit operator acceptance, mapping replay and the
+in-memory failure/resume contract. It preserves failure suffixes and refuses
+missing rename roles. These checks do not establish a transactional filesystem
+or validate actual speaker identity.
 
-```text
-Session: session-103-t1-parent
-Kind: parent-role-lookup
-
-This is a parent-sample session. The merged file's inserted
-speaker (currently labeled PAR0 → ???) needs a CHAT role.
-
-Contributor data sheet (if attached): not available
-Audio preview duration: 8m 14s
-
-Algorithm-suggested:  INV : Investigator   (default for ambiguity)
-
-Your decision?
-  [a] Accept suggested (INV : Investigator)
-  [m] MOT : Mother
-  [f] FAT : Father
-  [p] PAR : Adult (gender unknown)
-  [c] Custom role
-  [d] Defer
-  [b] Block (needs upstream metadata)
-> 
-```
-
-### diarization-mix-review
-
-Triggered by the operator (or a post-merge auto-scan) observing
-that an ASR speaker's content mixes real-world speakers. The
-adjudication is to add the `"diarization-mixed"` flag plus a
-note explaining the mix.
-
-### sanity-scan-misclassification
-
-Triggered by the post-merge sanity scan when a retained-speaker
-utterance has high text similarity with a temporally-adjacent
-inserted-speaker utterance. The operator either confirms
-("the original speaker-id was wrong, swap the mapping") or
-overrides ("the duplication is real, both speakers said the
-same thing at the same time").
-
-## Resumption and re-adjudication
-
-The pending-adjudications file is the source of truth for
-"what still needs deciding." If the operator quits mid-review
-(via `[q]` or process-kill), the next `chatter adjudicate`
-invocation picks up where they left off, already-decided
-entries have already been removed from pending and written to
-the override file.
-
-Re-adjudication of an already-decided entry is a **planned
-extension, not yet implemented**. The proposed interface would
-load the existing override entry, present it as the "current
-decision," and ask the operator whether to keep or replace it;
-the operator's decision would overwrite the entry, and the prior
-decision would be preserved in a `history` array on the entry
-(recording the prior `mode`, `mapping`, `operator`, `decided_at`,
-and `note`). The proposed invocation shape (not a working command
-today) is:
-
-```text
-# Proposed, not yet implemented:
-chatter adjudicate --re-adjudicate <SESSION_ID> --override-file overrides.toml
-```
-
-It needs a small override-file schema extension, a per-entry
-optional `history: Vec<MergeOverride>` field. This is a minor,
-additive schema change, comparable to the 2026-06 `engine`/`judgment`
-addition (no version bump needed either way), not a breaking one;
-`schema_version` is already `2` as of the `adult_roles` map (see
-[Merge Override File Format §Future schema
-changes](../chatter/integrating/merge-overrides.md#future-schema-changes)),
-so a future breaking change to this schema would need `schema_version
-= 3`, not `2`.
-
-## Composition with the orchestrator
-
-The orchestrator (proposed `tb merge` or similar) drives the
-pipeline. Its high-level flow:
-
-```rust,ignore
-// pseudocode for the orchestrator's main loop
-let inputs = discover_input_sessions(input_dir);
-let override_file = OverrideFile::read_or_default(override_path);
-let mut pending = PendingAdjudications::default();
-
-for session in inputs {
-    if let Some(decision) = override_file.get(&session.id) {
-        // Already adjudicated; apply directly.
-        let labeled = apply_mapping(&session.donor, &decision.mapping)?;
-        let merged = merge(&session.reference, &labeled, &session.retain)?;
-        write_merged(merged, &session.output_path)?;
-    } else {
-        // Try auto-decide.
-        match identify_mapping(&session.donor, &session.reference, ...) {
-            Ok(mapping) => {
-                let labeled = apply_mapping(&session.donor, &mapping)?;
-                let merged = merge(...)?;
-                write_merged(merged, &session.output_path)?;
-                override_file.insert(session.id.clone(), record_auto_decision(&mapping));
-            }
-            Err(SpeakerIdError::LowConfidence { scores, margin, threshold }) => {
-                pending.push(PendingEntry::speaker_id_low_confidence(
-                    session.id.clone(),
-                    scores, margin, threshold,
-                    /* preview */ build_preview(&session),
-                ));
-            }
-            Err(other) => return Err(other),
-        }
-    }
-}
-
-pending.write(pending_path)?;
-override_file.write(override_path)?;
-
-if !pending.is_empty() {
-    eprintln!(
-        "Pipeline complete for {} sessions; {} sessions need adjudication.\n\
-         Run: chatter adjudicate {} --override-file {}",
-        decided_count, pending.len(), pending_path, override_path
-    );
-    return Ok(ExitCode::NeedsAdjudication);
-}
-```
-
-The orchestrator is the layer that hasn't been designed yet at
-the type level. It's likely a `tb` subcommand (since `tb` is
-the workflow tool for multi-repo / multi-step ops), with a
-fallback shell-script form for the v0 pipeline.
-
-## What this design does NOT cover
-
-- **The orchestrator binary itself.** That's a separate design
-  pass; this doc only specifies the contract between the
-  pipeline stages and the adjudication tool.
-- **GUI/web adjudication backends.** v1 is terminal-only. The
-  `Prompter` trait is the extension point; future backends
-  implement it. The data contract (`pending.toml`,
-  `overrides.toml`) does not change.
-- **Audio playback / waveform display.** v1 launches the
-  operator's `$TB_MEDIA_PLAYER` and gets out of the way. A
-  future TUI with inline audio scrubbing is conceivable but is
-  a major UI project, not v1.
-- **ML-suggested decisions.** A future version could feed
-  pending entries to a classifier that pre-fills "suggested"
-  with model output. Out of scope; the `suggested` field
-  exists today as a hook.
-
-## Test coverage
-
-The library's current failure contract is covered by a canonical-reference
-workflow: exhausted input, an out-of-order session, or an incompatible decision
-retains the failing request and all later requests field-for-field in their wire
-representation and in their original order. Accepted overrides remain in the
-in-memory document, and a retry resolves only the remaining requests. A private
-queue owner borrows the pending destination for the run; its only advancement
-operation first obtains and successfully applies a decision. Dropping the owner
-restores the uncommitted suffix on either success or error.
-
-Before an override can be committed, a private prepared-decision state admits it
-through the existing `to_mapping_spec` conversion. A rename without its required
-adult role yields `InvalidDecisionMapping`, retaining the pending suffix. This
-proves conversion readiness, not complete CHAT validity, role vocabulary, or
-collision freedom. Raw public override records still require conversion at
-their consumers. The CLI reports this refusal with exit status 2 before writing
-either file.
-
-This is an in-memory contract, not a transactional filesystem guarantee. The
-CLI currently persists the override and pending files only after a successful
-run. The corpus supplies real parsed speaker identities; scripted role choices
-are authored test inputs, not inferred facts about those recordings.
-
-The canonical sanity-scan reference also exercises the real TOML boundary:
-pending suggestions survive file write/read field-for-field, both readers
-refuse an unsupported schema version rather than silently defaulting, and an
-explicit scripted TOML acceptance is required before mapping replay. This
-checks individual file operations, not atomicity across the pending and override
-files or crash recovery.
-
-The list below is the design's target inventory, not a claim that all listed
-behaviors are implemented or tested. Current tests exercise supported accept,
-override, and role-choice paths plus the in-memory failure/resume contract above.
-Defer and block decisions remain planned. See the
-[Test Plan](./merge-test-plan.md) for the broader intended inventory:
-
-- Each adjudication kind's happy path (operator accepts
-  suggested, decision written to override file)
-- Each adjudication kind's override path (operator types an
-  alternative, decision validated and recorded)
-- Each adjudication kind's defer path (entry stays in pending)
-- Each adjudication kind's block path (entry marked blocked;
-  pipeline reports blocker)
-- Re-adjudication path (operator changes their mind; prior
-  decision preserved in `history`)
-- Mutually-exclusive flag enforcement (`--interactive` +
-  `--scripted` rejected)
-- Invalid operator response handling (with and without
-  `--skip-on-error`)
-- Schema-version refusal on the pending file
-- Empty pending file (no-op, exit 0)
+The sanity-scan workflow uses mean utterance word-count asymmetry, not nearby
+utterance text similarity. Its advisory suggestion needs operator evidence;
+a threshold crossing is not proof of an identity swap. See
+[Review Tools](../chatter/user-guide/merge-workflow.md) and
+[Test Plan](merge-test-plan.md) for the relevant owners.

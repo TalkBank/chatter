@@ -15,7 +15,7 @@ fn test_pho_tier_construction() {
         PhoItem::Word(PhoWord::new("tu")),
         PhoItem::Word(PhoWord::new("θɹi")),
     ];
-    let tier = PhoTier::new(PhoTierType::Pho, items);
+    let tier = PhoTier::new(talkbank_model::Location::Unlocated, PhoTierType::Pho, items);
     assert_eq!(tier.items.len(), 3);
     assert!(tier.is_pho());
 
@@ -26,7 +26,11 @@ fn test_pho_tier_construction() {
 /// Tests mod tier type.
 #[test]
 fn test_mod_tier_type() {
-    let tier = PhoTier::new(PhoTierType::Mod, vec![]);
+    let tier = PhoTier::new(
+        talkbank_model::Location::Unlocated,
+        PhoTierType::Mod,
+        vec![],
+    );
     assert!(tier.is_mod());
     assert_eq!(tier.to_chat_string(), "%mod:\t");
 }
@@ -34,7 +38,11 @@ fn test_mod_tier_type() {
 /// Tests empty tier.
 #[test]
 fn test_empty_tier() {
-    let tier = PhoTier::new(PhoTierType::Pho, vec![]);
+    let tier = PhoTier::new(
+        talkbank_model::Location::Unlocated,
+        PhoTierType::Pho,
+        vec![],
+    );
     assert_eq!(tier.items.len(), 0);
     assert!(tier.is_empty());
 }
@@ -44,7 +52,7 @@ fn test_empty_tier() {
 fn test_single_token() -> Result<(), String> {
     use talkbank_model::model::{PhoItem, PhoWord};
     let items = vec![PhoItem::Word(PhoWord::new("hɛloʊ"))];
-    let tier = PhoTier::new(PhoTierType::Pho, items);
+    let tier = PhoTier::new(talkbank_model::Location::Unlocated, PhoTierType::Pho, items);
     assert_eq!(tier.len(), 1);
     match &tier.items[0] {
         PhoItem::Word(word) => assert_eq!(word.as_str(), "hɛloʊ"),
@@ -62,7 +70,7 @@ fn test_unicode_tokens() -> Result<(), String> {
         PhoItem::Word(PhoWord::new("ɪz")),
         PhoItem::Word(PhoWord::new("naɪs")),
     ];
-    let tier = PhoTier::new(PhoTierType::Pho, items);
+    let tier = PhoTier::new(talkbank_model::Location::Unlocated, PhoTierType::Pho, items);
     assert_eq!(tier.len(), 3);
     match &tier.items[0] {
         PhoItem::Word(word) => assert_eq!(word.as_str(), "ʃə"),

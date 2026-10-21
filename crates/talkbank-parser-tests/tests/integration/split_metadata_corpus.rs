@@ -89,8 +89,8 @@ fn authored_split_metadata_keeps_scope_and_source_bound_tier_policies() {
             child.main.content.language_code,
             source.main.content.language_code
         );
-        assert_eq!(child.main.span, source.main.span);
-        assert_eq!(child.main.speaker_span, source.main.speaker_span);
+        assert_eq!(child.main.location, source.main.location);
+        assert_eq!(child.main.speaker_location, source.main.speaker_location);
     }
     let tier_kinds: Vec<Vec<_>> = children
         .iter()
@@ -103,8 +103,14 @@ fn authored_split_metadata_keeps_scope_and_source_bound_tier_policies() {
         })
         .collect();
     assert_eq!(tier_kinds, [vec!["com", "xtra", "act", "wor"], vec!["wor"]]);
-    assert_eq!(children[0].main.content.bullet, Some(Bullet::new(100, 300)));
-    assert_eq!(children[1].main.content.bullet, Some(Bullet::new(300, 600)));
+    assert_eq!(
+        children[0].main.content.bullet,
+        Some(Bullet::new(talkbank_model::Location::Unlocated, 100, 300))
+    );
+    assert_eq!(
+        children[1].main.content.bullet,
+        Some(Bullet::new(talkbank_model::Location::Unlocated, 300, 600))
+    );
     let leading_wor = children[0].wor_tier().expect("first child's timing");
     assert!(matches!(
         leading_wor.items.first(),

@@ -24,7 +24,7 @@ use crate::model::{
     AnnotatedContentAnnotations, BracketedContent, ContentStructure, Descend, GroupRef, MainTier,
     UtteranceContent,
 };
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// Reject pauses that occur inside phonological groups (`‹...›`).
 ///
@@ -47,11 +47,10 @@ pub(crate) fn check_no_pauses_in_pho_groups(main_tier: &MainTier, errors: &impl 
             for item in &pho_group.content.content {
                 if matches!(item, BracketedItem::Pause(_)) {
                     errors.report(
-                        ParseError::new(
+                        ParseError::at_location(
                             ErrorCode::PauseInPhoGroup,
                             Severity::Error,
-                            SourceLocation::new(main_tier.span),
-                            ErrorContext::new("", main_tier.span, ""),
+                            main_tier.location,
                             "Pause cannot appear inside phonological group ‹...›",
                         )
                         .with_suggestion(
@@ -95,8 +94,8 @@ pub(crate) fn report_unknown_annotations(main_tier: &MainTier, errors: &impl Err
                 // A leaf records no span of its own, so its annotations are
                 // reported against the tier. Saying so beats inventing a
                 // position for them.
-                let span = item.span().unwrap_or(main_tier.span);
-                AnnotatedContentAnnotations::report_unknown_markers(annotations, span, errors);
+                let location = item.location().unwrap_or(main_tier.location);
+                AnnotatedContentAnnotations::report_unknown_markers(annotations, location, errors);
             }
             Descend::Into
         });
@@ -152,11 +151,10 @@ fn report_nested_quotations(
         ContentStructure::Group(group @ GroupRef::Quotation(_)) => {
             if encloses_a_quotation(group.content()) {
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::NestedQuotation,
                         Severity::Error,
-                        SourceLocation::new(main_tier.span),
-                        ErrorContext::new("", main_tier.span, ""),
+                        main_tier.location,
                         "Quotations cannot be nested inside other quotations",
                     )
                     .with_suggestion("Use separate quotations or reformulate without nesting"),

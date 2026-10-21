@@ -12,9 +12,9 @@ contribution, and release processes.
 | Artifact | Status | Notes |
 |----------|--------|-------|
 | `LICENSE-MIT` + `LICENSE-APACHE` | Done | Dual-licensed `MIT OR Apache-2.0` (standard Rust convention; both files present at root, no combined `LICENSE`). Every crate inherits `license = "MIT OR Apache-2.0"` from `[workspace.package]`. |
-| `CONTRIBUTING.md` | Done | Setup, standards, PR flow, pre-PR checklist |
+| `CONTRIBUTING.md` | Present | Routes to maintained setup and verification guides; independent onboarding remains an acceptance task |
 | `CODE_OF_CONDUCT.md` | **TODO (deferred)** | Intentionally absent for now: it is held until a durable enforcement contact (an institutional address or successor handle, not an individual) is settled. The plan is to adopt the Contributor Covenant once that contact exists. |
-| `SECURITY.md` | Done | Root file present; the issue-template contact link resolves to a real policy |
+| `SECURITY.md` | Present | Root policy and issue-template link use private vulnerability reporting; maintainers must enable and verify that GitHub reporting route |
 | `CODEOWNERS` | **TODO** | Not added yet: repo contents do not currently publish an authoritative GitHub owner/team map for path-level review ownership |
 | `.github/workflows/*.yml` | Done | `ci.yml` (Rust build+test, mdBook) + `cross-platform.yml` (OS matrix) + `release-lint.yml` (clippy + feature-off, on a tag) + `clippy-rolling.yml` + `crates-io-foundation.yml` + `release.yml` + `release-desktop.yml` |
 | `.github/ISSUE_TEMPLATE/*` | Done | Bug report + feature request (YAML forms) |
@@ -22,19 +22,20 @@ contribution, and release processes.
 
 ## CI Governance Policy
 
-- Required status checks: the `ci.yml` jobs that run on every pull request,
-  `Rust build + test`, `mdBook build`, and `Rust version pins in sync`. See
-  [Branch Protection](branch-protection.md) for the exact GitHub check names
-  and which other workflow (`cross-platform.yml`) is deliberately not in the
-  required set.
-- Branch protection rules: documented in
-  [Branch Protection](branch-protection.md); configure on GitHub once the
-  repo is public.
+- [Branch Protection](branch-protection.md) describes the configured
+  protection for `main`: which `ci.yml` jobs are required checks, which run
+  without blocking a merge, and why `cross-platform.yml` is not a PR check. Do
+  not maintain a second list here.
+- Editing that page does not configure GitHub. When a maintainer changes the
+  live settings, update that page in the same change; a green CI run alone
+  does not establish which failed checks block merges.
 
 ## Release Governance
 
-- Releases: the CLI and desktop app are published as signed GitHub Releases
-  (cargo-dist); the Rust crates are source-available (not yet on crates.io).
+- Releases include CLI/LSP artifacts and desktop installers. Signing differs
+  by platform, and updater signing is distinct from installer signing; see
+  [CI and Release](ci-and-release.md). Do not describe every artifact as signed
+  or infer registry availability from a GitHub release.
 - Cargo publication governance: first-wave crates.io foundations are documented
   in [Crates.io Publication](crates-io-publication.md) and checked by
   `.github/workflows/crates-io-foundation.yml`.
@@ -51,14 +52,22 @@ contribution, and release processes.
 ## Community Operations
 
 - Label taxonomy: `bug` and `enhancement` auto-applied by issue templates. Richer taxonomy (`drift`, `spec`, `grammar`, `parser`, `docs`, `good first issue`): **TODO** (GitHub settings).
-- Contributor pathway: `CONTRIBUTING.md` covers setup and PR flow. First-time/advanced contributor pathways: **TODO**.
-- Public project roadmap: **TODO**.
+- Contributor pathway: start with [Setup](setup.md), then
+  [Developer Verification Checks](dev-checks.md). The guides are maintained;
+  an independent contributor drill is still needed to establish onboarding.
+- Public release conditions: [Toward Chatter 1.0](one-zero-readiness.md).
+  It is a readiness contract, not a promised release date.
 
 ## Supply Chain and Security
 
-- Dependency scanning: CI runs `rustsec/audit-check` and `cargo-deny` (with `deny.toml`). Automated update PRs (Dependabot/Renovate): **TODO**.
-- Signed release artifacts: **TODO**.
-- Security advisories process: documented in `SECURITY.md`.
+- Dependency policy: CI runs `cargo-deny` through `just deps-check`, with
+  `deny.toml`. Automated update PRs (Dependabot/Renovate): **TODO**.
+- Release signing: follow the platform and credential boundaries in
+  [CI and Release](ci-and-release.md); verify the actual candidate artifacts.
+- Security advisories: `SECURITY.md` owns the policy. It relies on GitHub
+  private vulnerability reporting, which is a repository setting; a policy
+  file cannot enable it. Keep the setting on while `SECURITY.md` routes
+  reporters there.
 
 ## Acceptance Criteria
 - Repo has complete governance artifacts at root.

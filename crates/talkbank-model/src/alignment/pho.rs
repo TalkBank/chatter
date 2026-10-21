@@ -9,7 +9,7 @@ use super::indices::{MainWordIndex, PhoItemIndex};
 use super::traits::{AlignableTier, TierAlignmentResult, positional_align};
 use super::types::AlignmentPair;
 use crate::model::{MainTier, PhoTier, PhoTierType};
-use crate::{ErrorCode, ParseError, Span};
+use crate::{ErrorCode, ParseError};
 use schemars::JsonSchema;
 use talkbank_derive::SpanShift;
 
@@ -122,8 +122,8 @@ impl AlignableTier for PhoTier {
             .collect()
     }
 
-    fn span(&self) -> Span {
-        self.span
+    fn location(&self) -> crate::Location {
+        self.location
     }
 
     fn error_code_too_few(&self) -> ErrorCode {

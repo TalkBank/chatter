@@ -104,11 +104,16 @@ fn reference_wor_generation_preserves_projection_without_inventing_word_timing()
             assert_eq!(generated.word_count(), count.get());
             assert_eq!(
                 generated.language_code,
-                utterance.main.content.language_code
+                utterance
+                    .main
+                    .content
+                    .language_code
+                    .as_ref()
+                    .map(|precode| precode.code.clone())
             );
             assert_eq!(generated.terminator, utterance.main.content.terminator);
             assert!(
-                generated.span.is_dummy(),
+                generated.location.span().is_none(),
                 "generation does not invent a source location"
             );
             let convenience = utterance.main.generate_wor_tier();
@@ -119,8 +124,7 @@ fn reference_wor_generation_preserves_projection_without_inventing_word_timing()
                     separators += 1;
                 }
             }
-            let WorTimingBinding::CountMatched(matched) = projection.bind_timing(Some(&generated))
-            else {
+            let Ok(matched) = projection.bind_present_timing(&generated) else {
                 panic!("generation drifted from its owning projection");
             };
             let WorTimingCorrespondence::Corroborated(corroborated) =
@@ -264,16 +268,15 @@ fn canonical_wor_sequences_require_positive_complete_timing_before_exposing_hull
                     let rebuilt = match words {
                         Some(words) => {
                             construction_shapes[0] += 1;
-                            WorTier::from_words(words)
+                            WorTier::from_words(wor.location, words)
                         }
                         None => {
                             construction_shapes[1] += 1;
-                            WorTier::new(wor.items.clone())
+                            WorTier::new(wor.location, wor.items.clone())
                         }
                     }
                     .with_terminator(wor.terminator.clone())
-                    .with_language_code(wor.language_code.clone())
-                    .with_span(wor.span);
+                    .with_language_code(wor.language_code.clone());
                     assert_eq!(
                         &rebuilt, wor,
                         "tier construction preserves all payload and spans"
@@ -289,7 +292,7 @@ fn canonical_wor_sequences_require_positive_complete_timing_before_exposing_hull
                         rebuilt = rebuilt.with_inline_bullet(bullet);
                         assert_eq!(rebuilt.raw_text(), word.raw_text());
                         assert_eq!(rebuilt.cleaned_text(), word.cleaned_text());
-                        assert_eq!(rebuilt.span, word.span);
+                        assert_eq!(rebuilt.location, word.location);
                         assert_eq!(rebuilt.to_chat_string(), word.to_chat_string());
                         assert_eq!(
                             serde_json::to_value(&rebuilt).expect("rebuilt timing metadata"),

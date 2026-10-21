@@ -15,7 +15,6 @@ tier_body:
     Period: "."
   postcodes: []
   media_bullet:
-    MediaBullet:
-      raw_text: "\u00153110_4450\u0015"
-      start_time: "3110"
-      end_time: "4450"
+    raw_text: "\u00153110_4450\u0015"
+    start_time: "3110"
+    end_time: "4450"

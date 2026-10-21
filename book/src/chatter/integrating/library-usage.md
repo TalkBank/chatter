@@ -9,13 +9,11 @@ shows the most common entry points; the API reference on docs.rs (once
 published) is the authoritative source. Until then, treat the rustdoc
 comments inside each crate's `src/lib.rs` as the source of truth.
 
-> **Examples on this page are mirrored as a real Cargo test at
-> `crates/talkbank-transform/tests/integration/book_library_usage_examples.rs`.**
-> The book renders them as `rust,ignore` so mdbook doesn't try to link
-> against the workspace's many compiled crate variants; the parallel
-> test runs the same code under `cargo test` and is what catches API
-> drift between this page and the libraries. If you edit either,
-> update both.
+The Rust recipes below are included directly from
+`crates/talkbank-transform/tests/integration/book_library_usage_examples.rs`.
+Cargo compiles and runs that source; the book renders it without a second
+manually maintained copy. The surrounding explanations still require review
+when APIs or policies change.
 
 **Important:** some legacy tree-sitter fragment helpers are synthetic
 rather than semantically honest. They can inject fragment input into
@@ -39,8 +37,49 @@ talkbank-transform = { path = "../chatter/crates/talkbank-transform" }
 talkbank-parser = { path = "../chatter/crates/talkbank-parser" }
 ```
 
-The published-crate workflow is tracked separately; once it lands these
-paths can become `version = "X.Y"` deps.
+Registry publication is a [separate acceptance workflow](../../contributing/crates-io-publication.md).
+Do not substitute an unrelated package with a similar name. Record the Chatter
+commit or release tag used by your application, and use one coherent revision
+for these coupled crates.
+
+## Run the library recipes
+
+From the directory containing your Chatter checkout, create a small library
+project alongside it:
+
+```sh
+cargo new --lib chat-example
+```
+
+Add the three path dependencies above to its `Cargo.toml`. Paths are relative
+to that manifest, not the shell's current directory. Replace the generated
+`src/lib.rs` contents with the shared imports and sample inputs below, followed
+by the recipe functions you want to try. These are `#[test]` functions rather
+than `main`; `cargo run` is not their entrypoint.
+
+```rust,ignore
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_imports}}
+
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_samples}}
+```
+
+From `chat-example`, run:
+
+```sh
+cargo test -- --nocapture
+```
+
+The first recipe below prints `Speaker: CHI` and passes. Copying all six recipes
+gives six passing tests; copying fewer can leave unused-import/sample warnings.
+Use these synthetic inputs before trying research data. For a real file, read
+its UTF-8 text with `std::fs::read_to_string(path)?` in a result-returning
+function and pass that string to the same API. Do not overwrite the input as
+part of learning the serialization calls.
+
+Maintainers can select the actual book examples in the existing integration
+target with `cargo test -p talkbank-transform --test integration book_library_usage_examples`.
+That checks the included recipes, not external registry installation or every
+supported platform.
 
 ### Optional library features
 
@@ -135,32 +174,23 @@ or certifies CHAT validity.
 
 ## Parsing and Validating a CHAT File
 
-The simplest entry point is `parse_and_validate` from
-`talkbank-transform`. It takes the source text and a
-`ParseValidateOptions`, returns a fully constructed `ChatFile`, or a
-`PipelineError` if parsing or validation failed.
+The convenience entry point is `parse_and_validate` from `talkbank-transform`.
+It returns a `ChatFile` after the checks selected by `ParseValidateOptions`,
+or a `PipelineError`. The example explicitly requests structural validation;
+this is not a claim that every optional policy or tier-alignment check ran.
 
 ```rust,ignore
-# extern crate talkbank_model;
-# extern crate talkbank_transform;
-use talkbank_model::ParseValidateOptions;
-use talkbank_transform::parse_and_validate;
-
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
-let source = std::fs::read_to_string("file.cha")?;
-let options = ParseValidateOptions::default().with_validation();
-let chat_file = parse_and_validate(&source, options)?;
-
-for utt in chat_file.utterances() {
-    println!("Speaker: {}", utt.main.speaker);
-}
-# Ok(())
-# }
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_parse}}
 ```
 
 `parse_and_validate` returns a mutable `ChatFile` and may skip validation
 according to its options. Use `parse_validated_with_parser` for an immutable
 `ValidChatFile` whose policy cannot skip validation.
+For an existing model, `talkbank_model::validate_chat_file_with_options` runs
+only the selected validation phase. It does not parse or certify recovery-free
+input: `Ok(())` can mean validation was skipped, and any emitted diagnostic
+(including a warning) produces `Err(Vec<ParseError>)`. It has no filename, so
+filename-dependent checks require a named validation entry point instead.
 When original bytes must be returned unchanged, use `parse_source_with_parser`.
 Its opaque `ParsedSourceChat` permits read-only inspection before `admit`
 validates that same parse with complete rules and tier alignment; this
@@ -180,25 +210,7 @@ For batch workflows where parser construction overhead matters, reuse a
 single `TreeSitterParser` and call `parse_and_validate_with_parser`:
 
 ```rust,ignore
-# extern crate talkbank_model;
-# extern crate talkbank_parser;
-# extern crate talkbank_transform;
-use talkbank_model::ParseValidateOptions;
-use talkbank_parser::TreeSitterParser;
-use talkbank_transform::parse_and_validate_with_parser;
-
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let chat_files: Vec<std::path::PathBuf> = Vec::new();
-let parser = TreeSitterParser::new()?;
-let options = ParseValidateOptions::default().with_validation();
-
-for path in &chat_files {
-    let source = std::fs::read_to_string(path)?;
-    let chat_file = parse_and_validate_with_parser(&parser, &source, options.clone())?;
-    let _ = chat_file;
-}
-# Ok(())
-# }
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_reuse_parser}}
 ```
 
 `ParseValidateOptions` also exposes `with_alignment()` (implies
@@ -290,46 +302,14 @@ parsing. Utterances live in `lines` and are iterated via
 `chat_file.utterances()`.
 
 ```rust,ignore
-# extern crate talkbank_model;
-# extern crate talkbank_transform;
-use talkbank_model::DependentTier;
-use talkbank_model::ParseValidateOptions;
-use talkbank_transform::parse_and_validate;
-
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
-let source = "\
-@UTF8
-@Begin
-@Languages:\teng
-@Participants:\tCHI Target_Child
-@ID:\teng|test|CHI|||||Target_Child|||
-*CHI:\thello world .
-%mor:\tco|hello n|world .
-@End
-";
-let chat_file = parse_and_validate(source, ParseValidateOptions::default().with_validation())?;
-
-// Participant metadata is top-level on the ChatFile.
-let _participants = &chat_file.participants;
-
-// Iterate utterances and their dependent tiers.
-for utt in chat_file.utterances() {
-    for tier in &utt.dependent_tiers {
-        if let DependentTier::Mor(mor_tier) = tier {
-            for item in mor_tier.items() {
-                println!("POS: {}, Lemma: {}", item.main.pos, item.main.lemma);
-            }
-        }
-    }
-}
-# Ok(())
-# }
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_model}}
 ```
 
-`DependentTier` is a closed-set enum (`Mor`, `Gra`, `Pho`, `Mod`, `Sin`,
-`Act`, `Add`, `Com`, `Err`, `Exp`, `Gpx`, `Int`, `Lan`, …); match on the
-variants you care about and ignore the rest. `MorTier::items()` returns
-`&[Mor]`; each `Mor` has a main `MorWord` plus optional post-clitics.
+Each dependent-tier entry carries its typed value in `entry.tier`; match that
+`DependentTier`, not the entry wrapper. Select just `Mor` for this read-only
+example. A transform that promises to preserve all tiers must also preserve
+the variants it does not change. `MorTier::items()` returns `&[Mor]`; each `Mor`
+has a main `MorWord` plus optional post-clitics.
 
 ## Serializing to CHAT
 
@@ -338,51 +318,25 @@ fully-rendered CHAT string, or `write_chat(&mut writer)` to stream into
 any `std::fmt::Write`.
 
 ```rust,ignore
-# extern crate talkbank_model;
-# extern crate talkbank_transform;
-use std::fmt::Write as _;
-
-use talkbank_model::ParseValidateOptions;
-use talkbank_model::WriteChat;
-use talkbank_transform::parse_and_validate;
-
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
-let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n";
-let chat_file = parse_and_validate(source, ParseValidateOptions::default().with_validation())?;
-
-// Convenience: render to a fresh String.
-let chat_text = chat_file.to_chat_string();
-assert!(chat_text.starts_with("@UTF8"));
-
-// Streaming: write into any std::fmt::Write sink.
-let mut output = String::new();
-chat_file.write_chat(&mut output)?;
-# Ok(())
-# }
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_chat}}
 ```
+
+Serialization is not validation and need not preserve the original bytes.
+Editing a mutable `ChatFile` can invalidate previous findings. Validate the
+edited model before publishing its output; retain the source-admission carrier
+described above when the requirement is unchanged original bytes.
 
 ## Serializing to JSON
 
 Prefer the schema-validated helpers in `talkbank_transform::json`:
 `to_json_pretty_validated` checks the output against the JSON schema and
-catches drift between the data model and the schema. The unvalidated
-variants are a faster bypass when you've already validated upstream.
+catches drift between the data model and the schema. Schema conformance and
+CHAT semantic validity are different checks: one does not replace the other.
+The explicitly unvalidated variants skip the schema check; use that path only
+when your application deliberately does not require that guarantee.
 
 ```rust,ignore
-# extern crate talkbank_model;
-# extern crate talkbank_transform;
-use talkbank_model::ParseValidateOptions;
-use talkbank_transform::json::to_json_pretty_validated;
-use talkbank_transform::parse_and_validate;
-
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
-let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thi .\n@End\n";
-let chat_file = parse_and_validate(source, ParseValidateOptions::default().with_validation())?;
-
-let json = to_json_pretty_validated(&chat_file)?;
-assert!(json.contains("\"speaker\""));
-# Ok(())
-# }
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_json}}
 ```
 
 The schema for `ChatFile` lives at `schema/chat-file.schema.json` and is
@@ -391,15 +345,9 @@ serde values (not just `ChatFile`), `to_json_unvalidated` /
 `to_json_pretty_unvalidated` work the same way without the schema step.
 
 To go straight from CHAT text to JSON, `talkbank_transform::chat_to_json`
-parses, validates and serializes in one call, taking a `JsonLayout`
-(`Pretty` or `Compact`) rather than a bare `bool`:
-
-```rust,ignore
-use talkbank_model::ParseValidateOptions;
-use talkbank_transform::{JsonLayout, chat_to_json};
-
-let json = chat_to_json(source, ParseValidateOptions::default().with_validation(), JsonLayout::Compact)?;
-```
+parses, performs the checks selected by `ParseValidateOptions` and serializes
+in one call. It takes a `JsonLayout` (`Pretty` or `Compact`) rather than a
+bare `bool`. It does not implicitly upgrade a parse-only option to validation.
 
 ## Custom Error Handling
 
@@ -409,19 +357,13 @@ errors as they arrive, useful when you need finer-grained control than
 the `Result<ChatFile, PipelineError>` shape `parse_and_validate` returns.
 
 ```rust,ignore
-# extern crate talkbank_model;
-use talkbank_model::ErrorSink;
-use talkbank_model::ParseError;
-
-struct MyErrorHandler;
-
-impl ErrorSink for MyErrorHandler {
-    fn report(&self, error: ParseError) {
-        // Custom handling: log, filter, count, etc.
-        eprintln!("[{}] {}", error.code, error.message);
-    }
-}
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_sink}}
 ```
+
+This last recipe checks that a custom sink implements the interface. Its empty
+handler intentionally records nothing; use `ErrorCollector` or implement the
+actual reporting behavior your application needs. Discarding a diagnostic does
+not repair invalid CHAT or turn an internal tool failure into a valid result.
 
 `ErrorSink` is `Send + Sync`, and a blanket `&T: ErrorSink` impl means
 borrowed references are sinks too, no `Arc` wrapper required. The
@@ -439,7 +381,8 @@ implement `ErrorSink` directly for everything else.
 
 `talkbank-model` is the foundation, every other crate depends on it. If
 all you need are the AST types and validation, model alone is enough.
-`talkbank-transform` brings parsing + JSON + caching.
+`talkbank-transform` brings parsing and JSON; its default `validation-runner`
+feature additionally brings batch validation and caching.
 
 ## Batchalign3-Facing Surface
 

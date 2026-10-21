@@ -20,14 +20,14 @@ fn pause_extents_survive_lowering_and_fragment_rebasing() {
             let mut spans = Vec::new();
             walk_content(main.content.content.as_slice(), None, &mut |item| {
                 if let ContentItem::Pause(pause) = item {
-                    spans.push(pause.span);
+                    spans.push(pause.location);
                 }
             });
             let expected: Vec<_> = ["(.)", "(..)", "(...)", "(1:02.5)"]
                 .into_iter()
                 .map(|text| {
                     let start = input.find(text).unwrap() + offset;
-                    Span::from_usize(start, start + text.len())
+                    talkbank_model::Location::Located(Span::new(start, start + text.len()))
                 })
                 .collect();
             assert_eq!(spans, expected, "{input:?} at {offset}");
@@ -51,7 +51,7 @@ fn pause_spacing_is_shared_located_and_recursive() {
             .into_vec()
             .into_iter()
             .filter(|e| e.code == code)
-            .map(|e| e.location.span)
+            .map(|e| e.location.span().expect("located diagnostic"))
             .collect()
     }
     let canonical = talkbank_parser::TreeSitterParser::new().unwrap();
@@ -86,7 +86,6 @@ fn pause_spacing_is_shared_located_and_recursive() {
             let actual = spans(&re2c, &input, code);
             assert_eq!(actual.len(), expected_count, "{body:?}: {actual:?}");
             assert_eq!(actual, expected, "{body:?}");
-            assert!(actual.iter().all(|span| !span.is_dummy()));
         }
     }
 }

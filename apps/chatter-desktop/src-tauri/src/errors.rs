@@ -93,7 +93,7 @@ pub enum ClanError {
     },
 
     #[error("Cannot resolve the CLAN location: {0}")]
-    Resolve(#[from] talkbank_model::ClanHiddenLineError),
+    Resolve(#[from] talkbank_model::ClanLocationError),
 
     #[error("CLAN did not accept the request: {0}")]
     Send(#[from] send2clan::Error),

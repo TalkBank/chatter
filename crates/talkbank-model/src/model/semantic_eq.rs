@@ -37,6 +37,13 @@ impl SemanticEq for crate::Span {
     }
 }
 
+impl SemanticEq for crate::Location {
+    /// Whether a value has a source position is provenance, not content.
+    fn semantic_eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
 // =============================================================================
 // Blanket implementations for primitives
 // =============================================================================

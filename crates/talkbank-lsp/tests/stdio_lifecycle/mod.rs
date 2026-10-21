@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+mod completion;
 mod diagnostics;
 
 const DEADLINE: Duration = Duration::from_secs(10);
@@ -185,10 +186,18 @@ impl Editor {
     }
 
     fn initialize(&mut self) {
+        self.initialize_with_capabilities(json!({
+            "workspace":{"workspaceEdit":{"documentChanges":true}}
+        }));
+    }
+
+    fn initialize_with_capabilities(&mut self, capabilities: Value) -> Value {
         self.send(json!({"jsonrpc":"2.0", "id":1, "method":"initialize",
-            "params":{"processId":null,"rootUri":null,"capabilities":{}}}));
-        assert!(self.response(1)["result"]["capabilities"].is_object());
+            "params":{"processId":null,"rootUri":null,"capabilities":capabilities}}));
+        let response = self.response(1);
+        assert!(response["result"]["capabilities"].is_object());
         self.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
+        response
     }
 
     fn expect_exit(&mut self, code: i32) {

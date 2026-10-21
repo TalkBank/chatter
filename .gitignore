@@ -6,9 +6,8 @@
 # Cargo lockfile is committed for reproducible builds (this is a workspace
 # with binary targets in later sessions).
 
-# A contributor's local Cargo override (an empty `rustc-wrapper`, so a global
-# sccache wrapper does not disable incremental builds). Never committed: the
-# empty value trips cargo-llvm-cov. See book/src/contributing/compile-times.md.
+# Contributor-specific Cargo configuration; do not commit machine-local
+# wrapper or linker choices. See book/src/contributing/compile-times.md.
 /.cargo/config.toml
 
 # Editor / IDE state
@@ -57,5 +56,6 @@ __pycache__/
 mutants.out/
 mutants.out.old/
 
-# graft's local graph cache — regenerable, not committed (run `graft build`).
-/graft/
+# Trail learnings are a private working diary; they live in the maintainer's
+# private workspace and never in a public tree.
+.trail/

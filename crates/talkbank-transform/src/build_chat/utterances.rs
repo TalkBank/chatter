@@ -6,6 +6,7 @@
 //! override. The batchalign word-level path (timed ASR tokens, retrace runs,
 //! `%wor` generation) is not part of this general builder.
 
+use talkbank_model::model::LanguagePrecode;
 use talkbank_model::model::{LanguageCode, Line, Utterance};
 
 use super::UtteranceDesc;
@@ -94,7 +95,11 @@ fn apply_utterance_language_override(
     {
         let code = LanguageCode::new(utterance_lang)
             .map_err(|e| format!("invalid utterance language code {utterance_lang:?}: {e}"))?;
-        utterance.main.content.language_code = Some(code);
+        // A built utterance has no source for its precode.
+        utterance.main.content.language_code = Some(LanguagePrecode::new(
+            talkbank_model::Location::Unlocated,
+            code,
+        ));
     }
     Ok(())
 }

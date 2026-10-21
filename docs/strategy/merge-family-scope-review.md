@@ -1,9 +1,16 @@
 # Merge Command Family: Scope-Rule Classification
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Status:** Historical scope review with subsequent command removals
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/strategy/merge-family-scope-review.md)
 
-**Status:** Current. Verdicts ratified by the maintainer 2026-06-12.
-**Last updated:** 2026-06-12 16:29 EDT
+The June ratification below is historical, not the current command inventory.
+Later removal of `merge`, `pipeline`, `batch` and the internal CLI preflight
+supersedes the original all-seven-stay conclusion. Current usage and boundaries
+belong to [Removed Commands](../../book/src/chatter/user-guide/merge.md),
+[Review Tools](../../book/src/chatter/user-guide/merge-workflow.md) and
+[Adjudication Workflow](../../book/src/architecture/adjudication-workflow.md).
+The historical source paths, search observations and unchecked tasks below are
+not current implementation or verification receipts.
 
 Pre-release review of the transcript-merge command family against the
 repo scope rule (AGENTS.md: every subcommand must be useful to CHAT
@@ -17,7 +24,7 @@ pipeline,sanity_scan,transcript_merge}.rs`, `speaker_id/`) AND the
 backing `talkbank-transform` modules (`adjudication.rs`,
 `sanity_scan.rs`, `speaker_id/`, `transcript_merge.rs`).
 
-## Verdicts
+## Recorded dispositions (including later removals)
 
 | Surface | Verdict | Strongest grounds |
 |---------|---------|-------------------|
@@ -44,11 +51,13 @@ backing `talkbank-transform` modules (`adjudication.rs`,
 3. **Speaker codes are never a closed set.** PAR0/PAR1/CHI/INV appear
    only as documentation and prompt examples.
 
-## Conclusion
+## Original June conclusion and follow-up list (superseded)
 
-All seven surfaces remain in chatter. No relocations are required
-before the first public release. Remaining work is hardening, not
-moving (tracked in the v0.1.0 release checklist, Track A):
+The June review concluded that all seven surfaces should remain and that no
+relocations were required before the first release. That conclusion no longer
+describes the CLI; the subsequent removals are retained in the table above.
+The following checklist is historical planning, not an instruction to restore
+removed commands or rerun obsolete test targets:
 
 - [ ] Per-command `--help` accuracy pass.
 - [ ] Book page accuracy pass (merge.md, speaker-id.md,

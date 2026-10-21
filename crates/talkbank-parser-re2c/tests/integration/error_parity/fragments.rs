@@ -245,8 +245,8 @@ fn isolated_faults_require_errors_at_supported_fragment_boundaries() -> Result<(
                 .diagnostics()
                 .filter(|error| error.severity == Severity::Error)
             {
-                let span = error.location.span;
-                if (span.start as usize) < offset || (span.end as usize) > offset + mutation.len() {
+                let span = error.location.span().expect("located diagnostic");
+                if (span.start()) < offset || (span.end()) > offset + mutation.len() {
                     failures.push(format!("{spec} {route:?}: error outside original caller bytes at {offset}: {span:?}"));
                 }
             }

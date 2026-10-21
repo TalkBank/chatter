@@ -419,7 +419,10 @@ fn a_refused_merge_draft_admits_only_bullet_repair_before_validation() {
         let origins = draft.origins().to_vec();
         let count = draft.utterances_with_origin().count();
         assert_eq!(
-            draft.set_terminal_bullet(count, Bullet::new(1, 2)),
+            draft.set_terminal_bullet(
+                count,
+                Bullet::new(talkbank_model::Location::Unlocated, 1, 2)
+            ),
             Err(BulletEditError::NoSuchUtterance { output: count })
         );
         let untimed_output = draft
@@ -427,7 +430,10 @@ fn a_refused_merge_draft_admits_only_bullet_repair_before_validation() {
             .position(|(u, _)| u.main.content.bullet.is_none());
         if let Some(untimed_output) = untimed_output {
             assert_eq!(
-                draft.set_terminal_bullet(untimed_output, Bullet::new(1, 2)),
+                draft.set_terminal_bullet(
+                    untimed_output,
+                    Bullet::new(talkbank_model::Location::Unlocated, 1, 2)
+                ),
                 Err(BulletEditError::NoTerminalBullet {
                     output: untimed_output
                 })
@@ -454,7 +460,10 @@ fn a_refused_merge_draft_admits_only_bullet_repair_before_validation() {
         let repaired = repairs.len();
         for (output, start) in repairs {
             draft
-                .set_terminal_bullet(output, Bullet::new(start, start + 1))
+                .set_terminal_bullet(
+                    output,
+                    Bullet::new(talkbank_model::Location::Unlocated, start, start + 1),
+                )
                 .unwrap();
         }
         // The draft records every edit itself: one per utterance, in output order.
@@ -477,7 +486,11 @@ fn a_refused_merge_draft_admits_only_bullet_repair_before_validation() {
         draft
             .set_terminal_bullet(
                 first.output(),
-                Bullet::new(again.start_ms, again.end_ms + 5),
+                Bullet::new(
+                    talkbank_model::Location::Unlocated,
+                    again.start_ms,
+                    again.end_ms + 5,
+                ),
             )
             .unwrap();
         assert_eq!(
@@ -487,7 +500,11 @@ fn a_refused_merge_draft_admits_only_bullet_repair_before_validation() {
         draft
             .set_terminal_bullet(
                 first.output(),
-                Bullet::new(first.assembled().start_ms, first.assembled().end_ms),
+                Bullet::new(
+                    talkbank_model::Location::Unlocated,
+                    first.assembled().start_ms,
+                    first.assembled().end_ms,
+                ),
             )
             .unwrap();
         assert!(
@@ -496,7 +513,14 @@ fn a_refused_merge_draft_admits_only_bullet_repair_before_validation() {
                 .all(|edit| edit.output() != first.output())
         );
         draft
-            .set_terminal_bullet(first.output(), Bullet::new(again.start_ms, again.end_ms))
+            .set_terminal_bullet(
+                first.output(),
+                Bullet::new(
+                    talkbank_model::Location::Unlocated,
+                    again.start_ms,
+                    again.end_ms,
+                ),
+            )
             .unwrap();
         assert_eq!(
             (draft.origins(), draft.utterances_with_origin().count()),
@@ -841,7 +865,10 @@ fn selected_donor_header_only_reference_preserves_metadata_and_donor() {
     };
     let mut lines = donor.lines.take();
     let after_ids = lines.iter().rposition(|line| matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::ID(_)))).unwrap() + 1;
-    lines.insert(after_ids, Line::header(note.clone()));
+    lines.insert(
+        after_ids,
+        Line::header(talkbank_model::Location::Unlocated, note.clone()),
+    );
     donor.lines = lines.into();
     let mut reference = full.clone();
     reference

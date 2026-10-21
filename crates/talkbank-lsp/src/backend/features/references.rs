@@ -89,8 +89,8 @@ fn collect_speaker_locations(
             locations.push(Location {
                 uri: uri.clone(),
                 range: Range {
-                    start: utils::offset_to_position(doc, node.start_byte() as u32),
-                    end: utils::offset_to_position(doc, node.end_byte() as u32),
+                    start: utils::offset_to_position(doc, node.start_byte()),
+                    end: utils::offset_to_position(doc, node.end_byte()),
                 },
             });
         }

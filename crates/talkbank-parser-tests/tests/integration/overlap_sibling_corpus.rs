@@ -53,7 +53,7 @@ fn authored_overlap_siblings_distribute_and_reuse_indices_by_turn() {
                 .utterances()
                 .nth(anchor.utterance_index)
                 .expect("producer-retained origin");
-            assert_eq!(anchor.utterance_span(), origin.main.span);
+            assert_eq!(anchor.utterance_location(), origin.main.location);
             assert_eq!(anchor.speaker, origin.main.speaker);
         }
     }

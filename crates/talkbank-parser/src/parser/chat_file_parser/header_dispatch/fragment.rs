@@ -2,27 +2,45 @@
 
 use super::super::header_parser::{parse_header_node, parse_pre_begin_header};
 use super::finder::{HeaderLookupError, SelectedHeader, find_header_node_in_tree, first_child};
-use crate::api::fragment::{FragmentCoverageError, ParsedFragment, WrappedFragment};
+use crate::api::fragment::{FragmentCoverageError, ParsedFragment, Synthetic};
 use crate::error::{
-    ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
-    Severity, SourceLocation,
+    DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError,
+    ParseErrors, ParseResult, Severity,
 };
 use crate::generated_traversal::{AsRawNode, FullDocumentChild1Choice};
 use crate::model::Header;
 use crate::node_types::*;
+use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
+
+/// How much of the header line the caller supplied.
+#[derive(Clone, Copy)]
+pub(crate) enum HeaderCoverage {
+    /// The caller's input is the whole header line; the node must cover it
+    /// and nothing beyond surrounding whitespace.
+    WholeLine,
+    /// The wrapper supplied the `@Label:\t` prefix; the node may start in it
+    /// but must still account for every non-whitespace byte of caller input.
+    LabelSupplied,
+}
 
 /// Lowering owns the node and the source whose complete input it represents.
 /// No caller can lower a header merely because it starts inside the input.
-pub(super) struct HeaderFragment<'tree, 'source, 'input> {
+///
+/// Every diagnostic this type returns or reports is in the caller's DOCUMENT
+/// coordinates: lowering faults pass through the wrapper's sink, and
+/// admission refusals are placed at the caller's whole input. A caller
+/// reports them as they are, without a second rebase.
+pub(crate) struct HeaderFragment<'tree, 'source, 'input> {
     header: SelectedHeader<'tree, 'source>,
-    fragment: &'source WrappedFragment<'input>,
+    parsed: &'tree ParsedFragment<'source, 'input>,
 }
 
 impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
-    pub(super) fn admit(
+    pub(crate) fn admit(
         parsed: &'tree ParsedFragment<'source, 'input>,
         header_index: usize,
+        coverage: HeaderCoverage,
     ) -> ParseResult<Self> {
         let fragment = parsed.fragment();
         let header = (|| -> Result<_, HeaderLookupError> {
@@ -37,52 +55,53 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
             find_header_node_in_tree(root, header_index)
         })()
         .map_err(|error| {
-            let input = fragment.input();
             let code = match &error {
                 HeaderLookupError::NotFound { .. } => ErrorCode::TierValidationError,
                 HeaderLookupError::Binding(_) => ErrorCode::TreeParsingError,
             };
             ParseErrors::from(vec![
-                ParseError::new(
-                    code,
-                    Severity::Error,
-                    SourceLocation::from_offsets(0, input.len()),
-                    ErrorContext::new(input, 0..input.len(), "header"),
-                    error.to_string(),
-                )
-                .with_suggestion(
-                    "Check that all header lines are well-formed and appear before utterances",
-                ),
+                fragment
+                    .whole_input_error(code, Severity::Error, "header", error.to_string())
+                    .with_suggestion(
+                        "Check that all header lines are well-formed and appear before utterances",
+                    ),
             ])
         })?;
         let node = header.source().raw_node();
-        fragment.require_complete_input(node.byte_range()).map_err(|failure| {
-            let input = fragment.input();
+        let span = parsed.node_span(node);
+        match coverage {
+            HeaderCoverage::WholeLine => fragment.require_complete_input(span),
+            HeaderCoverage::LabelSupplied => fragment.require_complete_labelled_input(span),
+        }
+        .map_err(|failure| {
             let error = match failure {
-                FragmentCoverageError::OutsideInput => ParseError::new(
+                FragmentCoverageError::OutsideInput => fragment
+                    .whole_input_error(
+                        ErrorCode::TierValidationError,
+                        Severity::Error,
+                        "header",
+                        "Tier validation error: header node resolved outside input range (wrapper artifact)",
+                    )
+                    .with_suggestion(
+                        "Check header formatting, the line may be malformed or in the wrong position",
+                    ),
+                FragmentCoverageError::Incomplete => fragment.whole_input_error(
                     ErrorCode::TierValidationError,
                     Severity::Error,
-                    SourceLocation::from_offsets(0, input.len()),
-                    ErrorContext::new(input, 0..input.len(), "header"),
-                    "Tier validation error: header node resolved outside input range (wrapper artifact)",
-                ).with_suggestion(
-                    "Check header formatting, the line may be malformed or in the wrong position",
-                ),
-                FragmentCoverageError::Incomplete => ParseError::new(
-                    ErrorCode::TierValidationError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(0, input.len()),
-                    ErrorContext::new(input, 0..input.len(), "header"),
+                    "header",
                     "Expected exactly one complete header fragment",
                 ),
             };
             ParseErrors::from(vec![error])
         })?;
-        Ok(Self { header, fragment })
+        Ok(Self { header, parsed })
     }
 
-    pub(super) fn lower(self) -> ParseResult<Header> {
-        let Self { header, fragment } = self;
+    /// Lower the admitted header. Its spans are synthetic; the wrapper that
+    /// owns `parsed` rebases them.
+    pub(crate) fn lower(self) -> ParseResult<Synthetic<Header>> {
+        let Self { header, parsed } = self;
+        let fragment = parsed.fragment();
         let source = header.source();
         let header_node = source.raw_node();
         let wrapped = source.source();
@@ -136,13 +155,10 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
                         error_sink.report(ParseError::new(
                         ErrorCode::MalformedTierContent,
                         Severity::Error,
-                        SourceLocation::from_offsets(
-                            header_node.start_byte(),
-                            header_node.end_byte(),
-                        ),
+                        DiagnosticLocation::new(span_of(header_node)),
                         ErrorContext::new(
                             wrapped,
-                            header_node.start_byte()..header_node.end_byte(),
+                            span_of(header_node),
                             "",
                         ),
                         format!(
@@ -166,6 +182,6 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
             return Err(errors);
         }
 
-        Ok(header)
+        Ok(parsed.lowered(header))
     }
 }

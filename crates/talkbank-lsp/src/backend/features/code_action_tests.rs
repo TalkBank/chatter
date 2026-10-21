@@ -20,22 +20,24 @@ fn make_diagnostic(code: &str, message: &str, line: u32, start: u32, end: u32) -
     }
 }
 
-/// Helper: extract the single text edit from a one-action result.
-fn extract_edit(actions: &[CodeActionOrCommand], uri: &Url) -> TextEdit {
+// These unit tests exercise fix policy and provisional geometry only. Real
+// revision admission, capability negotiation and wire edits live in stdio tests.
+fn proposals(diagnostics: Vec<Diagnostic>, doc: Option<&str>) -> Option<Vec<ProposedQuickFix>> {
+    let actions: Vec<_> = diagnostics
+        .iter()
+        .flat_map(|diagnostic| fixes::actions_for_diagnostic(diagnostic, doc.unwrap_or("")))
+        .collect();
+    (!actions.is_empty()).then_some(actions)
+}
+
+/// Extract the single provisional text edit, not an admitted workspace edit.
+fn extract_edit(actions: &[ProposedQuickFix]) -> TextEdit {
     assert_eq!(actions.len(), 1);
-    match &actions[0] {
-        CodeActionOrCommand::CodeAction(action) => {
-            let edit = action.edit.as_ref().unwrap();
-            let changes = edit.changes.as_ref().unwrap();
-            changes[uri][0].clone()
-        }
-        _ => panic!("Expected CodeAction"),
-    }
+    actions[0].edit.clone()
 }
 
 #[test]
 fn test_undeclared_speaker_requires_explicit_participant_facts() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let doc = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI José Child\n*CHI:\thello .\n*FOO:\thi .\n@End\n";
     let diag = make_diagnostic(
         "E308",
@@ -45,17 +47,16 @@ fn test_undeclared_speaker_requires_explicit_participant_facts() {
         4,
     );
 
-    assert!(code_action(uri, vec![diag], Some(doc)).is_none());
+    assert!(proposals(vec![diag], Some(doc)).is_none());
 }
 
 #[test]
 fn test_fix_missing_end_inserts_at_eof() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let doc = "@UTF8\n@Begin\n*CHI:\thello .\n";
     let diag = make_diagnostic("E502", "Missing @End", 0, 0, 0);
 
-    let actions = code_action(uri.clone(), vec![diag], Some(doc)).unwrap();
-    let edit = extract_edit(&actions, &uri);
+    let actions = proposals(vec![diag], Some(doc)).unwrap();
+    let edit = extract_edit(&actions);
     assert_eq!(edit.range.start, Position::new(3, 0));
     assert_eq!(edit.range.end, edit.range.start);
     assert_eq!(edit.new_text, "@End\n");
@@ -63,18 +64,16 @@ fn test_fix_missing_end_inserts_at_eof() {
 
 #[test]
 fn test_fix_missing_utf8_inserts_at_start() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let diag = make_diagnostic("E503", "Missing @UTF8", 0, 0, 0);
 
-    let actions = code_action(uri.clone(), vec![diag], None).unwrap();
-    let edit = extract_edit(&actions, &uri);
+    let actions = proposals(vec![diag], None).unwrap();
+    let edit = extract_edit(&actions);
     assert_eq!(edit.range.start.line, 0);
     assert_eq!(edit.new_text, "@UTF8\n");
 }
 
 #[test]
 fn test_fix_undeclared_speaker_no_participants_line() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let doc = "@UTF8\n@Begin\n*FOO:\thello .\n@End\n";
     let diag = make_diagnostic(
         "E308",
@@ -84,74 +83,62 @@ fn test_fix_undeclared_speaker_no_participants_line() {
         4,
     );
 
-    let actions = code_action(uri, vec![diag], Some(doc));
+    let actions = proposals(vec![diag], Some(doc));
     assert!(actions.is_none());
 }
 
 #[test]
-fn test_fix_empty_utterance_deletes_line() {
-    let uri = Url::parse("file:///test.cha").unwrap();
+fn empty_utterance_requires_catalog_evidence() {
     let diag = make_diagnostic("E306", "Empty utterance", 2, 0, 5);
 
-    let actions = code_action(uri.clone(), vec![diag], None).unwrap();
-    let edit = extract_edit(&actions, &uri);
-    assert_eq!(edit.new_text, "");
-    assert_eq!(edit.range.start.line, 2);
-    assert_eq!(edit.range.end.line, 3);
+    assert!(proposals(vec![diag], Some("\n\n*CHI:\t\n")).is_none());
 }
 
 #[test]
 fn test_empty_languages_requires_explicit_language_facts() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let diag = make_diagnostic("E507", "Empty @Languages header", 3, 0, 11);
 
-    assert!(code_action(uri, vec![diag], None).is_none());
+    assert!(proposals(vec![diag], None).is_none());
 }
 
 #[test]
-fn test_fix_missing_terminator_offers_three_options() {
-    let uri = Url::parse("file:///test.cha").unwrap();
+fn missing_terminator_requires_catalog_evidence() {
     let diag = make_diagnostic("E305", "Missing terminator in main tier", 1, 0, 10);
 
-    let actions = code_action(uri.clone(), vec![diag], None).unwrap();
-    assert_eq!(actions.len(), 3); // ., ?, !
+    assert!(proposals(vec![diag], None).is_none());
 }
 
 #[test]
 fn test_no_actions_for_unknown_code() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let diag = make_diagnostic("E999", "Unknown error", 0, 0, 5);
 
-    let actions = code_action(uri, vec![diag], None);
+    let actions = proposals(vec![diag], None);
     assert!(actions.is_none());
 }
 
 #[test]
 fn test_fix_comma_after_non_spoken_removes_it() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let diag = make_diagnostic("E259", "Comma after non-spoken", 0, 15, 16);
 
-    let actions = code_action(uri.clone(), vec![diag], None).unwrap();
-    let edit = extract_edit(&actions, &uri);
+    let actions = proposals(vec![diag], None).unwrap();
+    let edit = extract_edit(&actions);
     assert_eq!(edit.new_text, "");
 }
 
 #[test]
 fn test_missing_participants_requires_explicit_participant_facts() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let doc = "@UTF8\n@Begin\n*CHI:\thello .\n@End\n";
     let diag = make_diagnostic("E504", "Missing required header: @Participants", 0, 0, 0);
 
-    assert!(code_action(uri, vec![diag], Some(doc)).is_none());
+    assert!(proposals(vec![diag], Some(doc)).is_none());
 }
 
 #[test]
 fn test_fix_e504_non_participants_ignored() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let doc = "@UTF8\n@Begin\n*CHI:\thello .\n@End\n";
     let diag = make_diagnostic("E504", "Missing required header: @Languages", 0, 0, 0);
 
-    let actions = code_action(uri, vec![diag], Some(doc));
+    let actions = proposals(vec![diag], Some(doc));
     assert!(actions.is_none());
 }
 
@@ -178,7 +165,6 @@ fn test_fix_e504_non_participants_ignored() {
 /// variant again, and this test still catches it either way.
 #[test]
 fn test_removed_codes_offer_no_action() {
-    let uri = Url::parse("file:///test.cha").unwrap();
     let removed_codes = [
         "E241", // IllegalUntranscribed: hardcoded "xxx", so it rewrote a `YYY` or `ww` to `xxx`.
         "E242", // UnbalancedQuotation: "+..." does not balance a quote.
@@ -197,10 +183,18 @@ fn test_removed_codes_offer_no_action() {
 
     for code in removed_codes {
         let diag = make_diagnostic(code, "placeholder message", 0, 0, 5);
-        let actions = code_action(uri.clone(), vec![diag], None);
+        let actions = proposals(vec![diag], None);
         assert!(
             actions.is_none(),
             "{code} must offer no code action (see audit report); got {actions:?}"
         );
     }
+}
+
+#[test]
+fn raw_line_diagnostics_cannot_issue_deletion() {
+    let overflow = make_diagnostic("E306", "Empty utterance", u32::MAX, 0, 5);
+    assert!(proposals(vec![overflow], Some("\n")).is_none());
+    let final_line = make_diagnostic("E306", "Empty utterance", 2, 0, 6);
+    assert!(proposals(vec![final_line], Some("\n\n*CHI:\t")).is_none());
 }

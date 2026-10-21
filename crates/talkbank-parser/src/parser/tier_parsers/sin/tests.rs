@@ -14,7 +14,7 @@ fn test_sin_tier_construction() {
         SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
         SinItem::Token(SinToken::new("0").expect("nonempty test token")),
     ];
-    let tier = SinTier::new(items);
+    let tier = SinTier::new(talkbank_model::Location::Unlocated, items);
     assert_eq!(tier.items.len(), 2);
 
     let output = tier.to_chat_string();
@@ -24,7 +24,7 @@ fn test_sin_tier_construction() {
 /// Tests empty tier.
 #[test]
 fn test_empty_tier() {
-    let tier = SinTier::new(vec![]);
+    let tier = SinTier::new(talkbank_model::Location::Unlocated, vec![]);
     assert_eq!(tier.items.len(), 0);
     assert!(tier.is_empty());
 }
@@ -36,7 +36,7 @@ fn test_single_token() -> Result<(), String> {
     let items = vec![SinItem::Token(
         SinToken::new("g:toy:dpoint").expect("nonempty test token"),
     )];
-    let tier = SinTier::new(items);
+    let tier = SinTier::new(talkbank_model::Location::Unlocated, items);
     assert_eq!(tier.len(), 1);
     match &tier.items[0] {
         SinItem::Token(text) => assert_eq!(text.as_ref(), "g:toy:dpoint"),
@@ -48,8 +48,11 @@ fn test_single_token() -> Result<(), String> {
 /// Tests all zeros.
 #[test]
 fn test_all_zeros() -> Result<(), String> {
-    let tier = SinTier::from_tokens(vec!["0".to_string(), "0".to_string(), "0".to_string()])
-        .expect("nonempty test tokens");
+    let tier = SinTier::from_tokens(
+        talkbank_model::Location::Unlocated,
+        vec!["0".to_string(), "0".to_string(), "0".to_string()],
+    )
+    .expect("nonempty test tokens");
     assert_eq!(tier.len(), 3);
     match &tier.items[0] {
         talkbank_model::model::SinItem::Token(text) => assert_eq!(text.as_ref(), "0"),

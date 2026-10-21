@@ -1,24 +1,22 @@
 # Rediarize (`chatter rediarize`)
 
 **Status:** Draft
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** {{git-dates:page}}
 
 `chatter rediarize` re-attributes utterance speakers in a CHAT file
 from an external diarization. Given a transcript whose utterances
 carry media time bullets and a JSON file of timestamped speaker turns
 produced by a dedicated diarizer (for example pyannote), it reassigns
 each utterance's main-tier speaker to the diarization track that
-covers the utterance's time span the most, keeping the utterance
-content (the words) byte-stable.
+covers the utterance's time span the most. It clones utterance content while
+changing the main-tier speaker, then serializes the resulting model. This is
+not a source-byte-preserving edit API.
 
-The command exists for a specific, common failure shape: ASR systems
-with bundled diarization (Rev.AI and others) auto-detect the speaker
-count and can under-count on hard material such as child-adult
-overlap, collapsing three or four real voices into two tracks. The
-ASR *words* are usually fine; the *attribution* is what is wrong. A
-dedicated diarizer recounts the voices correctly, and `rediarize`
-reconciles its turns with the existing transcript so you keep the
-good words and replace only the bad attribution.
+Use it when you have independently reviewed replacement speaker turns for an
+existing timed transcript. Neither transcription accuracy nor diarizer accuracy
+is established by this command. A new diarizer can also miscount speakers or
+misplace their boundaries; the transform applies its supplied evidence rather
+than listening to the recording.
 
 The command is **structural and audio-free**: it never touches the
 recording. The diarizer runs elsewhere (any tool, any model) and
@@ -31,17 +29,17 @@ flowchart LR
     Media["recording\n(audio)"] --> Diarizer["external diarizer\n(e.g. pyannote)"]
     Diarizer --> Turns["turns.json\n(documented format below)"]
     Media --> Asr["ASR with bundled\ndiarization"]
-    Asr --> AsrCha["asr.cha\ngood words,\nsuspect speaker tracks"]
+    Asr --> AsrCha["asr.cha\ntimed transcript"]
     AsrCha --> Rediarize["chatter rediarize\n(this page)"]
     Turns --> Rediarize
-    Rediarize --> Fixed["rediarized.cha\nPAR0..PARn correctly\nseparated tracks"]
-    Fixed --> SpkId["chatter speaker-id\n(assign real roles)"]
+    Rediarize --> Fixed["rediarized.cha\ntime-based track assignments"]
+    Fixed --> SpkId["Review identities and roles\nthen use chatter speaker-id"]
 ```
 
-`rediarize` fixes WHICH anonymous track owns each utterance; it does
-not decide who each track *is*. Role assignment (child, mother,
-investigator, ...) is [`chatter speaker-id`](speaker-id.md)'s job,
-downstream.
+`rediarize` selects an anonymous track for each overlapping utterance; it does
+not establish who that track is. Review identity and role evidence separately;
+[`chatter speaker-id`](speaker-id.md) documents the available mapping and
+review workflows, not a guarantee of correct real-world identity.
 
 ## Usage
 
@@ -96,33 +94,38 @@ chatter rediarize INPUT.cha --turns TURNS.json \
   turns file carried none).
 - `reassigned` / `unchanged`: utterance counts. `unchanged` includes
   flagged utterances (they kept their speaker), so the file's total
-  bulleted-tier utterance count is `reassigned + unchanged`.
+  total utterance count, including utterances without bullets, is
+  `reassigned + unchanged`.
 - `flagged`: every declined reattribution, **never truncated** (the
   stderr listing caps at 20 detail lines; this list is complete).
   `utterance_index` is the 0-based position among main-tier lines;
   `reason` is `"no_bullet"` or `"no_overlapping_turn"`.
 
-- `contested`: utterances whose time was meaningfully split between
-  tracks, empty unless `--contested-at` was given. These were still
-  reattributed, to `assigned`, so they are NOT in `flagged`, which means
-  "declined". `ownership.shares` is every overlapping track with its
+- `contested`: assignments meeting the supplied runner-up threshold, empty
+  unless `--contested-at` was given. These select `assigned` even when it is
+  already the utterance's speaker, so they may count as `unchanged`; they are
+  not in `flagged`, which means no assignment was available.
+  `ownership.shares` is every overlapping track with its
   union-held milliseconds, descending; overlapping turns for the SAME
   track count their shared interval once. `ownership.total_ms` is the sum
   of those per-track values and is the denominator. Simultaneous DIFFERENT
   tracks each retain the shared interval, so `total_ms` can exceed the
-  utterance bullet's duration. The whole distribution is emitted rather
+  utterance bullet's duration. At the integer limit the sum saturates at
+  `u64::MAX`; it is not an arbitrary-precision duration. The whole distribution is emitted rather
   than a winner and a runner-up, because that narrower shape cannot tell a
   55/45 split from 55/23/22 and the difference is the point.
 
 Field names and the `reason` strings are a stable output contract.
-The summary is written only on exit 0, after the CHAT output.
+The summary is attempted after the CHAT output. These are separate writes,
+not a transaction; a later summary failure does not roll back the CHAT write.
 
 ## Contested utterances (`--contested-at`)
 
 An utterance's bullet can overlap turns from more than one track. The
-tool assigns it to the track holding the most of it, which is the best
-available answer, but "most" can mean 95% or 34%, and those are
-different situations that the output otherwise reports identically.
+tool selects the largest union-held duration. This policy can select a track
+holding 34% of the total; it does not require a majority or establish confidence.
+Equal durations are ordered by track-code text, with the lexically first code
+winning. A tie does not produce a declined-assignment flag.
 
 ```bash
 chatter rediarize INPUT.cha --turns TURNS.json --contested-at 0.25
@@ -133,6 +136,10 @@ least that share of the total track-held time. Two rivals at 20% each
 is a different situation from one at 40%, and this is the latter
 question. Same-track duplicate coverage never inflates the denominator;
 cross-track overlap remains evidence for both simultaneous speakers.
+
+The comparison is inclusive. A threshold of zero therefore also reports a
+single-track assignment, whose runner-up share is zero. Contested status is a
+reporting predicate, not a measurement that multiple real speakers were audible.
 
 **There is no default, deliberately.** Omit the flag and nothing is
 reported as contested. What share makes an utterance genuinely mixed
@@ -178,6 +185,11 @@ the caller's concern; the format is:
     milliseconds, half-open `[start_ms, end_ms)`, with
     `end_ms >= start_ms`.
 
+The JSON reader accepts track strings as supplied; it does not check that each
+is a syntactically valid CHAT speaker code. Supply valid codes and validate the
+output. Negative or noninteger timestamps fail JSON admission. Zero-duration
+turns are accepted but contribute no positive overlap.
+
 Turns MAY overlap each other (diarizers that permit overlapping speech
 produce such turns). Overlap between turns for the same track is unioned;
 overlap between different tracks is retained for each track as crosstalk
@@ -192,7 +204,8 @@ The Rust `rediarize` API requires an error sink. After reconciling headers it
 uses the canonical participant join, reporting inconsistencies before exposing
 the resulting participant map. The returned mutable model is not a full
 validation certificate. The content-level wrapper refuses to serialize when
-that join reports errors; it does not silently discard them.
+that join reports errors; it does not silently discard them. It does not run a
+full validation pass on the rewritten model before serializing it.
 
 - Every utterance with a time bullet is assigned to the track with the
   greatest union of millisecond coverage against the bullet's span.
@@ -200,25 +213,47 @@ that join reports errors; it does not silently discard them.
   `unchanged`.
 - An utterance with **no bullet**, or whose bullet **overlaps no
   turn at all**, keeps its existing speaker and is **flagged** in
-  the summary. Ambiguity is surfaced, never silently guessed.
-- `@Participants` and `@ID` headers are reconciled to declare
-  exactly the set of tracks the output actually uses: new tracks get
-  entries cloned from an existing participant (same role),
-  declarations for tracks no longer used are dropped.
+  the summary. Equal-overlap ties instead select a winner as described above.
+- Existing `@Participants` lists retain used tracks and add missing entries
+  from the first participant template, including its name and role. Missing
+  `@ID` rows are cloned independently from the first ID template, changing only
+  its speaker code. These inherited fields are placeholders to review, not
+  facts inferred about the new track. Without the corresponding template this
+  function cannot synthesize those declarations. Unused declarations are dropped.
 - Header-only transcripts preserve their declarations: no utterances means
   there is no attribution evidence for pruning participants.
-- Utterance content, dependent tiers, and all other headers are
-  preserved as-is.
+- Utterance content, dependent tiers and other headers are cloned in the model.
+  Speaker references outside the main-tier code and participant/ID declarations
+  are not generally renamed. Retained references can therefore become
+  inconsistent and require review; participant-join errors refuse CLI output.
 
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
 | 0 | Rewrite completed and output written. Flagged utterances do not fail the command; check the summary. |
-| 1 | Invalid input: unreadable file, CHAT parse failure, malformed turns JSON. |
+| 1 | Input/admission failure (including unreadable input, malformed JSON or invalid threshold), or CHAT/summary output failure. |
 | 2 | Precondition violation: the turns JSON parsed but is semantically defective (for example a turn with `end_ms < start_ms`). |
 
-On any non-zero exit, no output file is written.
+Input and transformation failures occur before output writing. Once writing
+begins, a nonzero exit can leave a complete CHAT output and a missing or partial
+summary, or a partial CHAT destination. Existing destinations are written with
+replacement/truncation semantics; this is not atomic publication.
+
+### Safe destinations and recovery
+
+Use distinct new destinations for CHAT and summary, separate from both input
+files. The command does not check path aliases: pointing the summary at the
+CHAT output can replace the transcript with JSON, and an output path can
+overwrite an input. Different spellings do not prove different files when
+symlinks or hard links are involved. Avoid in-place use and preserve originals.
+
+After an output failure, inspect both destinations before retrying. Do not infer
+that neither changed from the exit code, or use an existing summary as proof
+that the latest attempt succeeded. Preserve any partial result needed for
+diagnosis and choose fresh distinct destinations for the retry. Validate the
+resulting CHAT separately; successful writing is not acoustic verification of
+the supplied diarization or proof of a correct speaker assignment.
 
 ## Worked example
 
@@ -232,7 +267,8 @@ chatter rediarize session.cha --turns turns.json -o session-3spk.cha
 chatter validate session-3spk.cha
 ```
 
-splits the merged adult track by time, declares `PAR2` in the
-headers, and leaves every word as the ASR wrote it. The output then
-flows into `chatter speaker-id` (or the merge workflow) to name the
-three tracks.
+assigns each overlapping utterance as a whole to one supplied track; it does
+not split an utterance at a speaker-change boundary. `PAR2` is declared only
+if the resulting transcript uses it and suitable header templates exist.
+Review copied names, roles and ID fields, validate the output, and compare
+contested assignments against the recording before applying an identity mapping.

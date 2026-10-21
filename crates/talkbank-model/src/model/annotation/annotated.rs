@@ -30,7 +30,7 @@
 
 use super::{ContentAnnotation, WriteChat};
 use crate::model::{
-    SemanticDiff, SemanticDiffContext, SemanticDiffReport, SemanticEq, SemanticPath, normalize_span,
+    SemanticDiff, SemanticDiffContext, SemanticDiffReport, SemanticEq, SemanticPath,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -190,7 +190,7 @@ impl AnnotatedContentAnnotations {
     /// annotations as a plain field and has no newtype to offer.
     pub(crate) fn report_unknown_markers(
         annotations: &[ContentAnnotation],
-        span: crate::Span,
+        location: crate::Location,
         errors: &impl crate::ErrorSink,
     ) {
         for annotation in annotations {
@@ -200,8 +200,12 @@ impl AnnotatedContentAnnotations {
                     crate::ParseError::new(
                         crate::ErrorCode::UnknownAnnotation,
                         crate::Severity::Error,
-                        crate::SourceLocation::new(span),
-                        crate::ErrorContext::new(marker.as_str(), 0..marker.len(), "annotation"),
+                        crate::DiagnosticLocation::from(location),
+                        crate::ErrorContext::new(
+                            marker.as_str(),
+                            crate::Span::new(0, marker.len()),
+                            "annotation",
+                        ),
                         unknown.unreadable_message(),
                     )
                     .with_suggestion("Check CHAT manual for valid annotation types"),
@@ -259,9 +263,9 @@ pub struct Annotated<T> {
     pub scoped_annotations: AnnotatedContentAnnotations,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl<T: SemanticEq> SemanticEq for Annotated<T> {
@@ -283,7 +287,7 @@ impl<T: SemanticDiff> SemanticDiff for Annotated<T> {
         report: &mut SemanticDiffReport,
         ctx: &mut SemanticDiffContext,
     ) {
-        let prev_span = ctx.push_span(normalize_span(self.span));
+        let prev_location = ctx.push_location(self.location);
 
         path.push_field("inner");
         self.inner
@@ -301,7 +305,7 @@ impl<T: SemanticDiff> SemanticDiff for Annotated<T> {
             path.pop();
         }
 
-        ctx.pop_span(prev_span);
+        ctx.pop_location(prev_location);
     }
 }
 
@@ -333,7 +337,7 @@ impl<T> Annotated<T> {
     /// let annotations = AnnotatedContentAnnotations::try_from(vec![
     ///     ContentAnnotation::Explanation(ScopedExplanation { text: "whining".into() }),
     /// ])?;
-    /// let annotated = Annotated::new(Action::new(), annotations);
+    /// let annotated = Annotated::new(talkbank_model::Location::Unlocated, Action::new(talkbank_model::Location::Unlocated), annotations);
     /// assert_eq!(annotated.scoped_annotations.len(), 1);
     ///
     /// // The empty list is refused, and the refusal has a name a caller can match on.
@@ -343,11 +347,15 @@ impl<T> Annotated<T> {
     /// );
     /// # Ok::<(), NoScopedAnnotations>(())
     /// ```
-    pub fn new(inner: T, scoped_annotations: AnnotatedContentAnnotations) -> Self {
+    pub fn new(
+        location: impl Into<crate::Location>,
+        inner: T,
+        scoped_annotations: AnnotatedContentAnnotations,
+    ) -> Self {
         Self {
             inner,
             scoped_annotations,
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
     }
 
@@ -356,14 +364,16 @@ impl<T> Annotated<T> {
     /// The promotion path: a bare construct meets its first scoped marker and
     /// becomes an annotated one. Infallible by construction, which is why it
     /// exists beside [`Self::new`].
-    pub fn with_one(inner: T, annotation: ContentAnnotation) -> Self {
-        Self::new(inner, AnnotatedContentAnnotations(vec![annotation]))
-    }
-
-    /// Sets source span metadata used in diagnostics.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
+    pub fn with_one(
+        location: impl Into<crate::Location>,
+        inner: T,
+        annotation: ContentAnnotation,
+    ) -> Self {
+        Self::new(
+            location,
+            inner,
+            AnnotatedContentAnnotations(vec![annotation]),
+        )
     }
 
     /// Appends one scoped annotation to the existing list.

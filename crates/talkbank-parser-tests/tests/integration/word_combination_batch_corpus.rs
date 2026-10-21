@@ -45,9 +45,10 @@ impl<'source> AdmittedFile<'source> {
             .words()
             .into_iter()
             .filter(|(word, _)| {
-                self.source
-                    .get(word.span.start as usize..word.span.end as usize)
-                    == Some(spelling)
+                self.source.get(
+                    word.location.span().expect("located").start()
+                        ..word.location.span().expect("located").end(),
+                ) == Some(spelling)
             })
             .collect();
         assert_eq!(words.len(), 1, "unique authored target: {spelling}");
@@ -169,7 +170,10 @@ fn assert_reference(name: &str, expected: Vec<ExpectedWord>) {
             ),
         }
         assert_eq!(
-            source.get(word.span.start as usize..word.span.end as usize),
+            source.get(
+                word.location.span().expect("located").start()
+                    ..word.location.span().expect("located").end()
+            ),
             Some(expected.spelling)
         );
         assert_eq!(
@@ -452,10 +456,10 @@ fn assert_policy_pairs(spec: &str, diagnostic: ExpectedDiagnostic, targets: &[(&
         let word = admitted.word(spelling);
         assert_eq!(admitted.file.to_chat_string(), source);
         let start = match mutation {
-            Mutation::Append(_) => word.span.end,
-            Mutation::Word(_) => word.span.start,
-        } as usize;
-        let end = word.span.end as usize;
+            Mutation::Append(_) => word.location.span().expect("located").end(),
+            Mutation::Word(_) => word.location.span().expect("located").start(),
+        };
+        let end = word.location.span().expect("located").end();
         let inserted = match mutation {
             Mutation::Append(text) | Mutation::Word(text) => text,
         };
@@ -483,7 +487,7 @@ fn assert_policy_pairs(spec: &str, diagnostic: ExpectedDiagnostic, targets: &[(&
             }
             assert_eq!(replacements.len(), 1);
             assert!(replacements[0].semantic_eq(word));
-            assert_eq!(replacements[0].span, word.span);
+            assert_eq!(replacements[0].location, word.location);
         }
         let errors = ErrorCollector::new();
         mutated.validate_with_alignment(&errors, TranscriptName::Anonymous);
@@ -593,9 +597,11 @@ fn secondary_stress_rejection_does_not_fabricate_a_word() {
         format!(
             "{}ˈˌ{}",
             source
-                .get(..word.span.start as usize)
+                .get(..word.location.span().expect("located").start() as usize)
                 .expect("UTF-8 prefix"),
-            source.get(word.span.end as usize..).expect("UTF-8 suffix")
+            source
+                .get(word.location.span().expect("located").end() as usize..)
+                .expect("UTF-8 suffix")
         ),
         mutant_source
     );

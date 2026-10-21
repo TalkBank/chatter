@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
@@ -135,11 +136,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "blocked_segments",
-                    "span": {
-                      "end": 419,
-                      "start": 416
-                    }
+                    "element_type": "blocked_segments"
                   },
                   "type": "ca_element"
                 },
@@ -195,11 +192,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "pitch_up",
-                    "span": {
-                      "end": 447,
-                      "start": 444
-                    }
+                    "element_type": "pitch_up"
                   },
                   "type": "ca_element"
                 },
@@ -242,11 +235,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "pitch_down",
-                    "span": {
-                      "end": 463,
-                      "start": 460
-                    }
+                    "element_type": "pitch_down"
                   },
                   "type": "ca_element"
                 },
@@ -291,11 +280,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "inhalation",
-                    "span": {
-                      "end": 486,
-                      "start": 483
-                    }
+                    "element_type": "inhalation"
                   },
                   "type": "ca_element"
                 },
@@ -327,11 +312,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "constriction",
-                    "span": {
-                      "end": 514,
-                      "start": 511
-                    }
+                    "element_type": "constriction"
                   },
                   "type": "ca_element"
                 }
@@ -359,11 +340,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "laugh_in_word",
-                    "span": {
-                      "end": 525,
-                      "start": 522
-                    }
+                    "element_type": "laugh_in_word"
                   },
                   "type": "ca_element"
                 },
@@ -393,11 +370,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "element_type": "pitch_reset",
-                    "span": {
-                      "end": 539,
-                      "start": 536
-                    }
+                    "element_type": "pitch_reset"
                   },
                   "type": "ca_element"
                 },
@@ -449,11 +422,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "segment_repetition",
-                    "span": {
-                      "end": 567,
-                      "start": 564
-                    }
+                    "delimiter_type": "segment_repetition"
                   },
                   "type": "ca_delimiter"
                 },
@@ -463,11 +432,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "segment_repetition",
-                    "span": {
-                      "end": 575,
-                      "start": 572
-                    }
+                    "delimiter_type": "segment_repetition"
                   },
                   "type": "ca_delimiter"
                 },
@@ -508,11 +473,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "faster",
-                    "span": {
-                      "end": 605,
-                      "start": 602
-                    }
+                    "delimiter_type": "faster"
                   },
                   "type": "ca_delimiter"
                 },
@@ -522,11 +483,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "faster",
-                    "span": {
-                      "end": 614,
-                      "start": 611
-                    }
+                    "delimiter_type": "faster"
                   },
                   "type": "ca_delimiter"
                 }
@@ -550,11 +507,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "slower",
-                    "span": {
-                      "end": 622,
-                      "start": 619
-                    }
+                    "delimiter_type": "slower"
                   },
                   "type": "ca_delimiter"
                 },
@@ -564,11 +517,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "slower",
-                    "span": {
-                      "end": 631,
-                      "start": 628
-                    }
+                    "delimiter_type": "slower"
                   },
                   "type": "ca_delimiter"
                 }
@@ -592,11 +541,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "creaky",
-                    "span": {
-                      "end": 639,
-                      "start": 636
-                    }
+                    "delimiter_type": "creaky"
                   },
                   "type": "ca_delimiter"
                 },
@@ -606,11 +551,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "creaky",
-                    "span": {
-                      "end": 648,
-                      "start": 645
-                    }
+                    "delimiter_type": "creaky"
                   },
                   "type": "ca_delimiter"
                 }
@@ -634,11 +575,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 655,
-                      "start": 653
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 },
@@ -648,11 +585,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 663,
-                      "start": 661
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 }
@@ -678,11 +611,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "low_pitch",
-                    "span": {
-                      "end": 675,
-                      "start": 672
-                    }
+                    "delimiter_type": "low_pitch"
                   },
                   "type": "ca_delimiter"
                 },
@@ -692,11 +621,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "low_pitch",
-                    "span": {
-                      "end": 686,
-                      "start": 683
-                    }
+                    "delimiter_type": "low_pitch"
                   },
                   "type": "ca_delimiter"
                 }
@@ -720,11 +645,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "high_pitch",
-                    "span": {
-                      "end": 694,
-                      "start": 691
-                    }
+                    "delimiter_type": "high_pitch"
                   },
                   "type": "ca_delimiter"
                 },
@@ -734,11 +655,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "high_pitch",
-                    "span": {
-                      "end": 706,
-                      "start": 703
-                    }
+                    "delimiter_type": "high_pitch"
                   },
                   "type": "ca_delimiter"
                 }
@@ -762,11 +679,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "smile_voice",
-                    "span": {
-                      "end": 714,
-                      "start": 711
-                    }
+                    "delimiter_type": "smile_voice"
                   },
                   "type": "ca_delimiter"
                 },
@@ -776,11 +689,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "smile_voice",
-                    "span": {
-                      "end": 727,
-                      "start": 724
-                    }
+                    "delimiter_type": "smile_voice"
                   },
                   "type": "ca_delimiter"
                 }
@@ -806,11 +715,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "breathy_voice",
-                    "span": {
-                      "end": 739,
-                      "start": 736
-                    }
+                    "delimiter_type": "breathy_voice"
                   },
                   "type": "ca_delimiter"
                 },
@@ -820,11 +725,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "breathy_voice",
-                    "span": {
-                      "end": 754,
-                      "start": 751
-                    }
+                    "delimiter_type": "breathy_voice"
                   },
                   "type": "ca_delimiter"
                 }
@@ -848,11 +749,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "unsure",
-                    "span": {
-                      "end": 762,
-                      "start": 759
-                    }
+                    "delimiter_type": "unsure"
                   },
                   "type": "ca_delimiter"
                 },
@@ -862,11 +759,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "unsure",
-                    "span": {
-                      "end": 771,
-                      "start": 768
-                    }
+                    "delimiter_type": "unsure"
                   },
                   "type": "ca_delimiter"
                 }
@@ -890,11 +783,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "whisper",
-                    "span": {
-                      "end": 779,
-                      "start": 776
-                    }
+                    "delimiter_type": "whisper"
                   },
                   "type": "ca_delimiter"
                 },
@@ -904,11 +793,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "whisper",
-                    "span": {
-                      "end": 789,
-                      "start": 786
-                    }
+                    "delimiter_type": "whisper"
                   },
                   "type": "ca_delimiter"
                 }
@@ -934,11 +819,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "yawn",
-                    "span": {
-                      "end": 800,
-                      "start": 798
-                    }
+                    "delimiter_type": "yawn"
                   },
                   "type": "ca_delimiter"
                 },
@@ -948,11 +829,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "yawn",
-                    "span": {
-                      "end": 806,
-                      "start": 804
-                    }
+                    "delimiter_type": "yawn"
                   },
                   "type": "ca_delimiter"
                 }
@@ -976,11 +853,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "singing",
-                    "span": {
-                      "end": 814,
-                      "start": 811
-                    }
+                    "delimiter_type": "singing"
                   },
                   "type": "ca_delimiter"
                 },
@@ -990,11 +863,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "singing",
-                    "span": {
-                      "end": 824,
-                      "start": 821
-                    }
+                    "delimiter_type": "singing"
                   },
                   "type": "ca_delimiter"
                 }
@@ -1020,11 +889,7 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "element_type": "hurried_start",
-                    "span": {
-                      "end": 836,
-                      "start": 833
-                    }
+                    "element_type": "hurried_start"
                   },
                   "type": "ca_element"
                 },
@@ -1100,11 +965,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "sudden_stop",
-                    "span": {
-                      "end": 875,
-                      "start": 872
-                    }
+                    "element_type": "sudden_stop"
                   },
                   "type": "ca_element"
                 }
@@ -1145,11 +1006,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "element_type": "hardening",
-                    "span": {
-                      "end": 896,
-                      "start": 893
-                    }
+                    "element_type": "hardening"
                   },
                   "type": "ca_element"
                 },

@@ -30,124 +30,124 @@ pub(super) fn find_content_range(content: &UtteranceContent, doc: &str) -> Optio
 pub(super) fn find_mor_item_range(
     tree: &Tree,
     doc: &str,
-    tier_span: Span,
+    span: Span,
     target_idx: usize,
 ) -> Option<Range> {
-    find_nth_node_range(tree, doc, tier_span, MOR_CONTENT, target_idx)
+    find_nth_node_range(tree, doc, span, MOR_CONTENT, target_idx)
 }
 
 /// Finds pho item range.
 pub(super) fn find_pho_item_range(
     tree: &Tree,
     doc: &str,
-    tier_span: Span,
+    span: Span,
     target_idx: usize,
 ) -> Option<Range> {
-    find_nth_node_range(tree, doc, tier_span, PHO_GROUP, target_idx)
+    find_nth_node_range(tree, doc, span, PHO_GROUP, target_idx)
 }
 
 /// Finds sin item range.
 pub(super) fn find_sin_item_range(
     tree: &Tree,
     doc: &str,
-    tier_span: Span,
+    span: Span,
     target_idx: usize,
 ) -> Option<Range> {
-    find_nth_node_range(tree, doc, tier_span, SIN_GROUP, target_idx)
+    find_nth_node_range(tree, doc, span, SIN_GROUP, target_idx)
 }
 
 /// Finds gra item range.
 pub(super) fn find_gra_item_range(
     tree: &Tree,
     doc: &str,
-    tier_span: Span,
+    span: Span,
     target_idx: usize,
 ) -> Option<Range> {
-    find_nth_node_range(tree, doc, tier_span, GRA_RELATION, target_idx)
+    find_nth_node_range(tree, doc, span, GRA_RELATION, target_idx)
 }
 
 /// Finds mor item index at offset.
 pub(super) fn find_mor_item_index_at_offset(
     tree: &Tree,
-    tier_span: Span,
-    offset: u32,
+    span: Span,
+    offset: usize,
 ) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, MOR_CONTENT, offset)
+    find_node_index_at_offset(tree, span, MOR_CONTENT, offset)
 }
 
 /// Finds pho item index at offset.
 pub(super) fn find_pho_item_index_at_offset(
     tree: &Tree,
-    tier_span: Span,
-    offset: u32,
+    span: Span,
+    offset: usize,
 ) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, PHO_GROUP, offset)
+    find_node_index_at_offset(tree, span, PHO_GROUP, offset)
 }
 
 /// Finds sin item index at offset.
 pub(super) fn find_sin_item_index_at_offset(
     tree: &Tree,
-    tier_span: Span,
-    offset: u32,
+    span: Span,
+    offset: usize,
 ) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, SIN_GROUP, offset)
+    find_node_index_at_offset(tree, span, SIN_GROUP, offset)
 }
 
 /// Finds gra item index at offset.
 pub(super) fn find_gra_item_index_at_offset(
     tree: &Tree,
-    tier_span: Span,
-    offset: u32,
+    span: Span,
+    offset: usize,
 ) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, GRA_RELATION, offset)
+    find_node_index_at_offset(tree, span, GRA_RELATION, offset)
 }
 
 /// Convert a model span into an LSP range.
 fn range_from_span(doc: &str, span: Span) -> Range {
     Range {
-        start: utils::offset_to_position(doc, span.start),
-        end: utils::offset_to_position(doc, span.end),
+        start: utils::offset_to_position(doc, span.start()),
+        end: utils::offset_to_position(doc, span.end()),
     }
 }
 
 /// Convert a tree-sitter node into an LSP range.
 fn range_from_node(doc: &str, node: Node) -> Range {
     Range {
-        start: utils::offset_to_position(doc, node.start_byte() as u32),
-        end: utils::offset_to_position(doc, node.end_byte() as u32),
+        start: utils::offset_to_position(doc, node.start_byte()),
+        end: utils::offset_to_position(doc, node.end_byte()),
     }
 }
 
 /// Return `true` when a node lies completely inside a span.
 fn node_inside_span(node: Node, span: Span) -> bool {
-    let start = node.start_byte() as u32;
-    let end = node.end_byte() as u32;
-    start >= span.start && end <= span.end
+    let start = node.start_byte();
+    let end = node.end_byte();
+    start >= span.start() && end <= span.end()
 }
 
 /// Return `true` when a node intersects a span.
 fn node_overlaps_span(node: Node, span: Span) -> bool {
-    let start = node.start_byte() as u32;
-    let end = node.end_byte() as u32;
-    end >= span.start && start <= span.end
+    let start = node.start_byte();
+    let end = node.end_byte();
+    end >= span.start() && start <= span.end()
 }
 
 /// Finds nth node range.
 fn find_nth_node_range(
     tree: &Tree,
     doc: &str,
-    tier_span: Span,
+    span: Span,
     kind: &str,
     target_idx: usize,
 ) -> Option<Range> {
-    let node = find_nth_node_in_span(tree, tier_span, kind, target_idx)?;
+    let node = find_nth_node_in_span(tree, span, kind, target_idx)?;
     Some(range_from_node(doc, node))
 }
 
 /// Finds nth node in span.
 fn find_nth_node_in_span<'a>(
     tree: &'a Tree,
-    tier_span: Span,
+    span: Span,
     kind: &str,
     target_idx: usize,
 ) -> Option<Node<'a>> {
@@ -156,11 +156,11 @@ fn find_nth_node_in_span<'a>(
     let mut current_idx = 0usize;
 
     while let Some(node) = stack.pop() {
-        if !node_overlaps_span(node, tier_span) {
+        if !node_overlaps_span(node, span) {
             continue;
         }
 
-        if !node.is_missing() && node.kind() == kind && node_inside_span(node, tier_span) {
+        if !node.is_missing() && node.kind() == kind && node_inside_span(node, span) {
             if current_idx == target_idx {
                 return Some(node);
             }
@@ -178,24 +178,19 @@ fn find_nth_node_in_span<'a>(
 }
 
 /// Finds node index at offset.
-fn find_node_index_at_offset(
-    tree: &Tree,
-    tier_span: Span,
-    kind: &str,
-    offset: u32,
-) -> Option<usize> {
+fn find_node_index_at_offset(tree: &Tree, span: Span, kind: &str, offset: usize) -> Option<usize> {
     let root = tree.root_node();
     let mut stack = vec![root];
     let mut current_idx = 0usize;
 
     while let Some(node) = stack.pop() {
-        if !node_overlaps_span(node, tier_span) {
+        if !node_overlaps_span(node, span) {
             continue;
         }
 
-        if !node.is_missing() && node.kind() == kind && node_inside_span(node, tier_span) {
-            let start = node.start_byte() as u32;
-            let end = node.end_byte() as u32;
+        if !node.is_missing() && node.kind() == kind && node_inside_span(node, span) {
+            let start = node.start_byte();
+            let end = node.end_byte();
             if offset >= start && offset <= end {
                 return Some(current_idx);
             }

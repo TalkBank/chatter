@@ -83,7 +83,7 @@ mod tests {
     /// is replaced.
     #[test]
     fn lexical_redaction_cannot_retain_untrusted_cleaned_text() {
-        let mut word = Word::simple("private-name");
+        let mut word = Word::simple(talkbank_model::Location::Unlocated, "private-name");
         let mut state = PlaceholderState::new();
 
         sanitize_word(&mut word, &mut state);

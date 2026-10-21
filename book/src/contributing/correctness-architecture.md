@@ -1,27 +1,60 @@
 # Correctness Architecture
 
-**Status:** Current
+**Status:** Current evidence contract with retained historical design narrative
 **Last modified:** {{git-dates:page}}
 
-This is the target design of chatter's correctness machinery, written for the
-maintainer who inherits it. It is not a patch list and not a description of the
-tree as it stands today. Where the current tree disagrees with this page, the
-tree is what has to move.
+This chapter retains the design reasoning that motivated the correctness work.
+Its historical inventories, proposed migrations and deletion estimates are not
+the current work queue, a release receipt or authority to change the tree.
+Current contracts and the historical narrative are separated below so a
+successor does not mistake an old proposal for an implemented invariant.
 
-The measurements below are design evidence, not a completion report. For the
-current measurement boundary, use
-[Coverage scope and completeness](testing.md#coverage-scope-and-completeness).
-Uncovered code is an investigation target, never automatic permission to delete
-recovery, constructor, wire-format or internal-failure handling.
+## Current evidence contract
 
-Read [Testing](testing.md) for what the layers are called today and
-[Spec System](../architecture/spec-system.md) for what the spec fields mean.
-This page says what the layers are FOR, which of them may be deleted, and how a
-successor knows the suite is complete rather than merely green.
+- The target remains 100% handwritten primary parser, model, validation and
+  transform line, region and branch coverage through canonical spec/reference
+  workflows. Generated behavior and boundary/fault-injection evidence remain
+  separate. Source, feature and semantic completeness need their own evidence;
+  a percentage alone proves none of them. See
+  [Coverage scope and completeness](testing.md#coverage-scope-and-completeness).
+- Preserve legal controls, invalid boundaries, constructor/wire tests and
+  genuine recovery/internal-failure handling. CHAT unreachability or zero
+  marginal coverage does not prove a test or branch redundant. Types must close
+  producer and consumer bypasses; their admitting constructors still need tests.
+  See [Adding tests](testing.md#adding-tests-and-when-not-to).
+- Use the [Spec Workflow](spec-workflow.md) and
+  [Spec System](../architecture/spec-system.md) for current claims, authored CST
+  review, generated observations and artifact ownership. Historical proposals
+  below to delete authored CSTs, derive implementation status from observed
+  diagnostics or introduce exact-code/model claims are not current schema
+  instructions. Do not change claims merely to match observed output.
+- Use the finite, reviewed public corpus for ordinary correctness work.
+  Retained production evidence can inform a sanitized, independently justified
+  control; the historical production-attribution step below is not permission
+  or a requirement to run a corpus differential. CHECK's
+  [single assessment authority](../architecture/errors-and-validation/check-parity-audit.md)
+  owns its scope and reopening rules.
+- Use [Developer Verification Checks](dev-checks.md) for current commands,
+  prerequisites and publication checks. The historical guard, timing estimates,
+  automatic-gate proposals and broad coverage commands below are not a current
+  execution recipe. Recover source-bound evidence before proposing another run.
+- Use [Toward Chatter 1.0](one-zero-readiness.md) for release conditions.
+  Coverage, successful tests and generated-file currency do not independently
+  establish distribution, platform, compatibility or handover readiness.
 
-Every count on this page carries the command that produced it. The commands are
-collected in [Appendix A](#appendix-a-how-every-number-here-was-produced) so
-that a number which has drifted can be re-derived rather than believed.
+## Historical design narrative
+
+**Everything following this heading is retained design history, including its
+uses of “today,” “current,” “must,” and “deleted.”** Some proposals were later
+implemented, some changed and others remain unresolved. The narrative is kept
+to explain alternatives and earlier measurements, not to issue blanket deletion
+or redesign instructions. A specific change needs current source evidence and
+the applicable approval, not an old count or table entry. In particular, a
+property test samples inputs; it is not a proof of universal quantification.
+
+The [appendix](#appendix-a-how-every-number-here-was-produced) preserves the old
+measurement commands. Their presence does not bind a number to today's source,
+prove that the population was complete, or justify rerunning them by default.
 
 ## Properties of the gate mechanism and the measured suite
 
@@ -207,12 +240,15 @@ into a model. Every one of them fabricates the AST it then judges. Repository
 wide there are 288 `new_unchecked` call sites and 403 `Span::DUMMY`
 constructions, the large majority of both inside that crate.
 
-`Span::DUMMY` is `Span { start: 0, end: 0 }`, which is also the legal
-zero-width position at the first byte of a file. The type already carries a
-long comment about this, opening with `KNOWN HAZARD, for maintainers` and
-conceding that "the VALUE is still overloaded, and that part is not fixed".
-That comment is a receipt: prose is gated by nothing, so a paragraph explaining
-why something is safe is a work item with an address, not a mitigation.
+`Span::DUMMY` was `Span { start: 0, end: 0 }`, which is also the legal
+zero-width position at the first byte of a file. The type carried a long
+comment about this, opening with `KNOWN HAZARD, for maintainers` and conceding
+that "the VALUE is still overloaded, and that part is not fixed". That comment
+was a receipt: prose is gated by nothing, so a paragraph explaining why
+something is safe is a work item with an address, not a mitigation. The
+address was paid on 2026-10-18: a value with no source position is
+`Location::Unlocated`, a variant, and the sentinel is gone from the language
+(see row 8 below and the [errors page](../architecture/errors-and-validation/chat-core-errors.md)).
 
 Three consequences follow from that single fact, and together they explain the
 shape of everything else:
@@ -710,13 +746,13 @@ possible wrong value AND deletes tests, with the count.
 | # | Change | Made unrepresentable | Tests deleted | What breaks |
 |---|---|---|---|---|
 | 1 | `Word` gets a structured body (segments joined by compound and clitic boundaries, at most one primary stress per segment, shortenings as balanced pairs); `Word::new_unchecked` becomes `#[cfg(test)]` and the fields go private | leading and trailing `+`, `++`, misplaced stress and lengthening, secondary stress without primary, empty content, unbalanced shortening | **36** (34 in `validation/word/{tests,snapshot_tests}.rs`, 2 parser regressions) | 147 fabricating test sites; both parsers' word builders move from mutate-then-patch to one fallible constructor; 11 error codes leave the model layer and become parse diagnostics; the `WordContents` wire format changes |
-| 2 | Fragment offsets become three newtypes (`DocumentOffset`, `SyntheticOffset`, `FragmentOffset`) with the wrapper owning the only conversion, and a clamp that returns `AsGiven` or `ClampedTo` | rebasing a span into the wrong space, omitting the rebase, a silent clamp | **16** (all of `context_public_api.rs`) | four public `parse_*_fragment` signatures, and their LSP and CLI callers |
+| 2 | Fragment coordinates are typed: `FragmentSource` witnesses the caller's document space and `Synthetic<T>` the wrapper's, mintable only by the wrapper's lowering and leavable only through its `rebase*`; coverage checks take `Synthetic<Span>`. Done 2026-10-18 in this form rather than as three offset newtypes: the spaces that needed separating were the wrapper's and the caller's, and a phase type on the lowered VALUE closes the omitted-rebase route where offset newtypes would only have renamed the arithmetic. Found one real omission (`parse_header` never rebased) and removed the nested wrappers of the participant and MOR-word fragments | rebasing a span into the wrong space, omitting the rebase, a silent clamp | the offset-arithmetic tests of `context_public_api.rs` that pinned subtraction by hand | `WrappedFragment`, `ParsedFragment`, `HeaderFragment`, the single-item lowerers |
 | 3 | The header preamble becomes typed slots plus nested `GemScope`s built once at the boundary | duplicate single-only headers, missing required headers, wrong header order, unmatched and mismatched gems | **35** (24 + 11 in `validation/header/`) | `ChatFile::validate*` takes a preamble instead of scraping lines, which forces row 4 |
 | 4 | `ChatFile` drops its four cached header-derived fields and `pub lines` | a cached `languages`/`options` drifting from the lines they came from; a JSON roundtrip that omits them silently yielding `ca_mode = false` on a CA file | few directly | 23 `ChatFile::new` sites and every consumer reading the cached fields; deliberate wire-format change |
 | 5 | `GrammaticalRelation` stores `SemanticWordIndex1` and `GraHeadRef`, and `Vec<_>` becomes a validated `DependencyForest` | index 0, dangling head, cycles, multiple roots, non-sequential indices | **8-12** | 98 `GrammaticalRelation::new` sites. Receipt for the shape: the typed `index_as_semantic()` accessor is called ZERO times today while `rel.head` is read raw 29 times, which is a proof type built by its consumers and never by its producer |
 | 6 | `ParseHealth` gains one `Alignment` enum with `fn tiers()` and an `AlignPermit`, replacing twenty hand-written mirrored predicates | forgetting an alignment gate; `ParseHealthState::default()` meaning "unknown" invisibly | **6** | 18 call sites |
 | 7 | `ValidationContext` gets one `FieldContext` and one `DeclaredLanguages`, and the byte-duplicate `get_other_language` / `is_tertiary_language` pair is deleted | three of four field Options set and the fourth not; primary/secondary/tertiary decoded by list position; a dropped `@Options: CA` validating as non-CA | **~8** | the six helpers that rebuild the pair by hand |
-| 8 | `Span` gains provenance (`Source(SourceSpan)` or `Synthesized`), with no `Default` and no numeric sentinel; `SourceLocation`'s two late-filled Options become a phase type `fn locate(SourceIndex) -> LocatedError` | a fabricated span indistinguishable from offset 0; a validator branching on `is_dummy()` and getting a wrong answer | few directly | 403 construction sites, overwhelmingly test scaffolding that row 1 removes anyway; 37 `is_dummy()` branches become decidable |
+| 8 | `Span` is geometry only (`start <= end` asserted in every profile, no `Default`, no sentinel); every model value carries `location: Location` (`Located(Span)` or `Unlocated`) from its constructor's first argument; diagnostics carry `DiagnosticLocation` (`Known` with a paired `LineColumn`, or `Unlocated`). Done 2026-10-18: `Span::DUMMY`, `is_dummy()` and `with_span` are deleted, AST JSON carries no locations, and the fabricated-AST gate holds the parser crates on production `Location::Unlocated` (tree-sitter 0; re2c 2 on 2026-10-19, down from 110, the two being the fallback arms reached only for a slice not from the source being converted: the re2c lexer keeps every token's whole lexeme, the line machine owns tier extents, and containers are placed as hulls) | a fabricated span indistinguishable from offset 0; a validator branching on `is_dummy()` and getting a wrong answer | few directly | 403 construction sites, overwhelmingly test scaffolding that row 1 removes anyway; 37 `is_dummy()` branches become decidable |
 | 9 | Finish the typed traversal migration: no `node.kind()` string comparison outside the generated carriers | a forgotten node kind compiling cleanly and dropping a subtree | **87** (30 characterization and visitor files) | 262 `.kind()` sites; `tokens.rs` and its 17 tests go too if the grammar's coarsened `token(...)` rules are un-coarsened |
 
 That is roughly 210 tests deleted with a compiler receipt, before row 9, and
@@ -787,8 +823,9 @@ returning.**
 duplicate roundtrip harness, the two root golden files and the audit binary that
 writes to the CWD, the command-surface manifest, the duplicate word snapshots.
 In the same commit: `cargo insta test --unreferenced=reject` joins `just gate`,
-and a ratchet counts `new_unchecked` and `Span::DUMMY` construction in test code
-and refuses an increase.
+and a ratchet counts `new_unchecked` and `from_checked_literal` construction in
+test code (it counted `Span::DUMMY` until that sentinel was deleted on
+2026-10-18) and refuses an increase.
 *Removes:* about 2.4 MB and roughly 470 files and cases, plus the ability for
 any of it to come back. The ratchet is what makes every later step provable:
 the number can only fall.
@@ -987,9 +1024,11 @@ memory.
 rg -c '^\s*#\[(test|tokio::test)\]' $(git ls-files '*.rs') | awk -F: '{s+=$2} END{print s}'
 rg -c '^\s*#\[(test|tokio::test)\]' $(git ls-files 'crates/talkbank-model') | awk -F: '{s+=$2} END{print s}'
 
-# Fabricated-AST construction
+# Fabricated-AST construction, and parser-minted unlocated values (the gate
+# counts code only, not comments or strings, and production text only for the
+# second; these are the raw lexical upper bounds)
 rg -c 'new_unchecked' $(git ls-files '*.rs') | awk -F: '{s+=$2} END{print s}'
-rg -c 'Span::DUMMY'   $(git ls-files '*.rs') | awk -F: '{s+=$2} END{print s}'
+rg -c --pcre2 '(?<![A-Za-z0-9_])Location::Unlocated' $(git ls-files 'crates/talkbank-parser*/src/*.rs' 'crates/talkbank-parser*/src/**/*.rs') | awk -F: '{s+=$2} END{print s}'
 
 # Construct specs, and the corpus cases derived from them. The `cst` fence is
 # written both as ```cst and as ``` cst, with a space; a scan anchored on the

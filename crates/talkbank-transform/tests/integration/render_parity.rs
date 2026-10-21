@@ -85,7 +85,8 @@ fn plain_and_colored_renders_agree_on_line() {
         let line = error
             .location()
             .expect("source admission")
-            .line
+            .position()
+            .map(|p| p.line.get())
             .expect("enhance_errors_with_source populates location.line");
         let marker = format!(":{line}:");
 
@@ -128,7 +129,8 @@ fn render_diagnostics_text_and_ansi_agree_on_line() {
             .error
             .location()
             .expect("source admission")
-            .line
+            .position()
+            .map(|p| p.line.get())
             .expect("render_diagnostics enhances internally -> location.line is set");
         let marker = format!(":{line}:");
 
@@ -159,11 +161,14 @@ fn render_diagnostics_text_and_ansi_agree_on_line() {
 /// must retain the finding without fabricating a caret, EOF location or verdict.
 #[test]
 fn invalid_source_context_never_falls_back_to_a_guessed_location() {
-    use talkbank_model::{ErrorCode, ErrorContext, ErrorLabel, SourceLocation, Span};
+    use talkbank_model::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorLabel, Span};
     let source = "é🙂";
     let shared = miette::NamedSource::new("fallback.cha", std::sync::Arc::new(source.to_owned()));
     let raw = ParseError::build(ErrorCode::UnparsableContent)
-        .location(SourceLocation::new(Span::new(1, 4)).with_position(99, 88))
+        .location(DiagnosticLocation::known_at(
+            Span::new(1, 4),
+            talkbank_model::LineColumn::one_based(99, 88).expect("one-based position"),
+        ))
         .message("original finding")
         .context(ErrorContext::new("stale snippet", Span::new(0, 5), "stale"))
         .label(ErrorLabel::new(Span::new(0, 100), "original label"))

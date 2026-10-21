@@ -22,13 +22,14 @@ mod simple;
 mod special;
 mod structured;
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, HeaderChoice, HeaderChoiceSourceView, SourceField, SourceSlice, SourceSlotView,
     ThumbnailHeaderNode,
 };
 use crate::model::Header;
 use crate::node_types::THUMBNAIL_HEADER;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 
@@ -129,7 +130,7 @@ fn dispatch_header_choice<'tree>(
         HeaderChoiceSourceView::BirthOfHeader(n) => lower!(bound special::birth_of, n),
         HeaderChoiceSourceView::BirthplaceOfHeader(n) => lower!(bound special::birthplace_of, n),
         HeaderChoiceSourceView::L1OfHeader(n) => lower!(bound special::l1_of, n),
-        HeaderChoiceSourceView::OptionsHeader(n) => lower!(special::options, n),
+        HeaderChoiceSourceView::OptionsHeader(n) => lower!(bound special::options, n),
 
         // GEM headers.
         HeaderChoiceSourceView::BgHeader(n) => lower!(bound gem::bg, n),
@@ -172,8 +173,8 @@ fn thumbnail<'tree>(
     errors.report(ParseError::new(
         ErrorCode::UnknownHeader,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(input, node.start_byte()..node.end_byte(), THUMBNAIL_HEADER),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(input, span_of(node), THUMBNAIL_HEADER),
         "Unsupported @Thumbnail header",
     ));
     ParseOutcome::rejected()

@@ -191,10 +191,8 @@ fn remaining_apis_preserve_input_shape_and_error_detection() -> Result<(), Strin
                         .diagnostics()
                         .filter(|error| error.severity == Severity::Error)
                     {
-                        let span = error.location.span;
-                        if (span.start as usize) < offset
-                            || (span.end as usize) > offset + input.len()
-                        {
+                        let span = error.location.span().expect("located diagnostic");
+                        if (span.start()) < offset || (span.end()) > offset + input.len() {
                             failures.push(format!("{api:?} {invocation:?} {fault:?}: diagnostic outside caller at {offset}: {span:?}"));
                         }
                     }

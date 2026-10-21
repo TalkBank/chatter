@@ -85,6 +85,11 @@ fn shapes_generic_over_their_axes_are_inspected_once_by_their_tree_reading() {
             Example(NarrowedChildren<'tree, K, R>),
         }
         pub struct NarrowedMissing<K: KindProof, M>(pub K::Missing<M>);
+        pub struct FlatChildren<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw, P: PresenceProof = BroadPresence> {
+            pub item: KindSlot<'tree, ExampleNode<'tree>, R>,
+            pub trailing_extras: Vec<Extra<'tree>>,
+            pub unexpected: Vec<tree_sitter::Node<'tree>>,
+        }
     "#;
     let inventory = Inventory::parse(source, "[]").expect("inventory source");
     assert_eq!(
@@ -102,6 +107,13 @@ fn shapes_generic_over_their_axes_are_inspected_once_by_their_tree_reading() {
         ["item"]
     );
     assert!(inventory.carrier("AdmittedNarrowedChildren").is_none());
+    assert_eq!(
+        inventory
+            .carrier("FlatChildren")
+            .expect("presence axis")
+            .fields(),
+        ["item"]
+    );
     let rendered = inventory.render().expect("observed layouts");
     assert!(rendered.contains("impl_inspect_choice!(NarrowedChoice { Example });"));
     assert!(!rendered.contains("Admitted"));

@@ -5,7 +5,6 @@
 //! - [Model phonology](https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology)
 
 use super::{PhoItem, PhoTierType, PhoWord, WriteChat};
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
@@ -49,11 +48,12 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Examples
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{PhoItem, PhoTier, PhoTierType, PhoWord};
 ///
 /// // Child says "fwi" for "three"
-/// let pho = PhoTier::new_pho(vec![PhoItem::Word(PhoWord::new("fwi"))]);
-/// let mod_tier = PhoTier::new_mod(vec![PhoItem::Word(PhoWord::new("θri"))]);
+/// let pho = PhoTier::new_pho(Location::Unlocated, vec![PhoItem::Word(PhoWord::new("fwi"))]);
+/// let mod_tier = PhoTier::new_mod(Location::Unlocated, vec![PhoItem::Word(PhoWord::new("θri"))]);
 ///
 /// // Should align 1-to-1
 /// assert_eq!(pho.len(), mod_tier.len());
@@ -79,32 +79,34 @@ pub struct PhoTier {
     pub items: PhoItems,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl PhoTier {
     /// Constructs a phonology tier from parsed items and explicit tier type.
-    pub fn new(tier_type: PhoTierType, items: Vec<PhoItem>) -> Self {
+    pub fn new(
+        location: impl Into<crate::Location>,
+        tier_type: PhoTierType,
+        items: Vec<PhoItem>,
+    ) -> Self {
         Self {
             tier_type,
             items: items.into(),
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata used in diagnostics.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Legacy convenience constructor from plain token text.
     ///
     /// Each token becomes `PhoItem::Word`. Prefer [`Self::new`] when callers
     /// already parsed groups or other structured `%pho/%mod` forms.
-    pub fn from_tokens(tier_type: PhoTierType, tokens: Vec<String>) -> Self {
+    pub fn from_tokens(
+        location: impl Into<crate::Location>,
+        tier_type: PhoTierType,
+        tokens: Vec<String>,
+    ) -> Self {
         let items: Vec<PhoItem> = tokens
             .into_iter()
             .map(|text| PhoItem::Word(PhoWord::new(text)))
@@ -112,18 +114,18 @@ impl PhoTier {
         Self {
             tier_type,
             items: items.into(),
-            span: Span::DUMMY,
+            location: location.into(),
         }
     }
 
     /// Construct `%pho` tier (observed pronunciation).
-    pub fn new_pho(items: Vec<PhoItem>) -> Self {
-        Self::new(PhoTierType::Pho, items)
+    pub fn new_pho(location: impl Into<crate::Location>, items: Vec<PhoItem>) -> Self {
+        Self::new(location, PhoTierType::Pho, items)
     }
 
     /// Construct `%mod` tier (target/model pronunciation).
-    pub fn new_mod(items: Vec<PhoItem>) -> Self {
-        Self::new(PhoTierType::Mod, items)
+    pub fn new_mod(location: impl Into<crate::Location>, items: Vec<PhoItem>) -> Self {
+        Self::new(location, PhoTierType::Mod, items)
     }
 
     /// Returns `true` if this tier serializes as `%pho`.

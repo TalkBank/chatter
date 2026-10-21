@@ -43,9 +43,9 @@
 //!
 //! # Reachability note (why the malformed cases look the way they do)
 //!
-//! `parse_gra_tier` is only invoked from the dispatch when the tier node has NO
-//! tree-sitter error (`GRA_DEPENDENT_TIER => if tier_node.has_error() { ... } else
-//! { parse_gra_tier(...) }`). A structurally broken `%gra` line (empty body,
+//! `parse_gra_tier` is only invoked from the dispatch when `TierAdmission::admit`
+//! finds the tier node has NO tree-sitter error (`attach_gra` in
+//! `dependent_tier_dispatch/parsed.rs`). A structurally broken `%gra` line (empty body,
 //! missing tab) makes the tier node `has_error()` and is routed to the upstream
 //! placeholder / error path (E600 / E602), so `parse_gra_tier`'s own
 //! "missing gra_contents -> MalformedGrammarRelation + empty tier" silent-partial
@@ -61,7 +61,7 @@ use talkbank_model::model::{DependentTier, Line};
 use talkbank_parser::TreeSitterParser;
 
 /// One diagnostic: (code, span start, span end, message).
-type Diag = (String, u32, u32, String);
+type Diag = (String, usize, usize, String);
 
 /// A valid `%gra` line with five `index|head|relation` triples on a single
 /// utterance. Exercises the reachable path: a `Present` `gra_contents` body slot
@@ -114,8 +114,8 @@ fn parse_gra(input: &str) -> (Vec<(usize, usize, String)>, bool, Vec<Diag>) {
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })
@@ -169,7 +169,7 @@ fn zero_index_relation_is_rejected_leaving_an_empty_gra_tier() {
         "the rejected relation must not be recovered as a fabricated default: {relations:?}"
     );
 
-    let e709: Vec<&(String, u32, u32, String)> =
+    let e709: Vec<&(String, usize, usize, String)> =
         diags.iter().filter(|(c, _, _, _)| c == "E709").collect();
     assert_eq!(
         e709,

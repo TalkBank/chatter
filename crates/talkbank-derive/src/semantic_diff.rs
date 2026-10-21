@@ -12,9 +12,9 @@ fn field_diffs(fields: &FieldsPlan, bound: bool) -> TokenStream {
         let left = &field.left;
         let right = &field.right;
         let call = if bound {
-            quote! { #left.semantic_diff_into(#right, path, report, ctx); }
+            quote! { crate::model::SemanticDiff::semantic_diff_into(#left, #right, path, report, ctx); }
         } else {
-            quote! { self.#member.semantic_diff_into(&other.#member, path, report, ctx); }
+            quote! { crate::model::SemanticDiff::semantic_diff_into(&self.#member, &other.#member, path, report, ctx); }
         };
         quote! {
             if report.is_truncated() { break '__tb_diff; }
@@ -25,9 +25,9 @@ fn field_diffs(fields: &FieldsPlan, bound: bool) -> TokenStream {
     });
     let span = fields.span_expr(bound);
     quote! {
-        let __prev_span = ctx.push_span(#span);
+        let __prev_location = ctx.push_location(#span);
         '__tb_diff: { #(#diffs)* }
-        ctx.pop_span(__prev_span);
+        ctx.pop_location(__prev_location);
     }
 }
 
@@ -36,6 +36,9 @@ pub(crate) fn impl_semantic_diff(input: &InputPlan<Semantic>) -> TokenStream {
     let name = &input.name;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let body = match &input.body {
+        BodyPlan::Enum(variants) if variants.is_empty() => {
+            quote! { let _ = (other, path, report, ctx); match *self {} }
+        }
         BodyPlan::Struct(fields) => {
             if fields.active().next().is_none() {
                 quote! { let _ = (other, path, report, ctx); }

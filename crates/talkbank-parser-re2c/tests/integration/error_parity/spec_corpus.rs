@@ -13,6 +13,8 @@ use talkbank_spec_vocabulary::frontmatter::{Claim, ExampleFrontmatter};
 
 use super::model::{BackendReport, ExampleOrdinal, ParsingFindings, SpecLabel, ValidationFindings};
 
+use crate::fixture_utils::LineEnding;
+
 /// One authored example. The actual tree-sitter outcome issues its obligation.
 pub(super) struct SpecCase {
     pub(super) label: SpecLabel,
@@ -40,6 +42,15 @@ impl SpecInput {
 
     pub(super) fn text(&self) -> &str {
         &self.text
+    }
+
+    /// Change only transport newlines, keeping the declared name and policy.
+    pub(super) fn with_line_ending(&self, ending: LineEnding) -> Self {
+        Self {
+            text: ending.apply(&self.text).into_owned(),
+            source: self.source.clone(),
+            rules: self.rules,
+        }
     }
 
     /// Capture parser findings before entering shared, named model validation.
@@ -132,20 +143,22 @@ fn declared_source_controls_filename_validation() {
         (Some(declared), FilenameExpectation::Mismatching),
     ] {
         case.input.source = source;
-        let reports = [
-            case.input
-                .measure_with(|text, errors| canonical.parse_chat_file_streaming(text, errors)),
-            case.input
-                .measure_with(talkbank_parser_re2c::parser::parse_chat_file_to_model),
-        ];
-        for reported in reports {
-            let mismatch = reported.codes().contains(&ErrorCode::MediaFilenameMismatch);
-            assert_eq!(
-                mismatch,
-                matches!(expected, FilenameExpectation::Mismatching),
-                "source {:?}: {reported}",
-                case.input.source
-            );
+        for ending in LineEnding::ALL {
+            let input = case.input.with_line_ending(ending);
+            let reports = [
+                input
+                    .measure_with(|text, errors| canonical.parse_chat_file_streaming(text, errors)),
+                input.measure_with(talkbank_parser_re2c::parser::parse_chat_file_to_model),
+            ];
+            for reported in reports {
+                let mismatch = reported.codes().contains(&ErrorCode::MediaFilenameMismatch);
+                assert_eq!(
+                    mismatch,
+                    matches!(expected, FilenameExpectation::Mismatching),
+                    "source {:?}, {ending:?}: {reported}",
+                    case.input.source
+                );
+            }
         }
     }
 }

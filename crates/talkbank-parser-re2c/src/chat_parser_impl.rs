@@ -57,13 +57,19 @@ impl Re2cParser {
             talkbank_model::model::content::word::ca::normalize_ca_omissions_in_main_tier(
                 &mut main,
             );
-        } else if let Some(span) = main.find_context_dependent_ca_omission_span() {
+        } else if let Some(location) = main.find_context_dependent_ca_omission() {
+            // The shorthand's presence rejects the fragment; a snippet is
+            // quoted only when the lexer recorded where the word is.
+            let context = location.span().map(|span| {
+                talkbank_model::ErrorContext::new(source.input(), span, "CA omission shorthand")
+            });
             source.error_sink(errors).report(talkbank_model::ParseError::new(
-                talkbank_model::ErrorCode::InvalidWordFormat, talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(span),
-                talkbank_model::ErrorContext::new(source.input(), span.start as usize..span.end as usize,
-                    "CA omission shorthand"),
-                "Main-tier fragment requires an explicit CA option to interpret omission shorthand"));
+                talkbank_model::ErrorCode::InvalidWordFormat,
+                talkbank_model::Severity::Error,
+                talkbank_model::DiagnosticLocation::from(location),
+                context,
+                "Main-tier fragment requires an explicit CA option to interpret omission shorthand",
+            ));
             return ParseOutcome::rejected();
         }
         ParseOutcome::parsed(main)
@@ -82,8 +88,12 @@ impl Re2cParser {
             .report(talkbank_model::ParseError::new(
                 talkbank_model::ErrorCode::UnparsableContent,
                 talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::from_offsets(0, input.len()),
-                talkbank_model::ErrorContext::new(input, 0..input.len(), context),
+                talkbank_model::DiagnosticLocation::from_offsets(0, input.len()),
+                talkbank_model::ErrorContext::new(
+                    input,
+                    talkbank_model::Span::new(0, input.len()),
+                    context,
+                ),
                 format!("Native re2c grammar rejected the {context} fragment"),
             ));
         ParseOutcome::rejected()
@@ -311,7 +321,13 @@ impl ChatParser for Re2cParser {
             return ParseOutcome::rejected();
         };
         let parsed = crate::parser::parse_mor_tier(input);
-        match ModelMorTier::try_from(&parsed) {
+        // A fragment's tier is the whole input.
+        let source = crate::source_text::SourceText::new(input);
+        match crate::convert::mor_tier_to_model(
+            &parsed,
+            talkbank_model::Location::Located(source.whole()),
+            source,
+        ) {
             Ok(tier) => ParseOutcome::parsed(fragment_source.rebase(tier)),
             // AST-to-model conversion failure (missing or unrecognized
             // terminator). Caller pattern-matches on Rejected.
@@ -362,9 +378,12 @@ impl ChatParser for Re2cParser {
         // at the wrong bytes of the file. Every other entry point in this file
         // wraps first, and so does the canonical backend.
         let diagnostics = fragment_source.error_sink(errors);
-        ParseOutcome::parsed(fragment_source.rebase(
-            crate::convert::gra_tier_to_model(&parsed, source, &diagnostics).tier_without_health(),
-        ))
+        ParseOutcome::parsed(
+            fragment_source.rebase(
+                crate::convert::gra_tier_to_model(&parsed, source, &diagnostics)
+                    .tier_without_health(talkbank_model::Location::Located(source.whole())),
+            ),
+        )
     }
 
     fn parse_gra_relation(
@@ -412,7 +431,13 @@ impl ChatParser for Re2cParser {
         };
         match crate::parser::parse_pho_tier_checked(input) {
             Some(parsed) if !parsed.items.is_empty() => {
-                ParseOutcome::parsed(fragment_source.rebase(ModelPhoTier::from(&parsed)))
+                ParseOutcome::parsed(fragment_source.rebase(crate::convert::convert_pho_tier(
+                    &parsed,
+                    talkbank_model::model::dependent_tier::pho::PhoTierType::Pho,
+                    talkbank_model::Location::Located(
+                        crate::source_text::SourceText::new(input).whole(),
+                    ),
+                )))
             }
             Some(_) | None => Self::rejected_fragment(fragment_source, errors, "phonology tier"),
         }
@@ -474,7 +499,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_act_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_act_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_cod_tier(
@@ -490,7 +518,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_cod_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_cod_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_com_tier(
@@ -506,7 +537,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_com_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_com_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_com_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_exp_tier(
@@ -522,7 +556,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_exp_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_exp_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_add_tier(
@@ -538,7 +575,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_add_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_add_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_gpx_tier(
@@ -554,7 +594,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_gpx_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_gpx_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_int_tier(
@@ -570,7 +613,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_int_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_int_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_spa_tier(
@@ -586,7 +632,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_spa_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_spa_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_sit_tier(
@@ -602,7 +651,10 @@ impl ChatParser for Re2cParser {
         };
         let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
-        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_sit_tier(&parsed)))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_sit_tier(
+            &parsed,
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )))
     }
 
     fn parse_wor_tier(
@@ -616,7 +668,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        match crate::convert::wor_tier_from_input(input) {
+        let diagnostics = fragment_source.error_sink(errors);
+        match crate::convert::wor_tier_from_input(input, &diagnostics) {
             Some(wor) => ParseOutcome::parsed(fragment_source.rebase(wor)),
             // An unparsable %wor tier used to arrive here as an empty one, so a
             // malformed tier and a tier with no words were indistinguishable.
@@ -649,6 +702,7 @@ impl ChatParser for Re2cParser {
         if let Some(tier) = crate::parser::parse_dependent_fragment(input, &diagnostics)
             && let Some(model_tier) = crate::convert::dependent_tier_to_model(
                 &tier.tier,
+                talkbank_model::Location::Located(tier.extent),
                 crate::source_text::SourceText::new(input),
                 &diagnostics,
                 &mut no_utterance_health,

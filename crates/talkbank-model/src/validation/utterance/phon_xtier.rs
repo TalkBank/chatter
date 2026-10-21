@@ -24,7 +24,7 @@ use crate::model::dependent_tier::{
     PhoItem, PhoTier, SylTier, SylWordKind, classify_syl_word, reconstruct_syl_word,
 };
 use crate::model::{MediaTiming, Utterance};
-use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// 1 ms rounding tolerance for the `%xphoint` media-bounds check.
 ///
@@ -152,10 +152,10 @@ fn validate_syl_tier(
                     && word.as_str() != expected
                 {
                     errors.report(
-                        ParseError::at_span(
+                        ParseError::at_location(
                             reconstruction_code,
                             Severity::Error,
-                            syl.span,
+                            syl.location,
                             format!(
                                 "{prefix} word {} is the pause filler '{}', but the {source_label} word at that position is '{}'",
                                 i + 1,
@@ -178,10 +178,10 @@ fn validate_syl_tier(
                     && reconstructed != expected
                 {
                     errors.report(
-                        ParseError::at_span(
+                        ParseError::at_location(
                             reconstruction_code,
                             Severity::Error,
-                            syl.span,
+                            syl.location,
                             format!(
                                 "{prefix} word {} ('{}') reconstructs to '{}', which does not match the {source_label} word '{}'",
                                 i + 1,
@@ -198,10 +198,10 @@ fn validate_syl_tier(
             }
             Err(err) if err.is_illegal_code() => {
                 errors.report(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::SylIllegalConstituentCode,
                         Severity::Error,
-                        syl.span,
+                        syl.location,
                         format!("{prefix} word {} ('{}'): {err}", i + 1, word.as_str()),
                     )
                     .with_suggestion("Use one of the legal constituent codes: O N C L R E A D U"),
@@ -209,10 +209,10 @@ fn validate_syl_tier(
             }
             Err(err) => {
                 errors.report(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::SylUnitMalformed,
                         Severity::Error,
-                        syl.span,
+                        syl.location,
                         format!("{prefix} word {} ('{}'): {err}", i + 1, word.as_str()),
                     )
                     .with_suggestion("Each unit must be one phone, a ':' , then a single code"),
@@ -237,7 +237,7 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
         // and empty-side pairs are rejected earlier at parse time.)
         for pair in &word.pairs {
             if pair.source.is_none() && pair.target.is_none() {
-                report_phoaln_pair_malformed(phoaln.span, i, errors);
+                report_phoaln_pair_malformed(phoaln.location, i, errors);
             }
         }
 
@@ -254,7 +254,7 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
         check_phoaln_reconstruction(
             &model_side,
             binding.model_word(),
-            phoaln.span,
+            phoaln.location,
             i,
             "%mod",
             ErrorCode::PhoalnModReconstructionMismatch,
@@ -270,7 +270,7 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
         check_phoaln_reconstruction(
             &actual_side,
             binding.actual_word(),
-            phoaln.span,
+            phoaln.location,
             i,
             "%pho",
             ErrorCode::PhoalnPhoReconstructionMismatch,
@@ -279,12 +279,16 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
     }
 }
 
-fn report_phoaln_pair_malformed(span: Span, word_index: usize, errors: &impl ErrorSink) {
+fn report_phoaln_pair_malformed(
+    location: crate::Location,
+    word_index: usize,
+    errors: &impl ErrorSink,
+) {
     errors.report(
-        ParseError::at_span(
+        ParseError::at_location(
             ErrorCode::PhoalnPairMalformed,
             Severity::Error,
-            span,
+            location,
             format!(
                 "%xphoaln word {} contains a '∅↔∅' pair, which is never legal",
                 word_index + 1
@@ -297,7 +301,7 @@ fn report_phoaln_pair_malformed(span: Span, word_index: usize, errors: &impl Err
 fn check_phoaln_reconstruction(
     reconstructed: &str,
     expected: Option<&str>,
-    span: Span,
+    location: crate::Location,
     word_index: usize,
     source_label: &str,
     code: ErrorCode,
@@ -307,10 +311,10 @@ fn check_phoaln_reconstruction(
         && strip_nonsegmental(reconstructed) != strip_source_notation(expected)
     {
         errors.report(
-            ParseError::at_span(
+            ParseError::at_location(
                 code,
                 Severity::Error,
-                span,
+                location,
                 format!(
                     "%xphoaln word {} reconstructs to '{}' on the {source_label} side, which does not match '{}'",
                     word_index + 1,
@@ -359,7 +363,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
     let Some(xphoint) = utterance.xphoint_tier() else {
         return;
     };
-    let span = xphoint.span;
+    let span = xphoint.location;
     let pho_tier = utterance.pho_tier();
     let reconstruction_clean = utterance.parse_health().can_align_xphoint_to_pho();
 
@@ -369,7 +373,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
         && xphoint.groups.len() != pho.items.len()
     {
         errors.report(
-            ParseError::at_span(
+            ParseError::at_location(
                 ErrorCode::XphointGroupCountMismatch,
                 Severity::Error,
                 span,
@@ -393,7 +397,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
                 && reconstructed != expected
             {
                 errors.report(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::XphointPhoneReconstructionMismatch,
                         Severity::Error,
                         span,
@@ -414,7 +418,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
             // E742: start < end.
             if timing.start_ms >= timing.end_ms {
                 errors.report(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::XphointBulletInvalid,
                         Severity::Error,
                         span,
@@ -433,7 +437,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
                 && timing.start_ms < previous.last.start_ms
             {
                 errors.report(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::XphointIntervalNotMonotonic,
                         Severity::Error,
                         span,
@@ -458,7 +462,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
         let media_end = media.timing.end_ms;
         if observed.exceeds_media_bounds(&media.timing) {
             errors.report(
-                ParseError::at_span(
+                ParseError::at_location(
                     ErrorCode::XphointMediaBoundsViolation,
                     Severity::Error,
                     span,

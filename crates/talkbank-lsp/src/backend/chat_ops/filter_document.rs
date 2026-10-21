@@ -34,9 +34,13 @@ fn filter_by_speakers(chat_file: &ChatFile, text: &str, selected: &HashSet<&str>
 
     for model_line in &chat_file.lines {
         match model_line {
-            Line::Header { span, .. } => {
-                let start_line = line_index.byte_to_line(span.start as usize);
-                let end_line = line_index.byte_to_line(span.end.saturating_sub(1) as usize);
+            Line::Header { location, .. } => {
+                // A header with no source location has no lines to copy.
+                let Some(span) = location.span() else {
+                    continue;
+                };
+                let start_line = line_index.byte_to_line(span.start());
+                let end_line = line_index.byte_to_line(span.end().saturating_sub(1));
                 for line in &lines[start_line..=end_line.min(lines.len().saturating_sub(1))] {
                     output.push(line.to_string());
                 }
@@ -51,21 +55,19 @@ fn filter_by_speakers(chat_file: &ChatFile, text: &str, selected: &HashSet<&str>
                     output.push(hdr.to_string());
                 }
 
-                let main_start = line_index.byte_to_line(utterance.main.span.start as usize);
+                // An utterance with no source location has no lines to copy.
+                let Some(main_span) = utterance.main.location.span() else {
+                    continue;
+                };
+                let main_start = line_index.byte_to_line(main_span.start());
                 let block_end = utterance
                     .dependent_tiers
                     .last()
-                    .and_then(|dt| {
-                        let span = dt.tier.span();
-                        if span.is_dummy() {
-                            None
-                        } else {
-                            Some(line_index.byte_to_line(span.end.saturating_sub(1) as usize))
-                        }
-                    })
-                    .unwrap_or_else(|| {
-                        line_index.byte_to_line(utterance.main.span.end.saturating_sub(1) as usize)
-                    });
+                    .and_then(|dt| dt.tier.location().span())
+                    .map_or_else(
+                        || line_index.byte_to_line(main_span.end().saturating_sub(1)),
+                        |span| line_index.byte_to_line(span.end().saturating_sub(1)),
+                    );
 
                 for line in &lines[main_start..=block_end.min(lines.len().saturating_sub(1))] {
                     output.push(line.to_string());

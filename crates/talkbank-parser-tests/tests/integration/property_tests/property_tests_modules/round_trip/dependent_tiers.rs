@@ -15,7 +15,7 @@ fn gra_tier_round_trip_simple() {
         GrammaticalRelation::new(2, 0, "ROOT"),
     ];
 
-    let tier = GraTier::new_gra(relations);
+    let tier = GraTier::new_gra(talkbank_model::Location::Unlocated, relations);
     let output = tier.to_chat();
     assert_eq!(
         output, "%gra:\t1|2|SUBJ 2|0|ROOT",
@@ -28,6 +28,7 @@ fn gra_tier_round_trip_simple() {
 #[test]
 fn pho_tier_round_trip_pho() {
     let tier = PhoTier::new(
+        talkbank_model::Location::Unlocated,
         PhoTierType::Pho,
         vec![
             PhoItem::Word(PhoWord::new("wʌn")),
@@ -47,6 +48,7 @@ fn pho_tier_round_trip_pho() {
 #[test]
 fn pho_tier_round_trip_mod() {
     let tier = PhoTier::new(
+        talkbank_model::Location::Unlocated,
         PhoTierType::Mod,
         vec![
             PhoItem::Word(PhoWord::new("wʌn")),
@@ -65,7 +67,10 @@ fn pho_tier_round_trip_mod() {
 /// Verifies `%act` tier round-trip serialization.
 #[test]
 fn act_tier_round_trip() {
-    let tier = ActTier::new(BulletContent::from_text("<1w-2w> holds object out to Amy"));
+    let tier = ActTier::new(
+        talkbank_model::Location::Unlocated,
+        BulletContent::from_text("<1w-2w> holds object out to Amy"),
+    );
     let output = tier.to_chat();
     assert_eq!(
         output, "%act:\t<1w-2w> holds object out to Amy",
@@ -77,7 +82,10 @@ fn act_tier_round_trip() {
 /// Verifies `%com` tier round-trip serialization.
 #[test]
 fn com_tier_round_trip() {
-    let tier = ComTier::new(BulletContent::from_text("spoken softly"));
+    let tier = ComTier::new(
+        talkbank_model::Location::Unlocated,
+        BulletContent::from_text("spoken softly"),
+    );
     let output = tier.to_chat();
     assert_eq!(
         output, "%com:\tspoken softly",
@@ -89,7 +97,10 @@ fn com_tier_round_trip() {
 /// Verifies `%exp` tier round-trip serialization.
 #[test]
 fn exp_tier_round_trip() {
-    let tier = ExpTier::new(BulletContent::from_text("dancing noises"));
+    let tier = ExpTier::new(
+        talkbank_model::Location::Unlocated,
+        BulletContent::from_text("dancing noises"),
+    );
     let output = tier.to_chat();
     assert_eq!(
         output, "%exp:\tdancing noises",
@@ -101,7 +112,10 @@ fn exp_tier_round_trip() {
 /// Adds tier round trip.
 #[test]
 fn add_tier_round_trip() {
-    let tier = AddTier::new(BulletContent::from_text("MOT"));
+    let tier = AddTier::new(
+        talkbank_model::Location::Unlocated,
+        BulletContent::from_text("MOT"),
+    );
     let output = tier.to_chat();
     assert_eq!(output, "%add:\tMOT", "AddTier roundtrip failed: {}", output);
 }
@@ -109,7 +123,10 @@ fn add_tier_round_trip() {
 /// Verifies `%gpx` tier round-trip serialization.
 #[test]
 fn gpx_tier_round_trip() {
-    let tier = GpxTier::new(BulletContent::from_text("points at toy"));
+    let tier = GpxTier::new(
+        talkbank_model::Location::Unlocated,
+        BulletContent::from_text("points at toy"),
+    );
     let output = tier.to_chat();
     assert_eq!(
         output, "%gpx:\tpoints at toy",

@@ -270,7 +270,11 @@ pub fn render_error_details(
                 Line::from(vec![Span::styled(
                     match error.presentation() {
                         Ok(presentation) => {
-                            format!("    Line {}:{}", presentation.line(), presentation.column())
+                            format!(
+                                "    Line {}:{}",
+                                presentation.position().line,
+                                presentation.position().column
+                            )
                         }
                         Err(reason) => format!("    Source context unavailable: {reason}"),
                     },
@@ -285,8 +289,8 @@ pub fn render_error_details(
             {
                 let context_line = ctx.first_line();
 
-                let span_start = ctx.span().start() as usize;
-                let span_end = ctx.span().end() as usize;
+                let span_start = ctx.span().start();
+                let span_end = ctx.span().end();
                 let source_lines: Vec<&str> = ctx.source_text().split('\n').collect();
 
                 all_lines.push(Line::from(""));

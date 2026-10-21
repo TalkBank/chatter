@@ -1,118 +1,100 @@
 # Architecture Overview
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:12 EDT
+**Last modified:** {{git-dates:page}}
 
-`TalkBank/chatter` is the standalone home of the TalkBank CHAT specification,
-tree-sitter grammar, Rust crates, `chatter` CLI, LSP server, and desktop app.
-It is self-contained: the CHAT-format core builds and runs
-without any external TalkBank repository, so downstream consumers can depend on
-its crates directly.
+Chatter brings the CHAT specification examples, grammar, shared Rust model,
+parsers, validation and user applications together. The tree-sitter parser is
+the default; the independent re2c backend is also part of the 1.0 compatibility
+work. Neither implementation defines correctness merely by accepting an input.
 
-## Data Flow
+## Source, generation and runtime
 
-Specification is the source of truth. Code is generated downstream from it.
+There is no single fully generated path from prose specification to application.
+Authored specs, symbol/error registries, grammar rules and handwritten semantic
+validation have different owners. Generated artifacts connect them and must stay
+in sync; they do not prove that every rule or construct has been covered.
 
-```text
-spec/           Source of truth (CHAT specification)
-    ↓
-grammar.js      Tree-sitter grammar (in grammar/)
-    ↓
-parser.c        Generated C parser (never hand-edited)
-    ↓
-Rust crates     Parser → Model → Validation → Transform
-    ↓
-Applications    chatter CLI, LSP server, desktop app
-```
-
-## Two layers
-
-Within this repository, the architecture splits into two layers:
-
-**Source-of-truth artifacts.** `spec/`, `spec/symbols/`, and `grammar/` define
-the CHAT language and generate downstream parser tests, error docs, and shared
-symbol sets.
-
-**Consumer crates and applications.** The Rust crates under `crates/`, the
-`chatter` CLI, `talkbank-lsp`, and the desktop app all consume those
-source-of-truth artifacts rather than defining CHAT semantics independently.
-
-## Crate Dependency Graph
+The following flow shows the principal artifact boundaries, not Cargo imports:
 
 ```mermaid
 flowchart TD
-    derive["talkbank-derive\nProc macros"]
-    model["talkbank-model\nData model, validation, alignment, errors"]
-    cache["talkbank-cache\nValidation + roundtrip cache"]
-    parser["talkbank-parser\nCanonical parser (tree-sitter)"]
-    re2c["talkbank-parser-re2c\nAlternate parser (equivalence oracle)"]
-    transform["talkbank-transform\nPipelines, CHAT↔JSON, caching"]
-    cli["chatter\nCLI: validate, normalize, convert"]
-    lsp["talkbank-lsp\nLanguage Server Protocol"]
-    s2c["send2clan\nCLAN app bindings"]
-    desktop["chatter-desktop\nDesktop validation app (Tauri)"]
-    tests["talkbank-parser-tests\nEquivalence tests"]
-
-    derive --> model
-    model --> parser & re2c
-    parser --> transform
-    re2c --> transform
-    cache --> transform
-    transform --> cli & lsp & desktop
-    s2c --> cli & desktop
-    parser --> tests
-    re2c --> tests
+    S["spec/: examples and registries"] -->|"registered generators"| A["Tests, fixtures, error docs and registry artifacts"]
+    G["grammar/grammar.js: grammar rules"] -->|"tree-sitter generator"| C["Generated C parser and node metadata"]
+    C -->|"pinned traversal generator"| T["Typed CST traversal and metadata bridge"]
+    C --> P["talkbank-parser"]
+    T --> P
+    P --> M["talkbank-model: owned CHAT, validation and serialization"]
+    R["talkbank-parser-re2c: native lexer and combinators"] --> M
+    M --> W["Applications and transform workflows"]
+    A -->|"finite contract checks"| W
 ```
 
-## Repository Layout
+The [Spec System](spec-system.md) owns the generated-artifact inventory;
+[Grammar Workflow](../contributing/grammar-workflow.md) owns regeneration.
+Some grammar regions are generated from registries; handwritten grammar rules
+remain an explicit source, not an output reconstructed from every spec example.
 
-```text
-chatter/
-├── grammar/                Tree-sitter grammar
-├── spec/                   CHAT specification (source of truth)
-│   ├── constructs/         Valid CHAT examples + expected parse trees
-│   ├── errors/             Invalid CHAT examples + claims
-│   ├── symbols/            Shared symbol registry (JSON)
-│   ├── tools/              Core spec generators
-│   └── runtime-tools/      Runtime-aware spec bootstrap/validation tools
-├── crates/                 Rust crates (model, parser, transform, CLI support, LSP)
-├── corpus/                 Reference corpus
-├── tests/                  Integration tests and fixtures
-├── schema/                 JSON Schema (auto-generated)
-├── apps/chatter-desktop/   Desktop validation app (Tauri v2, React)
-├── book/                   This documentation
-└── docs/                   Strategy, proposals, investigations
+Ordinary source builds consume committed generated artifacts. Regenerating
+typed traversal additionally needs the pinned standalone generator and the
+access described in the grammar workflow. A successful ordinary build is not
+proof of independent generator bootstrap, registry installation or release
+qualification.
+
+## Runtime boundaries
+
+- `talkbank-model` owns the shared model, parser traits, validation, alignment,
+  diagnostics and serialization contracts.
+- `talkbank-parser` lowers tree-sitter syntax into that model.
+  `talkbank-parser-re2c` uses its own native lexer/combinators and lowers into
+  the same model type. Shared type does not imply identical recovery values.
+- `talkbank-transform` owns higher-level parsing/validation/conversion,
+  transformation and runner workflows. Its default `validation-runner`
+  feature adds the shared cache and channel dependencies.
+- The CLI and desktop consume transform workflows. The LSP directly uses
+  the primary parser, model and grammar services; it does not depend on the
+  transform runner or SQLite cache.
+- `talkbank-llm` adapts the transform judgment-provider interface to HTTP for
+  explicitly requested model-assisted work. Ordinary CHAT parsing/validation
+  does not require a model service.
+
+These selected **normal dependency** edges come from the package manifests;
+arrows point from consumer to dependency. Build/dev dependencies and other
+direct edges are deliberately omitted.
+
+```mermaid
+flowchart TD
+    CLI["talkbank-chatter package / chatter executable"] --> X["talkbank-transform"]
+    D["chatter-desktop"] --> X
+    CLI --> H["talkbank-llm"]
+    H --> X
+    X --> P["talkbank-parser"]
+    X --> R["talkbank-parser-re2c"]
+    X -.->|"validation-runner feature"| C["talkbank-cache"]
+    X --> M["talkbank-model"]
+    C --> M
+    P --> M
+    R --> M
+    L["talkbank-lsp"] --> P
+    L --> M
+    L --> G["tree-sitter-talkbank"]
+    P --> G
 ```
 
-## Cargo Workspaces
+See [Crate Reference](crate-reference.md) for package names, locations and
+support tooling. Dependency availability is not a promise that every package
+or platform has completed publication acceptance.
 
-Two separate Cargo workspaces live here:
+## Choosing the next reference
 
-1. **Root workspace** (`Cargo.toml`), all Rust crates for parsing, model,
-   transform, CLI, LSP, and `apps/chatter-desktop/src-tauri`.
-2. **Spec workspace** (`spec/Cargo.toml`), `spec/tools` for core
-   generation, `spec/runtime-tools` for runtime-aware spec tooling.
-
-Use the relevant manifest path for the workspace you mean to operate in:
-
-- `spec/tools/Cargo.toml` for generators
-- `spec/runtime-tools/Cargo.toml` for bootstrap/mining/runtime validation
-
-## Where to read next
-
-For per-topic detail (sections being consolidated; see SUMMARY for the
-authoritative current list):
-
-- [Spec System](spec-system.md), [Grammar](grammar.md),
-  [Parser Backends](parser-backends.md), how CHAT becomes typed AST.
-- **CHAT model**: the AST itself, content traversal,
-  [wide-struct rule](chat-model/wide-structs.md).
-- [Alignment](alignment.md): tier alignment, DP, sequence alignment.
-- **Errors and validation**: diagnostics, validation gates,
-  and parser/model invariants.
-- **Editor/runtime integration**: `talkbank-lsp` and application
-  boundaries layered on top of the CHAT core.
-- [Memory and Ownership](memory-and-ownership.md), Type-Driven Design
-  (lands during M11 errors-and-validation work).
-
-For per-crate summaries see [Crate Reference](crate-reference.md).
+- [Repository Architecture and Boundaries](repo-architecture.md): directory
+  ownership, workspaces and which manifest to use.
+- [Parser Backends](parser-backends.md): semantic agreement and one-way error
+  detection, without demanding identical recovery.
+- [Parser/Model Contracts](parser-model-contracts.md), [Parsing](parsing.md)
+  and [Memory and Ownership](memory-and-ownership.md): admission, source
+  revision and lifetime boundaries.
+- [CHAT Model](chat-model/chat-model.md), [Alignment](alignment.md) and
+  [Validation](errors-and-validation/validation.md): runtime semantics.
+- [Documentation Architecture](../contributing/documentation-architecture.md):
+  where handwritten and generated documentation belongs.

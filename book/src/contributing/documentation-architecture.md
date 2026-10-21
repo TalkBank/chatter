@@ -8,17 +8,17 @@
 User-facing and contributor-facing prose lives in **mdBook**
 (`book/`). The repo-level `docs/` directory holds operator-facing
 material (release contract, versioning, code-signing, platform
-support, validation feature flags). Maintainers can also generate a
-local error-reference tree under `docs/errors/` while working on
-diagnostics, but that output is not the canonical checked-in docs
-surface. Subsystem-specific working docs stay in place
+support, validation feature flags). The checked-in error-reference tree under
+`docs/errors/` is generated from `spec/errors/`; edit the specs and regenerate,
+not the rendered pages. It complements the book, rather than supplying a
+second handwritten user guide. Subsystem-specific working docs stay in place
 only when tightly coupled to files in that directory.
 
 ```mermaid
 flowchart TD
     main["book/ (the unified Chatter mdBook)\nSurfaces: chatter, chat-format, architecture, contributing\nAudiences: users, integrators, contributors"]
     spec["spec/docs/\nSpec authoring guides"]
-    errors["docs/errors/\nOptional local generated error reference"]
+    errors["docs/errors/\nChecked-in generated error reference"]
     api["cargo doc\nRust API docs (auto-generated)"]
 
     main -->|"links to"| spec

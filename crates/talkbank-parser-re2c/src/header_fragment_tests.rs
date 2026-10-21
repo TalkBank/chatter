@@ -68,12 +68,12 @@ fn header_fragment_diagnostic_keeps_source_and_document_coordinates() {
                 .find(|error| error.code == ErrorCode::TierValidationError)
                 .unwrap();
             assert_eq!(
-                error.location.span,
-                Span::from_usize(offset, offset + input.len())
+                error.location.span().expect("located diagnostic"),
+                Span::new(offset, offset + input.len())
             );
             let context = error.context.as_ref().unwrap();
             assert_eq!(context.source_text, input);
-            assert_eq!(context.span, Span::from_usize(0, input.len()));
+            assert_eq!(context.span, Span::new(0, input.len()));
         }
     }
     check(&talkbank_parser::TreeSitterParser::new().unwrap());

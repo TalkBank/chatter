@@ -136,7 +136,10 @@ fn generated_equality_and_diff_agree_across_all_enum_shapes() {
     let report = values[5].0.semantic_diff(&values[7].0);
     assert_eq!(report.differences().len(), 1);
     assert_eq!(report.differences()[0].path, "value");
-    assert_eq!(report.differences()[0].span, Some(Span::new(10, 12)));
+    assert_eq!(
+        report.differences()[0].location,
+        crate::Location::Located(Span::new(10, 12))
+    );
 }
 
 #[test]
@@ -162,7 +165,7 @@ fn generated_struct_diffs_preserve_field_paths_and_skipped_metadata() {
         report
             .differences()
             .iter()
-            .all(|diff| diff.span == Some(left.span))
+            .all(|diff| diff.location == crate::Location::Located(left.span))
     );
 
     let report = Pair("one".into(), 1).semantic_diff(&Pair("two".into(), 2));

@@ -9,8 +9,8 @@
 use crate::chat_formatting::{PlainDisplayResult, process_for_plain_display_mapped};
 use crate::line_map::SourceIndex;
 use crate::{
-    DiagnosticContext, DiagnosticLabel, DiagnosticPresentation, DiagnosticSourceError, DisplaySpan,
-    ErrorCode, ParseError, SourceDiagnostic, Span,
+    DiagnosticContext, DiagnosticLabel, DiagnosticLocation, DiagnosticPresentation,
+    DiagnosticSourceError, DisplaySpan, ErrorCode, LineColumn, ParseError, SourceDiagnostic, Span,
 };
 
 /// Check if an error code requires raw source display (no CHAT formatting)
@@ -65,11 +65,11 @@ pub(super) fn project(
 ) -> Result<DiagnosticPresentation, DiagnosticSourceError> {
     let full_source = index.source();
     let line_map = index.lines();
-    let source_len =
-        u32::try_from(full_source.len()).map_err(|_| DiagnosticSourceError::SourceTooLarge {
-            source_len: full_source.len(),
-        })?;
-    let primary = error.location.span;
+    let source_len = full_source.len();
+    let primary = match error.location {
+        DiagnosticLocation::Known { span, .. } => span,
+        DiagnosticLocation::Unlocated => return Err(DiagnosticSourceError::Unlocated),
+    };
     if full_source.get(primary.to_range()).is_none() {
         return Err(DiagnosticSourceError::PrimaryRange {
             span: primary,
@@ -108,12 +108,10 @@ pub(super) fn project(
         }));
     }
     let first_line = line_map.line_of(min_byte);
-    let context_start = line_map.line_start(first_line) as usize;
-    let mut context_end = line_map.line_end(last_line, source_len) as usize;
+    let context_start = line_map.line_start(first_line);
+    let mut context_end = line_map.line_end(last_line, source_len);
     // Only strip an unreferenced newline. Never shorten an admitted span.
-    if context_end > max_byte as usize
-        && full_source.as_bytes().get(context_end - 1) == Some(&b'\n')
-    {
+    if context_end > max_byte && full_source.as_bytes().get(context_end - 1) == Some(&b'\n') {
         context_end -= 1;
     }
     let context_text = &full_source[context_start..context_end];
@@ -123,27 +121,22 @@ pub(super) fn project(
         process_for_plain_display_mapped(context_text)
     };
     let project_span = |span: Span| {
-        let (start, end) = mapped.map_span(
-            span.start as usize - context_start,
-            span.end as usize - context_start,
-        );
-        DisplaySpan::in_text(
-            start,
-            if span.is_empty() { start } else { end },
-            mapped.text(),
-        )
+        let projected = mapped.project_range(span.start - context_start, span.end - context_start);
+        DisplaySpan::from_projected(if span.is_empty() {
+            projected.collapsed()
+        } else {
+            projected
+        })
     };
-    let display_span = project_span(primary)?;
+    let display_span = project_span(primary);
     let labels = error
         .labels
         .iter()
-        .map(|label| {
-            Ok(DiagnosticLabel {
-                span: project_span(label.span)?,
-                message: label.message.clone(),
-            })
+        .map(|label| DiagnosticLabel {
+            span: project_span(label.span),
+            message: label.message.clone(),
         })
-        .collect::<Result<Vec<_>, DiagnosticSourceError>>()?;
+        .collect();
     let context = DiagnosticContext {
         source_text: mapped.into_text(),
         span: display_span,
@@ -151,8 +144,7 @@ pub(super) fn project(
     };
     Ok(DiagnosticPresentation::new(
         primary,
-        line + 1,
-        column + 1,
+        LineColumn::from_zero_based(line, column),
         context,
         labels,
     ))
@@ -161,14 +153,14 @@ pub(super) fn project(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ErrorContext, ErrorLabel, Severity, SourceLocation};
+    use crate::{DiagnosticLocation, ErrorContext, ErrorLabel, Severity};
 
     fn render(source: &str, start: usize, end: usize, code: ErrorCode) -> SourceDiagnostic {
         let raw = ParseError::new(
             code,
             Severity::Error,
-            SourceLocation::from_offsets(start, end),
-            ErrorContext::new("partial", 0..0, "original"),
+            DiagnosticLocation::from_offsets(start, end),
+            ErrorContext::new("partial", crate::Span::new(0, 0), "original"),
             "Test error",
         );
         SourceDiagnostic::with_index(raw, &SourceIndex::new(source))
@@ -184,7 +176,7 @@ mod tests {
         let rendered = SourceDiagnostic::with_index(raw.clone(), &SourceIndex::new(source));
         assert_eq!(rendered.original(), &raw);
         let p = rendered.presentation().expect("source admission");
-        assert_eq!((p.line(), p.column()), (2, 8));
+        assert_eq!((p.position().line.get(), p.position().column.get()), (2, 8));
         assert_eq!(p.context().source_text(), "line 2 with error");
         assert_eq!(p.context().first_line(), 2);
         assert_eq!(p.context().span().to_range(), 7..12);
@@ -224,7 +216,7 @@ mod tests {
     fn test_enhance_errors_handles_first_line() {
         let rendered = render("error first\nsecond\n", 0, 5, ErrorCode::UnknownError);
         let p = rendered.presentation().expect("source admission");
-        assert_eq!((p.line(), p.column()), (1, 1));
+        assert_eq!((p.position().line.get(), p.position().column.get()), (1, 1));
         assert_eq!(p.context().source_text(), "error first");
         assert_eq!(p.context().first_line(), 1);
     }
@@ -235,7 +227,7 @@ mod tests {
         let start = source.find("error").expect("error");
         let rendered = render(source, start, source.len(), ErrorCode::UnknownError);
         let p = rendered.presentation().expect("source admission");
-        assert_eq!((p.line(), p.column()), (2, 6));
+        assert_eq!((p.position().line.get(), p.position().column.get()), (2, 6));
         assert_eq!(p.context().source_text(), "last error");
         assert_eq!(p.context().first_line(), 2);
     }
@@ -267,7 +259,7 @@ mod tests {
         let raw = ParseError::build(ErrorCode::PhoCountMismatchTooFew)
             .at(main, wor - 1)
             .message("Alignment mismatch")
-            .label(ErrorLabel::new(Span::from_usize(wor, end), "%wor tier"))
+            .label(ErrorLabel::new(Span::new(wor, end), "%wor tier"))
             .finish();
         let rendered = SourceDiagnostic::with_index(raw.clone(), &SourceIndex::new(source));
         let p = rendered.presentation().expect("source admission");
@@ -304,6 +296,6 @@ mod tests {
     fn source_and_line_index_must_not_be_mixed() {
         let rendered = render("aaéb", 4, 5, ErrorCode::UnmatchedUnderlineBegin);
         let p = rendered.presentation().expect("source admission");
-        assert_eq!((p.line(), p.column()), (1, 5));
+        assert_eq!((p.position().line.get(), p.position().column.get()), (1, 5));
     }
 }

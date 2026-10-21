@@ -108,7 +108,10 @@ mod tests {
             panic!("one diagnostic")
         };
         assert_eq!(diagnostic.code, ErrorCode::InternalError);
-        assert_eq!(diagnostic.location.span, Span::new(3, 9));
+        assert_eq!(
+            diagnostic.location.span().expect("located diagnostic"),
+            Span::new(3, 9)
+        );
         assert!(CompletedDiagnostics::admit(fault.into_diagnostics()).is_err());
     }
 }

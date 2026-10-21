@@ -227,14 +227,14 @@ pub struct TextTier {
     /// E756 judges this state. The rule ("a tier whose content is empty
     /// declares nothing") was never `%x`-specific, and the maintainer widened
     /// it on 2026-08-16 rather than write E330's spec or mint a third code.
-    /// `DependentTier::empty_content_span` is where a tier answers it.
+    /// `DependentTier::empty_content_location` is where a tier answers it.
     ///
     pub content: Option<NonEmptyString>,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl TextTier {
@@ -243,10 +243,10 @@ impl TextTier {
     /// This constructor is used for `%alt/%coh/%def/...` style tiers that do
     /// not carry structured token alignment. Parser paths typically call
     /// [`Self::with_span`] immediately after construction.
-    pub fn new(content: NonEmptyString) -> Self {
+    pub fn new(location: impl Into<crate::Location>, content: NonEmptyString) -> Self {
         Self {
             content: Some(content),
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
     }
 
@@ -261,20 +261,11 @@ impl TextTier {
     /// recovery is not validity, and a parser that cannot express what the file
     /// says is a parser that will invent something instead. E756 states the
     /// rule this exists to let the validator apply.
-    pub fn empty() -> Self {
+    pub fn empty(location: impl Into<crate::Location>) -> Self {
         Self {
             content: None,
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata used in diagnostics.
-    ///
-    /// Keeping span assignment explicit lets test fixtures stay concise while
-    /// preserving precise offsets in parser-produced values.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Borrows the raw tier payload text, empty when the tier declares nothing.
@@ -322,9 +313,9 @@ pub struct UserDefinedDependentTier {
     pub content: Option<NonEmptyString>,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl super::WriteChat for DependentTier {

@@ -1,7 +1,7 @@
 # CHAT Processing Playbook for Editors and Analysts
 
 **Status:** Current
-**Last updated:** 2026-03-24 00:01 EDT
+**Last modified:** {{git-dates:page}}
 
 ## Objective
 Provide practical guidance for non-compiler users who create, edit, and validate CHAT files,
@@ -14,11 +14,16 @@ with emphasis on error interpretation and correction workflow.
 - linguists using tooling outputs but not parser internals.
 
 ## Core Editing Workflow
-1. Open file in editor with CHAT diagnostics enabled.
-2. Run validation (single file first, then batch).
-3. Fix highest-severity structural issues first (headers, tier markers, unmatched delimiters).
-4. Re-run validation and inspect warnings.
-5. Only then address style and normalization suggestions.
+
+Start with the [practice tutorial](quick-start.md) if this is your first use.
+
+1. Keep an unchanged original or a version-controlled checkpoint.
+2. Open the file in an editor with CHAT diagnostics enabled, and validate it.
+3. Compare each diagnostic with the documented rule and intended transcription.
+   Investigate a possible tool defect before changing data just to silence it.
+4. Resolve structural issues first (headers, tier markers, unmatched delimiters).
+5. Review the diff, revalidate, and inspect warnings. Treat normalization as a
+   separate, reviewable change.
 
 ## Error Triage Heuristic
 - Errors at file start: likely header formatting or encoding issues.
@@ -27,9 +32,12 @@ with emphasis on error interpretation and correction workflow.
 - Repeated same error class: likely one systemic rule violation pattern.
 
 ## Fast Interpretation Guide
-- `Error`: parser/validator could not accept structure; must fix.
+- `Error`: the selected parser/validator checks reject the file; resolve the
+  data issue or report a confirmed tool defect.
 - `Warning`: valid but suspicious or non-canonical; review strongly recommended.
-- `Info`: advisory normalization or convention hints.
+
+Validation uses error and warning severities, not a separate `Info` level.
+Passing format checks does not verify transcription accuracy or recording identity.
 
 ## Common Fix Recipes
 - Header spacing problems:
@@ -45,13 +53,16 @@ with emphasis on error interpretation and correction workflow.
 1. Validate a small sample first.
 2. Group failures by error code.
 3. Fix by pattern, not file-by-file random order.
-4. Re-run and confirm error count decreases monotonically.
-5. Save run report for audit trail.
+4. Review the transformation on affected files, then revalidate. Fixing an early
+   structural error can expose later errors; a monotonic count is not a requirement.
+5. Save the command, tool version, input revision and run report for an audit trail.
 
 ## Collaboration Workflow with Developers
-When reporting parsing issues, include:
-- exact file path,
-- minimal excerpt around failing span,
+When reporting parsing issues publicly, include:
+
+- a minimal synthetic file that reproduces the issue, without private paths,
+  participant identities or restricted transcript content,
+- the command and `chatter --version` output,
 - observed diagnostic code/message,
 - expected behavior (if known).
 

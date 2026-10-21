@@ -4,25 +4,21 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Utterance_Media>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Linking>
 
-use crate::model::{Bullet, WriteChat};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::model::Bullet;
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// Validate one media bullet's internal timing invariants.
 ///
-/// Currently enforces `start_ms < end_ms` (`E362`) and reports diagnostics using
-/// reconstructed bullet text for user-facing context.
+/// Currently enforces `start_ms < end_ms` (`E362`). The model retains the
+/// absolute location; source-aware presentation attaches the actual snippet.
 pub(crate) fn check_bullet(bullet: &Bullet, errors: &impl ErrorSink) {
     // E362: Check start < end
     if bullet.timing.start_ms >= bullet.timing.end_ms {
-        // Use bullet's serialized form for error context
-        let bullet_text = bullet.to_chat_string();
-
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::TimestampBackwards,
                 Severity::Error,
-                SourceLocation::new(bullet.span),
-                ErrorContext::from_reconstructed(&bullet_text, bullet.span),
+                bullet.location,
                 format!(
                     "Media bullet start time ({}ms) must be less than end time ({}ms)",
                     bullet.timing.start_ms, bullet.timing.end_ms
@@ -39,13 +35,11 @@ pub(crate) fn check_bullet(bullet: &Bullet, errors: &impl ErrorSink) {
 /// different: untimed words remain legitimate partial alignment.
 pub(crate) fn check_word_interval(bullet: &Bullet, errors: &impl ErrorSink) {
     if bullet.timing.start_ms >= bullet.timing.end_ms {
-        let bullet_text = bullet.to_chat_string();
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::TimestampBackwards,
                 Severity::Error,
-                SourceLocation::new(bullet.span),
-                ErrorContext::from_reconstructed(&bullet_text, bullet.span),
+                bullet.location,
                 format!(
                     "Word timing start ({}ms) must be less than end ({}ms)",
                     bullet.timing.start_ms, bullet.timing.end_ms
@@ -66,14 +60,11 @@ pub fn check_bullet_monotonicity(bullets: &[&Bullet], errors: &impl ErrorSink) {
     for i in 1..bullets.len() {
         // E362: Check monotonicity - each start time must be >= previous start time
         if bullets[i].timing.start_ms < bullets[i - 1].timing.start_ms {
-            let bullet_text = bullets[i].to_chat_string();
-
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::TimestampBackwards,
                     Severity::Error,
-                    SourceLocation::new(bullets[i].span),
-                    ErrorContext::from_reconstructed(&bullet_text, bullets[i].span),
+                    bullets[i].location,
                     format!(
                         "Media bullet timestamp {}ms comes before previous timestamp {}ms (timestamps must increase monotonically)",
                         bullets[i].timing.start_ms, bullets[i-1].timing.start_ms

@@ -14,7 +14,7 @@
 
 use crate::alignment::helpers::{WordItem, walk_words};
 use crate::model::{CADelimiterType, Utterance, Word, WordContent};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// How a word's material relates to its segment-repetition spans.
 ///
@@ -93,13 +93,11 @@ pub(crate) fn check_repetition_segment_has_stem(utterance: &Utterance, errors: &
             return;
         }
         if classify_repetition_shape(word) == Some(RepetitionShape::OnlyRepetition) {
-            let word_text = word.raw_text().to_string();
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::WordOnlyRepetitionSegments,
                     Severity::Error,
-                    SourceLocation::new(word.span),
-                    ErrorContext::new(word_text.clone(), word.span, &word_text),
+                    word.location,
                     "word consists only of a repetition segment (all material inside ↫...↫); the notation marks a repeated segment OF a word and needs a stem outside the delimiters",
                 )
                 .with_suggestion(

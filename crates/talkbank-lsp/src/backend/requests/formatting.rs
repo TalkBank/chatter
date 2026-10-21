@@ -30,7 +30,7 @@ pub(super) async fn handle_formatting(
                 line: 0,
                 character: 0,
             },
-            end: crate::backend::utils::offset_to_position(&doc, doc.len() as u32),
+            end: crate::backend::utils::offset_to_position(&doc, doc.len()),
         },
         new_text: formatted,
     }]))

@@ -73,7 +73,7 @@ pub(super) fn report_if_marker_on_marker(retrace: &Retrace, errors: &impl ErrorS
 
     errors.report(super::retrace_error(
         ErrorCode::RetraceWithNoMaterial,
-        retrace.span,
+        retrace.location,
         format!(
             "the {} marker retraces another retracing marker, which is not \
              material; a marker retraces the words to its left",

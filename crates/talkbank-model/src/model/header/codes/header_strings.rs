@@ -351,10 +351,10 @@ impl MediaFilename {
     /// [`LanguageCode::report_code_issues`]: super::LanguageCode
     pub(crate) fn report_representability_issues(
         &self,
-        span: crate::Span,
+        location: crate::Location,
         errors: &impl crate::ErrorSink,
     ) {
-        use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+        use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
         let Some(problem) = Self::problem_with(self.as_str()) else {
             return;
@@ -363,8 +363,9 @@ impl MediaFilename {
         errors.report(ParseError::new(
             ErrorCode::MediaFilenameNotRepresentable,
             Severity::Error,
-            SourceLocation::at_offset(span.start as usize),
-            ErrorContext::new(text, 0..text.len(), "media_filename"),
+            // Point at the start of the filename, when it has one.
+            DiagnosticLocation::from(location.start_point()),
+            ErrorContext::new(text, crate::Span::new(0, text.len()), "media_filename"),
             // The problem's own Display is already a full sentence naming the
             // subject, so it IS the message; prefixing it stutters.
             problem.to_string(),

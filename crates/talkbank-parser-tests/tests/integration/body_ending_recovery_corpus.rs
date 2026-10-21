@@ -97,12 +97,17 @@ fn check_candidate(
         .control
         .file()
         .utterances()
-        .find(|utterance| utterance.main.span.start as usize == candidate.original_tier.start)
+        .find(|utterance| {
+            utterance.main.location.span().expect("located").start()
+                == candidate.original_tier.start
+        })
         .expect("control owns the edited turn")
         .main;
     let actual = file
         .utterances()
-        .find(|utterance| utterance.main.span.start as usize == candidate.tier.start)
+        .find(|utterance| {
+            utterance.main.location.span().expect("located").start() == candidate.tier.start
+        })
         .map(|utterance| &utterance.main);
     let healthy_ending = !ending.raw_node().has_error();
     match policy {
@@ -168,7 +173,7 @@ fn check_candidate(
                     .expect("unchanged timing control");
                 assert_eq!(
                     bullet.raw_node().byte_range(),
-                    candidate.translated(expected.span)
+                    candidate.translated(expected.location.span().expect("located"))
                 );
                 assert!(
                     actual
@@ -285,14 +290,19 @@ fn admitted_body_ending_control_owns_complete_token_edits() {
             .file()
             .utterances()
             .find(|utterance| {
-                utterance.main.span.start <= word.span.start
-                    && word.span.end <= utterance.main.span.end
+                utterance.main.location.span().expect("located").start()
+                    <= word.location.span().expect("located").start()
+                    && word.location.span().expect("located").end()
+                        <= utterance.main.location.span().expect("located").end()
             })
             .expect("word owner");
         let tier = root
             .descendants()
             .filter_map(|node| node.expect("range").typed::<MainTierNode>())
-            .find(|node| node.raw_node().start_byte() == expected.main.span.start as usize)
+            .find(|node| {
+                node.raw_node().start_byte()
+                    == expected.main.location.span().expect("located").start()
+            })
             .expect("admitted native main");
         let main = tier.extract();
         let SourceSlotView::Present(body) = main.field_child_5().slot().view() else {

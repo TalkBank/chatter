@@ -1,0 +1,27 @@
+error[E0599]: the method `shift_spans_after` exists for struct `Active<Frozen>`, but its trait bounds were not satisfied
+  --> tests/ui/fail_span_shift_active_generic.rs:13:10
+   |
+ 4 | struct Frozen;
+   | ------------- doesn't satisfy `Frozen: SpanShift`
+...
+ 7 | struct Active<T> {
+   | ---------------- method `shift_spans_after` not found for this struct because it doesn't satisfy `Active<Frozen>: SpanShift`
+...
+13 |     node.shift_spans_after(0, 1);
+   |          ^^^^^^^^^^^^^^^^^ method cannot be called on `Active<Frozen>` due to unsatisfied trait bounds
+   |
+note: trait bound `Frozen: SpanShift` was not satisfied
+  --> tests/ui/fail_span_shift_active_generic.rs:6:10
+   |
+ 6 | #[derive(SpanShift)]
+   |          ^^^^^^^^^ type parameter would need to implement `SpanShift`
+note: the trait `SpanShift` must be implemented
+  --> $WORKSPACE/crates/talkbank-model/src/errors/span_shift.rs
+   |
+   | pub trait SpanShift {
+   | ^^^^^^^^^^^^^^^^^^^
+   = help: consider manually implementing the trait to avoid undesired bounds
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `shift_spans_after`, perhaps you need to implement it:
+           candidate #1: `SpanShift`
+   = note: this error originates in the derive macro `SpanShift` (in Nightly builds, run with -Z macro-backtrace for more info)

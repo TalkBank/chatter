@@ -1,33 +1,38 @@
-//! Pre-validation and post-validation gates for CHAT files.
+//! Legacy partial workflow checks for CHAT models.
 //!
-//! Each server orchestrator validates the parsed CHAT file to a command's
-//! minimum validity level before spending compute. Invalid files are
-//! rejected early with diagnostics.
+//! These helpers check selected properties of an existing model. They do not
+//! parse source, issue a complete validity capability, or establish preservation
+//! between input and output. Use the checked parsing/construction APIs when a
+//! consumer requires complete admission under a declared validation policy.
 //!
 //! # Validity levels (cumulative)
 //!
 //! | Level | Name | Checks |
 //! |-------|------|--------|
-//! | L0 | Parseable | No parse errors (clean tree-sitter CST) |
-//! | L1 | StructurallyComplete | Participants, languages, speaker codes, terminators |
-//! | L2 | MainTierValid | Well-formed words, timing bullets |
+//! | L0 | Parseable | Supplied diagnostic slice is empty; no parsing occurs |
+//! | L1 | StructurallyComplete | Declared speakers and languages present, utterance speakers declared, terminators present unless CA waives them |
+//! | L2 | MainTierValid | L1 plus rejection of a main tier with no content, linkers or language precode |
 //!
-//! Each level includes all checks from lower levels.
+//! Each level includes all checks from lower levels. The historical names do
+//! not imply individual-word validation, valid timing intervals, complete ID
+//! metadata or clean parser provenance. [`validate_output`] is likewise a
+//! partial model check, not an output-admission API.
 
-use talkbank_model::ParseError;
 use talkbank_model::model::{CaOptionEffect, ChatFile, Line};
+use talkbank_model::{DiagnosticLocation, ParseError};
 pub use talkbank_model::{GateValidationError as ValidationError, ValidityLevel};
 
-/// Validate a CHAT file to the specified minimum validity level.
+/// Run the selected cumulative legacy checks on an existing CHAT model.
 ///
-/// Returns `Ok(())` if the file meets the level, or `Err` with all
-/// failures found (checks all levels up to the specified one).
+/// Returns `Ok(())` if these checks report nothing, or `Err` with all findings
+/// from levels up to the requested one. Success does not certify full CHAT
+/// validity, and the helper neither parses nor authenticates `parse_errors`.
 ///
-/// `parse_errors` are the structured errors from the parser (typically
-/// from [`crate::parse::parse_lenient`]). The L0 gate surfaces the
-/// first error's code, source excerpt, and byte span in its message,
-/// so end-users can locate and diagnose the problem without reading
-/// daemon logs.
+/// Supply the producing parser's diagnostics (for example, from
+/// [`crate::parse::parse_lenient`]); any nonempty slice fails L0, without a
+/// severity filter. Its first diagnostic contributes the code, message,
+/// optional context text and location to the summary. Supplying an empty slice
+/// for a recovered model does not establish clean parser provenance.
 pub fn validate_to_level(
     file: &ChatFile,
     parse_errors: &[ParseError],
@@ -64,23 +69,28 @@ pub fn validate_to_level(
 /// Includes the error code, byte span, offending text excerpt (if the
 /// parser supplied one), the parser's own message, and a "+N more"
 /// summary when multiple parse errors stacked up. Line/column info is
-/// included when `ParseError.location.line` is populated; today the
+/// included when the diagnostic location carries a position; today the
 /// streaming tree-sitter parser leaves that None, so the byte span is
 /// the primary coordinate. (See the upstream-issue assessment,
 /// Fundamental D.)
 fn format_l0_message(first: &ParseError, total: usize) -> String {
     let code = first.code.as_str();
-    let span = &first.location.span;
     let excerpt = first
         .context
         .as_ref()
         .map(|c| c.source_text.as_str())
         .unwrap_or("");
-    let line_hint = first
-        .location
-        .line
-        .map(|l| format!(" line {l}, "))
-        .unwrap_or_else(|| format!(" bytes {}..{} ", span.start, span.end));
+    let line_hint = match first.location {
+        DiagnosticLocation::Known {
+            position: Some(position),
+            ..
+        } => format!(" line {}, ", position.line),
+        DiagnosticLocation::Known {
+            span,
+            position: None,
+        } => format!(" bytes {}..{} ", span.start(), span.end()),
+        DiagnosticLocation::Unlocated => " location unknown, ".to_owned(),
+    };
     let more = if total > 1 {
         format!(" (+{} more)", total - 1)
     } else {
@@ -92,7 +102,7 @@ fn format_l0_message(first: &ParseError, total: usize) -> String {
     )
 }
 
-/// L1 checks: structural completeness.
+/// L1 checks: roster/language presence, declared speakers and terminators.
 fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError>) {
     // Check @Participants present with at least one participant.
     // Same reason as the roster check below: an `@Participants` header whose
@@ -154,7 +164,7 @@ fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError
     }
 }
 
-/// L2 checks: main tier content validity.
+/// L2 adds only the empty-main-tier check; it does not validate words or timing.
 fn check_main_tier_valid(file: &ChatFile, errors: &mut Vec<ValidationError>) {
     for line in &file.lines {
         if let Line::Utterance(utt) = line {
@@ -311,14 +321,14 @@ mod tests {
 
     #[test]
     fn test_parse_errors_fail_l0() {
-        use talkbank_model::{ErrorCode, Severity, SourceLocation, Span};
+        use talkbank_model::{DiagnosticLocation, ErrorCode, Severity, Span};
         let chat = parse_chat_file(MOR_GRA_CHAT);
         let synthetic: Vec<ParseError> = (0..3)
             .map(|_| {
                 ParseError::new(
                     ErrorCode::UnparsableContent,
                     Severity::Error,
-                    SourceLocation::new(Span::from_usize(0, 1)),
+                    DiagnosticLocation::new(Span::new(0, 1)),
                     None,
                     "synthetic parse error",
                 )

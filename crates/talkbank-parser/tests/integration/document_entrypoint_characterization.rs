@@ -51,7 +51,7 @@ use talkbank_model::model::{Header, Line};
 use talkbank_parser::TreeSitterParser;
 
 /// One diagnostic: (code, span start, span end, message).
-type Diag = (String, u32, u32, String);
+type Diag = (String, usize, usize, String);
 
 /// A file with a stray top-level `@Date!` (invalid separator). Tree-sitter cannot
 /// parse this as a date header, so it emits an `ERROR` node that is a DIRECT
@@ -154,8 +154,8 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })
@@ -213,7 +213,7 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
         "stray @Date! must emit exactly E316, got: {diags:?}"
     );
 
-    let e316: Vec<&(String, u32, u32, String)> =
+    let e316: Vec<&(String, usize, usize, String)> =
         diags.iter().filter(|(c, _, _, _)| c == "E316").collect();
     assert_eq!(
         e316.len(),

@@ -23,6 +23,7 @@ serde_json = { workspace = true }
 talkbank-model = { workspace = true }
 tree-sitter-highlight = { workspace = true }
 talkbank-parser = { workspace = true }
+talkbank-transform = { workspace = true }
 thiserror = { workspace = true } #unified
 tokio = { workspace = true }
 tower-lsp = { workspace = true }

@@ -5,18 +5,16 @@
 //! writing it out untouched re-exposes every word the main tier hides.
 //! Whether a `%wor` word may take its main-tier word's placeholder is the
 //! model's question, answered by its one owner of `%wor` membership and
-//! pairing: [`WorMainTierProjection::bind_timing`] (the counts) and then
+//! pairing: [`WorMainTierProjection::bind_present_timing`] (the counts) and then
 //! [`corroborate_wor_timing`] (the words), which the model says a
 //! count-matched pair "must then pass" because equal counts cannot see a
 //! same-count edit. Corroboration compares the two tiers' TEXT, so the
 //! verdict has to be taken while both still carry it: [`WorPlan::decide`]
 //! runs before the main tier is sanitized and [`WorPlan::apply`] after.
 //!
-//! [`WorMainTierProjection::bind_timing`]: talkbank_model::alignment::WorMainTierProjection::bind_timing
+//! [`WorMainTierProjection::bind_present_timing`]: talkbank_model::alignment::WorMainTierProjection::bind_present_timing
 
-use talkbank_model::alignment::{
-    WorTimingBinding, WorTimingCorrespondence, corroborate_wor_timing,
-};
+use talkbank_model::alignment::{WorTimingCorrespondence, corroborate_wor_timing};
 use talkbank_model::dependent_tier::WorItem;
 use talkbank_model::{DependentTier, MainTier, WorTier};
 
@@ -93,17 +91,12 @@ fn wor_tiers_mut<'t>(
 }
 
 fn agreement(main: &MainTier, wor: &WorTier) -> WorAgreement {
-    match main.wor_projection().bind_timing(Some(wor)) {
-        WorTimingBinding::CountMatched(matched) => match corroborate_wor_timing(matched) {
+    match main.wor_projection().bind_present_timing(wor) {
+        Ok(matched) => match corroborate_wor_timing(matched) {
             WorTimingCorrespondence::Corroborated(_) => WorAgreement::Corroborated,
             WorTimingCorrespondence::Uncorroborated(_) => WorAgreement::NotCorroborated,
         },
-        // `Missing` is the binding of an absent tier; this one is in hand,
-        // so the arm cannot arise, and it is spelled out rather than folded
-        // into a catch-all because the enum has the state.
-        WorTimingBinding::Drifted(_) | WorTimingBinding::Missing(_) => {
-            WorAgreement::NotCorroborated
-        }
+        Err(_) => WorAgreement::NotCorroborated,
     }
 }
 
@@ -115,15 +108,15 @@ fn agreement(main: &MainTier, wor: &WorTier) -> WorAgreement {
 fn take_main_placeholders(wor: &mut WorTier, main: &MainTier, state: &mut PlaceholderState) {
     // The binding borrows the tier, so the paired texts are taken before
     // the tier is rewritten; one small string per `%wor` word.
-    let paired: Vec<smol_str::SmolStr> = match main.wor_projection().bind_timing(Some(wor)) {
-        WorTimingBinding::CountMatched(matched) => matched
+    let paired: Vec<smol_str::SmolStr> = match main.wor_projection().bind_present_timing(wor) {
+        Ok(matched) => matched
             .pairs()
             .map(|(main_word, _wor_word)| smol_str::SmolStr::new(main_word.cleaned_text()))
             .collect(),
         // Sanitizing changes no word count, so a tier decided Corroborated
-        // binds count-matched again; the arms the enum has take the
+        // binds count-matched again; count drift still takes the
         // non-asserting action.
-        WorTimingBinding::Drifted(_) | WorTimingBinding::Missing(_) => {
+        Err(_) => {
             take_fresh_placeholders(wor, state);
             return;
         }

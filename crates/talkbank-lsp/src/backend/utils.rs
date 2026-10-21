@@ -27,7 +27,7 @@ impl<'a> LineIndex<'a> {
     }
 
     /// Find the line in O(log n), then count UTF-16 units up to the offset.
-    pub fn offset_to_position(&self, offset: u32) -> Position {
+    pub fn offset_to_position(&self, offset: usize) -> Position {
         let offset = boundary_offset(self.text, offset);
         let line = self.line_starts.partition_point(|&start| start <= offset) - 1;
         position_on_line(self.text, line, self.line_starts[line], offset)
@@ -35,8 +35,8 @@ impl<'a> LineIndex<'a> {
 }
 
 /// Clamp a wire/model offset without ever slicing inside a UTF-8 character.
-fn boundary_offset(text: &str, offset: u32) -> usize {
-    let mut offset = (offset as usize).min(text.len());
+fn boundary_offset(text: &str, offset: usize) -> usize {
+    let mut offset = offset.min(text.len());
     while !text.is_char_boundary(offset) {
         offset -= 1;
     }
@@ -55,7 +55,7 @@ fn position_on_line(text: &str, line: usize, start: usize, offset: usize) -> Pos
 }
 
 /// Convert one byte offset without allocating an index. O(n) in the prefix.
-pub fn offset_to_position(text: &str, offset: u32) -> Position {
+pub fn offset_to_position(text: &str, offset: usize) -> Position {
     let offset = boundary_offset(text, offset);
     let mut line = 0;
     let mut start = 0;
@@ -104,7 +104,7 @@ pub fn find_utterance_at_position<'a>(
     position: Position,
     document: &str,
 ) -> Option<&'a talkbank_model::model::Utterance> {
-    let offset = position_to_offset(document, position) as u32;
+    let offset = position_to_offset(document, position);
     chat_file
         .utterance_containing(offset)
         .or_else(|| chat_file.utterance_containing(offset.saturating_sub(1)))
@@ -118,7 +118,7 @@ mod tests {
     fn line_index_and_standalone_offset_conversion_match() {
         for text in ["ab\ncd\n你z", "😀\r\n", "", "\n"] {
             let index = LineIndex::new(text);
-            for offset in 0..=text.len() as u32 + 2 {
+            for offset in 0..=text.len() + 2 {
                 let indexed = index.offset_to_position(offset);
                 let standalone = offset_to_position(text, offset);
                 assert_eq!(indexed, standalone, "text={text:?}, offset={offset}");

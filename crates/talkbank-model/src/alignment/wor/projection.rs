@@ -240,16 +240,22 @@ impl<'main> WorMainTierProjection<'main> {
                 }
                 WorMainTierProjectionItem::Separator(separator) => WorItem::Separator {
                     text: separator.to_chat_string(),
-                    span: separator.span(),
+                    location: separator.location(),
                 },
             })
             .collect();
 
         WorTier {
-            language_code: self.main.content.language_code.clone(),
+            language_code: self
+                .main
+                .content
+                .language_code
+                .as_ref()
+                .map(|precode| precode.code.clone()),
             items,
             terminator: self.main.content.terminator.clone(),
-            span: crate::Span::DUMMY,
+            // A projection is generated from the main tier, not read from source.
+            location: crate::Location::Unlocated,
         }
     }
 
@@ -260,16 +266,32 @@ impl<'main> WorMainTierProjection<'main> {
     /// [`super::bind_wor_timing`] when the projection itself is not otherwise
     /// needed.
     pub fn bind_timing(self, wor: Option<&'main WorTier>) -> WorTimingBinding<'main> {
+        let Some(wor) = wor else {
+            return WorTimingBinding::Missing(MissingWorTimings {
+                policy: self.policy,
+                main_count: self.slot_count(),
+            });
+        };
+        match self.bind_present_timing(wor) {
+            Ok(matched) => WorTimingBinding::CountMatched(matched),
+            Err(drift) => WorTimingBinding::Drifted(drift),
+        }
+    }
+
+    /// Bind a known-present `%wor` tier without introducing an absence state.
+    ///
+    /// Equal counts admit the correspondence check; they do not prove lexical
+    /// correspondence or timing validity. The optional-tier entry point delegates
+    /// here so both routes share the same membership and count comparison.
+    pub fn bind_present_timing(
+        self,
+        wor: &'main WorTier,
+    ) -> Result<CountMatchedWorTimings<'main>, WorTimingDrift> {
         let main_count = self.slot_count();
         let policy = self.policy;
-
-        let Some(wor) = wor else {
-            return WorTimingBinding::Missing(MissingWorTimings { policy, main_count });
-        };
-
         let wor_count = WorTierSlotCount(wor.word_count());
         if main_count.get() != wor_count.get() {
-            return WorTimingBinding::Drifted(WorTimingDrift {
+            return Err(WorTimingDrift {
                 policy,
                 main_count,
                 wor_count,
@@ -286,7 +308,7 @@ impl<'main> WorMainTierProjection<'main> {
             .collect();
         let wor_slots = wor.words().collect();
 
-        WorTimingBinding::CountMatched(CountMatchedWorTimings {
+        Ok(CountMatchedWorTimings {
             policy,
             main_slots,
             wor_slots,
@@ -296,7 +318,8 @@ impl<'main> WorMainTierProjection<'main> {
 
 fn wor_display_word_from_main(word: &Word) -> Word {
     let cleaned = canonical_wor_display_text(word);
-    let mut display_word = Word::new_unchecked(cleaned);
+    // A display projection is generated, not read from source.
+    let mut display_word = Word::new_unchecked(crate::Location::Unlocated, cleaned);
     display_word.inline_bullet.clone_from(&word.inline_bullet);
     display_word
 }

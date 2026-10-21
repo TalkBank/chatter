@@ -12,5 +12,8 @@
 mod finder;
 mod fragment;
 mod parse;
+
+pub(crate) use fragment::HeaderCoverage;
+pub(crate) use parse::{POST_BEGIN_HEADER_INDEX, POST_BEGIN_PREFIX, POST_BEGIN_SUFFIX};
 #[cfg(test)]
 mod tests;

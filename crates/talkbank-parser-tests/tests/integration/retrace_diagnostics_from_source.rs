@@ -72,12 +72,14 @@ fn e370_points_at_the_marker_in_the_source() -> Result<(), TestError> {
             .iter()
             .find(|e| e.code.to_string() == "E370")
             .expect("E370 reported");
-        let span = e370.location.span;
-        let pointed = &source[span.start as usize..span.end as usize];
+        let span = e370.location.span().expect("located diagnostic");
+        let pointed = &source[span.start() as usize..span.end() as usize];
         assert_eq!(
-            pointed, *marker,
+            pointed,
+            *marker,
             "E370 on {utterance:?} points at {pointed:?}, bytes {}..{}",
-            span.start, span.end
+            span.start(),
+            span.end()
         );
     }
     Ok(())

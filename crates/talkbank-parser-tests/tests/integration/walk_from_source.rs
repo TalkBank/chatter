@@ -242,7 +242,7 @@ fn the_mutable_walk_reaches_every_word() -> Result<(), TestError> {
     let mut tier = tier("hello world .", &[])?;
     walk_words_mut(tier.content.content.as_mut_slice(), None, &mut |leaf| {
         if let WordItemMut::Word(word) = leaf {
-            word.inline_bullet = Some(Bullet::new(0, 100));
+            word.inline_bullet = Some(Bullet::new(talkbank_model::Location::Unlocated, 0, 100));
         }
     });
     let mut with_bullet = 0;

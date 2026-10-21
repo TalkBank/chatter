@@ -13,8 +13,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::SpanShift;
 
-use crate::Span;
-
 /// Single alignable unit within a tier alignment domain.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
@@ -24,8 +22,9 @@ pub struct AlignmentUnit {
     pub index: usize,
 
     /// Source span for this unit (if available).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub span: Option<Span>,
+    #[serde(skip, default = "crate::Location::unlocated")]
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 /// Alignable units for each tier/domain pair.

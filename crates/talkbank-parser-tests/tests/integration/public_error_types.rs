@@ -55,7 +55,7 @@ fn assert_nameable<T>() {}
 /// Typestate controls presence; this checks the public field/default policy.
 #[test]
 fn diagnostic_builder_preserves_fields_in_either_order() {
-    use talkbank_model::{ErrorCode, ParseError, Severity, SourceLocation, Span};
+    use talkbank_model::{DiagnosticLocation, ErrorCode, ParseError, Severity, Span};
     let span = Span::new(1, 3);
     let error = ParseError::build(ErrorCode::ParseFailed)
         .message("initial")
@@ -66,17 +66,17 @@ fn diagnostic_builder_preserves_fields_in_either_order() {
         .finish();
     assert_eq!(error.message, "final");
     assert_eq!(error.severity, Severity::Warning);
-    assert_eq!(error.location.span, span);
+    assert_eq!(error.location.span().expect("located diagnostic"), span);
     assert_eq!(error.suggestion.as_deref(), Some("repair"));
     assert_eq!(
         error.help_url,
         Some(ErrorCode::ParseFailed.documentation_url())
     );
     let other = ParseError::build(ErrorCode::ParseFailed)
-        .location(SourceLocation::new(span))
+        .location(DiagnosticLocation::new(span))
         .message("final")
         .finish();
-    assert_eq!(other.location.span, span);
+    assert_eq!(other.location.span().expect("located diagnostic"), span);
     assert_eq!(other.severity, Severity::Error);
     assert!(other.context.is_none());
 }
@@ -90,14 +90,15 @@ fn diagnostic_source_admission_preserves_evidence_and_inclusive_eof() {
     };
 
     for source in ["ascii", "é", "字", "🙂", "a\né", "a\n"] {
-        let end = u32::try_from(source.len()).expect("small boundary source");
+        let end = source.len();
+        // An inverted range is refused at admission, so it can never reach projection.
+        assert!(Span::try_new(end, 0).is_err());
         let index = SourceIndex::new(source);
         for input in [
             Span::new(0, 0),
             Span::new(end, end),
             Span::new(end + 1, end + 2),
             Span::new(0, end + 1),
-            Span::new(end, 0),
         ] {
             let errors = [ParseError::build(ErrorCode::InternalError)
                 .message("downstream location boundary")
@@ -112,7 +113,10 @@ fn diagnostic_source_admission_preserves_evidence_and_inclusive_eof() {
                         input == Span::new(0, 0) || input == Span::new(end, end),
                         "only real source boundaries are admitted"
                     );
-                    assert_eq!(presentation.location().span, input);
+                    assert_eq!(
+                        presentation.location().span().expect("located diagnostic"),
+                        input
+                    );
                     let context = presentation.context();
                     assert_eq!(
                         context.span().start(),
@@ -136,7 +140,7 @@ fn diagnostic_source_admission_preserves_evidence_and_inclusive_eof() {
             }
         }
         for middle in 0..end {
-            if source.is_char_boundary(middle as usize) {
+            if source.is_char_boundary(middle) {
                 continue;
             }
             for span in [Span::new(middle, end), Span::new(0, middle)] {
@@ -160,19 +164,19 @@ fn diagnostic_source_admission_preserves_evidence_and_inclusive_eof() {
 #[test]
 fn diagnostic_source_labels_are_admitted_atomically() {
     use talkbank_model::{
-        DiagnosticSourceError, ErrorCode, ErrorLabel, ParseError, SourceDiagnostic, SourceIndex,
-        SourceLocation, Span,
+        DiagnosticLocation, DiagnosticSourceError, ErrorCode, ErrorLabel, ParseError,
+        SourceDiagnostic, SourceIndex, Span,
     };
     let source = "first\né🙂\n";
     let index = SourceIndex::new(source);
-    for span in [
-        Span::new(1, 0),
-        Span::new(0, 100),
-        Span::new(7, 8),
-        Span::new(8, 9),
-    ] {
+    // An inverted label cannot be built at all (`Span::try_new` refuses it);
+    // out-of-source and non-boundary labels remain the rejected cases.
+    for span in [Span::new(0, 100), Span::new(7, 8), Span::new(8, 9)] {
         let raw = ParseError::build(ErrorCode::UnparsableContent)
-            .location(SourceLocation::new(Span::new(0, 5)).with_position(99, 88))
+            .location(DiagnosticLocation::known_at(
+                Span::new(0, 5),
+                talkbank_model::LineColumn::one_based(99, 88).expect("one-based position"),
+            ))
             .message("original finding")
             .label(ErrorLabel::new(Span::new(0, 5), "valid label"))
             .label(ErrorLabel::new(span, "invalid label"))
@@ -230,7 +234,8 @@ fn talkbank_model_constructor_error_types_are_nameable() {
     assert_nameable::<talkbank_model::SemanticWordIndexError>();
     assert_nameable::<talkbank_model::SourceLocationError>();
     assert_nameable::<talkbank_model::ParseErrorBuilder>();
-    assert_nameable::<talkbank_model::ParseErrorBuilder<String, talkbank_model::SourceLocation>>();
+    assert_nameable::<talkbank_model::ParseErrorBuilder<String, talkbank_model::DiagnosticLocation>>(
+    );
     assert_nameable::<talkbank_model::SylWordError>();
     assert_nameable::<talkbank_model::XphointParseError>();
     assert_nameable::<talkbank_model::PhoalnParseError>();
@@ -308,13 +313,28 @@ fn fragment_source_admission_checks_byte_extent_and_reports_once() {
     use talkbank_model::{
         ErrorCode, ErrorCollector, FragmentRangeError, FragmentSource, ParseOutcome, Span,
     };
-    let limit = u32::MAX as usize;
-    for (origin, len) in [(0, limit), (limit, 0), (limit - 2, 2)] {
+    let limit = talkbank_model::MAX_PARSER_INPUT_BYTES;
+    // Document origins are `usize`; only the parser input length is bounded.
+    for (origin, len) in [
+        (0, limit),
+        (limit, 0),
+        (limit - 2, 2),
+        (limit, 1),
+        (limit - 1, 2),
+    ] {
         assert!(FragmentRangeError::check(origin, len).is_ok());
     }
-    for (origin, len) in [(limit, 1), (limit - 1, 2), (usize::MAX, 1)] {
-        assert!(FragmentRangeError::check(origin, len).is_err());
-    }
+    assert_eq!(
+        FragmentRangeError::check(0, limit + 1),
+        Err(FragmentRangeError::InputTooLarge { len: limit + 1 })
+    );
+    assert_eq!(
+        FragmentRangeError::check(usize::MAX, 1),
+        Err(FragmentRangeError::RangeOverflows {
+            origin: usize::MAX,
+            len: 1
+        })
+    );
     let input = "é";
     let errors = ErrorCollector::new();
     let ParseOutcome::Parsed(source) = FragmentSource::admit(input, limit - 2, &errors) else {
@@ -322,19 +342,23 @@ fn fragment_source_admission_checks_byte_extent_and_reports_once() {
     };
     assert_eq!(source.input(), input);
     assert!(errors.is_empty());
+    assert_eq!(source.rebase(Span::new(0, 2)), Span::new(limit - 2, limit));
     assert_eq!(
-        source.rebase(Span::new(0, 2)),
-        Span::new(u32::MAX - 2, u32::MAX)
+        source.rebase(talkbank_model::Location::Unlocated),
+        talkbank_model::Location::Unlocated
     );
-    assert_eq!(source.rebase(Span::DUMMY), Span::DUMMY);
+    // A range whose end does not exist is refused once, without a location.
     assert!(matches!(
-        FragmentSource::admit(input, limit - 1, &errors),
+        FragmentSource::admit(input, usize::MAX, &errors),
         ParseOutcome::Rejected
     ));
     let diagnostics = errors.to_vec();
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, ErrorCode::ParseFailed);
-    assert_eq!(diagnostics[0].location.span, Span::DUMMY);
+    assert_eq!(
+        diagnostics[0].location,
+        talkbank_model::DiagnosticLocation::Unlocated
+    );
     assert!(diagnostics[0].context.is_none());
 }
 
@@ -353,12 +377,19 @@ fn reference_tier_parsers_honor_the_full_admitted_coordinate_range() {
         let file = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(source))
             .expect("reference parses");
         for entry in file.utterances().flat_map(|u| &u.dependent_tiers) {
-            let span = entry.span();
+            let span = entry.location();
             let input = source
-                .get(span.start as usize..span.end as usize)
+                .get(span.span().expect("located").start()..span.span().expect("located").end())
                 .expect("source-bound tier");
-            let last_origin = u32::MAX as usize - input.len();
-            for origin in [i32::MAX as usize, i32::MAX as usize + 1, last_origin] {
+            // Origins past the former 32-bit coordinate limit are admitted;
+            // only a range whose end overflows is refused.
+            let former_limit = u32::MAX as usize - input.len();
+            for origin in [
+                i32::MAX as usize,
+                i32::MAX as usize + 1,
+                former_limit,
+                former_limit + 1,
+            ] {
                 let errors = ErrorCollector::new();
                 let ParseOutcome::Parsed(tier) =
                     ChatParser::parse_dependent_tier(&parser, input, origin, &errors)
@@ -375,14 +406,19 @@ fn reference_tier_parsers_honor_the_full_admitted_coordinate_range() {
                     "coordinate placement cannot change payload"
                 );
                 assert_eq!(
-                    tier.span(),
-                    Span::new(origin as u32, (origin + input.len()) as u32)
+                    tier.location(),
+                    talkbank_model::Location::Located(Span::new(origin, origin + input.len()))
                 );
                 witnessed.insert(entry.kind().to_owned());
             }
             let errors = ErrorCollector::new();
             assert!(matches!(
-                ChatParser::parse_dependent_tier(&parser, input, last_origin + 1, &errors),
+                ChatParser::parse_dependent_tier(
+                    &parser,
+                    input,
+                    usize::MAX - input.len() + 1,
+                    &errors
+                ),
                 ParseOutcome::Rejected
             ));
             let diagnostics = errors.to_vec();
@@ -392,7 +428,10 @@ fn reference_tier_parsers_honor_the_full_admitted_coordinate_range() {
                 "one admission refusal, not parser recovery"
             );
             assert_eq!(diagnostics[0].code, ErrorCode::ParseFailed);
-            assert_eq!(diagnostics[0].location.span, Span::DUMMY);
+            assert_eq!(
+                diagnostics[0].location,
+                talkbank_model::DiagnosticLocation::Unlocated
+            );
             assert!(diagnostics[0].context.is_none());
         }
     }
@@ -419,21 +458,25 @@ fn fragment_source_rebases_labels_without_rebasing_snippets() {
         "boundary witness",
     )
     .with_label(ErrorLabel::new(Span::new(0, 1), "related"))
-    .with_label(ErrorLabel::new(Span::DUMMY, "unknown location"));
+    // An unlocated value gets no label.
+    .with_label_at(talkbank_model::Location::Unlocated, "unknown location");
     let errors = ErrorCollector::new();
     source.error_sink(&errors).report(original.clone());
     let diagnostics = errors.to_vec();
     assert_eq!(diagnostics.len(), 1);
     let actual = &diagnostics[0];
-    assert_eq!(actual.location.span, Span::new(19, 21));
+    assert_eq!(
+        actual.location.span().expect("located diagnostic"),
+        Span::new(19, 21)
+    );
     assert_eq!(actual.labels[0].span, Span::new(17, 18));
-    assert_eq!(actual.labels[1].span, Span::DUMMY);
+    assert_eq!(actual.labels.len(), 1, "an unlocated label is not attached");
     assert_eq!(actual.context, original.context);
     assert_eq!(actual.message, original.message);
     assert_eq!(actual.code, original.code);
 
-    // Both directions exceed a signed edit step without allocating a giant source.
-    let wrapper_start = i32::MAX as u32 + 100;
+    // A wrapper far into the document rebases without allocating a giant source.
+    let wrapper_start = i32::MAX as usize + 100;
     assert_eq!(
         source.rebase_from(
             Span::new(wrapper_start + 2, wrapper_start + 4),

@@ -8,7 +8,7 @@
 
 use crate::model::content::word::{MarkerSpelling, UntranscribedStatus};
 use crate::model::{Word, WordContent, WordMaterial, WordStressMarkerType};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 /// Enforce character-level hygiene for the normalized word surface.
 ///
@@ -45,11 +45,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
         if let Some(text) = text
             && text.contains(['@', '(', ')'])
         {
-            errors.report(ParseError::new(
+            errors.report(ParseError::at_location(
                 ErrorCode::IllegalCharactersInWord,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(text, word.span, text),
+                word.location,
                 "Lexical text contains a structural delimiter; use typed word markers",
             ));
         }
@@ -58,11 +57,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     // Check for whitespace
     if cleaned.chars().any(|c| c.is_whitespace()) {
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::IllegalCharactersInWord,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(cleaned, word.span, cleaned),
+                word.location,
                 "Word contains illegal whitespace characters",
             )
             .with_suggestion(
@@ -74,11 +72,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     // Check for bullet marker (unit separator U+0015)
     if cleaned.as_bytes().contains(&0x15) {
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::IllegalCharactersInWord,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(cleaned, word.span, cleaned),
+                word.location,
                 "Word contains illegal bullet marker (U+0015)",
             )
             .with_suggestion(
@@ -91,11 +88,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     // spec E243_pipe_in_word.md): it has no meaning in main-tier word text.
     if cleaned.contains('|') {
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::IllegalCharactersInWord,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(cleaned, word.span, cleaned),
+                word.location,
                 "Word contains reserved tier-delimiter character '|'",
             )
             .with_suggestion(
@@ -109,11 +105,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     // policy and are not rejected by this standalone-token rule.
     if cleaned == "/" {
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::IllegalCharactersInWord,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(cleaned, word.span, cleaned),
+                word.location,
                 "Standalone slash is not a spoken word",
             )
             .with_suggestion(
@@ -126,11 +121,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     // Keep the parsed Word and its source span intact: validation is not repair.
     if cleaned.contains('\u{2026}') {
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::IllegalCharactersInWord,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(cleaned, word.span, cleaned),
+                word.location,
                 "Word contains Unicode ellipsis (U+2026)",
             )
             .with_suggestion(
@@ -144,11 +138,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
         if ch.is_control() && ch != '\u{0015}' {
             // Already checked bullet separately
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::IllegalCharactersInWord,
                     Severity::Error,
-                    SourceLocation::new(word.span),
-                    ErrorContext::new(cleaned, word.span, cleaned),
+                    word.location,
                     format!("Word contains illegal control character U+{:04X} at position {}", ch as u32, idx),
                 )
                 .with_suggestion(
@@ -164,11 +157,10 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
         if let Some(rejected) = RejectedLexicalScalar::admit(ch) {
             let (character, category) = rejected.into_parts();
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::IllegalCharactersInWord,
                     Severity::Error,
-                    SourceLocation::new(word.span),
-                    ErrorContext::new(cleaned, word.span, cleaned),
+                    word.location,
                     format!(
                         "Word contains a Unicode {category} U+{:04X} at position {idx}",
                         character as u32,
@@ -239,21 +231,19 @@ pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
         if matches!(item, WordContent::CompoundMarker(_)) {
             match state {
                 CompoundPartState::InitialEmpty => errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::InvalidCompoundMarkerPosition,
                         Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
+                        word.location,
                         "Compound marker '+' has no preceding spoken part",
                     )
                     .with_suggestion("Add spoken material before '+' or remove the marker"),
                 ),
                 CompoundPartState::JoinedEmpty => errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::EmptyCompoundPart,
                         Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
+                        word.location,
                         "Compound markers '+' enclose an empty spoken part",
                     )
                     .with_suggestion("Remove one '+' or add content between compound markers"),
@@ -268,11 +258,10 @@ pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
 
     if matches!(state, CompoundPartState::JoinedEmpty) {
         errors.report(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::EmptyCompoundPart,
                 Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
+                word.location,
                 "Compound marker '+' cannot have an empty trailing part",
             )
             .with_suggestion("Add content after '+' or remove the trailing marker"),
@@ -396,11 +385,10 @@ impl<'a> ProsodicWord<'a> {
         // E247: Only one primary stress per word
         if primary_stress_count > 1 {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::MultiplePrimaryStress,
                     Severity::Error,
-                    SourceLocation::new(word.span),
-                    ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                    word.location,
                     format!(
                         "Word has {} primary stress markers, but only one is allowed",
                         primary_stress_count
@@ -413,11 +401,10 @@ impl<'a> ProsodicWord<'a> {
         // E250: Secondary stress requires primary stress
         if secondary_stress_count > 0 && primary_stress_count == 0 {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::SecondaryStressWithoutPrimary,
                     Severity::Error,
-                    SourceLocation::new(word.span),
-                    ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                    word.location,
                     "Word has secondary stress (ˌ) but no primary stress (ˈ)",
                 )
                 .with_suggestion(
@@ -435,11 +422,10 @@ impl<'a> ProsodicWord<'a> {
             )
         }) {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::ConsecutiveStressMarkers,
                     Severity::Error,
-                    SourceLocation::new(word.span),
-                    ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                    word.location,
                     "Multiple consecutive stress markers",
                 )
                 .with_suggestion(
@@ -455,11 +441,10 @@ impl<'a> ProsodicWord<'a> {
 
                 if !has_following_text {
                     errors.report(
-                        ParseError::new(
+                        ParseError::at_location(
                             ErrorCode::StressNotBeforeSpokenMaterial,
                             Severity::Error,
-                            SourceLocation::new(word.span),
-                            ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                            word.location,
                             "Stress marker not followed by spoken material",
                         )
                         .with_suggestion(
@@ -475,11 +460,10 @@ impl<'a> ProsodicWord<'a> {
 
                 if !has_preceding_text {
                     errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::LengtheningNotAfterSpokenMaterial,
                         Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                        word.location,
                         "Lengthening marker (:) not after spoken material",
                     )
                     .with_suggestion(
@@ -496,11 +480,10 @@ impl<'a> ProsodicWord<'a> {
 
                 if !has_preceding_text || !has_following_text {
                     errors.report(
-                        ParseError::new(
+                        ParseError::at_location(
                             ErrorCode::SyllablePauseNotBetweenSpokenMaterial,
                             Severity::Error,
-                            SourceLocation::new(word.span),
-                            ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                            word.location,
                             "Syllable pause marker (^) must be between spoken material",
                         )
                         .with_suggestion(

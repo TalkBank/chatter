@@ -1,7 +1,8 @@
 //! Selection range provider for CHAT-aware smart expand-selection.
 //!
 //! Expands selection through CHAT structural levels:
-//! word → main tier content → main tier line → utterance block → section → file.
+//! word → tier content → line → utterance block → file.
+//! Only levels containing the cursor and nested within their parent are offered.
 
 use tower_lsp::lsp_types::*;
 
@@ -40,7 +41,7 @@ fn build_selection_range(document: &str, position: Position) -> SelectionRange {
         },
         end: Position {
             line: position.line,
-            character: offset_to_position(line, line.len() as u32).character,
+            character: offset_to_position(line, line.len()).character,
         },
     };
 
@@ -53,30 +54,59 @@ fn build_selection_range(document: &str, position: Position) -> SelectionRange {
             line: 0,
             character: 0,
         },
-        end: offset_to_position(document, document.len() as u32),
+        end: offset_to_position(document, document.len()),
     };
 
-    // Build nested chain from innermost to outermost.
-    let file_sel = SelectionRange {
-        range: file_range,
-        parent: None,
+    let Some(chain) = SelectionChain::new(file_range, position) else {
+        return point_range(position);
     };
-    let block_sel = SelectionRange {
-        range: block_range,
-        parent: Some(Box::new(file_sel)),
-    };
-    let line_sel = SelectionRange {
-        range: line_range,
-        parent: Some(Box::new(block_sel)),
-    };
-    let content_sel = SelectionRange {
-        range: content_range,
-        parent: Some(Box::new(line_sel)),
-    };
-    SelectionRange {
-        range: word_range,
-        parent: Some(Box::new(content_sel)),
+    chain
+        .descend(block_range)
+        .descend(line_range)
+        .descend(content_range)
+        .descend(word_range)
+        .selection
+}
+
+/// Owns a cursor-containing chain; candidates cannot bypass nesting admission.
+struct SelectionChain {
+    cursor: Range,
+    selection: SelectionRange,
+}
+
+impl SelectionChain {
+    fn new(outer: Range, position: Position) -> Option<Self> {
+        let cursor = Range::new(position, position);
+        contains_range(outer, cursor).then_some(Self {
+            cursor,
+            selection: SelectionRange {
+                range: outer,
+                parent: None,
+            },
+        })
     }
+
+    fn descend(self, candidate: Range) -> Self {
+        if !contains_range(self.selection.range, candidate)
+            || !contains_range(candidate, self.cursor)
+        {
+            return self;
+        }
+        Self {
+            cursor: self.cursor,
+            selection: SelectionRange {
+                range: candidate,
+                parent: Some(Box::new(self.selection)),
+            },
+        }
+    }
+}
+
+fn contains_range(outer: Range, inner: Range) -> bool {
+    let key = |position: Position| (position.line, position.character);
+    key(outer.start) <= key(inner.start)
+        && key(inner.start) <= key(inner.end)
+        && key(inner.end) <= key(outer.end)
 }
 
 /// Find the word boundaries around the cursor column.
@@ -96,11 +126,11 @@ fn find_word_range(line: &str, col: usize, line_num: u32) -> Range {
     Range {
         start: Position {
             line: line_num,
-            character: offset_to_position(line, start as u32).character,
+            character: offset_to_position(line, start).character,
         },
         end: Position {
             line: line_num,
-            character: offset_to_position(line, end as u32).character,
+            character: offset_to_position(line, end).character,
         },
     }
 }
@@ -111,11 +141,11 @@ fn find_content_range(line: &str, line_num: u32) -> Range {
     Range {
         start: Position {
             line: line_num,
-            character: offset_to_position(line, content_start as u32).character,
+            character: offset_to_position(line, content_start).character,
         },
         end: Position {
             line: line_num,
-            character: offset_to_position(line, line.len() as u32).character,
+            character: offset_to_position(line, line.len()).character,
         },
     }
 }
@@ -155,9 +185,9 @@ fn find_utterance_block(lines: &[&str], line_idx: usize) -> Range {
         },
         end: Position {
             line: block_end as u32,
-            character: lines.get(block_end).map_or(0, |line| {
-                offset_to_position(line, line.len() as u32).character
-            }),
+            character: lines
+                .get(block_end)
+                .map_or(0, |line| offset_to_position(line, line.len()).character),
         },
     }
 }
@@ -175,6 +205,74 @@ fn point_range(position: Position) -> SelectionRange {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selection_chain_refuses_noncontaining_candidates() {
+        let range = |start, end| Range::new(Position::new(0, start), Position::new(0, end));
+        assert!(SelectionChain::new(range(4, 2), Position::new(0, 3)).is_none());
+        assert!(SelectionChain::new(range(0, 2), Position::new(0, 3)).is_none());
+        let chain = SelectionChain::new(range(0, 10), Position::new(0, 3)).unwrap();
+        let chain = chain
+            .descend(range(0, 11))
+            .descend(range(4, 8))
+            .descend(range(4, 2));
+        assert_eq!(chain.selection.range, range(0, 10));
+        assert!(chain.selection.parent.is_none());
+        let chain = chain.descend(range(2, 4));
+        assert_eq!(chain.selection.range, range(2, 4));
+        assert_eq!(chain.selection.parent.unwrap().range, range(0, 10));
+    }
+
+    #[test]
+    fn tier_prefix_selection_skips_content() {
+        let ranges = selection_range("*CHI:\thello .\n", &[Position::new(0, 2)]);
+        let selection = &ranges[0];
+        assert_eq!(
+            selection.range,
+            Range::new(Position::new(0, 0), Position::new(0, 5))
+        );
+        assert_eq!(
+            selection.parent.as_ref().unwrap().range.start,
+            Position::new(0, 0)
+        );
+    }
+
+    #[test]
+    fn selection_ranges_contain_cursor_and_children() {
+        let source = "@UTF8\n@Begin\n@Participants:\tCHI Child\n*CHI:\thello 😀 world .\n%mor:\tn|hello n|world .\n\n@Comment:\ta note\n@End\n";
+        for document in [source.to_owned(), source.replace('\n', "\r\n")] {
+            let mut positions = Vec::new();
+            for (line, text) in document.lines().enumerate() {
+                for character in 0..=text.encode_utf16().count() {
+                    positions.push(Position::new(line as u32, character as u32));
+                }
+            }
+            positions.push(offset_to_position(&document, document.len()));
+            let ranges = selection_range(&document, &positions);
+            assert_eq!(ranges.len(), positions.len());
+            for (position, selection) in positions.iter().zip(&ranges) {
+                let contains = |range: Range, point: Position| {
+                    (range.start.line, range.start.character) <= (point.line, point.character)
+                        && (point.line, point.character) <= (range.end.line, range.end.character)
+                };
+                assert!(
+                    contains(selection.range, *position),
+                    "{position:?}: {selection:?}"
+                );
+                let mut child = selection;
+                while let Some(parent) = child.parent.as_deref() {
+                    assert!(
+                        contains(parent.range, child.range.start)
+                            && contains(parent.range, child.range.end),
+                        "{position:?}: child {:?}, parent {:?}",
+                        child.range,
+                        parent.range
+                    );
+                    child = parent;
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_selection_range_nesting() {

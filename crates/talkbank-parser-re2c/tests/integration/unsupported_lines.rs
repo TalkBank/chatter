@@ -12,20 +12,23 @@ fn check(parser: &impl ChatParser, source: &str, offset: usize) -> (String, Vec<
     for error in &diagnostics {
         assert_eq!(error.code, ErrorCode::UnexpectedLineType);
         assert_eq!(error.severity, Severity::Error);
-        let span = error.location.span;
-        assert!(span.start as usize >= offset);
-        let text = &source[span.start as usize - offset..span.end as usize - offset];
+        let span = error.location.span().expect("located diagnostic");
+        assert!(span.start() >= offset);
+        let text = &source[span.start() - offset..span.end() - offset];
         assert!(text.ends_with('\n'));
         assert!(!text.starts_with(['@', '*', '%', '\t']));
         let context = error.context.as_ref().unwrap();
         assert_eq!(
-            &context.source_text[context.span.start as usize..context.span.end as usize],
+            &context.source_text[context.span.start()..context.span.end()],
             text,
         );
     }
     (
         file.to_chat_string(),
-        diagnostics.into_iter().map(|e| e.location.span).collect(),
+        diagnostics
+            .into_iter()
+            .map(|e| e.location.span().expect("located diagnostic"))
+            .collect(),
     )
 }
 

@@ -15,7 +15,7 @@
 //! # What this replaces, and why it is a stronger claim
 //!
 //! `talkbank-model`'s `alignment/location_tests.rs` built a `MainTier` with
-//! `Span::from_usize(0, 20)` and a trailing comment reading
+//! `Span::new(0, 20)` and a trailing comment reading
 //! `// *CHI: one two .`, then asserted the error landed at 0..20. The span and
 //! the comment are two statements of one fact, joined by nothing: change the
 //! comment's text and the number stays right, change the number and the
@@ -115,7 +115,7 @@ fn a_count_mismatch_points_at_the_main_tier() -> Result<(), TestError> {
         // This is the whole difference from the predecessor: there is no
         // number here to disagree with the text.
         let main_span = file.lines.iter().find_map(|line| match line {
-            Line::Utterance(utterance) => Some(utterance.main.span),
+            Line::Utterance(utterance) => Some(utterance.main.location),
             _ => None,
         });
         let Some(main_span) = main_span else {
@@ -149,10 +149,13 @@ fn a_count_mismatch_points_at_the_main_tier() -> Result<(), TestError> {
                         wrong.push(format!("{}: expected {code} and got {got:?}", case.what));
                     }
                     [error] => {
-                        if error.location.span != main_span {
+                        if error.location.span().expect("located diagnostic")
+                            != main_span.span().expect("located")
+                        {
                             wrong.push(format!(
                                 "{}: {code} points at {:?} and the main tier is at {main_span:?}",
-                                case.what, error.location.span
+                                case.what,
+                                error.location.span().expect("located diagnostic")
                             ));
                         }
                     }

@@ -5,7 +5,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     Absence, AsRawNode, BaseAnnotationChoiceBoundView, BaseAnnotationsNode, KindSlot, Never,
     NodeSlot, SourceBound, SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
@@ -17,6 +17,7 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::single::{ParsedAnnotation, parse_single_annotation};
+use crate::parser::node_span::span_of;
 
 /// Converts a `base_annotations` node into the ordered run of markers.
 ///
@@ -100,7 +101,12 @@ pub(crate) fn parse_scoped_annotations<'tree>(
 /// pair begins. A sequence is never MISSING or displaced, and the slot's
 /// type says so.
 fn pair<'value, 'tree: 'value, 'source, T, A: Absence>(
-    slot: SourceField<'value, 'tree, 'source, NodeSlot<'tree, T, Never, Never, A>>,
+    slot: SourceField<
+        'value,
+        'tree,
+        'source,
+        NodeSlot<T, Never, tree_sitter::Node<'tree>, Never, A>,
+    >,
     index: usize,
     errors: &impl ErrorSink,
 ) -> Option<SourceField<'value, 'tree, 'source, T>> {
@@ -144,8 +150,8 @@ fn report_mismatch(
     errors.report(ParseError::new(
         ErrorCode::ContentAnnotationParseError,
         Severity::Error,
-        SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-        ErrorContext::new(source, bad.start_byte()..bad.end_byte(), ""),
+        DiagnosticLocation::new(span_of(bad)),
+        ErrorContext::new(source, span_of(bad), ""),
         format!(
             "Expected {expected} at position {position} of base_annotations, found '{}'",
             bad.kind()

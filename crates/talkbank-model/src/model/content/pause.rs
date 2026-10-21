@@ -76,22 +76,23 @@ pub enum PauseDuration {
 /// # Examples
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{Pause, PauseDuration, PauseTimedDuration};
 ///
 /// // Short pause
-/// let pause = Pause::new(PauseDuration::Short);
+/// let pause = Pause::new(Location::Unlocated, PauseDuration::Short);
 /// assert_eq!(pause.to_string(), "(.)");
 ///
 /// // Medium pause
-/// let pause = Pause::new(PauseDuration::Medium);
+/// let pause = Pause::new(Location::Unlocated, PauseDuration::Medium);
 /// assert_eq!(pause.to_string(), "(..)");
 ///
 /// // Long pause
-/// let pause = Pause::new(PauseDuration::Long);
+/// let pause = Pause::new(Location::Unlocated, PauseDuration::Long);
 /// assert_eq!(pause.to_string(), "(...)");
 ///
 /// // Timed pause (2.5 seconds)
-/// let pause = Pause::new(PauseDuration::Timed(PauseTimedDuration::new("2.5")));
+/// let pause = Pause::new(Location::Unlocated, PauseDuration::Timed(PauseTimedDuration::new("2.5")));
 /// assert_eq!(pause.to_string(), "(2.5)");
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
@@ -100,9 +101,9 @@ pub struct Pause {
     pub duration: PauseDuration,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl Pause {
@@ -110,19 +111,11 @@ impl Pause {
     ///
     /// Parser pipelines commonly construct with this first, then attach source
     /// spans after token boundaries are finalized.
-    pub fn new(duration: PauseDuration) -> Self {
+    pub fn new(location: impl Into<crate::Location>, duration: PauseDuration) -> Self {
         Self {
             duration,
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata used by diagnostics.
-    ///
-    /// Span data does not affect pause serialization or semantic equality.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 }
 
@@ -274,16 +267,16 @@ impl PauseTimedDuration {
         if !frac.bytes().all(|b| b.is_ascii_digit()) {
             return None;
         }
-        // Pad or truncate to 3 digits
-        let millis: u32 = match frac.len() {
-            1 => frac.parse::<u32>().ok()? * 100,
-            2 => frac.parse::<u32>().ok()? * 10,
-            3 => frac.parse::<u32>().ok()?,
-            _ => {
-                // More than 3 digits: take first 3
-                frac[..3].parse::<u32>().ok()?
-            }
-        };
+        // The immutable spelling is entirely ASCII digits. Accumulate exactly
+        // three places, padding short fractions with zeros. Each intermediate
+        // is at most 999; no integer parse or UTF-8 slice can fail here.
+        // Validate the entire spelling above, including truncated digits.
+        let millis = frac
+            .bytes()
+            .map(|byte| u32::from(byte - b'0'))
+            .chain(std::iter::repeat(0))
+            .take(3)
+            .fold(0, |value, digit| value * 10 + digit);
         Some(millis)
     }
 }
@@ -343,7 +336,7 @@ mod tests {
     /// Round-trips the short pause form `(.)`.
     #[test]
     fn pause_short_roundtrip() {
-        let pause = Pause::new(PauseDuration::Short);
+        let pause = Pause::new(crate::Location::Unlocated, PauseDuration::Short);
         let output = pause.to_string();
         assert_eq!(output, "(.)", "Short pause roundtrip failed");
     }
@@ -351,7 +344,7 @@ mod tests {
     /// Round-trips the medium pause form `(..)`.
     #[test]
     fn pause_medium_roundtrip() {
-        let pause = Pause::new(PauseDuration::Medium);
+        let pause = Pause::new(crate::Location::Unlocated, PauseDuration::Medium);
         let output = pause.to_string();
         assert_eq!(output, "(..)", "Medium pause roundtrip failed");
     }
@@ -359,7 +352,7 @@ mod tests {
     /// Round-trips the long pause form `(...)`.
     #[test]
     fn pause_long_roundtrip() {
-        let pause = Pause::new(PauseDuration::Long);
+        let pause = Pause::new(crate::Location::Unlocated, PauseDuration::Long);
         let output = pause.to_string();
         assert_eq!(output, "(...)", "Long pause roundtrip failed");
     }
@@ -367,7 +360,10 @@ mod tests {
     /// Round-trips a numeric pause duration.
     #[test]
     fn pause_numeric_roundtrip() {
-        let pause = Pause::new(PauseDuration::Timed(PauseTimedDuration::new("1.5")));
+        let pause = Pause::new(
+            crate::Location::Unlocated,
+            PauseDuration::Timed(PauseTimedDuration::new("1.5")),
+        );
         let output = pause.to_string();
         assert_eq!(output, "(1.5)", "Numeric pause roundtrip failed");
     }

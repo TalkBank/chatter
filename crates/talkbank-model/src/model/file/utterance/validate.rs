@@ -73,11 +73,10 @@ impl Validate for Utterance {
         if !context.shared.participant_ids.contains(&self.main.speaker) {
             let speaker_str = self.main.speaker.as_str();
             errors.report(
-                crate::ParseError::new(
+                crate::ParseError::at_location(
                     crate::ErrorCode::SpeakerNotDefined,
                     crate::Severity::Error,
-                    crate::SourceLocation::new(self.main.speaker_span),
-                    crate::ErrorContext::new(speaker_str, self.main.speaker_span, speaker_str),
+                    self.main.speaker_location,
                     format!(
                         "Speaker '{}' used on main tier but not declared in @Participants",
                         speaker_str
@@ -157,11 +156,10 @@ impl Validate for Utterance {
             .is_tier_tainted(crate::model::ParseHealthTier::Mor);
         if has_gra && !has_mor && !mor_tainted {
             errors.report(
-                crate::ParseError::new(
+                crate::ParseError::at_location(
                     crate::ErrorCode::GraWithoutMor,
                     crate::Severity::Error,
-                    crate::SourceLocation::new(self.main.span),
-                    crate::ErrorContext::new("", self.main.span, ""),
+                    self.main.location,
                     "%gra tier requires %mor tier to be present",
                 )
                 .with_suggestion("Add %mor tier before %gra, or remove %gra tier"),
@@ -196,15 +194,15 @@ impl Validate for Utterance {
         // E756: any dependent tier that declares no content, not just `%x*`.
         //
         // The kind-specific question ("can this tier even be empty?") belongs
-        // to `DependentTier::empty_content_span`, whose match is exhaustive, so
+        // to `DependentTier::empty_content_location`, whose match is exhaustive, so
         // a new tier variant stops compiling there rather than silently
         // escaping this rule. This loop only asks.
         for entry in &self.dependent_tiers {
             if let DependentTier::Sin(tier) = &entry.tier {
                 tier.validate(context, errors);
             }
-            if let Some(span) = entry.tier.empty_content_span() {
-                crate::validation::check_dependent_tier_content(entry.kind(), span, errors);
+            if let Some(location) = entry.tier.empty_content_location() {
+                crate::validation::check_dependent_tier_content(entry.kind(), location, errors);
             }
         }
 
@@ -213,7 +211,7 @@ impl Validate for Utterance {
             if let DependentTier::Tim(tim_tier) = &entry.tier
                 && tim_tier.has_validation_issue()
             {
-                check_tim_tier_format(tim_tier.as_str(), tim_tier.span(), errors);
+                check_tim_tier_format(tim_tier.as_str(), tim_tier.location(), errors);
             }
         }
 
@@ -231,15 +229,10 @@ impl Validate for Utterance {
         for entry in &self.dependent_tiers {
             if let DependentTier::Unsupported(t) = &entry.tier {
                 errors.report(
-                    crate::ParseError::new(
+                    crate::ParseError::at_location(
                         crate::ErrorCode::UnsupportedDependentTier,
                         crate::Severity::Error,
-                        crate::SourceLocation::new(t.span),
-                        crate::ErrorContext::new(
-                            t.label.as_str(),
-                            t.span,
-                            t.label.as_str(),
-                        ),
+                        t.location,
                         format!(
                             "Unsupported dependent tier '%{}'",
                             t.label
@@ -255,13 +248,12 @@ impl Validate for Utterance {
 }
 
 /// E603: Emit warning for non-time-like `%tim` tier content.
-fn check_tim_tier_format(content: &str, span: crate::Span, errors: &impl ErrorSink) {
+fn check_tim_tier_format(content: &str, location: crate::Location, errors: &impl ErrorSink) {
     errors.report(
-        crate::ParseError::new(
+        crate::ParseError::at_location(
             crate::ErrorCode::InvalidTimTierFormat,
             crate::Severity::Warning,
-            crate::SourceLocation::new(span),
-            crate::ErrorContext::new(content, span, "tim"),
+            location,
             format!("Invalid %tim tier format: '{}'", content.trim()),
         )
         .with_suggestion("Expected time format: HH:MM:SS or HH:MM:SS.mmm"),

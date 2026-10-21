@@ -181,9 +181,17 @@ fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
         // Deliberate input-boundary mutation, not an authorized output retiming.
         // The new interval has no claimed source span.
         row.main.content.bullet = Some(if before_gem {
-            talkbank_model::model::Bullet::new(original.timing.start_ms, gem_start)
+            talkbank_model::model::Bullet::new(
+                talkbank_model::Location::Unlocated,
+                original.timing.start_ms,
+                gem_start,
+            )
         } else {
-            talkbank_model::model::Bullet::new(gem_end, original.timing.end_ms)
+            talkbank_model::model::Bullet::new(
+                talkbank_model::Location::Unlocated,
+                gem_end,
+                original.timing.end_ms,
+            )
         });
         let wire = touching.to_chat_string();
         let selected = SourceBoundDonorSelection::bind(&touching, &touching, parents())

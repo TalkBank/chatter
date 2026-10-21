@@ -1,6 +1,7 @@
 //! `chatter debug sanitize`, protected-corpus redaction.
 
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 use super::*;
@@ -9,8 +10,8 @@ use super::*;
 /// stdout when `None`).
 ///
 /// Implements `chatter debug sanitize`. Runs the strict sanitization
-/// policy from `talkbank-transform::redact`. See
-/// `talkbank/docs/protected-corpus-debugging-workflow.md` for context.
+/// policy from `talkbank-transform::redact`. See the book's sanitizer guide
+/// for the retained metadata and manual privacy-review boundary.
 ///
 /// A file that parses with diagnostics but still builds a model (a
 /// healthy region alongside a malformed one) is sanitized anyway: the
@@ -18,7 +19,13 @@ use super::*;
 /// Only a file that cannot build a model at all (see
 /// [`talkbank_parser::ParseProduct::Unbuildable`]) aborts the run.
 pub fn run_sanitize(input: &Path, output_path: Option<&Path>) {
-    let source = std::fs::read_to_string(input)
+    let mut source_handle = File::open(input)
+        .and_then(same_file::Handle::from_file)
+        .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", input.display())));
+    let mut source = String::new();
+    source_handle
+        .as_file_mut()
+        .read_to_string(&mut source)
         .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", input.display())));
     let parser = super::parser();
     let Some(parsed) = parse_or_report(&parser, input, &source) else {
@@ -31,20 +38,9 @@ pub fn run_sanitize(input: &Path, output_path: Option<&Path>) {
     let chat_text = sanitized.to_chat_string();
 
     match output_path {
-        Some(path) => {
-            if same_file(input, path) {
-                die(&format!(
-                    "refusing to write the sanitized copy over its own input, {}.\n\
-                     \x20      Sanitization is deliberately LOSSY: it strips contributor \
-                     lexical content.\n\
-                     \x20      Writing it over the source would destroy the original \
-                     irrecoverably. Name a different -o path.",
-                    input.display()
-                ));
-            }
-            std::fs::write(path, &chat_text)
-                .unwrap_or_else(|e| die(&format!("cannot write {}: {e}", path.display())))
-        }
+        Some(path) => DistinctOutput::open(&source_handle, path)
+            .and_then(|output| output.write(chat_text.as_bytes()))
+            .unwrap_or_else(|e| die(&format!("cannot write {}: {e}", path.display()))),
         None => std::io::stdout()
             .lock()
             .write_all(chat_text.as_bytes())
@@ -52,35 +48,43 @@ pub fn run_sanitize(input: &Path, output_path: Option<&Path>) {
     }
 }
 
-/// Whether `output` names the same file on disk as `input`.
-///
-/// Compares RESOLVED paths, not the strings: `x.cha`, `./x.cha` and an absolute
-/// spelling of the same file are the same file, and a string comparison would
-/// pass all but the exact repeat. `output` need not exist yet, so its parent is
-/// resolved and the file name compared beside it.
-///
-/// Fails CLOSED in the direction that matters: if either path cannot be
-/// resolved, this answers `false` and the write proceeds, because refusing a
-/// legitimate write on an unresolvable path would be worse than the narrow case
-/// this guards. The case it guards is the exact one an operator hits, `-o` the
-/// same path they just typed as the input.
-fn same_file(input: &Path, output: &Path) -> bool {
-    let Ok(resolved_input) = input.canonicalize() else {
-        return false;
-    };
-    if let Ok(resolved_output) = output.canonicalize() {
-        return resolved_input == resolved_output;
+/// An opened destination whose identity differs from the retained source.
+/// Only this capability can truncate/write; neither operation reopens a path.
+struct DistinctOutput(same_file::Handle);
+
+#[derive(Debug, thiserror::Error)]
+enum OutputError {
+    #[error(
+        "refusing to write the sanitized copy over its own input; sanitization is lossy, so name a different -o path"
+    )]
+    SourceAlias,
+    #[error(transparent)]
+    Io(#[from] io::Error),
+}
+
+impl DistinctOutput {
+    fn open(source: &same_file::Handle, path: &Path) -> Result<Self, OutputError> {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        let output = same_file::Handle::from_file(file)?;
+        if source == &output {
+            return Err(OutputError::SourceAlias);
+        }
+        Ok(Self(output))
     }
-    // Not created yet: resolve the directory it would land in.
-    let (Some(parent), Some(name)) = (output.parent(), output.file_name()) else {
-        return false;
-    };
-    let parent = if parent.as_os_str().is_empty() {
-        Path::new(".")
-    } else {
-        parent
-    };
-    parent
-        .canonicalize()
-        .is_ok_and(|dir| dir.join(name) == resolved_input)
+
+    fn write(mut self, bytes: &[u8]) -> Result<(), OutputError> {
+        let file = self.0.as_file_mut();
+        // Streams/devices have no replaceable length. Preserve their write
+        // behavior while truncating ordinary files only after admission.
+        if file.metadata()?.is_file() {
+            file.set_len(0)?;
+        }
+        file.write_all(bytes)?;
+        file.flush()?;
+        Ok(())
+    }
 }

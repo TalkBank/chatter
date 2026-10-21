@@ -73,13 +73,14 @@ fn full_document(tree: &tree_sitter::Tree) -> tree_sitter::Node<'_> {
 
 /// Return the raw node a `Present` slot wraps, or panic with context. (Test-only;
 /// the clean reference file makes every descent slot `Present`.)
-fn present_raw<'tree, T, M, U, A>(
-    slot: &NodeSlot<'tree, T, M, U, A>,
+fn present_raw<'tree, T, M, E, U, A>(
+    slot: &NodeSlot<T, M, E, U, A>,
     what: &str,
 ) -> tree_sitter::Node<'tree>
 where
     T: AsRawNode<'tree> + std::fmt::Debug,
     M: std::fmt::Debug,
+    E: std::fmt::Debug,
     U: std::fmt::Debug,
     A: std::fmt::Debug,
 {

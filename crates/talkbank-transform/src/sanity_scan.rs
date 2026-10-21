@@ -1,4 +1,4 @@
-//! Post-merge sanity scan for `chatter merge` output.
+//! Sanity scan for structurally assembled CHAT.
 //!
 //! The scan detects sessions where pass-1 reference-mode produced a
 //! confident (above-threshold) auto-decision that nonetheless looks
@@ -30,18 +30,53 @@ use crate::speaker_id::{InsertedRoleSpec, MergeOverride, SpeakerAction};
 /// Ratio threshold for the mean-utterance-word-count heuristic.
 ///
 /// A scan flags a session when
-/// `anchor_mean_words >= inserted_mean_words * threshold.0`. Values
-/// below 1.0 would flag every session; the realistic operator range
-/// is 1.2× (sensitive) to 2.0× (specific). The CLI default is 1.5×.
+/// `anchor_mean_words >= inserted_mean_words * threshold.value()`.
+/// The factor must be finite and positive; choosing a useful sensitivity
+/// remains the caller's responsibility. The CLI default is 1.5×.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct SanityScanThreshold(pub f64);
+pub struct SanityScanThreshold(f64);
 
 impl SanityScanThreshold {
-    /// Operator-facing default. Picked at 1.5× as a balance between
-    /// recall (catching real misclassifications) and precision
-    /// (not flagging every typical child-adult session with mild
-    /// asymmetry). Operators tune per-corpus via the CLI.
+    /// Operator-facing default, not a calibrated accuracy guarantee.
     pub const DEFAULT: Self = Self(1.5);
+
+    /// Admit a finite positive comparison factor.
+    pub fn new(value: f64) -> Result<Self, SanityScanThresholdError> {
+        match value {
+            value if value.is_finite() && value > 0.0 => Ok(Self(value)),
+            value => Err(SanityScanThresholdError::Invalid(value)),
+        }
+    }
+
+    /// Scalar form for recording the admitted threshold in pending evidence.
+    pub fn value(self) -> f64 {
+        self.0
+    }
+}
+
+/// Numeric syntax and domain refusals for a sanity-scan threshold.
+#[derive(Debug, thiserror::Error)]
+pub enum SanityScanThresholdError {
+    /// The supplied text is not a floating-point number.
+    #[error("sanity-scan threshold is not a number: {0}")]
+    Float(#[from] std::num::ParseFloatError),
+    /// The number cannot be used as a finite positive comparison factor.
+    #[error("sanity-scan threshold must be finite and positive, got {0}")]
+    Invalid(f64),
+}
+
+impl std::str::FromStr for SanityScanThreshold {
+    type Err = SanityScanThresholdError;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::new(text.parse()?)
+    }
+}
+
+impl std::fmt::Display for SanityScanThreshold {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
 }
 
 /// Outcome of scanning one session for misclassification.
@@ -202,4 +237,32 @@ fn swapped_mapping(drop_speaker: &str, rename_speaker: &str) -> BTreeMap<String,
     out.insert(drop_speaker.to_string(), SpeakerAction::Rename);
     out.insert(rename_speaker.to_string(), SpeakerAction::Drop);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SanityScanThreshold;
+
+    #[test]
+    fn threshold_admission_rejects_nonfinite_and_nonpositive_values() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.0, -0.0, -1.0] {
+            assert!(SanityScanThreshold::new(value).is_err());
+            assert!(value.to_string().parse::<SanityScanThreshold>().is_err());
+        }
+        assert!("not-a-number".parse::<SanityScanThreshold>().is_err());
+    }
+
+    #[test]
+    fn threshold_admission_preserves_positive_factors_and_default() {
+        for value in [f64::MIN_POSITIVE, 0.5, 1.0, 1.5, 2.0, f64::MAX] {
+            let admitted = SanityScanThreshold::new(value).expect("positive finite factor");
+            assert_eq!(admitted.value(), value);
+            let reparsed = admitted
+                .to_string()
+                .parse::<SanityScanThreshold>()
+                .expect("displayed factor");
+            assert_eq!(reparsed, admitted);
+        }
+        assert_eq!(SanityScanThreshold::DEFAULT.value(), 1.5);
+    }
 }

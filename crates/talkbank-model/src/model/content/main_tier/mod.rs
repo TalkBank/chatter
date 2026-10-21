@@ -42,11 +42,11 @@ mod tests;
 mod wor;
 
 use super::{
-    Bullet, LanguageCode, Linker, Postcode, SpeakerCode, Terminator, TierContent, TierSeparator,
+    Bullet, LanguagePrecode, Linker, Postcode, SpeakerCode, Terminator, TierContent, TierSeparator,
     UtteranceContent, WriteChat,
 };
 use crate::alignment::helpers::{WordItem, walk_words};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -89,13 +89,13 @@ pub struct MainTier {
     /// Shared tier payload (content, markers, terminator, postcodes, bullet).
     pub content: TierContent,
     /// Source span for the full main-tier line.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
     /// Source span for speaker token only.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub speaker_span: Span,
+    pub speaker_location: crate::Location,
     /// The `colon tab trailing_space?` separator between the speaker token
     /// and the tier content. Provenance only: E758 (illegal trailing space)
     /// is detected from this field; the JSON wire and schema are unchanged.
@@ -104,9 +104,40 @@ pub struct MainTier {
     pub separator: TierSeparator,
 }
 
+/// Where a main tier sits in its source: the whole line, the speaker label
+/// and the content region after the separator.
+///
+/// Three locations of one type travelled positionally through
+/// [`MainTier::new`] until 2026-10-18, so swapping the line and the speaker
+/// compiled and only misplaced diagnostics. Named fields carry the meaning
+/// with the value. A builder with no source writes [`Self::UNLOCATED`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MainTierLocations {
+    /// The whole `*SPK:\tcontent` line, including its line ending when the
+    /// source has one (both parser backends measure a line this way, as
+    /// they do a header or a dependent tier).
+    pub line: crate::Location,
+    /// The speaker label only.
+    pub speaker: crate::Location,
+    /// The content after the separator's colon, through the end of `line`:
+    /// the tab is content, as in the grammar, so a content offset can be
+    /// compared across backends byte for byte.
+    pub content: crate::Location,
+}
+
+impl MainTierLocations {
+    /// A main tier built without source: every part unlocated.
+    pub const UNLOCATED: Self = Self {
+        line: crate::Location::Unlocated,
+        speaker: crate::Location::Unlocated,
+        content: crate::Location::Unlocated,
+    };
+}
+
 impl MainTier {
     /// Builds a main tier from required fields with empty optional components.
     pub fn new(
+        locations: MainTierLocations,
         speaker: impl Into<SpeakerCode>,
         content: Vec<UtteranceContent>,
         terminator: impl Into<Option<Terminator>>,
@@ -114,6 +145,7 @@ impl MainTier {
         Self {
             speaker: speaker.into(),
             content: TierContent::with_all(
+                locations.content,
                 Vec::new(),
                 None,
                 content,
@@ -121,22 +153,10 @@ impl MainTier {
                 Vec::new(),
                 None,
             ),
-            span: Span::DUMMY,
-            speaker_span: Span::DUMMY,
+            location: locations.line,
+            speaker_location: locations.speaker,
             separator: TierSeparator::CLEAN,
         }
-    }
-
-    /// Sets full-line source span metadata.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
-    }
-
-    /// Sets speaker-token source span metadata.
-    pub fn with_speaker_span(mut self, speaker_span: Span) -> Self {
-        self.speaker_span = speaker_span;
-        self
     }
 
     /// Sets the label-to-content separator (E758 provenance).
@@ -158,15 +178,8 @@ impl MainTier {
     }
 
     /// Sets utterance-scoped language code (`[- code]`).
-    pub fn with_language_code(mut self, language_code: impl Into<LanguageCode>) -> Self {
-        self.content = self.content.with_language_code(language_code.into());
-        self
-    }
-
-    /// Sets the source span of the `[- code]` precode (its opening `[` at
-    /// `.start`). Provenance only; see [`TierContent::language_code_span`].
-    pub fn with_language_code_span(mut self, span: Span) -> Self {
-        self.content = self.content.with_language_code_span(span);
+    pub fn with_language_code(mut self, precode: LanguagePrecode) -> Self {
+        self.content = self.content.with_language_code(precode);
         self
     }
 
@@ -188,12 +201,6 @@ impl MainTier {
         self
     }
 
-    /// Sets source span for content region (portion after speaker token).
-    pub fn with_content_span(mut self, content_span: Span) -> Self {
-        self.content = self.content.with_content_span(content_span);
-        self
-    }
-
     /// Serialize this main tier to an owned CHAT string.
     pub fn to_chat(&self) -> String {
         let mut s = String::new();
@@ -201,35 +208,40 @@ impl MainTier {
         s
     }
 
-    /// Find the first context-dependent CA omission span in this main tier.
+    /// The location of the first context-dependent CA omission in this main
+    /// tier, if there is one.
     ///
     /// Fragment parsers use this to reject parenthesized omission shorthand
     /// when they do not have file-level `@Options: CA` context. This matches
     /// both explicit `CAOmission` words and standalone shortening-only forms.
-    pub fn find_context_dependent_ca_omission_span(&self) -> Option<Span> {
+    /// The word's PRESENCE is the answer; its location, which a front end
+    /// may not have recorded, only says where to point. Until 2026-10-18 this
+    /// returned the span and skipped an unlocated word, so a front end that
+    /// recorded no offset for the word would have admitted the shorthand.
+    pub fn find_context_dependent_ca_omission(&self) -> Option<crate::Location> {
         use crate::model::content::word::ca::requires_ca_omission_context;
 
-        let mut span = None;
+        let mut found = None;
         walk_words(&self.content.content, None, &mut |leaf| match leaf {
-            WordItem::Word(word) if span.is_none() && requires_ca_omission_context(word) => {
-                span = Some(word.span);
+            WordItem::Word(word) if found.is_none() && requires_ca_omission_context(word) => {
+                found = Some(word.location);
             }
-            WordItem::ReplacedWord(replaced) if span.is_none() => {
+            WordItem::ReplacedWord(replaced) if found.is_none() => {
                 if requires_ca_omission_context(&replaced.word) {
-                    span = Some(replaced.word.span);
+                    found = Some(replaced.word.location);
                 } else {
-                    span = replaced
+                    found = replaced
                         .replacement
                         .words
                         .iter()
                         .find(|word| requires_ca_omission_context(word))
-                        .map(|word| word.span);
+                        .map(|word| word.location);
                 }
             }
             WordItem::Word(_) | WordItem::ReplacedWord(_) | WordItem::Separator(_) => {}
         });
 
-        span
+        found
     }
 }
 
@@ -262,7 +274,7 @@ impl crate::validation::Validate for MainTier {
         // Validate speaker
         let speaker_str = self.speaker.as_str();
 
-        crate::validation::check_speaker_id(speaker_str, self.speaker_span, errors);
+        crate::validation::check_speaker_id(speaker_str, self.speaker_location, errors);
 
         // E308: Check if speaker is in participant list (unless speaker is "0" - unidentified)
         if !context.shared.participant_ids.is_empty()
@@ -270,11 +282,10 @@ impl crate::validation::Validate for MainTier {
             && speaker_str != "0"
         {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::UndeclaredSpeaker,
                     Severity::Error,
-                    SourceLocation::new(self.speaker_span),
-                    ErrorContext::new(speaker_str, self.speaker_span, "speaker"),
+                    self.speaker_location,
                     format!("Speaker '{}' is not in the participant list", speaker_str),
                 )
                 .with_suggestion("Add this speaker to the @Participants header"),
@@ -288,14 +299,19 @@ impl crate::validation::Validate for MainTier {
                 .collect();
             expected_speakers.sort();
 
-            let warning_context =
-                ErrorContext::new(speaker_str, self.speaker_span, "speaker_not_found")
-                    .with_expected(expected_speakers);
+            // Preserve the expected-speaker metadata beside a model-value
+            // snippet, never use the document offset inside that short text.
+            let warning_context = ErrorContext::new(
+                speaker_str,
+                crate::Span::new(0, speaker_str.len()),
+                "speaker_not_found",
+            )
+            .with_expected(expected_speakers);
             errors.report(
                 ParseError::new(
                     ErrorCode::SpeakerNotFoundInParticipants,
                     Severity::Warning,
-                    SourceLocation::new(self.speaker_span),
+                    DiagnosticLocation::from(self.speaker_location),
                     warning_context,
                     format!(
                         "Speaker '{}' not found in @Participants header",
@@ -323,39 +339,32 @@ impl crate::validation::Validate for MainTier {
             && !context.main_parse_tainted
         {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::MissingTerminator,
                     Severity::Error,
-                    SourceLocation::new(self.span),
-                    ErrorContext::new(self.speaker.as_str(), self.span, self.speaker.as_str()),
+                    self.location,
                     "Expected terminator not found",
                 )
                 .with_suggestion("Add a terminator at the end: Standard (. ? !), Interruption (+... +/. +//. +/? +//? +/??  +..? +\"/. +\". +.), or CA intonation (⇗ ↗ → ↘ ⇘ ≋ +≋ ≈ +≈)"),
             );
         }
 
-        // Validate content using the content_span for precise error highlighting
-        // The content_span points to the exact portion after the colon where content errors occur
-        let content_context = if let Some(content_span) = tier_content.content_span {
-            // Use content's own span for precise error highlighting
-            context
-                .clone()
-                .with_field_span(content_span)
-                .with_field_text("") // Empty text - span is used for location, not text extraction
-        } else {
-            // Fallback for backward compatibility (shouldn't happen after parser update)
-            context
-                .clone()
-                .with_field_span(self.span)
-                .with_field_text("")
-        };
+        // Validate content at the content region's own location (the portion
+        // after the colon) for precise highlighting; programmatic content
+        // falls back to the tier's location.
+        let content_location = tier_content.location.or(self.location);
+        let content_context = context
+            .clone()
+            .with_field_location(content_location)
+            .with_field_text(""); // the location, not text, is the context
         tier_content.content.validate(&content_context, errors);
 
         // Determine tier-level language for word validation
         // Tier can override with language_code (e.g., *CHI@s:spa)
         let tier_language = tier_content
             .language_code
-            .clone()
+            .as_ref()
+            .map(|precode| precode.code.clone())
             .or_else(|| context.shared.default_language.clone());
         let word_context = context.clone().with_tier_language(tier_language);
 
@@ -395,12 +404,11 @@ impl crate::validation::Validate for MainTier {
             word_context.shared.default_language.as_ref(),
             &word_context.shared.declared_languages,
         ) {
-            let span = tier_content.content_span.unwrap_or(self.span);
             errors.report(
                 ParseError::new(
                     ErrorCode::WholeUtteranceLanguageSwitchShouldUsePrecode,
                     Severity::Error,
-                    SourceLocation::new(span),
+                    DiagnosticLocation::from(content_location),
                     None,
                     format!(
                         "Whole-utterance language switch to '{}' should use utterance precode [- {}] instead of tagging every lexical word with @s",

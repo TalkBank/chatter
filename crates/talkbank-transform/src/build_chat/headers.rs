@@ -12,35 +12,53 @@ pub(super) fn build_header_lines(context: &BuildChatContext<'_>) -> Vec<Line> {
     let desc = context.description();
     let participant_entries = build_participant_entries(desc);
     let id_headers = build_id_headers(context);
-    let mut lines: Vec<Line> = vec![Line::header(Header::Utf8)];
+    let mut lines: Vec<Line> = vec![Line::header(
+        talkbank_model::Location::Unlocated,
+        Header::Utf8,
+    )];
 
     // `@PID` (persistent handle) sits between `@UTF8` and `@Begin` (published
     // order). Optional: emitted only when a PID is supplied (preserved, never
     // minted).
     if let Some(pid) = &desc.pid {
-        lines.push(Line::header(Header::Pid { pid: pid.clone() }));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Pid { pid: pid.clone() },
+        ));
     }
 
     lines.extend([
-        Line::header(Header::Begin),
-        Line::header(Header::Languages {
-            codes: LanguageCodes::new(context.langs().cloned().collect()),
-        }),
-        Line::header(Header::Participants {
-            entries: ParticipantEntries::new(participant_entries),
-        }),
+        Line::header(talkbank_model::Location::Unlocated, Header::Begin),
+        Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Languages {
+                codes: LanguageCodes::new(context.langs().cloned().collect()),
+            },
+        ),
+        Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Participants {
+                entries: ParticipantEntries::new(participant_entries),
+            },
+        ),
     ]);
 
     // `@Options` sits between `@Participants` and the `@ID` block (published
     // MICASE order). Optional: emitted only when the caller supplies flags.
     if let Some(options) = &desc.options {
-        lines.push(Line::header(Header::Options {
-            options: options.clone(),
-        }));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Options {
+                options: options.clone(),
+            },
+        ));
     }
 
     for id in id_headers {
-        lines.push(Line::header(Header::ID(id)));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::ID(id),
+        ));
     }
 
     // `@L1 of` is a constant participant header and must immediately follow the
@@ -48,40 +66,58 @@ pub(super) fn build_header_lines(context: &BuildChatContext<'_>) -> Vec<Line> {
     // first language.
     for participant in &desc.participants {
         if let Some(language) = &participant.l1_language {
-            lines.push(Line::header(Header::L1Of {
-                participant: SpeakerCode::new(participant.id.as_str()),
-                language: language.clone(),
-            }));
+            lines.push(Line::header(
+                talkbank_model::Location::Unlocated,
+                Header::L1Of {
+                    participant: SpeakerCode::new(participant.id.as_str()),
+                    language: language.clone(),
+                },
+            ));
         }
     }
 
     if let Some(media_header) = context.media_header() {
-        lines.push(Line::header(Header::Media(media_header.clone())));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Media(media_header.clone()),
+        ));
     }
 
     // Changeable headers follow `@Media`, in published MICASE order:
     // `@Date` then `@Situation`. Each is optional.
     if let Some(date) = &desc.date {
-        lines.push(Line::header(Header::Date { date: date.clone() }));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Date { date: date.clone() },
+        ));
     }
     if let Some(situation) = &desc.situation {
-        lines.push(Line::header(Header::Situation {
-            text: situation.clone(),
-        }));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Situation {
+                text: situation.clone(),
+            },
+        ));
     }
 
     if let Some(transcriber) = &desc.transcriber {
-        lines.push(Line::header(Header::Transcriber {
-            transcriber: transcriber.clone(),
-        }));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Transcriber {
+                transcriber: transcriber.clone(),
+            },
+        ));
     }
 
     // `@Comment` lines close the header block (e.g. speaker usage restrictions,
     // preserved provenance).
     for comment in &desc.comments {
-        lines.push(Line::header(Header::Comment {
-            content: BulletContent::from_text(comment),
-        }));
+        lines.push(Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Comment {
+                content: BulletContent::from_text(comment),
+            },
+        ));
     }
 
     lines

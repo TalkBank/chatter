@@ -67,6 +67,7 @@ fn require_field_location<K: DeriveKind>(attrs: &[Attribute]) -> syn::Result<()>
 /// A field whose metadata and generated bindings have already been admitted.
 pub(crate) struct FieldPlan {
     pub(crate) member: Member,
+    pub(crate) ty: syn::Type,
     pub(crate) left: Ident,
     pub(crate) right: Ident,
     participation: Participation,
@@ -98,17 +99,11 @@ pub(crate) enum Shape {
     Unit,
 }
 
-/// How the selected context field is normalized.
-enum SpanKind {
-    Direct,
-    Optional,
-}
-
 /// The actual selected field and its normalization, issued together.
 struct ContextSpan {
     member: Member,
     binding: Ident,
-    kind: SpanKind,
+    kind: crate::helpers::SpanFieldKind,
 }
 
 /// A complete admitted field group, including its existing context policy.
@@ -135,6 +130,7 @@ impl FieldsPlan {
                 };
                 Ok(FieldPlan {
                     member,
+                    ty: field.ty.clone(),
                     left: format_ident!("__tb_left_{index}", span = Span::mixed_site()),
                     right: format_ident!("__tb_right_{index}", span = Span::mixed_site()),
                     participation: admit_participation::<K>(&field.attrs)?,
@@ -145,20 +141,16 @@ impl FieldsPlan {
             let selected = match fields {
                     Fields::Named(_) => crate::helpers::find_span_field(fields).and_then(|span| {
                         plans.iter().find(|plan| matches!(&plan.member, Member::Named(name) if name == &span.ident))
-                            .map(|plan| (plan, span.is_option))
+                            .map(|plan| (plan, span.kind))
                     }),
                     Fields::Unnamed(_) if enum_variant => crate::helpers::find_span_index(fields)
-                        .map(|span| (&plans[span.index], span.is_option)),
+                        .map(|span| (&plans[span.index], span.kind)),
                     Fields::Unnamed(_) | Fields::Unit => None,
                 };
-            selected.map(|(plan, optional)| ContextSpan {
+            selected.map(|(plan, kind)| ContextSpan {
                 member: plan.member.clone(),
                 binding: plan.left.clone(),
-                kind: if optional {
-                    SpanKind::Optional
-                } else {
-                    SpanKind::Direct
-                },
+                kind,
             })
         } else {
             None
@@ -211,7 +203,7 @@ impl FieldsPlan {
 
     pub(crate) fn span_expr(&self, bound: bool) -> TokenStream {
         let Some(context) = &self.context else {
-            return quote! { None };
+            return quote! { crate::Location::Unlocated };
         };
         let member = &context.member;
         let binding = &context.binding;
@@ -221,8 +213,16 @@ impl FieldsPlan {
             quote! { self.#member }
         };
         match context.kind {
-            SpanKind::Direct => quote! { crate::model::normalize_span(#value) },
-            SpanKind::Optional => quote! { crate::model::normalize_span_option(#value) },
+            crate::helpers::SpanFieldKind::Span => quote! { crate::Location::Located(#value) },
+            // Parenthesized: `value` may be a deref, and `*x.method()` would
+            // dereference the method's result.
+            crate::helpers::SpanFieldKind::OptionSpan => {
+                quote! { (#value).map_or(crate::Location::Unlocated, crate::Location::Located) }
+            }
+            crate::helpers::SpanFieldKind::Location => quote! { #value },
+            crate::helpers::SpanFieldKind::OptionLocation => {
+                quote! { (#value).unwrap_or(crate::Location::Unlocated) }
+            }
         }
     }
 }

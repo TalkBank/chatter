@@ -89,7 +89,7 @@ fn run_word_validation(
 #[test]
 fn test_e243_word_with_trailing_space() {
     // This catches the %wor tier bug where words include trailing spaces
-    let word = Word::simple("hello ");
+    let word = Word::simple(crate::Location::Unlocated, "hello ");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -104,7 +104,7 @@ fn test_e243_word_with_trailing_space() {
 /// Leading spaces should consistently emit `E243` rather than silently passing.
 #[test]
 fn test_e243_word_with_leading_space() {
-    let word = Word::simple(" hello");
+    let word = Word::simple(crate::Location::Unlocated, " hello");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -122,7 +122,7 @@ fn test_e243_word_with_leading_space() {
 fn test_e243_word_with_bullet_marker() {
     // Bullet marker U+0015 (byte 0x15) should never be in word text
     let word_with_bullet = "hello\x15".to_string();
-    let word = Word::new_unchecked(&word_with_bullet);
+    let word = Word::new_unchecked(crate::Location::Unlocated, &word_with_bullet);
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -139,7 +139,7 @@ fn test_e243_word_with_bullet_marker() {
 /// Tabs are treated as formatting contamination and should emit `E243`.
 #[test]
 fn test_e243_word_with_tab() {
-    let word = Word::simple("hello\tworld");
+    let word = Word::simple(crate::Location::Unlocated, "hello\tworld");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -154,7 +154,7 @@ fn test_e243_word_with_tab() {
 /// Newlines must not survive tokenization and therefore trigger `E243`.
 #[test]
 fn test_e243_word_with_newline() {
-    let word = Word::simple("hello\nworld");
+    let word = Word::simple(crate::Location::Unlocated, "hello\nworld");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -169,7 +169,7 @@ fn test_e243_word_with_newline() {
 /// A plain token should pass with no `E243`.
 #[test]
 fn test_e243_clean_word_no_error() {
-    let word = Word::simple("hello");
+    let word = Word::simple(crate::Location::Unlocated, "hello");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -186,7 +186,7 @@ fn test_e243_clean_word_no_error() {
 fn test_e243_word_with_space_and_bullet() {
     // This is the exact pattern from %wor tier bug: "word \x15"
     let word_with_space_and_bullet = "hello \x15".to_string();
-    let word = Word::new_unchecked(&word_with_space_and_bullet);
+    let word = Word::new_unchecked(crate::Location::Unlocated, &word_with_space_and_bullet);
     let errors = run_word_validation(&word, None, &[], false);
 
     // Should get at least one E243 error (maybe two - one for space, one for bullet)
@@ -211,7 +211,8 @@ fn test_e243_word_with_space_and_bullet() {
 /// semantic element.
 #[test]
 fn test_e253_empty_word_content_list() {
-    let word = Word::simple("test").with_content(WordContents::default());
+    let word =
+        Word::simple(crate::Location::Unlocated, "test").with_content(WordContents::default());
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -226,7 +227,7 @@ fn test_e253_empty_word_content_list() {
 /// A normal `Word` should preserve at least one element in `content`.
 #[test]
 fn test_e253_non_empty_word_content_list() {
-    let word = Word::simple("test");
+    let word = Word::simple(crate::Location::Unlocated, "test");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -265,9 +266,10 @@ fn test_e251_deserialized_word_content() -> Result<(), serde_json::Error> {
 #[test]
 fn test_e251_valid_non_empty_text() {
     // Word with non-empty Text content
-    let word = Word::simple("test").with_content(vec![WordContent::Text(WordText::from(
-        non_empty_literal!("test"),
-    ))]);
+    let word =
+        Word::simple(crate::Location::Unlocated, "test").with_content(vec![WordContent::Text(
+            WordText::from(non_empty_literal!("test")),
+        )]);
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(

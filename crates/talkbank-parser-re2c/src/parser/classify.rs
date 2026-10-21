@@ -59,10 +59,19 @@ pub fn word_to_content_item<'a>(word: WordWithAnnotations<'a>) -> ContentItem<'a
 pub(crate) enum Chain<'a> {
     /// A word, with whatever annotations have attached so far.
     Word(WordWithAnnotations<'a>),
-    /// An event token, with its annotations.
-    Event(Token<'a>, Vec<ParsedAnnotation<'a>>),
-    /// A bracketed group, with its annotations.
-    Group(Vec<ContentItem<'a>>, Vec<ParsedAnnotation<'a>>),
+    /// An event, with its annotations.
+    Event(crate::token::Extracted<'a>, Vec<ParsedAnnotation<'a>>),
+    /// A standalone `0` (an action), with its annotations. It joins the fold
+    /// so a retrace marker after it wraps it, as the tree-sitter backend
+    /// does; until 2026-10-19 the action kept its whole run as annotations
+    /// and the lowering, which reads only scoped ones, dropped the marker.
+    Action(&'a str, Vec<ParsedAnnotation<'a>>),
+    /// A bracketed group (its brackets, its contents), with its annotations.
+    Group(
+        Enclosure<'a>,
+        Vec<ContentItem<'a>>,
+        Vec<ParsedAnnotation<'a>>,
+    ),
     /// A quotation, with its annotations.
     Quotation(Quotation<'a>),
     /// At least one retrace marker has wrapped the chain.
@@ -74,8 +83,8 @@ impl<'a> Chain<'a> {
     pub(crate) fn fold(self, markers: impl IntoIterator<Item = ParsedAnnotation<'a>>) -> Self {
         markers
             .into_iter()
-            .fold(self, |chain, marker| match marker.retrace_kind() {
-                Some(kind) => chain.retraced(kind),
+            .fold(self, |chain, marker| match marker.retrace() {
+                Some((kind, lexeme)) => chain.retraced(kind, lexeme),
                 None => chain.annotated_with(marker),
             })
     }
@@ -91,9 +100,13 @@ impl<'a> Chain<'a> {
                 annotations.push(annotation);
                 Chain::Event(event, annotations)
             }
-            Chain::Group(contents, mut annotations) => {
+            Chain::Action(zero, mut annotations) => {
                 annotations.push(annotation);
-                Chain::Group(contents, annotations)
+                Chain::Action(zero, annotations)
+            }
+            Chain::Group(enclosure, contents, mut annotations) => {
+                annotations.push(annotation);
+                Chain::Group(enclosure, contents, annotations)
             }
             Chain::Quotation(mut quotation) => {
                 quotation.annotations.push(annotation);
@@ -106,10 +119,10 @@ impl<'a> Chain<'a> {
         }
     }
 
-    /// Wrap the chain in a retrace.
-    fn retraced(self, kind: RetraceKindParsed) -> Self {
+    /// Wrap the chain in a retrace whose marker was written as `marker`.
+    fn retraced(self, kind: RetraceKindParsed, marker: &'a str) -> Self {
         // A group with no annotations of its own hands its brackets to the
-        // retrace, which is what `is_group` records. Nesting it instead would
+        // retrace, which is what `enclosure` records. Nesting it instead would
         // serialize `<<a b>> [/]`, a bracket pair nobody wrote.
         //
         // SHARED SEMANTICS, written twice. `talkbank-parser`'s
@@ -117,32 +130,30 @@ impl<'a> Chain<'a> {
         // type, so no constructor can own it for both. Drift here is silent and
         // corrupts output, so the enforcement is the cross-parser test
         // `equivalence_marker_chain`; change one of these two and run it.
-        if let Chain::Group(contents, annotations) = self {
+        if let Chain::Group(enclosure, contents, annotations) = self {
             if annotations.is_empty() {
                 return Chain::Wrapped(Retrace {
-                    content: contents,
+                    body: RetraceBody::Enclosed(enclosure, contents),
                     kind,
-                    is_group: true,
-                    synthesized_missing_annotation: false,
+                    marker,
                     annotations: Vec::new(),
                 });
             }
             return Chain::Wrapped(Retrace {
-                content: vec![ContentItem::Group(Group {
+                body: RetraceBody::Single(Box::new(ContentItem::Group(Group {
+                    enclosure,
                     contents,
                     annotations,
-                })],
+                }))),
                 kind,
-                is_group: false,
-                synthesized_missing_annotation: false,
+                marker,
                 annotations: Vec::new(),
             });
         }
         Chain::Wrapped(Retrace {
-            content: vec![self.into_content_item()],
+            body: RetraceBody::Single(Box::new(self.into_content_item())),
             kind,
-            is_group: false,
-            synthesized_missing_annotation: false,
+            marker,
             annotations: Vec::new(),
         })
     }
@@ -152,15 +163,14 @@ impl<'a> Chain<'a> {
             Chain::Word(word) => ContentItem::Word(word),
             Chain::Event(event, annotations) => {
                 if annotations.is_empty() {
-                    ContentItem::Event(event.text())
+                    ContentItem::Event(event)
                 } else {
-                    ContentItem::AnnotatedEvent {
-                        event: event.text(),
-                        annotations,
-                    }
+                    ContentItem::AnnotatedEvent { event, annotations }
                 }
             }
-            Chain::Group(contents, annotations) => ContentItem::Group(Group {
+            Chain::Action(zero, annotations) => ContentItem::Action { zero, annotations },
+            Chain::Group(enclosure, contents, annotations) => ContentItem::Group(Group {
+                enclosure,
                 contents,
                 annotations,
             }),
@@ -181,27 +191,27 @@ impl<'a> Chain<'a> {
 /// `is_annotation` is derived from it rather than repeating it.
 pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation<'a>> {
     Some(match tok {
-        Token::RetracePartial(_) => ParsedAnnotation::Retrace(RetraceKindParsed::Partial),
-        Token::RetraceComplete(_) => ParsedAnnotation::Retrace(RetraceKindParsed::Complete),
-        Token::RetraceMultiple(_) => ParsedAnnotation::Retrace(RetraceKindParsed::Multiple),
-        Token::RetraceReformulation(_) => {
-            ParsedAnnotation::Retrace(RetraceKindParsed::Reformulation)
+        Token::RetracePartial(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Partial, s),
+        Token::RetraceComplete(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Complete, s),
+        Token::RetraceMultiple(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Multiple, s),
+        Token::RetraceReformulation(s) => {
+            ParsedAnnotation::Retrace(RetraceKindParsed::Reformulation, s)
         }
         Token::UnknownAnnotation(_) => return None,
-        Token::ScopedStressing(_) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Stressing)
+        Token::ScopedStressing(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Stressing(s))
         }
-        Token::ScopedContrastiveStressing(_) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::ContrastiveStressing)
+        Token::ScopedContrastiveStressing(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::ContrastiveStressing(s))
         }
-        Token::ScopedUncertain(_) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Uncertain)
+        Token::ScopedUncertain(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Uncertain(s))
         }
-        Token::ExcludeMarker(_) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Exclude)
+        Token::ExcludeMarker(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Exclude(s))
         }
-        Token::CodeSwitchShortcut(_) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::CodeSwitchShortcut)
+        Token::CodeSwitchShortcut(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::CodeSwitchShortcut(s))
         }
         Token::CodeSwitchExplicit(s) => {
             ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::CodeSwitchExplicit(s))
@@ -232,7 +242,7 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
             ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::PercentComment(s))
         }
         Token::Langcode(s) => ParsedAnnotation::Langcode(s),
-        Token::Postcode(s) => ParsedAnnotation::Postcode(s.text()),
+        Token::Postcode(s) => ParsedAnnotation::Postcode(s),
         _ => return None,
     })
 }

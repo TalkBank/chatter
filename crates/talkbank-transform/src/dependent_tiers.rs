@@ -56,7 +56,7 @@ mod tests {
         let xtra1 = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xtra").unwrap(),
             content: Some(NonEmptyString::new("first").unwrap()),
-            span: talkbank_model::Span::DUMMY,
+            location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, xtra1);
         assert_eq!(tiers.len(), 1);
@@ -64,7 +64,7 @@ mod tests {
         let xtra2 = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xtra").unwrap(),
             content: Some(NonEmptyString::new("second").unwrap()),
-            span: talkbank_model::Span::DUMMY,
+            location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, xtra2);
         assert_eq!(tiers.len(), 1);
@@ -77,7 +77,7 @@ mod tests {
         let xcod = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xcod").unwrap(),
             content: Some(NonEmptyString::new("code").unwrap()),
-            span: talkbank_model::Span::DUMMY,
+            location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, xcod);
         assert_eq!(tiers.len(), 2);
@@ -86,11 +86,15 @@ mod tests {
     #[test]
     fn replace_or_add_tier_replaces_existing_wor() {
         let mut tiers = smallvec::smallvec![DependentTierEntry::new(DependentTier::Wor(
-            WorTier::default()
+            WorTier::new(talkbank_model::Location::Unlocated, Vec::new())
         ))];
-        let replacement = DependentTier::Wor(WorTier::from_words(vec![
-            talkbank_model::model::Word::simple("hello"),
-        ]));
+        let replacement = DependentTier::Wor(WorTier::from_words(
+            talkbank_model::Location::Unlocated,
+            vec![talkbank_model::model::Word::simple(
+                talkbank_model::Location::Unlocated,
+                "hello",
+            )],
+        ));
 
         replace_or_add_tier(&mut tiers, replacement);
 
@@ -120,7 +124,10 @@ mod tests {
     fn accepts_an_utterances_own_tier_storage(utterance: &mut talkbank_model::Utterance) {
         replace_or_add_tier(
             &mut utterance.dependent_tiers,
-            DependentTier::Wor(WorTier::default()),
+            DependentTier::Wor(WorTier::new(
+                talkbank_model::Location::Unlocated,
+                Vec::new(),
+            )),
         );
     }
 
@@ -132,11 +139,20 @@ mod tests {
 
         let dirty = TierSeparator::with_trailing_space(Span::new(3, 5));
         let mut tiers = smallvec::smallvec![DependentTierEntry::with_separator(
-            DependentTier::Wor(WorTier::default()),
+            DependentTier::Wor(WorTier::new(
+                talkbank_model::Location::Unlocated,
+                Vec::new()
+            )),
             dirty,
         )];
 
-        replace_or_add_tier(&mut tiers, DependentTier::Wor(WorTier::default()));
+        replace_or_add_tier(
+            &mut tiers,
+            DependentTier::Wor(WorTier::new(
+                talkbank_model::Location::Unlocated,
+                Vec::new(),
+            )),
+        );
         assert_eq!(
             tiers[0].separator, dirty,
             "replacing a tier's payload must not discard its source spacing"
@@ -145,7 +161,7 @@ mod tests {
         let appended = DependentTier::UserDefined(UserDefinedDependentTier {
             label: NonEmptyString::new("xtra").unwrap(),
             content: Some(NonEmptyString::new("new").unwrap()),
-            span: talkbank_model::Span::DUMMY,
+            location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, appended);
         assert_eq!(

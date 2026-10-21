@@ -2,102 +2,89 @@
 
 **Last modified:** {{git-dates:page}}
 
-These experimental tools review speaker decisions and inspect existing output.
-`merge`, `pipeline`, and `batch` are not commands (see the
-[removal notice](merge.md)). These review tools do not replace event correspondence.
-Use `speaker-id --write-pending` to prepare unresolved speaker decisions.
+These experimental tools review speaker decisions and inspect existing CHAT.
+They do not establish event correspondence or recording identity.
+`merge`, `pipeline` and `batch` are not commands; see the
+[removal notice](merge.md).
 
-## `chatter adjudicate` (the operator step)
+## Prepare for review
 
-Reads the pending file a pass produced, walks the operator through the
-unresolved sessions, and appends the resolved decisions to the override
-file. On success the pending file is rewritten to drop the entries that
-were resolved, so re-running adjudicate only ever shows what is left.
+Reference-mode [speaker-id](speaker-id.md) can write unresolved decisions with
+`--write-pending`. Keep the original pending file and any existing override
+file before reviewing. Associate each session ID with the correct source and
+external evidence yourself; the pending record does not contain a playable
+recording or transcript preview.
 
-```text
-chatter adjudicate <PENDING> --override-file <FILE> [--interactive | --scripted <TOML>]
+Use separate working copies and avoid simultaneous writers. There is no
+dry-run flag or automatic decision history.
 
-ARGUMENTS:
-  <PENDING>  The pending-adjudications TOML a pass wrote.
+## `chatter adjudicate`
 
-REQUIRED:
-  --override-file <FILE>  Override file to append resolved decisions to
-                         (created if absent). This is the same file pass 2
-                         reads back.
+Choose one of these forms, using your own retained inputs:
 
-DECISION SOURCE (one of):
-  --interactive           Prompt per pending entry on stdin. See "The
-                         interactive decision language" below for the
-                         three decision verbs and their syntax.
-  --scripted <TOML>       Pre-canned operator decisions, for replayable /
-                         tested runs. Mutually exclusive with --interactive.
-
-  --operator <NAME>       Recorded in each override entry (defaults to $USER).
+```bash
+chatter adjudicate pending.toml --override-file overrides.toml \
+  --scripted decisions.toml --operator operator
 ```
 
-### The interactive decision language
-
-Each pending entry is printed with its full context (the sessions, the
-suggested mapping, the engine's confidence scores and reasoning), then
-one line is read from stdin. Three decision verbs are accepted:
-
-| Verb | Form | Meaning |
-|---|---|---|
-| `accept` (or `a`) | `accept [note...]` | Take the suggested mapping exactly as proposed |
-| `choose` | `choose SPK:CODE:TAG [SPK:CODE:TAG ...] [note...]` | Supply the speaker mapping yourself: each group maps a donor speaker to a CHAT code and role tag |
-| `override` | `override SPK:CODE:TAG [SPK:CODE:TAG ...] SPK=action [SPK=action ...] [note...]` | Supply the mapping AND per-speaker actions (for example `SPK=drop` to exclude a donor speaker entirely) |
-
-`SPK:CODE:TAG` groups are repeatable, so multi-adult sessions are
-expressed naturally, one group per speaker:
-
-```text
-choose A:CHI:Target_Child B:INV:Investigator C:MOT:Mother reviewed against the recording
+```bash
+chatter adjudicate pending.toml --override-file overrides.toml \
+  --interactive --operator operator
 ```
 
-Anything after the structured arguments is recorded verbatim as the
-operator's note. Every decision (verb, mapping, note, operator, and the
-engine's original scores) is appended to the override file, so the audit
-trail survives the session.
+On success, decisions replace/insert session entries in the override file,
+then the pending file is rewritten without resolved entries.
+Review the resulting mappings and notes before applying them to CHAT.
 
-This is the interactive review tool the `speaker-id` page
-refer to: the audit trail (who decided, the scores, any note) lands in
-the override file so a later reader can see *why* a session was labeled
-the way it was. The decision schema is the same override-file format
-used everywhere in the workflow; see
-[Merge Override File Format](../integrating/merge-overrides.md), and the
-[Adjudication Workflow](../../architecture/adjudication-workflow.md)
-architecture page for the design.
+The terminal supports:
 
-## `chatter sanity-scan` (post-merge QA)
+| Input | Meaning |
+| --- | --- |
+| `accept` or `a` | Accept a low-confidence or sanity-scan suggestion; no terminal acceptance note is recorded |
+| `choose SPK:CODE:TAG ... [note...]` | Supply roles for a parent-role entry's existing mapping |
+| `override SPK:CODE:TAG ... SPK=action ... [note...]` | Replace a suggestion with roles and rename/drop actions |
 
-A confident auto-decision can still be wrong, the runner-up was simply
-even further off. `sanity-scan` re-reads the merged output and the
-pass-1 audit file and flags sessions that pass an out-of-band check: the
-**mean utterance word count** of the anchor speaker versus the inserted
-speaker. In a typical child-language recording the adult out-talks the
-child, so an anchor (child) mean that is much *higher* than the inserted
-(adult) mean is suspicious, possibly the two were swapped.
+Choose/override notes are reconstructed from tokens, not stored verbatim.
+Use a scripted decision to retain an acceptance note. Unsupported input fails
+rather than deferring or reprompting. There is no media player, defer, block,
+save-and-quit or flag-only action.
+
+See [Adjudication Workflow](../../architecture/adjudication-workflow.md) for
+the scripted format, admitted decision/kind pairs and in-memory retry contract.
+
+## Failure and recovery
+
+Decision failure occurs before either CLI file write: answers already supplied
+during that invocation are not persisted. On a write failure, however, the
+override file may already have changed while the pending file remains old.
+The two writes are not transactional.
+
+Compare both files with the retained originals before retrying. Do not simply
+assume exit failure means no change, or that replay creates a history record.
+See [Override File Format](../integrating/merge-overrides.md).
+
+## `chatter sanity-scan`
+
+The scan flags a mean-utterance-word-count asymmetry for operator review.
+It is not a nearby-text-similarity detector or a speaker-identity oracle.
 
 ```text
-chatter sanity-scan <MERGED_DIR> \
-  --override-file <FILE> --anchor <SPEAKER> --write-pending <FILE> [OPTIONS]
-
-REQUIRED:
-  --override-file <FILE>  The pass-1 audit file. Only auto-decided sessions
-                         are scanned; explicit-mode entries are skipped (the
-                         operator already signed off).
-  --anchor <SPEAKER>      Anchor code in the merged files (typically CHI).
-  --write-pending <FILE>  Flagged sessions are appended here as
-                         sanity-scan-misclassification pending entries for
-                         `chatter adjudicate`. Required.
-
-  --threshold <F>         Flag when anchor_mean >= inserted_mean * threshold
-                         (default 1.5).
+chatter sanity-scan MERGED_DIR \
+  --override-file overrides.toml --anchor CHI --write-pending pending.toml
 ```
 
-A flag is a question, not a verdict: the session goes back into the
-adjudication queue for an operator to confirm or correct. Whether to run
-the scan at all is a judgment about the corpus. It assumes the typical
-"adult out-talks child" shape, and is unreliable where that inverts
-(e.g. a clinical-interview corpus where children out-narrate the adult);
-there, review speaker identity using appropriate evidence instead.
+The CLI examines auto-decided entries; explicit decisions are skipped.
+The default threshold is 1.5: the heuristic flags when anchor mean is at least
+inserted mean times the threshold. Unsupported mapping shapes and absent
+observed speaker populations do not supply a swap suggestion.
+
+The threshold must be finite and positive. Invalid values (including NaN,
+infinity, zero and negatives) are usage errors before input/output access.
+Positive factors below one remain allowed; choosing a meaningful sensitivity
+requires evidence for the task, not merely successful numeric admission.
+
+A suggestion is not automatically applied to the transcript or existing
+override. The heuristic may be inappropriate for a task where the anchor
+naturally produces longer turns. Inspect the evidence, then adjudicate only
+if a decision is justified. Successful parsing or a threshold crossing is
+not proof that speakers were swapped.

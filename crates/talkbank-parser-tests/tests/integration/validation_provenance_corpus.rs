@@ -16,6 +16,7 @@ fn canonical_checked_construction_is_distinct_from_parser_provenance() {
 
     let parser = TreeSitterParser::new().expect("parser");
     let mut outcomes = [[0; 3]; 2];
+    let mut held_location_warnings = [0; 2];
     for root in [
         "corpus/reference",
         "crates/talkbank-parser-tests/tests/error_corpus/validation_errors",
@@ -76,7 +77,9 @@ fn canonical_checked_construction_is_distinct_from_parser_provenance() {
                             assert!(!utterance.parse_health().is_clean());
                             assert!(utterance.parse_health().can_align_main_to_mor());
                             let edit = SpliceEdit::new(
-                                EditTarget::InsertAt(utterance.main.span.start),
+                                EditTarget::InsertAt(
+                                    utterance.main.location.span().expect("located").start(),
+                                ),
                                 Replacement::new("x"),
                                 EditProvenance::Transform(TransformName::new(
                                     "construction-boundary",
@@ -114,6 +117,37 @@ fn canonical_checked_construction_is_distinct_from_parser_provenance() {
                         let editable = proof.into_unchecked();
                         assert!(editable.utterances().all(|u| u.parse_health().is_unknown()));
                         assert!(editable.semantic_eq(&file));
+                        let context = editable
+                            .validate_headers_only(&NullErrorSink, TranscriptName::Anonymous);
+                        for utterance in editable.utterances() {
+                            let Some(mor) = utterance.mor_tier() else {
+                                continue;
+                            };
+                            if utterance.main.location.span().is_none()
+                                || mor.location.span().is_none()
+                            {
+                                continue;
+                            }
+                            let expected_labels = vec![
+                                talkbank_model::ErrorLabel::new(
+                                    utterance.main.location.span().expect("located"),
+                                    "main tier",
+                                ),
+                                talkbank_model::ErrorLabel::new(
+                                    mor.location.span().expect("located"),
+                                    "%mor tier",
+                                ),
+                            ];
+                            let mut computed = utterance.clone();
+                            computed.compute_alignments(&context);
+                            assert!(computed.parse_health().is_unknown());
+                            let metadata = computed.alignments.as_ref().expect("metadata");
+                            assert_eq!(unknown_alignment(metadata.mor.as_ref(), true), 1);
+                            let warning = &metadata.mor.as_ref().expect("MOR warning").errors[0];
+                            assert_eq!(warning.labels, expected_labels);
+                            assert!(computed.semantic_eq(utterance));
+                            held_location_warnings[policy_index] += 1;
+                        }
                         outcomes[policy_index][0] += 1;
                     }
                     Err(failure) => {
@@ -138,6 +172,10 @@ fn canonical_checked_construction_is_distinct_from_parser_provenance() {
             }
         }
     }
+    assert!(
+        held_location_warnings.into_iter().all(|count| count > 0),
+        "withdrawing each validation proof retains held labels, never alignment authority"
+    );
     assert!(
         outcomes.into_iter().flatten().all(|count| count > 0),
         "each policy must exercise success, invalidity and recovery"
@@ -376,6 +414,9 @@ fn canonical_validation_preserves_header_scope_and_wire_provenance() {
                 fixture.path().display()
             );
             provenance_warnings += warnings.len();
+            for warning in &warnings {
+                assert_unknown_provenance_guidance(warning);
+            }
             // Exercise the derived-metadata producer, not only the separate
             // validation facade. Recomputed wire alignments must not reuse
             // parser-origin evidence which JSON deliberately cannot preserve.
@@ -719,5 +760,14 @@ fn unknown_alignment<T: talkbank_model::alignment::TierAlignmentResult>(
     assert_eq!(warning.code, ErrorCode::TierValidationError);
     assert_eq!(warning.severity, Severity::Warning);
     assert!(warning.message.contains("provenance is unknown"));
+    assert_unknown_provenance_guidance(warning);
     1
+}
+
+fn assert_unknown_provenance_guidance(warning: &talkbank_model::ParseError) {
+    assert_eq!(
+        warning.suggestion.as_deref(),
+        Some("Run parser-backed validation to establish parse provenance before alignment checks"),
+        "model or JSON reconstruction cannot be certified by marking provenance without parse evidence"
+    );
 }

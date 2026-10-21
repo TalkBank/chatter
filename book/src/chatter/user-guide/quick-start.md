@@ -1,112 +1,106 @@
-# Quick Start
+# Quick Start: Create, Check, and Export a Transcript
 
 **Status:** Current
-**Last updated:** {{git-dates:page}}
+**Last modified:** {{git-dates:page}}
 
-This page gets you from zero to productive with `chatter` in five minutes.
-[Install chatter first](installation.md) if you haven't already.
+This walkthrough uses a tiny practice transcript, not your research data.
+[Install chatter](installation.md) first, then open a terminal in an empty
+working directory. Keep the output names below unused so you do not overwrite
+existing files. The commands work in a checkout-free installation.
 
-## Validate a CHAT file
-
-Check a single transcript for errors:
+## 1. Create a valid starting point
 
 ```bash
-chatter validate transcript.cha
+chatter new-file --output practice.cha --speaker CHI --language eng --utterance 'hello .'
+chatter --tui-mode disable validate practice.cha
 ```
 
-If the file is valid you get a summary (a cache-statistics block follows it;
-use `--quiet` to suppress all output and rely on the exit code):
+`new-file` supplies the CHAT headers and tab separators. Validation should
+report one valid file and zero invalid files. This confirms that the file
+passes the selected format checks; it does not establish that words, speakers,
+or timing accurately describe a recording.
 
-```text
-=== Summary ===
-Total files: 1
-Valid: 1
-Invalid: 0
+## 2. Recognize and resolve a diagnostic
+
+Open `practice.cha` in a text editor. On the `*CHI:` line, remove only the
+final period, save, and run validation again:
+
+```bash
+chatter --tui-mode disable validate practice.cha
 ```
 
-If there are problems, you'll see rich diagnostics with the exact location
-and a stable error code. For example, a `*CHI:` line missing its terminator:
+This ordinary, non-CA utterance now lacks a terminator. Expect an `E305`
+diagnostic and a failing exit status. Read the code, highlighted location and
+suggestion together. Restore the period, save, and validate once more; the
+file should be valid again. Do not enable a different transcription policy or
+suppress the code merely to silence a genuine defect.
 
-```text
-✗ Errors found in transcript.cha
+Errors prevent a successful validation result. Warnings request review but do
+not make an otherwise valid file invalid. A warnings-only run exits `0`.
+Fixing an early structural error can reveal later errors, so counts need not
+decrease on each edit. If a diagnostic conflicts with the documented CHAT
+rule, preserve the original and investigate before changing its meaning.
+See [Validation Errors](validation-errors.md) and the
+[editor's playbook](chat-processing-playbook.md).
 
-E305 (https://talkbank.org/errors/E305)
+For scripts, exit `0` means success, `1` means validation or operational
+failure, and `2` means invalid command-line usage. `--quiet` suppresses success
+output, **not errors**. See [CI Integration](ci-integration.md) for automation.
 
-  × error[E305]: Expected terminator not found (line 6, column 1)
-   ╭─[input:6:1]
- 6 │ *CHI:   hello world
-   · ─────────┬─────────
-   ·          ╰── here
-   ╰────
-  help: Add a terminator at the end: Standard (. ? !), Interruption
-        (+... +/. ...), or CA intonation (⇗ ↗ → ↘ ⇘ ...)
+## 3. Preview repairs; normalize into a separate file
+
+```bash
+chatter fix practice.cha
 ```
 
-Every error code (`E305`, `E705`, etc.) is documented with fix guidance in the
-[validation error reference](validation-errors.md).
+Without `--apply`, this reports available automatic fixes without changing
+the file. The valid practice file should need none. Not every diagnostic has
+an automatic repair. Review the proposed changes and keep an original before
+choosing to apply them; semantic fixes require explicit code selection.
+See [`fix` in the CLI reference](cli-reference.md#fix).
 
-Not every diagnostic is an error. Some codes are warnings: the file is valid
-CHAT, but something is worth flagging (for example `W110`, an `@Media` name
-that differs from the transcript's own name only in letter case). A file
-whose only diagnostics are warnings is reported as valid, and its heading
-reflects that. For a `Session.cha` declaring `@Media: session, audio`:
+Normalization is a separate operation: it serializes CHAT consistently, not
+a promise to repair invalid input or preserve every original byte.
 
-```text
-⚠ Warnings in ./Session.cha
-
-W110 (https://talkbank.org/errors/W110)
-
-  ⚠ warning[W110]: Media filename 'session' differs from file name 'Session'
-  │ only in letter case. The names must match exactly: a case-insensitive
-  │ filesystem finds the recording either way, a case-sensitive one does not.
-  │ (line 6, column 1, bytes 101..124)
-   ╭─[input:6:1]
- 6 │ @Media: session, audio
-   · ───────────┬──────────
-   ·            ╰── here
-   ╰────
-  help: Make the names identical: update @Media to "@Media:	Session, audio" or
-        rename the transcript, and give the recording the same spelling.
+```bash
+chatter normalize practice.cha --validate --output practice.normalized.cha
+chatter --tui-mode disable validate practice.normalized.cha
 ```
 
-The summary still counts this file under `Valid`, and the exit code stays `0`.
+Both commands should succeed. This practice file has no `@Media` header.
+For real transcripts, preserve the relationship between transcript and media
+names when choosing output names; a renamed copy may need a reviewed header
+change, not just a new filename.
 
-## Validate an entire corpus
+## 4. Export the structured model and return to CHAT
 
-Point `chatter` at a directory, it walks recursively, validates in parallel,
-and caches results:
+```bash
+chatter to-json practice.cha --output practice.json
+chatter from-json practice.json --output restored.cha
+chatter --tui-mode disable validate restored.cha
+```
+
+The restored file should validate. The JSON represents the typed CHAT model;
+conversion is not a byte-for-byte backup. Keep the original when formatting
+or source provenance matters. See the [JSON contract](../integrating/json-output.md).
+
+## 5. Move to your own workflow
+
+To validate a directory recursively:
 
 ```bash
 chatter validate corpus/
 ```
 
-The interactive TUI shows progress and lets you browse errors per file.
-Use `--format json` for machine-readable output, or `--quiet` for CI
-(exit code 1 on errors).
+An interactive terminal can show a progress TUI. Add `--tui-mode disable`
+for plain text. For machine-readable validation results, use `--format json`:
+these diagnostic records are **not** the transcript-model JSON from `to-json`.
 
-## Convert to JSON
+For feedback while editing, `chatter watch practice.cha` keeps running and
+revalidates on saves; stop it with Ctrl+C.
 
-Get a structured representation of any CHAT file:
-
-```bash
-chatter to-json transcript.cha
-```
-
-The output conforms to the [TalkBank CHAT JSON Schema](https://talkbank.org/schemas/v0.1/chat-file.json).
-Convert back with `chatter from-json`.
-
-## Watch for changes
-
-Edit a file and get live validation feedback:
-
-```bash
-chatter watch transcript.cha
-```
-
-Every time you save, `chatter` re-validates and shows updated diagnostics.
-
-## What next?
-
-- **[CLI Reference](cli-reference.md)**: all commands, flags, and output formats
-- **[Validation Errors](validation-errors.md)**: every error code, with examples and fix guidance
-- **[Batch Workflows](batch-workflows.md)**: corpus-scale validation and analysis
+- [Batch Workflows](batch-workflows.md): directory validation, exports and cache management
+- [CLI Reference](cli-reference.md): commands, options and policy choices
+- [Library Usage](../integrating/library-usage.md): use the typed model in Rust
+- [Install](../../install/index.md): desktop and editor options
+- [CHAT Format Overview](../../chat-format/overview.md): learn the transcription format

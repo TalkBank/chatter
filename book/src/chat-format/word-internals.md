@@ -8,10 +8,12 @@ chapter documents what a word actually is, how the grammar parses it, and
 how the Rust model represents it. If you maintain this codebase, you will
 encounter word-level bugs. This chapter exists so you can understand them.
 
-## The Fundamental Rule
+## Whitespace and structured content
 
-**Whitespace delimits words.** Contiguous non-whitespace characters form
-one word token. This applies everywhere on the main tier.
+Whitespace is explicit in the grammar and usually separates main-tier content
+items. It is not a universal tokenizer: a contiguous sequence can contain
+several grammar tokens, and annotations or groups have their own structure.
+Do not derive CHAT words by splitting text on whitespace.
 
 ```text
 *CHI:   hello world .
@@ -24,16 +26,16 @@ nodes (`whitespaces`, `space`) are explicit in the CST. Tree-sitter does
 not skip whitespace between tokens. This is the foundation of every
 tokenization decision in the grammar.
 
-There are no exceptions to this rule. Every ambiguity described in this
-chapter is resolved by applying this rule consistently.
+Adjacency matters, but it works together with the grammar's alternatives and
+precedence rules. A recognized structure can still require a validation error.
 
 ## Word Structure
 
 A word in the grammar is `standalone_word` -- a sequence of an optional
 prefix, a required body, optional suffixes, and an optional POS tag.
 
-The following diagram shows the full decomposition. All named nodes are
-separate CST children.
+The following diagram is an orientation to the structure, not an exhaustive
+grammar or a claim that its children may appear in any order.
 
 ```mermaid
 flowchart TD
@@ -63,61 +65,46 @@ flowchart TD
     ue["underline_end\ncontrol char pair"]
     cm["'+'\ncompound marker"]
 
-    wb -->|"children (any order)"| ws & short & sm & len & op & cae & cad & ub & ue & cm
+    wb -->|"examples of ordered children"| ws & short & sm & len & op & cae & cad & ub & ue & cm
 ```
 
-In the grammar (search `grammar/grammar.js` for the `standalone_word`
-and `word_body` rules), the structure is:
-
-```javascript
-standalone_word: $ => prec.right(6, seq(
-  optional(choice($.word_prefix, $.zero)),
-  $.word_body,
-  optional($.form_marker),
-  optional($.word_lang_suffix),
-  optional($.pos_tag),
-)),
-
-word_body: $ => prec.right(choice(
-  seq(
-    choice($.word_segment, $.shortening, $.stress_marker),
-    repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
-  ),
-  seq(
-    choice($.overlap_point, $.ca_element, $.ca_delimiter, $.underline_begin),
-    choice($.word_segment, $.shortening, $.stress_marker),
-    repeat(choice($.word_segment, $.shortening, $.stress_marker, $._word_marker)),
-  ),
-)),
-```
+The exact alternatives are owned by `standalone_word`, `word_body` and
+`_word_marker` in
+[`grammar/grammar.js`](https://github.com/TalkBank/chatter/blob/main/grammar/grammar.js).
+In particular, the form position also admits `repeated_form_marker` for
+diagnosis; parsing that shape does not certify a valid form combination.
 
 `word_body` has two branches:
 
 1. **Standard start**: the word begins with `word_segment`, `shortening`,
    or `stress_marker`, followed by any number of body children.
-2. **Marker-initial**: the word begins with a structural marker (overlap,
-   CA, underline), but that marker must be immediately followed by text
-   content. This prevents degenerate words like a standalone overlap marker
-   from forming a valid `standalone_word`.
+2. **Marker-initial**: one or more leading overlap, CA, underline or syllable-pause
+   markers precede a word segment, shortening or stress marker. Repetition
+   permits stacked notation such as `°↑hello°`; the leading prefix alone does
+   not satisfy this branch. A leading syllable pause is represented for diagnosis,
+   not silently accepted as valid placement.
 
 Lengthening and `+` (compound marker) are excluded from starting a word
 body. This is how standalone `:` falls through to `separator(colon)` --
-see Section 5 (Tokenization Ambiguities) below.
+see [Tokenization Ambiguities](#the-six-tokenization-ambiguities) below.
 
 ## The word_segment Purity Invariant
 
-**`word_segment` contains ONLY pure spoken text.** All structural markers
-are separate typed children in `word_body`, never consumed by `word_segment`.
+**`word_segment` excludes the structural characters assigned separate grammar
+roles.** Word-internal markers are separate children in `word_body`, not hidden
+inside a segment. This is a structural invariant, not proof that every parsed
+segment is valid lexical material or an accurate transcription.
 
 This is a hard invariant with three consequences:
 
-1. **`cleaned_text()` never scans for markers.** It concatenates `Text` and
-   `Shortening` elements. No stripping needed.
-2. **Validation finds ALL markers by type.** Overlap markers, CA elements,
-   and underline pairs are always `WordContent` variants, regardless of
-   position within the word.
-3. **Editors get typed CST nodes.** Syntax highlighting, bracket matching,
-   and hover info work on individual markers, not opaque substrings.
+1. **Lexical projection uses typed leaves.** `cleaned_text()` consumes
+   `lexical_parts()`, including its segment-repetition state, rather than
+   stripping characters from raw source.
+2. **Ordinary word markers have typed model variants.** Validation can inspect
+   them without another text parser. The `@u` phonetic folding described below
+   is a distinct conversion path, not a one-to-one marker mapping.
+3. **Editors can use structured CST nodes.** The availability of a node is not
+   proof that every editor feature has been implemented for it.
 
 ### How it works
 
@@ -132,10 +119,11 @@ word_segment: $ => token(prec(5, seq(
 ))),
 ```
 
-### Full exclusion table
+### Examples of excluded character classes
 
-Every character in this table is excluded from `word_segment` and
-becomes a separate typed node in the CST.
+The following classes illustrate why a segment is not an opaque word token.
+Some start annotations or groups instead of becoming word-internal nodes.
+The generated exclusion sets, not this overview, own the complete inventory.
 
 | Category | Characters | CST node type |
 |----------|-----------|---------------|
@@ -152,16 +140,18 @@ becomes a separate typed node in the CST.
 | Group delimiters | `‹` `›` `"` `"` `〔` `〕` | pho/sin groups, quotes |
 | Control chars | `\x01`-`\x08`, `\x15` | bullets, underline |
 
-**First-character-only exclusion:** `0` is excluded from the first
+**One first-character-only exclusion:** `0` is excluded from the first
 character of `word_segment` (it is the omission prefix). `0` in
-non-initial positions is valid: `200`, `h0me`, `abc0` all parse correctly.
+non-initial positions can be represented: `200`, `h0me`, `abc0` can parse.
+Their lexical validity still depends on the applicable language and word rules.
 
 ## The Rust Data Model
 
 ### Word struct
 
 The `Word` struct (`crates/talkbank-model/src/model/content/word/word_type.rs`)
-is the canonical typed representation:
+is the canonical typed representation. This field sketch omits attributes and
+the private derived-text cache; consult the source for construction APIs:
 
 ```rust,ignore
 pub struct Word {
@@ -199,18 +189,20 @@ Key fields:
 
 `WordContent` (`crates/talkbank-model/src/model/content/word/content.rs`)
 is the enum of everything that can appear inside a word body. Each variant
-maps directly to a grammar node.
+records typed content. Most ordinary marker variants correspond to grammar
+children; phonetic folding is a context-dependent conversion rather than a
+one-to-one node mapping.
 
 | Grammar node | `WordContent` variant | Rust type | Example |
 |---|---|---|---|
 | `word_segment` | `Text` | `WordText(NonEmptyString)` | `hello`, `want` |
-| `word_segment` in a `@u` word | `Phonetic` | `WordPhonetic(NonEmptyString)` | `rɛmbə˞` in `rɛmbə˞@u` |
+| folded body of a `@u` word | `Phonetic` | `WordPhonetic(NonEmptyString)` | `rɛmbə˞` in `rɛmbə˞@u` |
 | `shortening` | `Shortening` | `WordShortening(NonEmptyString)` | `(be)` in `(be)cause` |
 | `overlap_point` | `OverlapPoint` | `OverlapPoint` | `⌈`, `⌉2` |
 | `ca_element` | `CAElement` | `CAElement` | `↑`, `↓` |
 | `ca_delimiter` | `CADelimiter` | `CADelimiter` | `∆`, `°` |
 | `stress_marker` | `StressMarker` | `WordStressMarker` | `ˈ` primary, `ˌ` secondary |
-| `lengthening` | `Lengthening` | `WordLengthening { count: u8 }` | `:` = 1, `::` = 2, `:::` = 3 |
+| `lengthening` | `Lengthening` | `WordLengthening { count: NonZeroUsize, ... }` | `:` = 1, `::` = 2, `:::` = 3 |
 | (caret in word) | `SyllablePause` | `WordSyllablePause` | `^` in `o^ver` |
 | `underline_begin` | `UnderlineBegin` | `UnderlineMarker` | `\x02\x01` |
 | `underline_end` | `UnderlineEnd` | `UnderlineMarker` | `\x02\x02` |
@@ -219,25 +211,18 @@ maps directly to a grammar node.
 
 ### cleaned_text()
 
-`Word::cleaned_text()` derives NLP-ready text from `content` by
-concatenating only `Text`, `Phonetic`, and `Shortening` variants:
+`Word::cleaned_text()` concatenates the `Spoken` contributions produced by
+`lexical_parts()`. That iterator classifies `Text`, `Phonetic` and `Shortening`
+leaves in their segment-repetition context: text inside a `↫...↫` pair is
+`Repeated`, not `Spoken`, and is excluded from the cleaned projection. Other
+structural leaves contribute no text. For example, `↫b-b-b↫boy` projects to
+`boy`, while `∆fast∆` retains `fast`.
 
-```rust,ignore
-pub fn compute_cleaned_text(&self) -> String {
-    let mut result = String::new();
-    for item in &self.content {
-        match item {
-            WordContent::Text(t) => result.push_str(t.as_ref()),
-            WordContent::Shortening(s) => result.push_str(s.as_ref()),
-            _ => {}
-        }
-    }
-    result
-}
-```
-
-This works because the purity invariant guarantees that `Text` elements
-never contain structural markers. There is nothing to strip.
+The implementation is owned by `Word::compute_cleaned_text` in `word_type.rs`
+and `WordLexicalParts` in `word/lexical.rs`. Consumers needing repeated sounds
+or compound/clitic boundaries should retain those typed leaves rather than
+try to reconstruct them from cleaned text. This projection is not a universal
+input contract for every NLP engine and is not byte-preserving serialization.
 
 ### `@u` phonetic forms are typed phonetic content
 
@@ -276,14 +261,15 @@ The result is cached via `OnceLock` on first access.
 
 ### What is included in cleaned_text vs what is stripped
 
-The following table is the **complete inventory** of how every word-internal
-element contributes to (or is excluded from) `cleaned_text()`. This must
-match what NLP pipelines (Stanza, etc.) expect as input.
+The following table describes lexical contributions. Text-bearing leaves are
+included only outside segment-repetition spans; the iterator, not a second
+character-filtering implementation, owns that context.
 
 | `WordContent` variant | Character(s) | In `cleaned_text`? | Rationale |
 |---|---|---|---|
-| `Text` | spoken text | **YES** | The actual word |
-| `Shortening` | `(be)` | **YES** | Shortened form is still spoken |
+| `Text` | lexical text | Yes, outside repetition | Lexical spelling |
+| `Phonetic` | phonetic text | Yes, outside repetition | Typed phonetic spelling |
+| `Shortening` | `(be)` | Yes, outside repetition | Restores the omitted portion to the full form |
 | `CompoundMarker` | `+` | No | Structural boundary, not spoken |
 | `CliticBoundary` | `~` | No | Morphological boundary, not spoken |
 | `SyllablePause` | `^` | No | Pause between syllables, not spoken |
@@ -295,7 +281,8 @@ match what NLP pipelines (Stanza, etc.) expect as input.
 | `UnderlineBegin` | `\x02\x01` | No | Formatting marker |
 | `UnderlineEnd` | `\x02\x02` | No | Formatting marker |
 
-**Characters that stay in word_segment (ARE spoken text):**
+**Examples of characters that can remain in a segment:**
+
 - Letters (all Unicode)
 - Digits (in non-initial position; `0` in initial = omission prefix)
 - Hyphen (`-`), part of word text, e.g., `ice-cream`, `self-conscious`
@@ -308,23 +295,13 @@ See the full exclusion table in
 [Precedence Decisions](https://github.com/TalkBank/chatter/blob/main/grammar/docs/precedence-decisions.md#word-segment-purity-invariant)
 in the grammar docs.
 
-### Comparison with batchalign2
+### Consumer boundary
 
-batchalign2's `annotation_clean()` (60 lines of `.replace()` calls) strips
-all the same characters that our grammar excludes from `word_segment`.
-Key differences:
-
-1. **Parentheses**: ba2 COMMENTED OUT the strip. We handle them as
-   `Shortening`, the content inside parens IS included in `cleaned_text`.
-2. **IPA characters** (`ạ ā ʔ ʕ ʰ`): ba2 incorrectly strips them. We
-   correctly keep them; they are real phonetic content.
-3. **Hyphen** (`-`): ba2 strips it. We keep it in word_segment because
-   hyphen is a valid word character (contractions, compounds, morphological
-   suffixes in `%mor` tier).
-
-Our design eliminates the need for character-by-character stripping entirely.
-`cleaned_text()` is a simple concatenation of `Text` + `Shortening`
-elements, with zero scanning.
+Do not replace the typed projection with a downstream list of characters to
+strip. Such a list loses segment-repetition context and can remove legitimate
+lexical or phonetic content. Check a downstream consumer's actual input
+contract separately; similarity to an older tool's cleanup function does not
+establish equivalent behavior.
 
 ## The Six Tokenization Ambiguities
 
@@ -337,19 +314,20 @@ What follows is a summary for orientation.
 ### 1. Overlap markers (⌈⌉⌊⌋)
 
 Adjacent to text = part of the word. Space-separated = standalone
-`overlap_point`. This adjacency rule is a deliberate approximation of
-an ideal (edge markers top-level, interior markers in-word) whose full
-history, feasibility analysis, and open implementation decision are
+`overlap_point`. A historical alternative would put edge markers at the
+top level while keeping interior markers in-word. Its design history and
+experimental observations, not an approved implementation plan, are
 documented in [Overlap Marker Binding](../architecture/overlap-binding.md).
 
 ```text
-Yeah⌋⌈2 hey      ONE word: "Yeah⌋⌈2"
-Yeah ⌋ ⌈2 hey    three tokens: "Yeah", ⌋, ⌈2
+Yeah⌋⌈2 hey      two words: "Yeah⌋⌈2", "hey"
+Yeah ⌋ ⌈2 hey    four content items: "Yeah", ⌋, ⌈2, "hey"
 ```
 
-Maximal munch at `prec(5)` makes `word_segment` consume adjacent overlap
-characters. Overlap markers are only recognized as `overlap_point` when
-space-separated on both sides.
+The enclosing `word_body` owns adjacent markers as separate `overlap_point`
+children. `word_segment` never consumes those characters. A space-separated
+marker can instead be a top-level content item; CST kind and structural
+ownership are different questions.
 
 ### 2. Zero/omission prefix (0)
 
@@ -409,9 +387,10 @@ and then +...     terminator: trailing_off (prec 10 beats prec 5)
 +< but I +/.      linker: lazy_overlap, terminator: interruption
 ```
 
-Terminators and linkers use `prec(10)`, which beats `word_segment` at
-`prec(5)`. No valid CHAT word ends with `+` -- the grammar enforces this
-by structure.
+Terminator and linker alternatives compete with word structure. An internal
+compound `+` is its own child, not part of a longer `word_segment` token.
+Do not infer compound validity from grammar recognition alone: marker-position
+validation remains a separate obligation.
 
 ### 6. Bracket annotations vs plain brackets
 
@@ -421,8 +400,9 @@ prefix tokens to beat generic bracket handling.
 ## Design: Structured Word Content
 
 `standalone_word` is a structured grammar, not an opaque token. Every
-word-internal marker is a separate child of `word_body`. A reference copy of this shape is kept in
-`grammar/docs/pre-coarsening-grammar.js.reference`:
+word-internal marker is a separate child of `word_body`. A historical precursor
+is kept in `grammar/docs/pre-coarsening-grammar.js.reference`; the following is
+that historical vocabulary, not a replacement for the current grammar rules:
 
 ```javascript
 word_content: $ => choice(
@@ -447,9 +427,9 @@ The design decisions that follow from this:
    registry as the single source of truth for the exclusion sets.
 2. Each marker type is a separate CST child in `word_body`, so editors get typed
    nodes and validation finds structural markers without re-parsing.
-3. The `WordContent` enum in the Rust model is aligned 1:1 with the grammar
-   nodes, so `cleaned_text()` reads typed content rather than scanning for and
-   stripping marker characters.
+3. The model preserves typed word content, with explicit conversion rules such
+   as phonetic folding. `cleaned_text()` uses the lexical-contribution iterator
+   instead of scanning raw spelling for markers.
 4. The `word_segment` purity invariant is a gate: a structural marker is never
    consumed by `word_segment`.
 
@@ -491,13 +471,11 @@ If you add a new structural marker to the grammar:
    [Spec Workflow](../contributing/spec-workflow.md) so a
    per-construct test fixture is created in `grammar/test/corpus/generated/word/`.
    Verify the CST output names each marker as its own child.
-4. Run the full verification sequence:
-   ```bash
-   cd grammar && tree-sitter generate && tree-sitter test
-   cargo test -p talkbank-parser
-   cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus
-   cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus
-   ```
+4. Follow the current [Grammar Workflow](../contributing/grammar-workflow.md)
+   and [Spec Workflow](../contributing/spec-workflow.md) for regeneration and
+   affected parser, equivalence and roundtrip checks. Review authored CST
+   expectations separately: generated fixture currency alone does not prove
+   the authored fragment agrees with the implementation.
 
 ## Key Source Files
 
@@ -510,8 +488,9 @@ If you add a new structural marker to the grammar:
 | `grammar/docs/precedence-decisions.md` | Precedence proofs (zero, colon, purity invariant) |
 | `grammar/docs/pre-coarsening-grammar.js.reference` | The structured word grammar shape in `word_content` form, kept as a reference |
 | `crates/talkbank-model/src/model/content/word/word_type.rs` | `Word` struct |
-| `crates/talkbank-model/src/model/content/word/content.rs` | `WordContent` enum (12 variants) |
+| `crates/talkbank-model/src/model/content/word/content.rs` | `WordContent` enum and typed payloads |
+| `crates/talkbank-model/src/model/content/word/lexical.rs` | Contextual lexical contributions, including segment repetition |
 | `crates/talkbank-model/src/model/content/word/word_contents.rs` | `WordContents` (SmallVec-backed sequence) |
-| `crates/talkbank-model/src/model/content/word/category.rs` | `WordCategory` enum (5 variants) |
-| `crates/talkbank-model/src/model/content/word/form.rs` | `FormType` enum (22 variants) |
-| `crates/talkbank-model/src/model/content/word/language.rs` | `WordLanguageMarker` enum (4 variants) |
+| `crates/talkbank-model/src/model/content/word/category.rs` | `WordCategory` enum |
+| `crates/talkbank-model/src/model/content/word/form.rs` | `FormType` enum |
+| `crates/talkbank-model/src/model/content/word/language.rs` | `WordLanguageMarker` enum |

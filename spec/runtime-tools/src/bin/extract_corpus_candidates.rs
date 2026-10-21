@@ -11,6 +11,7 @@
 //!     --max-lines 200 \
 //!     --top 10
 
+use anyhow::Context;
 use clap::ArgAction;
 use clap::Parser as ClapParser;
 use serde::Serialize;
@@ -117,21 +118,25 @@ fn main() -> anyhow::Result<()> {
         all_candidates.insert(lang.clone(), Vec::new());
     }
 
-    let mut data_repos: Vec<PathBuf> = std::fs::read_dir(&args.data_dir)?
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let path = e.path();
-            if !path.is_dir() {
-                return None;
+    // Admit the repository selection before scanning. An enumeration failure
+    // must not silently turn a partial selection into a complete report.
+    let entries = fs::read_dir(&args.data_dir)
+        .with_context(|| format!("reading data directory {}", args.data_dir.display()))?;
+    let mut data_repos = Vec::new();
+    for entry in entries {
+        let entry = entry
+            .with_context(|| format!("enumerating data directory {}", args.data_dir.display()))?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.ends_with("-data") && !name.ends_with("-xml") {
+            let path = entry.path();
+            let metadata = fs::metadata(&path)
+                .with_context(|| format!("reading repository metadata {}", path.display()))?;
+            if metadata.is_dir() {
+                data_repos.push(path);
             }
-            let name = e.file_name().to_string_lossy().to_string();
-            if name.ends_with("-data") && !name.ends_with("-xml") {
-                Some(path)
-            } else {
-                None
-            }
-        })
-        .collect();
+        }
+    }
 
     if data_repos.is_empty() {
         data_repos.push(args.data_dir.clone());
@@ -147,22 +152,21 @@ fn main() -> anyhow::Result<()> {
     let mut accepted_files = 0usize;
 
     'repo_loop: for repo in &data_repos {
-        for entry in WalkDir::new(repo).into_iter().filter_map(|e| e.ok()) {
+        for entry in WalkDir::new(repo) {
             if let Some(limit) = args.max_files
                 && scanned_files >= limit
             {
                 break 'repo_loop;
             }
+            let entry = entry.with_context(|| format!("traversing {}", repo.display()))?;
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("cha") {
                 continue;
             }
             scanned_files += 1;
 
-            let source = match std::fs::read_to_string(path) {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
+            let source = fs::read_to_string(path)
+                .with_context(|| format!("reading selected CHAT file {}", path.display()))?;
 
             // Check line count
             let line_count = source.lines().count();

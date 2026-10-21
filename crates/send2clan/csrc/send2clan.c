@@ -126,6 +126,114 @@ static int map_platform_error(int platform_error) {
 }
 #endif  // defined(__APPLE__) || defined(_WIN32)
 
+#ifdef _WIN32
+/*
+ * Executable-path admission
+ * =========================
+ * A clan_executable_path holds a NUL-terminated path that
+ * resolve_clan_executable has admitted, and it is produced nowhere else. Both
+ * launch_clan_app and is_clan_available obtain it through the resolver and read
+ * `value` only when clan_path_is_resolved accepts the outcome, so a failed or
+ * malformed registry value can never reach a file probe or a launch. C cannot
+ * make the field private; the single constructor, the closed outcome enum and
+ * the exhaustive switch below are the discipline that stands in for a newtype.
+ *
+ * RegQueryValueExA's contract matters here: a successful string query need not
+ * store a terminating NUL, the reported size counts bytes actually stored, and
+ * ERROR_MORE_DATA leaves the buffer contents undefined. Each case is admitted
+ * explicitly instead of being trusted.
+ */
+typedef struct {
+    char value[MAX_PATH];
+} clan_executable_path;
+
+/* Every way resolution can end. Only the two RESOLVED_* outcomes fill the path. */
+typedef enum {
+    CLAN_PATH_RESOLVED_FROM_REGISTRY, /* InstallPath admitted, "\\CLAN.EXE" appended */
+    CLAN_PATH_RESOLVED_DEFAULT,       /* the TalkBank key does not exist: compiled default */
+    CLAN_PATH_KEY_UNREADABLE,         /* the key exists but could not be opened */
+    CLAN_PATH_VALUE_UNREADABLE,       /* the key opened but InstallPath could not be read */
+    CLAN_PATH_VALUE_NOT_STRING,       /* InstallPath is not REG_SZ */
+    CLAN_PATH_VALUE_EMPTY,            /* InstallPath holds no characters */
+    CLAN_PATH_VALUE_EMBEDDED_NUL,     /* a NUL precedes other characters */
+    CLAN_PATH_TOO_LONG                /* the value, or value plus "\\CLAN.EXE", exceeds MAX_PATH */
+} clan_path_resolution;
+
+#define CLAN_REGISTRY_KEY "Software\\TalkBank\\CLAN"
+#define CLAN_REGISTRY_VALUE "InstallPath"
+#define CLAN_EXECUTABLE_SUFFIX "\\CLAN.EXE"
+
+/* Fill `out` only on a RESOLVED_* outcome; on every other outcome `out` is untouched. */
+static clan_path_resolution resolve_clan_executable(clan_executable_path *out) {
+    HKEY key;
+    LONG opened = RegOpenKeyExA(HKEY_LOCAL_MACHINE, CLAN_REGISTRY_KEY, 0, KEY_READ, &key);
+    if (opened == ERROR_FILE_NOT_FOUND) {
+        // No TalkBank key at all: the installer never registered a location.
+        memcpy(out->value, DEFAULT_CLAN_PATH, sizeof(DEFAULT_CLAN_PATH));
+        return CLAN_PATH_RESOLVED_DEFAULT;
+    }
+    if (opened != ERROR_SUCCESS) {
+        return CLAN_PATH_KEY_UNREADABLE;
+    }
+
+    char raw[MAX_PATH];
+    DWORD type = 0;
+    DWORD stored = sizeof(raw);
+    LONG queried = RegQueryValueExA(key, CLAN_REGISTRY_VALUE, NULL, &type, (LPBYTE)raw, &stored);
+    RegCloseKey(key);
+    if (queried == ERROR_MORE_DATA) {
+        return CLAN_PATH_TOO_LONG;
+    }
+    if (queried != ERROR_SUCCESS) {
+        return CLAN_PATH_VALUE_UNREADABLE;
+    }
+    if (type != REG_SZ) {
+        return CLAN_PATH_VALUE_NOT_STRING;
+    }
+    if (stored > sizeof(raw)) {
+        return CLAN_PATH_TOO_LONG;
+    }
+
+    // `stored` counts bytes written. A trailing run of NULs is terminator
+    // padding; any NUL before the last character is an embedded NUL.
+    size_t length = stored;
+    while (length > 0 && raw[length - 1] == '\0') {
+        length--;
+    }
+    if (length == 0) {
+        return CLAN_PATH_VALUE_EMPTY;
+    }
+    if (memchr(raw, '\0', length) != NULL) {
+        return CLAN_PATH_VALUE_EMBEDDED_NUL;
+    }
+    // sizeof includes the suffix's own NUL, which becomes the path's terminator.
+    if (length + sizeof(CLAN_EXECUTABLE_SUFFIX) > sizeof(out->value)) {
+        return CLAN_PATH_TOO_LONG;
+    }
+    memcpy(out->value, raw, length);
+    memcpy(out->value + length, CLAN_EXECUTABLE_SUFFIX, sizeof(CLAN_EXECUTABLE_SUFFIX));
+    return CLAN_PATH_RESOLVED_FROM_REGISTRY;
+}
+
+/* The one place that decides whether an outcome carries a usable path. No
+ * default case: a new outcome must be classified here, and -Wswitch says so. */
+static bool clan_path_is_resolved(clan_path_resolution resolution) {
+    switch (resolution) {
+        case CLAN_PATH_RESOLVED_FROM_REGISTRY:
+        case CLAN_PATH_RESOLVED_DEFAULT:
+            return true;
+        case CLAN_PATH_KEY_UNREADABLE:
+        case CLAN_PATH_VALUE_UNREADABLE:
+        case CLAN_PATH_VALUE_NOT_STRING:
+        case CLAN_PATH_VALUE_EMPTY:
+        case CLAN_PATH_VALUE_EMBEDDED_NUL:
+        case CLAN_PATH_TOO_LONG:
+            return false;
+    }
+    return false;
+}
+#endif  // _WIN32
+
 // Simple platform-specific launch function
 static int launch_clan_app(long timeOut) {
 #ifdef __APPLE__
@@ -159,28 +267,20 @@ static int launch_clan_app(long timeOut) {
         return SEND2CLAN_SUCCESS;
     }
 
-    // Try to launch CLAN
-    char clanPath[MAX_PATH];
-    HKEY hKey;
-    DWORD pathSize = sizeof(clanPath);
-
-    // Check registry first
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\TalkBank\\CLAN", 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        if (RegQueryValueExA(hKey, "InstallPath", NULL, NULL, (LPBYTE)clanPath, &pathSize) == ERROR_SUCCESS) {
-            strcat_s(clanPath, sizeof(clanPath), "\\CLAN.EXE");
-        }
-        RegCloseKey(hKey);
-    } else {
-        strcpy_s(clanPath, sizeof(clanPath), DEFAULT_CLAN_PATH);
+    // An unresolvable or malformed configured location is reported as "not
+    // found" without probing or launching anything.
+    clan_executable_path clanPath;
+    if (!clan_path_is_resolved(resolve_clan_executable(&clanPath))) {
+        return SEND2CLAN_ERR_APP_NOT_FOUND;
     }
 
     // Verify executable exists
-    if (GetFileAttributesA(clanPath) == INVALID_FILE_ATTRIBUTES) {
+    if (GetFileAttributesA(clanPath.value) == INVALID_FILE_ATTRIBUTES) {
         return SEND2CLAN_ERR_APP_NOT_FOUND;
     }
 
     // Launch the app
-    HINSTANCE result = ShellExecuteA(NULL, NULL, clanPath, NULL, NULL, SW_SHOWNORMAL);
+    HINSTANCE result = ShellExecuteA(NULL, NULL, clanPath.value, NULL, NULL, SW_SHOWNORMAL);
     if ((intptr_t)result <= 32) {
         return map_platform_error((int)(intptr_t)result);
     }
@@ -384,22 +484,13 @@ SEND2CLAN_API bool is_clan_available(void) {
     CFRelease(appURLs);
     return true;
 #elif defined(_WIN32)
-    char clanPath[MAX_PATH];
-    HKEY hKey;
-    DWORD pathSize = sizeof(clanPath);
-
-    // Check registry first
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\TalkBank\\CLAN", 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        if (RegQueryValueExA(hKey, "InstallPath", NULL, NULL, (LPBYTE)clanPath, &pathSize) == ERROR_SUCCESS) {
-            strcat_s(clanPath, sizeof(clanPath), "\\CLAN.EXE");
-        }
-        RegCloseKey(hKey);
-    } else {
-        strcpy_s(clanPath, sizeof(clanPath), DEFAULT_CLAN_PATH);
+    clan_executable_path clanPath;
+    if (!clan_path_is_resolved(resolve_clan_executable(&clanPath))) {
+        return false;
     }
 
     // Check if executable exists
-    return (GetFileAttributesA(clanPath) != INVALID_FILE_ATTRIBUTES);
+    return (GetFileAttributesA(clanPath.value) != INVALID_FILE_ATTRIBUTES);
 #else
     return false;
 #endif

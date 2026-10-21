@@ -9,7 +9,6 @@
 //! - [CA Intonation](https://talkbank.org/0info/manuals/CHAT.html#CA_Intonation)
 
 use super::WriteChat;
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -55,124 +54,124 @@ pub enum Terminator {
     /// Period `.` - declarative statement
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Period_Terminator>
     Period {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// Question mark `?` - interrogative
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#QuestionMark_Terminator>
     Question {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// Exclamation `!` - imperative/exclamatory
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#ExclamationMark_Terminator>
     Exclamation {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +... - trailing off (incomplete utterance)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TrailingOff_Terminator>
     TrailingOff {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +/. - interruption (interrupted by another speaker)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Interruption_Terminator>
     Interruption {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +//. - self-interruption
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Self_Interruption_Terminator>
     SelfInterruption {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +/? - interrupted question
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Interrupted_Question_Terminator>
     InterruptedQuestion {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +!? - broken-off question
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#BrokenQuestion_Terminator>
     BrokenQuestion {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +"/. - SUTNL - quoted utterance, next line (quote-slash-period)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#QuotedNewLine_Terminator>
     #[serde(rename = "quoted_new_line")]
     QuotedNewLine {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +". - SUTQP - quoted utterance with period (quote-period, no slash)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#QuotedPeriod_Terminator>
     #[serde(rename = "quoted_period_simple")]
     QuotedPeriodSimple {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +//? - self-interrupted question
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#SelfInterruptedQuestion_Terminator>
     #[serde(rename = "self_interrupted_question")]
     SelfInterruptedQuestion {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +..? - trailing off question
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#TrailingOffQuestion_Terminator>
     #[serde(rename = "trailing_off_question")]
     TrailingOffQuestion {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
     /// +. - break for coding
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#BreakForCoding>
     #[serde(rename = "break_for_coding")]
     BreakForCoding {
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
         #[semantic_eq(skip)]
         /// Source span for error reporting.
-        span: Span,
+        location: crate::Location,
     },
 }
 
@@ -195,29 +194,29 @@ impl Terminator {
     /// supported inventory. Returns `None` for any other input, including
     /// content punctuation like `,` `;` `:`, CA separators/linkers, and any
     /// non-terminator text.
-    /// Spans are set to [`Span::DUMMY`] since the caller has no source
-    /// location for a terminator recovered from a free string.
+    /// The caller supplies the location: a terminator recovered from a free
+    /// string (a UD `PUNCT` token, say) is `Location::Unlocated`.
     ///
     /// This is the round-trip partner of [`WriteChat::write_chat`]. Useful
     /// for classifying untyped tokens (e.g., UD `PUNCT` words returned by
     /// a morphotag pipeline) without stringly-typed pattern matching at the
     /// call site.
-    pub fn try_from_chat_str(s: &str) -> Option<Self> {
-        let span = Span::DUMMY;
+    pub fn try_from_chat_str(location: impl Into<crate::Location>, s: &str) -> Option<Self> {
+        let location = location.into();
         let t = match s {
-            "." => Self::Period { span },
-            "?" => Self::Question { span },
-            "!" => Self::Exclamation { span },
-            "+..." => Self::TrailingOff { span },
-            "+/." => Self::Interruption { span },
-            "+//." => Self::SelfInterruption { span },
-            "+/?" => Self::InterruptedQuestion { span },
-            "+!?" => Self::BrokenQuestion { span },
-            "+\"/." => Self::QuotedNewLine { span },
-            "+\"." => Self::QuotedPeriodSimple { span },
-            "+//?" => Self::SelfInterruptedQuestion { span },
-            "+..?" => Self::TrailingOffQuestion { span },
-            "+." => Self::BreakForCoding { span },
+            "." => Self::Period { location },
+            "?" => Self::Question { location },
+            "!" => Self::Exclamation { location },
+            "+..." => Self::TrailingOff { location },
+            "+/." => Self::Interruption { location },
+            "+//." => Self::SelfInterruption { location },
+            "+/?" => Self::InterruptedQuestion { location },
+            "+!?" => Self::BrokenQuestion { location },
+            "+\"/." => Self::QuotedNewLine { location },
+            "+\"." => Self::QuotedPeriodSimple { location },
+            "+//?" => Self::SelfInterruptedQuestion { location },
+            "+..?" => Self::TrailingOffQuestion { location },
+            "+." => Self::BreakForCoding { location },
             _ => return None,
         };
         Some(t)
@@ -229,46 +228,25 @@ impl Terminator {
     /// callsite pattern "does this string terminate an utterance?".
     /// Returns `false` for content punctuation (`,`, `;`, `:`, etc.).
     pub fn is_chat_terminator(s: &str) -> bool {
-        Self::try_from_chat_str(s).is_some()
+        Self::try_from_chat_str(crate::Location::Unlocated, s).is_some()
     }
 
-    /// Returns source span metadata associated with this terminator.
-    pub fn span(&self) -> Span {
+    /// Returns the source location of this terminator.
+    pub fn location(&self) -> crate::Location {
         match self {
-            Terminator::Period { span }
-            | Terminator::Question { span }
-            | Terminator::Exclamation { span }
-            | Terminator::TrailingOff { span }
-            | Terminator::Interruption { span }
-            | Terminator::SelfInterruption { span }
-            | Terminator::InterruptedQuestion { span }
-            | Terminator::BrokenQuestion { span }
-            | Terminator::QuotedNewLine { span }
-            | Terminator::QuotedPeriodSimple { span }
-            | Terminator::SelfInterruptedQuestion { span }
-            | Terminator::TrailingOffQuestion { span }
-            | Terminator::BreakForCoding { span } => *span,
-        }
-    }
-
-    /// Replace the stored source span while preserving the terminator kind.
-    pub fn with_span(self, span: Span) -> Self {
-        match self {
-            Terminator::Period { .. } => Terminator::Period { span },
-            Terminator::Question { .. } => Terminator::Question { span },
-            Terminator::Exclamation { .. } => Terminator::Exclamation { span },
-            Terminator::TrailingOff { .. } => Terminator::TrailingOff { span },
-            Terminator::Interruption { .. } => Terminator::Interruption { span },
-            Terminator::SelfInterruption { .. } => Terminator::SelfInterruption { span },
-            Terminator::InterruptedQuestion { .. } => Terminator::InterruptedQuestion { span },
-            Terminator::BrokenQuestion { .. } => Terminator::BrokenQuestion { span },
-            Terminator::QuotedNewLine { .. } => Terminator::QuotedNewLine { span },
-            Terminator::QuotedPeriodSimple { .. } => Terminator::QuotedPeriodSimple { span },
-            Terminator::SelfInterruptedQuestion { .. } => {
-                Terminator::SelfInterruptedQuestion { span }
-            }
-            Terminator::TrailingOffQuestion { .. } => Terminator::TrailingOffQuestion { span },
-            Terminator::BreakForCoding { .. } => Terminator::BreakForCoding { span },
+            Terminator::Period { location }
+            | Terminator::Question { location }
+            | Terminator::Exclamation { location }
+            | Terminator::TrailingOff { location }
+            | Terminator::Interruption { location }
+            | Terminator::SelfInterruption { location }
+            | Terminator::InterruptedQuestion { location }
+            | Terminator::BrokenQuestion { location }
+            | Terminator::QuotedNewLine { location }
+            | Terminator::QuotedPeriodSimple { location }
+            | Terminator::SelfInterruptedQuestion { location }
+            | Terminator::TrailingOffQuestion { location }
+            | Terminator::BreakForCoding { location } => *location,
         }
     }
 }
@@ -311,27 +289,27 @@ mod tests {
     /// parser/classifier no longer treats their surface forms as terminators.
     #[test]
     fn supported_variants_round_trip_display_to_try_from_chat_str() {
-        let span = Span::DUMMY;
+        let location = crate::Location::Unlocated;
         let all = [
-            Terminator::Period { span },
-            Terminator::Question { span },
-            Terminator::Exclamation { span },
-            Terminator::TrailingOff { span },
-            Terminator::Interruption { span },
-            Terminator::SelfInterruption { span },
-            Terminator::InterruptedQuestion { span },
-            Terminator::BrokenQuestion { span },
-            Terminator::QuotedNewLine { span },
-            Terminator::QuotedPeriodSimple { span },
-            Terminator::SelfInterruptedQuestion { span },
-            Terminator::TrailingOffQuestion { span },
-            Terminator::BreakForCoding { span },
+            Terminator::Period { location },
+            Terminator::Question { location },
+            Terminator::Exclamation { location },
+            Terminator::TrailingOff { location },
+            Terminator::Interruption { location },
+            Terminator::SelfInterruption { location },
+            Terminator::InterruptedQuestion { location },
+            Terminator::BrokenQuestion { location },
+            Terminator::QuotedNewLine { location },
+            Terminator::QuotedPeriodSimple { location },
+            Terminator::SelfInterruptedQuestion { location },
+            Terminator::TrailingOffQuestion { location },
+            Terminator::BreakForCoding { location },
         ];
         for t in all {
             let emitted = t.to_string();
-            let parsed = Terminator::try_from_chat_str(&emitted)
+            let parsed = Terminator::try_from_chat_str(crate::Location::Unlocated, &emitted)
                 .unwrap_or_else(|| panic!("{emitted:?} did not parse back to a Terminator"));
-            // The parsed variant uses DUMMY span; compare only the kind via
+            // The parsed variant is unlocated; compare only the kind via
             // re-emission, which is what callers actually key off of.
             assert_eq!(
                 parsed.to_string(),
@@ -351,7 +329,7 @@ mod tests {
             ",", ";", ":", "-", "\"", "'", "(", ")", "[", "]", "„", "‡", "&", "%",
         ] {
             assert!(
-                Terminator::try_from_chat_str(s).is_none(),
+                Terminator::try_from_chat_str(crate::Location::Unlocated, s).is_none(),
                 "content punct {s:?} must not parse as a terminator"
             );
             assert!(
@@ -377,8 +355,8 @@ mod tests {
     fn trailing_whitespace_not_accepted() {
         // Callers must trim before calling; this ensures we don't accept
         // `". "` (with trailing space) as a terminator silently.
-        assert!(Terminator::try_from_chat_str(". ").is_none());
-        assert!(Terminator::try_from_chat_str(" .").is_none());
+        assert!(Terminator::try_from_chat_str(crate::Location::Unlocated, ". ").is_none());
+        assert!(Terminator::try_from_chat_str(crate::Location::Unlocated, " .").is_none());
     }
 
     /// CA arrows, CA TCU separators, and CA TCU linker forms are not CHAT
@@ -387,7 +365,7 @@ mod tests {
     fn ca_symbols_are_not_chat_terminators() {
         for s in ["⇗", "↗", "→", "↘", "⇘", "≈", "≋", "+≈", "+≋"] {
             assert!(
-                Terminator::try_from_chat_str(s).is_none(),
+                Terminator::try_from_chat_str(crate::Location::Unlocated, s).is_none(),
                 "{s:?} must not parse as a terminator"
             );
             assert!(

@@ -41,6 +41,13 @@ impl<'source> LexedSource<'source> {
         self.source
     }
 
+    /// The text the tokens borrow from, for the parsers that slice it (the
+    /// word parsers) and the converter that places against it. Minting it
+    /// here keeps the tokens and the text one pairing.
+    pub(crate) fn source_text(&self) -> crate::source_text::SourceText<'source> {
+        crate::source_text::SourceText::new(self.source)
+    }
+
     pub(crate) fn tokens(&self) -> &[Token<'source>] {
         &self.tokens
     }
@@ -59,10 +66,54 @@ impl<'source> LexedSource<'source> {
         errors.report(talkbank_model::ParseError::new(
             code,
             talkbank_model::Severity::Error,
-            talkbank_model::SourceLocation::from_offsets(start, end),
-            talkbank_model::ErrorContext::new(self.source, start..end, "native_region"),
+            talkbank_model::DiagnosticLocation::from_offsets(start, end),
+            talkbank_model::ErrorContext::new(
+                self.source,
+                talkbank_model::Span::new(start, end),
+                "native_region",
+            ),
             message,
         ));
+    }
+
+    /// The source extent of a nonempty token range selected by the file
+    /// cursor: from the first token's start to the last token's end.
+    pub(crate) fn extent(&self, range: Range<usize>) -> talkbank_model::Span {
+        talkbank_model::Span::new(self.spans[range.start].start, self.spans[range.end - 1].end)
+    }
+
+    /// The locations of a main tier whose line the cursor selected, including
+    /// its line ending: the line, the speaker token and the content region,
+    /// which runs from the end of the separator's colon (so the tab is
+    /// content, as in the tree-sitter grammar) to the end of the line.
+    ///
+    /// `None` when the line does not begin `*`, speaker, separator. The
+    /// main-tier grammar refuses such a line before this is asked, so a
+    /// caller that still gets `None` has paired a parse with the wrong range
+    /// and must report that rather than lower an unlocated tier.
+    pub(crate) fn main_tier_locations(
+        &self,
+        line: Range<usize>,
+    ) -> Option<talkbank_model::MainTierLocations> {
+        use talkbank_model::{Location, MainTierLocations, Span};
+        /// Every `TierSep` lexeme begins with the colon; content starts after it.
+        const COLON: &str = ":";
+        let extent = self.extent(line.clone());
+        match &self.tokens[line.clone()] {
+            [Token::Star(_), Token::Speaker(_), Token::TierSep(_), ..] => {
+                let speaker = &self.spans[line.start + 1];
+                let separator = &self.spans[line.start + 2];
+                Some(MainTierLocations {
+                    line: Location::Located(extent),
+                    speaker: Location::Located(Span::new(speaker.start, speaker.end)),
+                    content: Location::Located(Span::new(
+                        separator.start + COLON.len(),
+                        extent.end(),
+                    )),
+                })
+            }
+            _ => None,
+        }
     }
 
     /// A token selected by the file cursor and its original lexer location.
@@ -91,8 +142,9 @@ impl<'source> LexedSource<'source> {
             None => return Ok(None),
         };
         DependentTierContentSpan::try_new(
-            Span::from_usize(self.spans[line.start].start, line_end),
-            Span::from_usize(self.spans[line.start].end, body_end),
+            Span::new(self.spans[line.start].start, line_end),
+            self.spans[line.start].end,
+            body_end,
         )
         .map(Some)
     }
@@ -105,10 +157,7 @@ impl<'source> LexedSource<'source> {
         separator: talkbank_model::model::TierSeparator,
     ) -> crate::ast::HeaderProvenance {
         crate::ast::HeaderProvenance::from_lexed(
-            talkbank_model::Span::from_usize(
-                self.spans[range.start].start,
-                self.spans[range.end - 1].end,
-            ),
+            talkbank_model::Span::new(self.spans[range.start].start, self.spans[range.end - 1].end),
             separator,
         )
     }
@@ -134,7 +183,7 @@ impl<'source> LexedSource<'source> {
                 let text = chunk.trim_end_matches(char::is_whitespace);
                 Some(LocatedItem {
                     text,
-                    span: talkbank_model::Span::from_usize(start, start + text.len()),
+                    span: talkbank_model::Span::new(start, start + text.len()),
                 })
             })
             .filter(|item| !item.text.is_empty())
@@ -153,7 +202,7 @@ impl<'source> LexedSource<'source> {
             errors.report(talkbank_model::ParseError::new(
                 talkbank_model::ErrorCode::BlankLineNotAllowed,
                 talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+                talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                 None,
                 "Blank lines are not allowed",
             ));

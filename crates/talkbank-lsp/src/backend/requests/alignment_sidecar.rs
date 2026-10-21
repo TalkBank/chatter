@@ -95,8 +95,7 @@ pub(crate) fn build_alignment_sidecar(
                     main_units.push(AlignmentSidecarMainUnit {
                         alignment_index: idx,
                         text: format_content_item(content),
-                        range: editor_target_span(content)
-                            .and_then(|span| span_to_range(span, &index)),
+                        range: editor_target_span(content).map(|span| span_to_range(span, &index)),
                         word_id,
                         inline_timing,
                     });
@@ -151,7 +150,11 @@ pub(crate) fn build_alignment_sidecar(
             AlignmentSidecarUtterance {
                 utterance_index,
                 speaker: utterance.main.speaker.to_string(),
-                range: span_to_range(utterance.main.span, &index),
+                range: utterance
+                    .main
+                    .location
+                    .span()
+                    .map(|span| span_to_range(span, &index)),
                 timing: utterance.main.content.bullet.as_ref().map(bullet_to_timing),
                 main_units,
                 alignments: links,
@@ -198,14 +201,11 @@ where
         .collect()
 }
 
-fn span_to_range(span: Span, index: &utils::LineIndex) -> Option<Range> {
-    if span.is_dummy() {
-        return None;
+fn span_to_range(span: Span, index: &utils::LineIndex) -> Range {
+    Range {
+        start: index.offset_to_position(span.start()),
+        end: index.offset_to_position(span.end()),
     }
-    Some(Range {
-        start: index.offset_to_position(span.start),
-        end: index.offset_to_position(span.end),
-    })
 }
 
 fn bullet_to_timing(bullet: &talkbank_model::model::Bullet) -> SidecarTiming {

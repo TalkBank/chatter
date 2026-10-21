@@ -78,7 +78,10 @@ fn phonological_fragments_preserve_typed_features_source_and_tier_policy() {
         assert_eq!(word.lang, None);
         assert_eq!(word.part_of_speech, None);
         assert_eq!(
-            source.get(word.span.start as usize..word.span.end as usize),
+            source.get(
+                word.location.span().expect("located").start()
+                    ..word.location.span().expect("located").end()
+            ),
             Some(spelling)
         );
         for (domain, counts) in [
@@ -94,12 +97,17 @@ fn phonological_fragments_preserve_typed_features_source_and_tier_policy() {
             );
         }
         let errors = ErrorCollector::new();
-        let fragment = ChatParser::parse_word(&parser, spelling, word.span.start as usize, &errors);
+        let fragment = ChatParser::parse_word(
+            &parser,
+            spelling,
+            word.location.span().expect("located").start(),
+            &errors,
+        );
         assert!(errors.is_empty(), "{:?}", errors.to_vec());
         let ParseOutcome::Parsed(fragment) = fragment else {
             panic!("fragment refused")
         };
-        assert_eq!(fragment.span, word.span);
+        assert_eq!(fragment.location, word.location);
         assert_eq!(fragment.to_chat(), spelling);
         assert!(fragment.semantic_eq(word));
     }
@@ -141,7 +149,7 @@ fn fragment_feature_specs_reject_only_the_added_replacement() {
         assert_eq!(words.len(), 1);
         let word = &words[0];
         assert_eq!(word.category, Some(WordCategory::PhonologicalFragment));
-        let boundary = word.span.end as usize;
+        let boundary = word.location.span().expect("located").end();
         let before = source.get(..boundary).expect("UTF-8 prefix");
         let after = source.get(boundary..).expect("UTF-8 suffix");
         let validation = ErrorCollector::new();
@@ -169,7 +177,7 @@ fn fragment_feature_specs_reject_only_the_added_replacement() {
         }
         assert_eq!(produced.len(), 1);
         assert!(produced[0].semantic_eq(word));
-        assert_eq!(produced[0].span, word.span);
+        assert_eq!(produced[0].location, word.location);
         let errors = ErrorCollector::new();
         mutated.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let diagnostics = errors.into_vec();
@@ -236,17 +244,25 @@ fn language_candidate_suffix_specs_preserve_every_code_and_source_spelling() {
             serde_json::from_value(wire).expect("marker wire restores");
         assert_eq!(&restored, marker, "{spec}");
         let spelling = source
-            .get(word.span.start as usize..word.span.end as usize)
+            .get(
+                word.location.span().expect("located").start()
+                    ..word.location.span().expect("located").end(),
+            )
             .expect("producing source range");
         assert_eq!(word.to_chat(), spelling, "{spec}");
         let errors = ErrorCollector::new();
-        let fragment = ChatParser::parse_word(&parser, spelling, word.span.start as usize, &errors);
+        let fragment = ChatParser::parse_word(
+            &parser,
+            spelling,
+            word.location.span().expect("located").start(),
+            &errors,
+        );
         assert!(errors.is_empty(), "{spec}: {:?}", errors.to_vec());
         let ParseOutcome::Parsed(fragment) = fragment else {
             panic!("authored suffix refused: {spec}");
         };
         assert_eq!(fragment.lang.as_ref(), Some(marker), "{spec}");
-        assert_eq!(fragment.span, word.span, "{spec}");
+        assert_eq!(fragment.location, word.location, "{spec}");
         assert_eq!(fragment.to_chat(), spelling, "{spec}");
         assert_eq!(file.to_chat_string(), source, "{spec}");
     }
@@ -277,7 +293,10 @@ fn canonical_word_spelling_is_derived_separately_from_source_spans() {
                     };
                     let original = fixture
                         .source()
-                        .get(word.span.start as usize..word.span.end as usize)
+                        .get(
+                            word.location.span().expect("located").start()
+                                ..word.location.span().expect("located").end(),
+                        )
                         .expect("parser-produced word has a UTF-8 source range");
                     source_differences += usize::from(word.raw_text() != original);
                     assert_eq!(word.raw_text(), word.to_chat());
@@ -356,7 +375,7 @@ fn reference_word_wire_preserves_recorded_spelling_without_source_coordinates() 
                     serde_json::to_value(word).expect("serialize reference word"),
                 )
                 .expect("reconstruct producer-issued word JSON");
-                assert!(reconstructed.span.is_dummy());
+                assert!(reconstructed.location.span().is_none());
                 assert_eq!(reconstructed.raw_text(), word.raw_text());
                 assert!(reconstructed.semantic_eq(word));
                 assert_eq!(reconstructed.to_chat_string(), word.to_chat_string());
@@ -364,7 +383,7 @@ fn reference_word_wire_preserves_recorded_spelling_without_source_coordinates() 
                 // metadata must survive JSON without changing CHAT or spelling.
                 let id = format!("word-{words}");
                 let identified = word.clone().with_word_id(id.as_str());
-                assert_eq!(identified.span, word.span);
+                assert_eq!(identified.location, word.location);
                 assert_eq!(identified.raw_text(), word.raw_text());
                 assert_eq!(identified.cleaned_text(), word.cleaned_text());
                 assert_eq!(identified.to_chat_string(), word.to_chat_string());
@@ -416,31 +435,24 @@ fn reference_word_wire_preserves_recorded_spelling_without_source_coordinates() 
                             )
                         }
                         WordContent::StressMarker(marker) => {
-                            let mut rebuilt_marker = WordStressMarker::new(marker.marker_type);
-                            if let Some(span) = marker.span {
-                                rebuilt_marker = rebuilt_marker.with_span(span);
-                            }
+                            // Rebuilt at the parsed marker's own location.
+                            let rebuilt_marker =
+                                WordStressMarker::new(marker.location, marker.marker_type);
                             structural_leaf_witnesses[0] += 1;
                             WordContent::StressMarker(rebuilt_marker)
                         }
                         WordContent::CompoundMarker(marker) => {
                             assert_eq!(marker.to_chat_string(), leaf.to_chat_string());
-                            let mut rebuilt_marker = WordCompoundMarker::new();
-                            if let Some(span) = marker.span {
-                                rebuilt_marker = rebuilt_marker.with_span(span);
-                            }
+                            let rebuilt_marker = WordCompoundMarker::new(marker.location);
                             structural_leaf_witnesses[1] += 1;
                             WordContent::CompoundMarker(rebuilt_marker)
                         }
                         WordContent::Lengthening(marker) => {
-                            let mut rebuilt_marker = if marker.count.get() == 1 {
-                                WordLengthening::default()
+                            let rebuilt_marker = if marker.count.get() == 1 {
+                                WordLengthening::new(marker.location)
                             } else {
-                                WordLengthening::with_count(marker.count)
+                                WordLengthening::with_count(marker.location, marker.count)
                             };
-                            if let Some(span) = marker.span {
-                                rebuilt_marker = rebuilt_marker.with_span(span);
-                            }
                             WordContent::Lengthening(rebuilt_marker)
                         }
                         WordContent::OverlapPoint(_)
@@ -662,7 +674,10 @@ fn shortening_combinations_preserve_typed_order_suffixes_and_replacement_scope()
         assert_eq!(word.category, None);
         assert_eq!(word.part_of_speech, None);
         assert_eq!(
-            source.get(word.span.start as usize..word.span.end as usize),
+            source.get(
+                word.location.span().expect("located").start()
+                    ..word.location.span().expect("located").end()
+            ),
             Some(spelling)
         );
     }
@@ -721,7 +736,10 @@ fn shortening_suffix_specs_do_not_supply_missing_spoken_material() {
             language.then_some(&WordLanguageMarker::Shortcut)
         );
         assert_eq!(
-            source.get(word.span.start as usize..word.span.end as usize),
+            source.get(
+                word.location.span().expect("located").start()
+                    ..word.location.span().expect("located").end()
+            ),
             Some(spelling)
         );
         let validation = ErrorCollector::new();
@@ -871,17 +889,24 @@ fn ca_boundary_combinations_preserve_typed_order_and_source_spelling() {
             assert_eq!(word.lang, None);
             assert_eq!(word.part_of_speech, None);
             assert_eq!(
-                source.get(word.span.start as usize..word.span.end as usize),
+                source.get(
+                    word.location.span().expect("located").start()
+                        ..word.location.span().expect("located").end()
+                ),
                 Some(*spelling)
             );
             let errors = ErrorCollector::new();
-            let fragment =
-                ChatParser::parse_word(&parser, spelling, word.span.start as usize, &errors);
+            let fragment = ChatParser::parse_word(
+                &parser,
+                spelling,
+                word.location.span().expect("located").start(),
+                &errors,
+            );
             assert!(errors.is_empty(), "fragment: {:?}", errors.to_vec());
             let ParseOutcome::Parsed(fragment) = fragment else {
                 panic!("authored word refused: {spelling:?}");
             };
-            assert_eq!(fragment.span, word.span);
+            assert_eq!(fragment.location, word.location);
             assert_eq!(fragment.to_chat(), *spelling);
             assert!(fragment.semantic_eq(word));
         }
@@ -931,7 +956,7 @@ fn ca_stretch_specs_pair_types_and_delete_only_one_source_bound_marker() {
                             if let WordContent::CADelimiter(marker) = content {
                                 markers.push((
                                     marker.delimiter_type,
-                                    marker.span.expect("parsed marker location"),
+                                    marker.location.span().expect("parsed marker location"),
                                 ));
                             }
                         }
@@ -956,8 +981,8 @@ fn ca_stretch_specs_pair_types_and_delete_only_one_source_bound_marker() {
         assert_eq!(file.to_chat_string(), source);
         for (mutation, ordinal) in deletions {
             let (kind, span) = markers[ordinal];
-            let start = span.start as usize;
-            let end = span.end as usize;
+            let start = span.start();
+            let end = span.end();
             assert_eq!(source.get(start..end), Some(kind.to_symbol()));
             let before = source.get(..start).expect("UTF-8 prefix");
             let after = source.get(end..).expect("UTF-8 suffix");
@@ -1024,7 +1049,10 @@ fn ca_pitch_does_not_supply_an_underline_boundary() {
             );
             assert_eq!(word.cleaned_text(), "rainbow");
             assert_eq!(
-                source.get(word.span.start as usize..word.span.end as usize),
+                source.get(
+                    word.location.span().expect("located").start()
+                        ..word.location.span().expect("located").end()
+                ),
                 Some(word.to_chat().as_str())
             );
             let validation = ErrorCollector::new();

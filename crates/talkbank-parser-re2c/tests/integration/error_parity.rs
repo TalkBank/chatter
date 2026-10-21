@@ -27,8 +27,10 @@
 //! in a multi-fault example can conceal a missing detection.
 
 mod contextual_fragments;
+mod empty_containers;
 mod fragments;
 mod model;
+mod native_locations;
 mod remaining_fragments;
 mod spec_corpus;
 
@@ -36,24 +38,25 @@ use talkbank_model::ErrorCollector;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::gate::{listing, report};
 
+use crate::fixture_utils::LineEnding;
 use model::{CaseReport, Detection};
 use spec_corpus::{SpecCorpus, load_spec_corpus};
 
-/// Run both native backends once, retaining every original example and phase.
-fn measure(corpus: &SpecCorpus) -> Result<Vec<CaseReport>, String> {
+/// Run both native backends once per variant, retaining every example and phase.
+fn measure(corpus: &SpecCorpus, ending: LineEnding) -> Result<Vec<CaseReport>, String> {
     let parser = TreeSitterParser::new()
         .map_err(|error| format!("cannot load the CHAT grammar: {error}"))?;
     Ok(corpus
         .cases
         .iter()
-        .map(|case| CaseReport {
-            label: case.label.clone(),
-            tree_sitter: case
-                .input
-                .measure_with(|input, errors| parser.parse_chat_file_streaming(input, errors)),
-            re2c: case
-                .input
-                .measure_with(talkbank_parser_re2c::parser::parse_chat_file_to_model),
+        .map(|case| {
+            let input = case.input.with_line_ending(ending);
+            CaseReport {
+                label: case.label.clone(),
+                tree_sitter: input
+                    .measure_with(|input, errors| parser.parse_chat_file_streaming(input, errors)),
+                re2c: input.measure_with(talkbank_parser_re2c::parser::parse_chat_file_to_model),
+            }
         })
         .collect())
 }
@@ -61,7 +64,25 @@ fn measure(corpus: &SpecCorpus) -> Result<Vec<CaseReport>, String> {
 /// Produce the complete failure inventory and its verdict in the same pass.
 fn audit() -> Result<String, String> {
     let corpus = load_spec_corpus()?;
-    let reports = measure(&corpus)?;
+    let mut summaries = Vec::new();
+    let mut refusals = Vec::new();
+    for ending in LineEnding::ALL {
+        // Keep every transport variant's complete inventory, even if an
+        // earlier variant fails. A later success cannot erase that refusal.
+        match audit_variant(&corpus, ending) {
+            Ok(summary) => summaries.push(summary),
+            Err(refusal) => refusals.push(refusal),
+        }
+    }
+    if refusals.is_empty() {
+        Ok(summaries.join("\n"))
+    } else {
+        Err(refusals.join("\n"))
+    }
+}
+
+fn audit_variant(corpus: &SpecCorpus, ending: LineEnding) -> Result<String, String> {
+    let reports = measure(corpus, ending)?;
     let mut detected = 0;
     let mut not_required = 0;
     let mut equal_codes = 0;
@@ -78,16 +99,22 @@ fn audit() -> Result<String, String> {
                 "{}; required by {} at {:?}",
                 measured.detail(),
                 finding.diagnostic().code,
-                finding.diagnostic().location.span
+                finding
+                    .diagnostic()
+                    .location
+                    .span()
+                    .expect("located diagnostic")
             )),
             Detection::ToolFailure { backend, finding } => failures.push(format!(
                 "{}: {backend} tool failure {} at {:?}",
-                measured.label, finding.code, finding.location.span
+                measured.label,
+                finding.code,
+                finding.location.span().expect("located diagnostic")
             )),
         }
     }
     let summary = format!(
-        "{} example(s) over {} spec file(s); {detected} required detections satisfied, {} missing, {not_required} without tree-sitter errors, {} tool failures\n     {} legal-claim examples and {} not-implemented spec files INCLUDED\n     {equal_codes} equal code sets, {} different (informational only)",
+        "{ending:?}: {} example(s) over {} spec file(s); {detected} required detections satisfied, {} missing, {not_required} without tree-sitter errors, {} tool failures\n     {} legal-claim examples and {} not-implemented spec files INCLUDED\n     {equal_codes} equal code sets, {} different (informational only)",
         reports.len(),
         corpus.files_scanned,
         missing.len(),
@@ -204,8 +231,8 @@ fn participants_recovery_preserves_entries_and_fragment_locations() {
         .find(|error| error.code == ErrorCode::TrailingCommaInParticipants)
         .unwrap();
     assert_eq!(
-        diagnostic.location.span,
-        talkbank_model::Span::from_usize(comma, comma + 1)
+        diagnostic.location.span().expect("located diagnostic"),
+        talkbank_model::Span::new(comma, comma + 1)
     );
 }
 
@@ -238,7 +265,7 @@ fn blank_line_recovery_matches_for_each_spec_line_ending() {
             .into_vec()
             .into_iter()
             .filter(|error| error.code == ErrorCode::BlankLineNotAllowed)
-            .map(|error| error.location.span)
+            .map(|error| error.location.span().expect("located diagnostic"))
             .collect()
     }
     for example in spec.examples() {
@@ -281,13 +308,13 @@ fn malformed_tier_prefixes_report_the_complete_source_line() {
             .into_vec()
             .into_iter()
             .filter(|error| error.code == ErrorCode::MalformedTierHeader)
-            .map(|error| error.location.span)
+            .map(|error| error.location.span().expect("located diagnostic"))
             .collect();
         match example.claim {
             // The canonical parser now rejects these through E316. re2c owns
             // a lexer-level malformed-header token and retains E602 honestly.
             Claim::Violates | Claim::SubsumedBy(_) => {
-                assert_eq!(spans, vec![Span::from_usize(start, start + line.len())]);
+                assert_eq!(spans, vec![Span::new(start, start + line.len())]);
             }
             Claim::Legal => assert!(spans.is_empty()),
         }
@@ -322,7 +349,12 @@ fn glued_replacement_reports_its_own_opening_token() {
                     ErrorCode::UnparsableContent | ErrorCode::ContentAnnotationParseError
                 )
             })
-            .map(|error| (error.code.to_string(), error.location.span))
+            .map(|error| {
+                (
+                    error.code.to_string(),
+                    error.location.span().expect("located diagnostic"),
+                )
+            })
             .collect();
         result.sort_by(|a, b| a.0.cmp(&b.0));
         result
@@ -345,7 +377,7 @@ fn glued_replacement_reports_its_own_opening_token() {
             let start = source.find("[: foo]").expect("authored replacement opener");
             vec![(
                 ErrorCode::ContentAnnotationParseError.to_string(),
-                Span::from_usize(start, start + 2),
+                Span::new(start, start + 2),
             )]
         };
         assert_eq!(diagnostics(&re2c, source), expected);

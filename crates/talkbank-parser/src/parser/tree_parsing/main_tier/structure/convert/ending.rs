@@ -20,12 +20,13 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{Absence, Never};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NodeSlot, PostcodeNode, SlotView, SourceBound, SourceField,
-    SourceSlotView, UtteranceEndNode,
+    AsRawNode, NodeSlot, PostcodeNode, SlotView, SourceBound, SourceField, SourceSlotView,
+    UtteranceEndNode,
 };
 use crate::model::{Bullet, Postcode, Terminator};
 use crate::parser::tree_parsing::media_bullet::parse_bullet_node;
 use crate::parser::tree_parsing::postcode::parse_postcode_node;
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 
 use super::super::super::content::{
@@ -59,8 +60,7 @@ pub(super) fn parse_utterance_end<'tree>(
     errors: &impl ErrorSink,
 ) -> Result<UtteranceEndTail, crate::CstFailure> {
     let source = typed.source();
-    let grammar = crate::parser::typed_cst::canonical_grammar()?;
-    let associated = typed.extract_admitted(grammar)?;
+    let associated = typed.extract_canonical()?;
     let end = associated.children();
 
     // child_0 (`terminator` supertype, optional). A `Present` choice maps through
@@ -95,7 +95,7 @@ pub(super) fn parse_utterance_end<'tree>(
     // from the OLD flat `element.child_0` to the group's `child_1`. Every other
     // element/group slot state is skipped (the safe default, matching the removed
     // loop which acted only on `postcode`-kind children). Error or optional
-    // absence yields no postcodes; Missing is diagnosed without inventing a code.
+    // absence yields no postcodes; compiled admission excludes MISSING postcodes.
     let mut postcodes: Vec<Postcode> = Vec::new();
     match associated
         .field_child_1()
@@ -104,7 +104,7 @@ pub(super) fn parse_utterance_end<'tree>(
         .map(|slot| slot.view())
     {
         Some(SourceSlotView::Present(final_codes)) => {
-            let associated_codes = final_codes.read()?.extract_admitted(grammar)?;
+            let associated_codes = final_codes.read()?.extract_canonical()?;
             let codes = associated_codes.children();
             surface_final_codes_group(codes.child_0.slot(), source, errors);
             // Both generated sequence shapes project the same source-bound
@@ -141,14 +141,6 @@ pub(super) fn parse_utterance_end<'tree>(
                 }
             }
             surface_main_tier_sink(codes, source, errors);
-        }
-        Some(SourceSlotView::Missing(missing)) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                source,
-                errors,
-                "utterance_end",
-            );
         }
         Some(SourceSlotView::Error(_)) | None => {}
     }
@@ -243,7 +235,7 @@ pub(super) fn parse_utterance_end<'tree>(
 /// Preserve the original region-specific displaced-node reporting independently
 /// of source-bound semantic decoding.
 fn surface_final_codes_group<'tree, G: MainTierBodyCarrier<'tree>, A: Absence>(
-    group_slot: &NodeSlot<'tree, G, Never, Never, A>,
+    group_slot: &NodeSlot<G, Never, tree_sitter::Node<'tree>, Never, A>,
     source: &str,
     errors: &impl ErrorSink,
 ) {
@@ -258,7 +250,12 @@ fn surface_final_codes_group<'tree, G: MainTierBodyCarrier<'tree>, A: Absence>(
 /// Admit a selected leaf's range before passing its source-bound token to the
 /// decoder. Ordinary recovery remains absence; source failure propagates.
 fn decode_postcode_slot<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, PostcodeNode<'tree>>>,
+    slot: SourceField<
+        '_,
+        'tree,
+        '_,
+        crate::generated_traversal::NonMissingKindSlot<'tree, PostcodeNode<'tree>>,
+    >,
     errors: &impl ErrorSink,
 ) -> Result<Option<Postcode>, crate::CstFailure> {
     Ok(match slot.view() {
@@ -266,15 +263,6 @@ fn decode_postcode_slot<'tree>(
             ParseOutcome::Parsed(postcode) => Some(postcode),
             ParseOutcome::Rejected => None,
         },
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "postcode",
-            );
-            None
-        }
         SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
     })
 }

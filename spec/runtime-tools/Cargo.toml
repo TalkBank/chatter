@@ -17,9 +17,12 @@ tree-sitter = { workspace = true }
 tree-sitter-talkbank = { workspace = true }
 
 generators = { path = "../tools" }
-talkbank-spec-vocabulary = { workspace = true }
+talkbank-spec-vocabulary = { workspace = true, features = ["model-runtime"] }
 talkbank-model = { workspace = true }
 talkbank-parser = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"
 
 # Command behavior belongs in the library and integration-test targets. These
 # executables themselves contain no tests, so exclude their empty harnesses.

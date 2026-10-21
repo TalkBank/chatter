@@ -7,27 +7,51 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
+//!
+//! **Recovery arms.** [`parse_mor_tier_inner`] takes a
+//! [`HealthyTier`]: a tier tree-sitter flagged `has_error() == false`, which
+//! means no descendant is an ERROR or MISSING node. The dispatcher admits
+//! every `%mor` tier through [`TierAdmission`](crate::parser::tier_parsers::admission::TierAdmission)
+//! before parsing (the whole-tier recovery walk reports a recovery carrier
+//! and substitutes an empty placeholder), and every fragment route wraps its
+//! input in a document and takes the same dispatcher. So a slot here in the
+//! `Missing` or `Error` state contradicts the admission; each such arm
+//! reports [`CstFailure::RecoveryInsideHealthyTier`] and rejects the tier,
+//! and none builds a CHAT diagnostic. Confirmed, not established, by
+//! measurement: a sweep of 1,662 single-edit mutations of a `%mor` line
+//! (2026-10-19, coverage drive batch 2) produced none of the MISSING or
+//! unexpected-node messages these arms used to build, and the slot-state
+//! census over the repository corpora (2026-09-09) saw `mor_word.child_2`,
+//! `mor_feature.child_1` and `mor_contents.child_1` in a recovery state only
+//! in trees that carry `has_error()`. An `Absent` required position is a
+//! different walk fault and reports [`CstFailure::AbsentRequiredPosition`].
+//! The CHAT diagnostics this file still builds are E305 for a tier whose
+//! grammar-optional terminator is absent (reachable and pinned) and E331 for
+//! a displaced node the walk's sink hands `surface_source_displaced`.
 
 use crate::generated_traversal::{
     Absence, AsRawNode, KindSlot, MorContentNode, MorContentsChild0Choice,
     MorContentsChild0MorContentChild2Child1Choice, MorContentsNode, MorDependentTierNode, Never,
-    NoChild, Ranged, ReadableSlot, SourceBound, SourceSlice, WhitespacesNode,
+    NoChild, Ranged, ReadableSlot, SlotView, SourceBound, SourceSlice, WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::structure::terminator::{
     RangedTerminatorChoice, terminator_from_new_choice,
 };
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::content::Terminator;
 use talkbank_model::model::{Mor, MorTier, MorTierType};
 use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, Span,
 };
 use tree_sitter::Node;
 
 use super::item::parse_mor_content;
-use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
+use crate::node_types::MOR_CONTENTS;
+use crate::parser::tier_parsers::admission::{HealthyTier, recovery_inside_healthy_tier};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::{CstFailure, GeneratedPosition, report_cst_failure};
 
 /// Converts `%mor` tier content into a `MorTier`.
 ///
@@ -61,14 +85,14 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_dis
 /// slot is classified here; prefix, separator and newline retain their existing
 /// recovery policy rather than gaining lexical checks from range admission.
 pub fn parse_mor_tier_inner<'tree>(
-    typed: SourceBound<'tree, '_, MorDependentTierNode<'tree>>,
+    tier: HealthyTier<'tree, '_, MorDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<MorTier> {
+    let typed = tier.node();
     let source = typed.source();
     let node = typed.raw_node();
     let span = span_of(node);
-    let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into));
+    let extraction = crate::parser::typed_cst::extract_envelope(typed);
     let Ok(children) =
         crate::parser::typed_cst::report_admission(extraction, typed.raw_node(), source, errors)
     else {
@@ -86,45 +110,8 @@ pub fn parse_mor_tier_inner<'tree>(
     else {
         return ParseOutcome::Rejected;
     };
-    match &children.children().child_2.slot {
-        ReadableSlot::Present(contents) => parse_mor_contents_body(*contents, span, errors),
-        ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_dependent_tier",
-            ));
-            ParseOutcome::Rejected
-        }
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "mor_dependent_tier",
-            );
-            ParseOutcome::Rejected
-        }
-        ReadableSlot::Unexpected(never) => match *never {},
-        ReadableSlot::Absent(NoChild) => {
-            // The loud signal for a grammar that no longer matches the
-            // generator, kept in its own words: the generic reporter would
-            // say "Unexpected 'mor_dependent_tier' in mor_dependent_tier".
-            errors.report(
-                ParseError::new(
-                    ErrorCode::TreeParsingError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-                    "CST structure mismatch in mor_dependent_tier: no mor_contents child. Grammar may have changed!",
-                )
-                .with_suggestion(
-                    "Check tree-sitter grammar for 'mor_dependent_tier' - expected a mor_contents child",
-                ),
-            );
-            ParseOutcome::Rejected
-        }
-    }
+    let SlotView::Present(contents) = children.children().child_2.slot.view();
+    parse_mor_contents_body(*contents, span, errors)
 }
 
 /// Decodes the `mor_contents` body: either items (with an optional trailing
@@ -140,8 +127,8 @@ fn parse_mor_contents_body<'tree>(
 ) -> ParseOutcome<MorTier> {
     let source = typed.source();
     let mor_contents_node = typed.raw_node();
-    let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into))
+    let extraction = typed
+        .extract_canonical()
         .and_then(|children| children.admit_ranges().map_err(Into::into));
     let Ok(contents) =
         crate::parser::typed_cst::report_admission(extraction, typed.raw_node(), source, errors)
@@ -152,20 +139,27 @@ fn parse_mor_contents_body<'tree>(
     let choice = match &contents.child_0.slot {
         ReadableSlot::Present(choice) => choice,
         ReadableSlot::Missing(missing) => {
-            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_contents");
+            recovery_inside_healthy_tier(missing.raw_node(), source, MOR_CONTENTS, errors);
             return ParseOutcome::Rejected;
         }
         ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_contents",
-            ));
+            recovery_inside_healthy_tier(bad.raw_node(), bad.source(), MOR_CONTENTS, errors);
             return ParseOutcome::Rejected;
         }
         ReadableSlot::Unexpected(never) => match *never {},
+        // The body choice is a required position; the walk cannot leave it
+        // empty (the grammar has no fail-closed partials), so this is the
+        // producer fault, not a terminator the tier lacks.
         ReadableSlot::Absent(NoChild) => {
-            report_missing_terminator(mor_contents_node, source, errors);
+            report_cst_failure(
+                mor_contents_node,
+                source,
+                CstFailure::AbsentRequiredPosition {
+                    rule: MOR_CONTENTS,
+                    position: GeneratedPosition::new("MorContentsChildren.child_0"),
+                },
+                errors,
+            );
             return ParseOutcome::Rejected;
         }
     };
@@ -185,11 +179,12 @@ fn parse_mor_contents_body<'tree>(
                         surface_source_displaced(&pair.unexpected, errors);
                     }
                     ReadableSlot::Error(bad) => {
-                        errors.report(unexpected_node_error(
+                        recovery_inside_healthy_tier(
                             bad.raw_node(),
                             bad.source(),
-                            "mor_contents",
-                        ));
+                            MOR_CONTENTS,
+                            errors,
+                        );
                         items.reject();
                     }
                     ReadableSlot::Missing(never) | ReadableSlot::Unexpected(never) => {
@@ -210,11 +205,12 @@ fn parse_mor_contents_body<'tree>(
                         decoded
                     }
                     ReadableSlot::Error(bad) => {
-                        errors.report(unexpected_node_error(
+                        recovery_inside_healthy_tier(
                             bad.raw_node(),
                             bad.source(),
-                            "mor_contents",
-                        ));
+                            MOR_CONTENTS,
+                            errors,
+                        );
                         items.reject();
                         None
                     }
@@ -292,7 +288,12 @@ fn finish_mor_tier(
     // site that builds the tier. If a second `%mor`-family tier ever lands, the
     // answer is a sum type carrying its own node, on the `PhoBodyTier` model,
     // not a re-added argument that a caller can get wrong.
-    ParseOutcome::Parsed(MorTier::new(MorTierType::Mor, items, typed_terminator).with_span(span))
+    ParseOutcome::Parsed(MorTier::new(
+        span,
+        MorTierType::Mor,
+        items,
+        typed_terminator,
+    ))
 }
 
 /// Reports the same `MissingTerminator` diagnostic the removed hand-walk
@@ -301,12 +302,8 @@ fn report_missing_terminator(mor_contents_node: Node, source: &str, errors: &imp
     errors.report(ParseError::new(
         ErrorCode::MissingTerminator,
         Severity::Error,
-        SourceLocation::from_offsets(mor_contents_node.start_byte(), mor_contents_node.end_byte()),
-        ErrorContext::new(
-            source,
-            mor_contents_node.start_byte()..mor_contents_node.end_byte(),
-            "mor_dependent_tier",
-        ),
+        DiagnosticLocation::new(span_of(mor_contents_node)),
+        ErrorContext::new(source, span_of(mor_contents_node), "mor_dependent_tier"),
         "%mor tier is missing a terminator".to_string(),
     ));
 }
@@ -318,36 +315,28 @@ fn report_missing_terminator(mor_contents_node: Node, source: &str, errors: &imp
 /// - `Present`: delegate to [`parse_mor_content`]; a `Rejected` item marks the
 ///   whole tier failed (no fabricated default) rather than being dropped
 ///   silently.
-/// - `Missing`: diagnose and irreversibly reject the collection.
+/// - `Missing`: excluded by compiled admission of this composite kind.
 /// - `Unexpected`: uninhabited for this kind-selected slot.
-/// - `Error`: report recovery and reject the whole tier.
+/// - `Error`: contradicts the tier's admission; report the fault and reject
+///   the whole tier.
 /// - `Absent`: no child at this position; nothing reported, nothing pushed.
 fn push_mor_content_item<'tree, 'source>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, MorContentNode<'tree>>, Ranged<'source>>,
+    slot: &crate::generated_traversal::NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, MorContentNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
     items: &mut MorItems,
 ) {
     let item_node = match slot {
         ReadableSlot::Present(item) => *item,
         ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_contents",
-            ));
+            recovery_inside_healthy_tier(bad.raw_node(), bad.source(), MOR_CONTENTS, errors);
             items.reject();
             return;
         }
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "mor_contents",
-            );
-            items.reject();
-            return;
-        }
+        ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Absent(NoChild) => return,
     };
@@ -368,12 +357,14 @@ fn push_mor_content_item<'tree, 'source>(
 
 /// A `whitespaces` position (between two items, before a trailing
 /// terminator, or after the whole body): purely structural, so Present and
-/// Absent need nothing, and a reported recovery marks the whole tier failed,
-/// as it does for an item or a terminator.
+/// Absent need nothing, and a recovery state contradicts the tier's
+/// admission and marks the whole tier failed, as it does for an item or a
+/// terminator.
 fn require_structure<'tree, 'source, A: Absence>(
     slot: &ReadableSlot<
         SourceBound<'tree, 'source, WhitespacesNode<'tree>>,
         SourceBound<'tree, 'source, WhitespacesNode<'tree>>,
+        SourceSlice<'tree, 'source>,
         Never,
         A,
     >,
@@ -383,15 +374,16 @@ fn require_structure<'tree, 'source, A: Absence>(
     match slot {
         ReadableSlot::Present(_) | ReadableSlot::Absent(_) => {}
         ReadableSlot::Missing(missing) => {
-            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_contents");
+            recovery_inside_healthy_tier(
+                missing.raw_node(),
+                missing.source(),
+                MOR_CONTENTS,
+                errors,
+            );
             items.reject();
         }
         ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_contents",
-            ));
+            recovery_inside_healthy_tier(bad.raw_node(), bad.source(), MOR_CONTENTS, errors);
             items.reject();
         }
         ReadableSlot::Unexpected(never) => match *never {},
@@ -401,10 +393,9 @@ fn require_structure<'tree, 'source, A: Absence>(
 /// Decode the terminator inside the optional trailing `(whitespaces,
 /// terminator)` group of the items alternative. `Present` maps through the
 /// SHARED exhaustive [`terminator_from_new_choice`] (the same 13-arm mapping
-/// `convert/ending.rs` and `tier_parsers/wor.rs` use); the recovery arms
-/// retain the structural whitespace policy since the removed loop applied the
-/// SAME uniform `check_not_missing`-first gate to the terminator child as to
-/// every other child in `mor_contents`.
+/// `convert/ending.rs` and `tier_parsers/wor.rs` use); a recovery state
+/// contradicts the tier's admission, as at every other position in
+/// `mor_contents`.
 fn decode_mor_terminator<'tree, 'source>(
     slot: &KindSlot<
         'tree,
@@ -418,16 +409,17 @@ fn decode_mor_terminator<'tree, 'source>(
         ReadableSlot::Present(choice) => Some(terminator_from_new_choice(choice)),
         ReadableSlot::Missing(missing) => {
             let missing = missing.source_slice();
-            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_contents");
+            recovery_inside_healthy_tier(
+                missing.raw_node(),
+                missing.source(),
+                MOR_CONTENTS,
+                errors,
+            );
             items.reject();
             None
         }
         ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_contents",
-            ));
+            recovery_inside_healthy_tier(bad.raw_node(), bad.source(), MOR_CONTENTS, errors);
             items.reject();
             None
         }

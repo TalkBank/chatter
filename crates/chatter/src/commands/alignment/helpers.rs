@@ -101,16 +101,22 @@ mod tests {
 
     #[test]
     fn extraction_helpers_return_none_for_out_of_bounds() {
-        let main = MainTier::new("CHI", vec![], None);
+        let main = MainTier::new(
+            talkbank_model::MainTierLocations::UNLOCATED,
+            "CHI",
+            vec![],
+            None,
+        );
         let mor = MorTier::new_mor(
+            talkbank_model::Location::Unlocated,
             vec![],
             talkbank_model::Terminator::Period {
-                span: talkbank_model::Span::DUMMY,
+                location: talkbank_model::Location::Unlocated,
             },
         );
-        let gra = GraTier::new_gra(vec![]);
-        let pho = PhoTier::new_pho(vec![]);
-        let sin = SinTier::new(vec![]);
+        let gra = GraTier::new_gra(talkbank_model::Location::Unlocated, vec![]);
+        let pho = PhoTier::new_pho(talkbank_model::Location::Unlocated, vec![]);
+        let sin = SinTier::new(talkbank_model::Location::Unlocated, vec![]);
 
         assert_eq!(get_main_content_text(&main, 0), None);
         assert_eq!(get_mor_item_text(&mor, 0), None);
@@ -121,11 +127,20 @@ mod tests {
 
     #[test]
     fn extraction_helpers_return_serialized_values() {
-        let gra = GraTier::new_gra(vec![GrammaticalRelation::new(1, 2, "SUBJ")]);
-        let pho = PhoTier::new_pho(vec![PhoItem::Word("hɛˈloʊ".into())]);
-        let sin = SinTier::new(vec![SinItem::Token(
-            SinToken::new("g:ball:dpoint").expect("nonempty test token"),
-        )]);
+        let gra = GraTier::new_gra(
+            talkbank_model::Location::Unlocated,
+            vec![GrammaticalRelation::new(1, 2, "SUBJ")],
+        );
+        let pho = PhoTier::new_pho(
+            talkbank_model::Location::Unlocated,
+            vec![PhoItem::Word("hɛˈloʊ".into())],
+        );
+        let sin = SinTier::new(
+            talkbank_model::Location::Unlocated,
+            vec![SinItem::Token(
+                SinToken::new("g:ball:dpoint").expect("nonempty test token"),
+            )],
+        );
 
         assert_eq!(get_gra_relation_text(&gra, 0), Some("1|2|SUBJ".to_string()));
         assert_eq!(get_pho_form_text(&pho, 0), Some("hɛˈloʊ".to_string()));

@@ -18,14 +18,12 @@
 //!
 //! # The bootstrap, stated because it is a real property
 //!
-//! This generator does NOT link `talkbank-model`, so it can rebuild the enum
-//! from the registry even when the committed enum does not compile. What it
-//! cannot do is repair a generator bug: the recovery from generated source
-//! that will not build is `git checkout` of the generated file, exactly as for
-//! `generated_diagnostic_kind.rs`. The registry's own types make the ordinary
-//! authoring mistakes unreachable, which is why that is an acceptable
-//! backstop rather than the main defence: [`VariantName`] cannot hold a token
-//! that is not an identifier, and [`Rustdoc`] cannot hold an empty one.
+//! `just model-sources-gen` selects the source-only package without the
+//! vocabulary's `model-runtime` feature. It can rebuild the enum even when
+//! committed model sources do not compile. A generator bug still needs a source
+//! repair; restoring generated output is not a substitute for fixing its owner.
+//! [`VariantName`] rejects non-identifiers and [`Rustdoc`] rejects empty
+//! documentation at the registry boundary.
 //!
 //! [`VariantName`]: talkbank_spec_vocabulary::registry::VariantName
 //! [`Rustdoc`]: talkbank_spec_vocabulary::registry::Rustdoc

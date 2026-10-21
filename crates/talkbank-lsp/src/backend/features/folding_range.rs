@@ -20,6 +20,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use talkbank_model::Span;
 use tower_lsp::lsp_types::*;
 
 use crate::backend::utils::LineIndex;
@@ -42,10 +43,14 @@ pub fn folding_range(
     let index = LineIndex::new(document);
 
     // Track the byte offset of the first utterance for the header fold.
-    let mut first_utterance_start: Option<u32> = None;
+    let mut first_utterance_start: Option<usize> = None;
 
     for utterance in chat_file.utterances() {
-        let main_start = utterance.main.span.start;
+        // An utterance with no source location has nothing to fold.
+        let Some(main_span) = utterance.main.location.span() else {
+            continue;
+        };
+        let main_start = main_span.start();
 
         if first_utterance_start.is_none() {
             first_utterance_start = Some(main_start);
@@ -57,7 +62,7 @@ pub fn folding_range(
         }
 
         let main_line = index.offset_to_position(main_start).line;
-        let block_end = utterance_block_end(utterance);
+        let block_end = utterance_block_end(utterance, main_span);
         let end_line = index.offset_to_position(block_end).line;
 
         if end_line > main_line {
@@ -114,13 +119,14 @@ pub fn folding_range(
 /// Returns the byte offset of the end of an utterance block (main tier +
 /// all dependent tiers). Falls back to the main tier end when no dependent
 /// tiers are present.
-fn utterance_block_end(utterance: &talkbank_model::model::Utterance) -> u32 {
+fn utterance_block_end(utterance: &talkbank_model::model::Utterance, main_span: Span) -> usize {
     utterance
         .dependent_tiers
         .iter()
-        .map(|t| t.tier.span().end)
+        .filter_map(|t| t.tier.location().span())
+        .map(|span| span.end())
         .max()
-        .unwrap_or(utterance.main.span.end)
+        .unwrap_or(main_span.end())
 }
 
 #[cfg(test)]

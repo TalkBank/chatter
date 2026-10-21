@@ -1,237 +1,81 @@
-# spec, CHAT Specification
+# Specification agent guidance
 
-**Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/spec/AGENTS.md)
 
-## Read the book first
+The [repository guidance](../AGENTS.md) governs workflow and publication.
+This file adds spec-specific ownership and review rules; it does not introduce
+automatic checks or replace the contributor documentation.
 
-The CONTRIBUTOR-facing documentation is authoritative and complete:
+## Canonical references
 
-- [`book/src/architecture/spec-system.md`](../book/src/architecture/spec-system.md),
-  what every field does, what is generated, and what checks what.
-- [`book/src/contributing/spec-workflow.md`](../book/src/contributing/spec-workflow.md),
-  the procedure, with every command written out.
+- [Spec System](../book/src/architecture/spec-system.md): schemas, claims,
+  generated artifacts and their acceptance limits.
+- [Spec Workflow](../book/src/contributing/spec-workflow.md): authoring,
+  bootstrap, regeneration and verification.
+- [Error Spec Format](docs/ERROR_SPEC_FORMAT.md): diagnostic taxonomy and
+  rules that types cannot express.
+- [Generator guidance](tools/AGENTS.md): implementation boundaries.
 
-Start any spec question with `just spec-status`, which derives its answers from
-the same code the gates use. This file carries only what is specific to working
-here as an agent; where it and the book overlap, the book wins.
+Use `just spec-status` when a live derived status is needed. Reuse retained
+source-bound results where appropriate; a status report is not the authority
+for changing a rule.
 
-## How This Works
+## Authored inputs and generated outputs
 
-Specs are the **single source of truth** for all CHAT grammar tests, parser
-tests, and error documentation. You never hand-edit generated test files.
+Specs own the examples and claims from which their registered tests, fixtures
+and error-reference pages are generated. They are not the source of every
+handwritten integration test or manual grammar case.
 
-```
-spec/codes/error-codes.toml ─┐   one entry per CODE: variant, rustdoc, kind, status
-spec/constructs/*.md         ├──► spec/tools generators
-spec/errors/*.md             ┤        ──► crates/talkbank-model/.../generated_error_code.rs (the ErrorCode enum)
-spec/tools/templates/        ┘        ──► crates/talkbank-model/.../generated_diagnostic_kind.rs
-                                      ──► grammar/test/corpus/generated/*.txt (membership from the snapshot)
-                                      ──► crates/.../integration/generated/*.rs (construct tests only)
-                                      ──► crates/.../error_corpus/validation_errors/ + manifest.json (EVERY example, claim-judged)
-                                      ──► docs/errors/*.md
-spec/observations/    ◄── spec-runtime-tools (regenerated FIRST; what each example emits, by stage)
-```
+- `spec/codes/error-codes.toml` defines diagnostic codes, variants, documentation,
+  kinds and implementation status. Spec files document a code; they do not
+  duplicate its registry metadata.
+- `spec/constructs/` holds valid fragment examples and reviewed expected CSTs.
+  Derive expectations from real parsing and inspect them against the intended
+  construct; do not invent trees or bless observed output without review.
+- `spec/errors/` holds diagnostic examples with explicit `violates`, `legal`
+  or `subsumed_by` claims. A legal claim means this rule does not fire, not
+  that every rule accepts the transcript.
+- `spec/tools/templates/` holds the fragment-wrapping templates. Follow the
+  canonical workflow's format; do not maintain a second schema example here.
+- `spec/observations/` records generated per-stage observations. Every changed
+  observation needs adjudication; it does not rewrite the intended claim.
 
-**A spec file DOCUMENTS a code; `spec/codes/error-codes.toml` DEFINES one.**
-Several spec files may describe one code (eleven do), so nothing about the code
-itself, its `ErrorCode` variant, its rustdoc, its `kind` or whether the
-validator enforces it, may live in a spec file. Writing `kind` or `status` in
-frontmatter is a load error naming the key.
+The generated artifact table in Spec System is derived from the owning
+registry. Do not keep another hand-maintained destination list here.
+`grammar/test/corpus/generated/` is generator-owned; unchanged files are
+retained and obsolete files are pruned only after generated-directory admission.
+It is **not wiped on every run**. The `.generated-output-dir` marker and
+ownership/link checks protect that operation.
+`grammar/test/corpus/manual/` is hand-maintained and never a generated
+destination. Never hand-edit generated outputs or redirect a generator into a
+shared authored tree.
 
-Regenerate with `just spec-gen`, and ask `just spec-check` whether the
-committed artifacts are current. One command covers every artifact; the
-destinations are constants in the registry (`spec/tools/src/artifacts.rs`), not
-arguments, so a generator cannot be aimed at the wrong tree.
+## Review and verification
 
-### Generated and hand-maintained tests live in SEPARATE trees
+Use the canonical recipes from the repository root: `just spec-gen` owns
+registered spec artifacts; `just spec-check` checks their currency without
+rewriting them. Changes to generated inputs follow the complete `just regen`
+workflow and affected behavioral verification described in the root guidance.
+Documentation-only edits need proportional documentation checks, not regeneration.
 
-```
-grammar/test/corpus/
-├── generated/   owned by the tree-sitter corpus artifact; DELETED IN FULL every run
-└── manual/      hand-maintained; no generator writes here
-```
+Keep the spec workspace distinct from the root Cargo workspace. Explicit
+manifest selection avoids running the wrong tests; the contributor workflow
+documents `cargo test --manifest-path spec/Cargo.toml --workspace`.
+Do not launch concurrent Cargo commands in the same workspace or interpret
+artifact currency as behavioral, feature-completeness or release acceptance.
 
-`tree-sitter test` recurses, and test names come from each file's `====`
-header rather than its path, so the split costs nothing and renames nothing.
+A fragment's authored `Expected CST` is not currently compared automatically
+with the emitter's parsed full-document CST. Review that correspondence
+explicitly. Generated tests and the observation snapshot are finite evidence,
+not proof of complete CHAT coverage.
 
-This is organization, not a rule to remember. The generator retains unchanged output and prunes obsolete files in its own
-directory. It **refuses to prune an existing directory lacking its
-`.generated-output-dir` marker**, conflicting or nested human ownership, and
-symlinked entries. Pointing `--output-dir` at a shared or hand-maintained tree fails
-loudly instead of deleting work. The marker file says the same thing in situ,
-so a reader who finds the directory does not need this page.
+When a grammar change alters which diagnostics an example emits, review its
+claim and rationale before changing either. Preserve valid controls and
+reviewed subsumption cases. Do not delete an example merely because its original
+diagnostic disappeared or change registry status to improve a count. Deferred
+implementation does not excuse contradicted legal/subsumption claims.
 
-Until 2026-07-29 both kinds of file shared one tree and were indistinguishable
-by content (both are `====`-headed corpus files), so "delete stale output"
-could only be implemented as "delete everything". That destroyed
-`manual/word_markers/marker_density.txt`, 1,468 lines mined from wild corpus
-data, twice in three days; both times it was caught only because a human read
-the diff. **Never hand-edit anything under `generated/`**, and put new
-hand-maintained tests in `manual/`.
-
-## Spec Locations
-
-| Location | Purpose |
-|----------|---------|
-| `spec/constructs/` | Valid CHAT examples with expected CSTs |
-| `spec/errors/` | Invalid (or boundary-legal) CHAT examples, each with a CLAIM |
-| → `grammar/test/corpus/generated/` | Generated tree-sitter tests (obsolete files pruned) |
-| `grammar/test/corpus/manual/` | Hand-maintained tree-sitter tests (never generated) |
-| → `crates/talkbank-parser-tests/tests/integration/generated/` | Generated Rust parser tests |
-| → `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/` | Validation fixtures + `manifest.json` (data-driven runner) |
-| → `docs/errors/` | Published error-reference pages; a registry artifact, gated |
-| → `spec/observations/` | Generated observation snapshot: what each example actually emits, by stage; a diff is adjudicated as intended or unintended, never regenerated blindly |
-
-## Adding a Test
-
-### 1. Create a spec file
-
-Put it in the right directory under `spec/constructs/` or `spec/errors/`:
-
-```
-spec/constructs/
-├── header/      # @-header examples
-├── main_tier/   # *SPK: line examples
-├── tiers/       # %mor, %gra, %sin, %wor etc.
-├── utterance/   # Full utterance (main + dependent tiers)
-└── word/        # Word-internal structure
-```
-
-### 2. Spec format (constructs)
-
-```markdown
-# example_name
-
-Description of what this tests.
-
-## Input
-
-```input_type
-*CHI:	hello .
-```
-
-## Expected CST
-
-```cst
-(main_tier ...)
-```
-
-## Metadata
-
-- **Level**: main_tier
-- **Category**: main_tier
-```
-
-The `input_type` in the code fence (e.g., `main_tier`, `standalone_word`,
-`utterance`) tells the generator which **template** to use for wrapping the
-fragment in a full CHAT document. Templates live in `spec/tools/templates/`.
-
-### 3. Spec format (errors)
-
-Declared data in `+++` TOML frontmatter, prose in the body:
-
-````markdown
-+++
-code = 'E999'
-name = 'Description of the condition'
-
-[[example]]
-level = 'word'          # word | utterance | tier | header | file; a fact about THIS example
-claim = 'violates'
-chat = '''
-@UTF8
-@Begin
-...invalid content...
-@End
-'''
-+++
-
-## Description
-
-Why this is not valid CHAT.
-````
-
-**The schema is the reference**, not this snippet:
-`talkbank_spec_vocabulary::frontmatter` carries every field with its type and
-its reason, and refuses an unrecognised key at load. `spec/docs/ERROR_SPEC_FORMAT.md`
-has the taxonomy and the handful of rules a type cannot state.
-
-### 4. Check templates
-
-The `input_type` must match a `.tera` template in `spec/tools/templates/`.
-If no template exists for your fragment type, create one. Templates wrap the
-fragment in valid CHAT scaffolding so `tree-sitter test` can parse it.
-
-Example (`spec/tools/templates/main_tier.tera`):
-```
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|test|CHI|||||Target_Child|||
-{{ input }}
-@End
-```
-
-### 5. Regenerate and verify
-
-```bash
-just spec-gen        # regenerate every artifact from the specs
-just spec-check      # or ask whether the committed copies are current
-
-cd grammar && tree-sitter test
-cargo build --workspace --all-targets --locked
-cargo test --workspace
-```
-
-## Key Commands
-
-```bash
-# Regenerate every artifact derived from spec/ (corpus tests, Rust test bodies,
-# validation fixtures + manifest, the DiagnosticKind registry)
-just spec-gen
-
-# Report staleness without writing anything. This is what the gate runs.
-just spec-check
-
-# (docs/errors/ is a spec-gen artifact; no separate command.)
-
-# Do the error specs' examples produce the codes they declare?
-just spec-validate-examples
-```
-
-## The tooling, and why this file does not list it
-
-`just --list` names every wired spec command with a one-line summary of the
-question it answers; `ls spec/*/src/bin` shows everything that exists. **This
-file used to carry its own table of binaries**, and it was one of FIVE
-hand-written copies across the tree that gave five different answers, one of
-them naming tools deleted months earlier. `spec/docs/ERROR_SPEC_FORMAT.md`
-carries the taxonomy (registry generators, artifact driver, reporters, corpus
-tooling, golden generators) that is worth writing down because it is not
-derivable; membership is derivable and so is not written down.
-
-The two that matter most here, because they are what you run:
-
-- `just spec-gen` / `just spec-check`: regenerate, or check, EVERY artifact
-  derived from `spec/`, from one registry that owns each destination.
-- `just spec-status`: what state the spec system is in, derived from the same
-  code the gates use.
-
-## Cross-Spec Consistency
-
-Error spec examples can be cross-referenced, the same `.cha` content may
-appear in multiple specs with different claims. When changing a
-grammar rule so that previously-unparsable content now parses:
-
-1. Regenerate: the observation snapshot records the new stage per example, and
-   corpus membership follows it (there is no authored `layer` to flip since R4)
-2. Audit `E316.md`: remove examples that no longer produce E316
-3. Run `just spec-gen` and review the diff
-4. Run the concrete verification commands from `book/src/contributing/dev-checks.md`
-
-## See Also
-- `spec/tools/AGENTS.md`: generator implementation details
-- `grammar/AGENTS.md`: grammar change workflow
-- `book/src/contributing/testing.md`: testing strategy
+Preserve unrelated dirty and staged work when a command fails. Investigate the
+failure and repair owned inputs; do not automatically revert or delete outputs.
+Publication and independent-operator acceptance remain separate from local
+generation and testing.

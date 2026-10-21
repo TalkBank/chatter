@@ -155,9 +155,9 @@ macro_rules! interned_newtype {
         impl $name {
             /// Create a new interned value.
             ///
-            /// The value is interned using the global interner, meaning repeated
-            /// calls with the same value will return Arc pointers to the same
-            /// allocation. This provides both memory efficiency and O(1) cloning.
+            /// Uses the selected global interner to reuse stored strings.
+            /// Concurrent first misses may return equal strings in different
+            /// allocations, so pointer identity is not an equality contract.
             pub fn new(value: impl AsRef<str>) -> Self {
                 let s = value.as_ref();
                 Self($interner_fn.intern(s))

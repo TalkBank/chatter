@@ -1,7 +1,7 @@
 # Install
 
 **Status:** Current
-**Last modified:** 2026-09-28 08:30 EDT
+**Last modified:** {{git-dates:page}}
 
 Everything here comes from the [latest
 release](https://github.com/TalkBank/chatter/releases/latest).
@@ -11,24 +11,25 @@ release](https://github.com/TalkBank/chatter/releases/latest).
 
 ## Chatter desktop app (recommended for most people)
 
-The Chatter app checks CHAT transcripts in an ordinary window: open a file, see
-the problems highlighted, fix them, and re-check. No terminal and no setup, and
-it updates itself when a new version comes out.
+The Chatter app checks CHAT transcripts in an ordinary window: choose a file,
+read its diagnostics, edit it in your usual transcript editor, then re-check.
+It does not edit transcripts itself. No terminal or separate CLI installation
+is needed. It offers updates for you to approve.
 
 ### macOS
 
-The Mac app is signed and notarized by Apple, so it opens normally (no security
-warnings).
+Official Mac releases are Developer ID signed and Apple-notarized. If macOS
+reports unexpected damage or an unverifiable download, stop and check that you
+have the intended release; do not disable system security to make it open.
 
 1. Download Chatter for your Mac:
-   - **Apple Silicon** (M1/M2/M3/M4, essentially every Mac sold since late
-     2020): **[Download Chatter for Apple
+   - **Apple Silicon** (an Apple M-series chip): **[Download Chatter for Apple
      Silicon](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-macos-apple-silicon.dmg)**.
    - **Intel** (older models): **[Download Chatter for Intel
      Mac](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-macos-intel.dmg)**.
 
-   Not sure which you have? Apple menu () then **About This Mac**: if it says
-   "Apple M...", it is Apple Silicon.
+   Not sure which you have? Choose **About This Mac** in the Apple menu: an
+   Apple chip uses Apple Silicon; an Intel processor uses the Intel download.
 2. Open the downloaded **`.dmg`** file.
 3. Drag **Chatter** onto the **Applications** folder in the window that appears.
 4. Open **Chatter** from your Applications folder (or Launchpad).
@@ -38,7 +39,9 @@ warnings).
 **[Download Chatter for
 Windows](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-windows-setup.exe)**
 and run the installer. Windows binaries are not code-signed yet, so SmartScreen
-may warn on first run: choose **More info**, then **Run anyway**.
+may warn on first run. Verify the source and selected release before deciding
+whether to proceed; follow your organization's software policy. Do not disable
+SmartScreen globally.
 
 ### Linux (Intel/AMD 64-bit, "x86_64")
 
@@ -51,6 +54,8 @@ package](https://github.com/TalkBank/chatter/releases/latest/download/Chatter-li
 (The desktop app is x86_64-only on Windows and Linux today; macOS has both
 Apple Silicon and Intel builds. The `chatter` command-line tool below also ships
 a Linux ARM build.)
+
+Continue with [your first desktop validation session](../chatter/user-guide/desktop-app.md#a-first-validation-session).
 
 ## `chatter`, the command-line tool (for programmers and automation)
 
@@ -70,16 +75,18 @@ Windows (PowerShell):
 irm https://github.com/TalkBank/chatter/releases/latest/download/chatter-installer.ps1 | iex
 ```
 
-Then run `chatter --help`. Full reference: [CLI
+Then run `chatter --version` and `chatter --help`, followed by the
+[practice tutorial](../chatter/user-guide/quick-start.md). Full reference: [CLI
 installation](../chatter/user-guide/installation.md) and [CLI
-Reference](../chatter/user-guide/cli-reference.md). `chatter` self-updates with
-`chatter update`.
+Reference](../chatter/user-guide/cli-reference.md). Official installer-based
+installations can use `chatter update`; source and package-manager installations
+must use their original installation method.
 
 ## `talkbank-lsp` language server (editor integration)
 
 For live CHAT validation, hover, go-to-definition, and cross-tier alignment
 inside an LSP-aware editor (Neovim, Emacs, Helix, Zed, VS Code, and others),
-install the standalone, code-signed language server:
+install the standalone language server. It is separate from the desktop app:
 
 macOS / Linux:
 
@@ -97,6 +104,11 @@ Or download the per-platform archive (`talkbank-lsp-<target>.tar.xz`, or `.zip`
 on Windows) from the release and point your editor's LSP client at the
 `talkbank-lsp` binary (it speaks LSP over stdio on `.cha` files, language id
 `chat`).
+
+Follow the [editor integration tutorial](../chatter/user-guide/editor-integration.md)
+to configure a client, check that it attached, and verify diagnostics after an
+edit. Running `talkbank-lsp` alone in a terminal does not open an editor: it
+waits for protocol messages on standard input.
 
 Editor quick fixes do not supply missing participant names, roles or languages.
 Enter those facts yourself: an undeclared speaker or missing/empty header does

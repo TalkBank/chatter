@@ -10,7 +10,6 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 use crate::editor_target::editor_target_span;
-use talkbank_model::Span;
 use talkbank_model::model::ChatFile;
 use talkbank_parser::node_types::{
     GRA_CONTENTS, GRA_DEPENDENT_TIER, GRA_RELATION, MOR_CONTENT, MOR_CONTENTS, MOR_DEPENDENT_TIER,
@@ -138,8 +137,8 @@ fn find_participant_definition_in_tree(
                 return Some(Location {
                     uri: uri.clone(),
                     range: Range {
-                        start: utils::offset_to_position(doc, code_node.start_byte() as u32),
-                        end: utils::offset_to_position(doc, code_node.end_byte() as u32),
+                        start: utils::offset_to_position(doc, code_node.start_byte()),
+                        end: utils::offset_to_position(doc, code_node.end_byte()),
                     },
                 });
             }
@@ -276,7 +275,7 @@ fn find_utterance_at_position_with_index<'a>(
     doc: &str,
     position: Position,
 ) -> Option<(usize, &'a talkbank_model::model::Utterance)> {
-    let offset = utils::position_to_offset(doc, position) as u32;
+    let offset = utils::position_to_offset(doc, position);
     for (idx, utterance) in chat_file.utterances().enumerate() {
         if utterance_contains_offset(utterance, offset) {
             return Some((idx, utterance));
@@ -298,20 +297,25 @@ fn find_main_tier_word_location(
     Some(Location {
         uri: uri.clone(),
         range: Range {
-            start: utils::offset_to_position(doc, span.start),
-            end: utils::offset_to_position(doc, span.end),
+            start: utils::offset_to_position(doc, span.start()),
+            end: utils::offset_to_position(doc, span.end()),
         },
     })
 }
 
 /// Return `true` when an absolute byte offset falls inside an utterance span.
-fn utterance_contains_offset(utterance: &talkbank_model::model::Utterance, offset: u32) -> bool {
-    let span_contains = |span: Span| offset >= span.start && offset <= span.end;
-    span_contains(utterance.main.span)
+fn utterance_contains_offset(utterance: &talkbank_model::model::Utterance, offset: usize) -> bool {
+    // An unlocated tier contains no offset.
+    let span_contains = |location: talkbank_model::Location| {
+        location
+            .span()
+            .is_some_and(|span| offset >= span.start() && offset <= span.end())
+    };
+    span_contains(utterance.main.location)
         || utterance
             .dependent_tiers
             .iter()
-            .any(|tier| span_contains(tier.tier.span()))
+            .any(|tier| span_contains(tier.tier.location()))
 }
 
 #[cfg(test)]

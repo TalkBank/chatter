@@ -1,245 +1,103 @@
-# Grammar, Tree-sitter Grammar for CHAT
+# Grammar agent guidance
 
 **Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/grammar/AGENTS.md)
 
-## Overview
-Tree-sitter grammar definition for CHAT (`grammar.js`) plus generated parser and corpus tests.
-Grammar changes require regeneration and re-running tests.
+The [repository guidance](../AGENTS.md) owns safety, verification and publication
+policy. This file adds grammar-specific boundaries; it does not define another
+gate or release workflow.
 
-## Mandatory Workflow (Do First)
-If `grammar.js` is modified, always do this before debugging parser behavior or trusting validation output:
-1. `tree-sitter generate`
-2. `tree-sitter test`
-3. Re-run relevant Rust-side checks:
-   - `cargo test -p talkbank-parser`
-   - `cargo test -p talkbank-parser-tests`
-4. Re-run real-file CLI validation for the affected syntax path
+## Read before changing grammar or generated consumers
 
-Do not draw conclusions from parser output until regeneration has been done.
+- [Grammar Workflow](../book/src/contributing/grammar-workflow.md): regeneration,
+  pinned traversal producer, consumer migration and evidence limits.
+- [Spec Workflow](../book/src/contributing/spec-workflow.md): authored examples,
+  claims, generated fixtures and observation review.
+- [Dev Checks](../book/src/contributing/dev-checks.md): focused feedback and
+  final publication checks.
+- [Setup](../book/src/contributing/setup.md): toolchain and Node prerequisites.
 
-## Critical Rules
+## Source and output ownership
 
-1. NEVER edit `src/parser.c` directly; it is generated from `grammar.js`.
-2. NEVER hand-edit `test/corpus/`; it is generated from upstream specs.
-3. The reference corpus in `corpus/reference/` must remain at 100% parser equivalence.
-4. If verification fails and a fix is not immediate, revert the grammar change before proceeding.
+`grammar.js` owns syntax. The symbol registry owns shared character sets.
+Generated parser, node-type, traversal, bridge and inventory outputs must be
+regenerated from their owners, never repaired by hand.
 
-### Stop Conditions
-- If `tree-sitter test` fails, stop and triage diffs before continuing.
-- If Rust parser tests fail, stop and fix parser/model drift before continuing.
-- If `cargo test -p talkbank-parser-tests` fails, stop and fix parser-equivalence drift before continuing.
-- Do not update corpus expectations automatically; only update after confirming intended behavior.
-- Keep `grammar.js` and generated artifacts (`src/parser.c`, `grammar.json`, `node-types.json`) synchronized in the same change.
+| Path | Owner |
+| --- | --- |
+| `src/parser.c`, `src/grammar.json`, `src/node-types.json` | Tree-sitter generation from `grammar.js` |
+| `src/generated_symbol_sets.js` | `spec/symbols/symbol_registry.json` through `just symbols-gen` |
+| `test/corpus/generated/` | Authored specs through `just spec-gen` |
+| `test/corpus/manual/` | Hand-maintained grammar tests; no spec generator owns this directory |
+| `../crates/talkbank-parser/src/generated_traversal.rs` and `bindings/rust/tsgu_language_metadata.c` | The pinned traversal recipe |
+| `../crates/talkbank-parser-tests/src/conformance/inventory.rs` | `just conformance-gen` from the current traversal |
 
-## Prerequisites
+Whole-directory generated owners retain unchanged files and prune obsolete
+ones through checked ownership. Do not clear `test/corpus/`, remove ownership
+markers or put authored work in generated destinations. The spec system
+requires its `.generated-output-dir` marker and refuses conflicting human
+ownership and linked entries.
 
-**Node.js** at the version pinned in `.nvmrc`. Newer Node releases
-periodically break `tree-sitter` native module compilation (V8 header
-toolchain requirements outpace the binding). An `.nvmrc` file is
-provided:
+## Regeneration and verification
 
-```bash
-nvm use          # Reads .nvmrc
-```
+After a grammar/spec/registry implementation change, use the root workflow's
+consolidated `just regen` and relevant tests. The book explains the dependency
+steps; do not maintain a second hand-copied sequence here. Documentation-only
+edits do not require rebuilding an unchanged parser.
 
-**Python** for `node-gyp`. Newer Python releases may introduce syntax
-changes that break gyp scripts. If your system `python3` is too new,
-set `NODE_GYP_FORCE_PYTHON` to point at a supported Python in your
-shell profile.
+Generate the parser before relying on behavior after a `grammar.js` change:
+`tree-sitter test` alone does not detect stale generated parser source. Keep
+the grammar, generated artifacts, typed consumers and reviewed spec changes in
+one coherent change. Inspect the observation snapshot rather than treating
+regeneration as approval of new output.
 
-CI pins the Node version via `actions/setup-node`.
+Traversal generation uses the existing recipe with a clean generator checkout
+at `tsgu-revision`. It produces both the Rust traversal and C metadata bridge.
+Use the [canonical procedure](../book/src/contributing/grammar-workflow.md#3-regenerate-the-typed-traversal),
+not raw stdout redirection or an assumed build-directory executable. A generator
+API change requires consumer migration even if the grammar hashes are unchanged.
+Do not infer producer currency from grammar-hash checks alone.
 
-## Key Commands
-```bash
-tree-sitter generate
-tree-sitter test
-tree-sitter parse path/to/file.cha
-```
+**Improve the generator when Chatter would benefit.** The typed traversal and
+its C bridge come from tree-sitter-grammar-utils (tsgu). When a consumer needs
+a capability the generated module lacks (a descriptor, a proof, a slot shape,
+an accessor), the fix belongs in tsgu, not in a hand edit of generated output
+and not in a consumer-side workaround that re-derives what the generator
+knows. Order matters, because the generator stamps its own revision into the
+module header: commit tsgu, pin `tsgu-revision`, regenerate both artifacts
+through the owning recipe, then commit Chatter with its migrated consumers.
 
-## Mandatory 4-Step Verification Sequence
+Retain real spec/reference workflows, parser equivalence and roundtrip checks
+for affected contracts. Passing a finite corpus is not a proof of all parser
+states or complete format support. Confirm selected tests actually ran.
 
-Run in this order after any `grammar.js` change:
+## Design and diagnosis
 
-1. `cd grammar && tree-sitter generate`
-2. `cd grammar && tree-sitter test`
-3. `cargo test -p talkbank-parser`
-4. `cargo test -p talkbank-parser-tests`
+- Keep whitespace explicit. Structural word markers are distinct CST children;
+  the symbol registry owns their exclusions from `word_segment`.
+- Consume generated typed traversal and associated source capabilities in
+  production lowering. Do not recreate a raw kind-walking parser or pair nodes
+  with independently supplied source strings.
+- Preserve genuine recovery states. Source identity, readable ranges and
+  grammar-kind admission prove different things; none alone proves validity or
+  presence of every required child.
+- For closed header vocabularies, typed recognition plus an explicit unsupported
+  value can preserve recoverable input for a specific diagnostic. Do not
+  fabricate a default value or change a spec claim merely to match output.
+- When a syntax change changes diagnostic behavior, review the affected error
+  specs and snapshot together against the intended rule. A changed parser result
+  does not automatically authorize deleting an example or relabeling its claim.
 
-If any step fails, stop and fix the underlying issue before continuing. Do not auto-update expectations to force green tests.
+On failure, preserve the checkout and logs, identify the cause and repair the
+coherent batch. Do not automatically revert, reset, stash or discard another
+contributor's work. Reverting a reviewed change, when authorized, also requires
+restoring its generated consumers consistently. Publication remains separate.
 
-## Generated Artifacts
-All files in `src/` and `test/corpus/` are generated. Never edit them manually.
+## Design references
 
-- **`test/corpus/`**: regenerated by `just spec-gen`, which wipes the
-  directory and recreates all files from `spec/constructs/` and `spec/errors/`.
-  To add or modify grammar tests, edit the spec files in `spec/`, then run the
-  current `spec/tools` generator commands.
-- **`src/parser.c`**, **`src/grammar.json`**, **`src/node-types.json`**: regenerated by `tree-sitter generate`
-- **`src/generated_symbol_sets.js`**: regenerated by `just symbols-gen` (from repo root)
-- **`test/corpus/`**: regenerated by `just spec-gen` (`just spec-check` reports staleness without writing)
-- **`crates/talkbank-parser/src/generated_traversal.rs`**: the single canonical typed CST traversal module, regenerated by `tree-sitter-grammar-utils` (see below; the pre-migration OLD/NEW module pair was collapsed to this one in the 2026-07 migration)
-
-## External Dependency: tree-sitter-grammar-utils
-
-The `generated_traversal.rs` file (typed CST traversal with `NodeSlot` fields) is
-generated by the `tree-sitter-grammar-utils` tool.
-**This tool is not yet published**: regeneration requires a local checkout, whose
-location the maintainer can point you at.
-
-**Purpose (binding architectural rule, see the root `AGENTS.md` "CST Traversal
-Rules"): this generated typed traversal module (free `extract_*` functions over a
-closed `NodeSlot` enum) exists to DRIVE the production parser**, exhaustively and without drift. Its `NodeSlot`
-(`Present`/`Missing`/`Error`/`Unexpected`/`Absent`) makes ERROR/MISSING handling
-mandatory at every child position, so the parser can never silently drop a
-recovery node and there is nowhere for ERROR-text-classification to live. It was
-created for this on 2026-03-23 but historically never wired into production (only
-a `TestTraversal` stub ever implemented it, in the test crate), and the production
-parser hand-walked `node.kind()` strings, which is the root of the recurring
-missing-node bugs and the text-hacking. The parser is being re-founded on this
-visitor; it has been relocated from `talkbank-parser-tests/src/` (legacy test-only
-home) into `talkbank-parser/src/` so the production parser can be driven by it.
-
-From a local checkout of the `tree-sitter-grammar-utils` repo, run
-the appropriate example pointed at this repo's
-`grammar/src/grammar.json` and `grammar/src/node-types.json`,
-redirecting its stdout into the matching file (the exact command
-shapes are documented at the top of `talkbank-parser`'s `lib.rs`):
-
-The `generate_typed_traversal` example (with NO `--skip` flag: the
-self-contained backend models grammar extras explicitly, so the skip is
-obviated; `--edition 2024 --toolchain stable`, the rust-toolchain.toml channel) into
-`crates/talkbank-parser/src/generated_traversal.rs`. This is the single
-canonical generated module (the 2026-07 migration onto the self-contained
-backend is complete; the OLD `generate_traversal` module was retired and this
-one, formerly `generated_traversal_typed`, took the canonical name).
-
-**It is a single command; there is no separate `cargo fmt` step.** The wrapper
-runs `rustfmt` on its own output before emitting it, so the file it writes is
-already fmt-clean. The `--edition 2024 --toolchain stable` flags run that
-`rustfmt` with this repo's edition and toolchain channel, so the emitted
-file is byte-identical to what CI's `rustfmt` would produce. CI's
-`cargo fmt --all -- --check` still guards the committed file as defense in depth
-(it catches a regen done with a different toolchain). The digest-based staleness
-guard (`generated_traversal_is_current`) only checks the grammar JSON digests,
-not formatting, so it does NOT catch a misformatted regen; the pinned
-`--toolchain` plus the CI `fmt --check` are what keep the file byte-reproducible
-from the documented workflow.
-
-The generated file is standalone (no external deps beyond `tree_sitter`) and
-handles its own lint suppression; its uniform per-rule carriers anchor their
-lifetime parameter without any `PhantomData` padding.
-
-## Architecture / Module Map
-```
-grammar.js    - grammar definition (source of truth)
-src/          - generated C parser (do not edit)
-test/corpus/  - generated corpus tests (do not edit)
-queries/      - highlight/indent/fold queries
-bindings/     - language bindings (C, Go, Node.js, Python, Rust, Swift)
-```
-
-## Grammar Design Pattern: Strict + Catch-All
-
-For header fields with a closed set of valid values, the grammar uses the **strict + catch-all** pattern to implement "parse, don't validate":
-
-```javascript
-// Strict known values captured as named nodes (for syntax highlighting)
-// + generic catch-all for unknown values (flagged by the Rust validator)
-option_name: $ => choice('CA', 'NoAlign', $.generic_option_name),
-generic_option_name: $ => /[^\s,\r\n\t]+/,
-```
-
-**How it works:** Tree-sitter's disambiguation gives string literals priority over regexes at the same length, so known values win. Unknown values fall through to the generic catch-all. The Rust parser extracts the wrapper node's text and delegates to `from_text()` which classifies or returns `Unsupported`. The validator then flags unsupported values with a specific error code.
-
-**Rules applying this pattern:**
-- `option_name` → `generic_option_name` (E534)
-- `media_type` → `generic_media_type`
-- `media_status` → `generic_media_status`
-- `recording_quality_option` → `generic_recording_quality`
-- `transcription_option` → `generic_transcription`
-- `number_option` → `generic_number`
-- `date_contents` → `strict_date` + `generic_date` (E518)
-- `time_duration_contents` → `strict_time` + `generic_time` (E541/E542)
-- `id_sex` → `male_value` + `female_value` + `generic_id_sex` (E540)
-- `id_ses` → `ses_combined` + `ethnicity_value` + `ses_code_value` + `generic_id_ses` (E546), uses `token(prec(1, regex))` instead of string literals to avoid keyword conflicts with common English words (White, Black, Native, etc.)
-
-**When NOT to use this pattern:**
-- Free-text fields (`@Location`, `@Situation`, `id_corpus`, etc.), no closed vocabulary
-- Regex-only fields (`id_age`, `types_design`), already accept all plausible values
-- Fields where the regex IS the validation (like `age_format`)
-
-**Key pitfall:** When adding a catch-all, also audit error specs (`spec/errors/`) that referenced E316 (parse error) for the field. Those examples will now parse successfully, so:
-1. Remove them from E316.md
-2. Move them to the field-specific error spec (e.g., E518.md), changing
-   the claim from `subsumed_by 'E316'` to `violates` (there is no authored
-   layer since R4; which stage catches the rule is observed in the snapshot)
-3. Run `just regen` and adjudicate the observation-snapshot diff as intended
-   or unintended, never by regenerating blindly
-
-## Design Documentation
-
-- **[Precedence Decisions](docs/precedence-decisions.md)**: zero disambiguation,
-  `extras:[]` whitespace sensitivity, word_segment purity invariant, multi-root union,
-  colon separator fix, proof that prec doesn't propagate through intermediate rules.
-- **[Tokenization Rules](docs/tokenization-rules.md)**: the 6 CHAT tokenization
-  ambiguities (overlap, zero, CA parenthetical, colon, plus, brackets) and how
-  the grammar resolves each.
-- **[Structuring Opaque Tokens](docs/structuring-opaque-tokens.md)**: which tokens
-  were structured into CST children and which remain opaque (with reasons).
-- **[Pre-coarsening Grammar Reference](docs/pre-coarsening-grammar.js.reference)**,
-  the original structured word grammar before it was coarsened to an opaque token.
-  Source of truth for what `word_content` children existed historically.
-
-### word_segment Purity Invariant
-
-**`word_segment` contains ONLY pure spoken text.** All structural markers
-(overlap, CA, underline, stress, lengthening) are separate typed children
-in `word_body`. Character exclusions come from the symbol registry
-(`src/generated_symbol_sets.js`), never hand-write exclusion regexes.
-
-Ask the grammar question before the test question: where a rule can make a
-bad input unparseable, that is better than a corpus case asserting it is, since
-a rule covers every input and a case covers one. Corpus tests remain primary
-for what a grammar cannot express and for pinning tokenization against attested
-data, which is most of this directory's work.
-
-TDD gate: per-construct corpus tests under `test/corpus/word/`,
-`*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt`,
-etc. The consolidated `word_segment_purity.txt` was retired in
-`fdceeac2`; current layout splits the same coverage across
-per-construct files generated by the current `spec/tools` pipeline from
-`spec/constructs/`. If you add a new structural marker, add it to the
-symbol registry AND add a spec under `spec/constructs/` that embeds
-the marker inside a word so the regenerated test fixture exercises
-the purity invariant.
-
-## Status and Limitations
-- Generated files must be regenerated, not edited by hand.
-- Grammar changes should be validated on real corpora before landing.
-- Rust parser bindings rely on regenerated node type constants after grammar changes.
-- Generation scripts live under `spec/symbols/` and `spec/tools/` (at the repo root).
-
-## Downstream Verification Impact
-
-After grammar changes pass local verification, these downstream repositories may still need checks:
-
-| Crate/Repo | Why | Command |
-|------------|-----|---------|
-| `talkbank-parser` | uses this parser directly | `cargo check -p talkbank-parser` |
-| `talkbank-lsp` | LSP parser consumer | `cargo check -p talkbank-lsp` |
-
-## Emergency Revert Procedure
-
-If a grammar change fails verification and the fix is unclear:
-
-```bash
-cd grammar
-git checkout -- grammar.js
-tree-sitter generate
-```
-
-Always regenerate after revert so generated artifacts match current `grammar.js`.
-
-## See Also
-- The workspace `AGENTS.md` at the chatter repo root.
-- The `spec/` directory at the chatter repo root.
+- [Word Internals](../book/src/chat-format/word-internals.md)
+- [Overlap Marker Binding](../book/src/architecture/overlap-binding.md)
+- [Tokenization Rules](docs/tokenization-rules.md)
+- [Precedence Decisions](docs/precedence-decisions.md)
+- [Structuring Opaque Tokens](docs/structuring-opaque-tokens.md)
+- [Pre-coarsening reference](docs/pre-coarsening-grammar.js.reference): historical
+  grammar shape, not current source authority.

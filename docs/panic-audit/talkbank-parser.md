@@ -1,28 +1,20 @@
 # Panic audit: talkbank-parser
 
 **Status:** Reference
-**Last updated:** 2026-06-13 21:07 EDT
+**Last updated:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/panic-audit/talkbank-parser.md)
 
-See [README](README.md) for the shared policy. This page records the
-crate-specific panic surface.
+See [shared policy](README.md) for enforcement and verification limits.
+The package inherits the workspace panic-shape restriction lints.
 
-## Surface
+CST traversal, source admission and recovery use typed failures and diagnostic
+sinks. This design goal does not prove every execution path panic-free.
 
-**None.** `talkbank-parser` has zero production `#[allow(clippy::...)]`
-panic sites. The crate sets the panic-shape lints to `deny` and meets them
-with no exceptions: every fallible path (CST traversal, node dispatch,
-span resolution) returns a typed error or reports through the `ErrorSink`
-rather than unwrapping. Unrecognized CST nodes go through
-`unexpected_node_error()`, not `unreachable!()`.
+Allowances in [document_root.rs](../../crates/talkbank-parser/src/parser/document_root.rs)
+and [typed_cst.rs](../../crates/talkbank-parser/src/parser/typed_cst.rs)
+belong to `#[cfg(test)]` modules. A source search must classify the enclosing
+configuration rather than count those as production exceptions. Excluding
+every file containing tests would also hide production code.
 
-Test code is exempt via `#![cfg_attr(test, allow(...))]` in `src/lib.rs`.
-
-## Verification
-
-`just clippy`, which covers this crate along with every other. See
-[README](README.md#verification) for what it checks and why the per-crate
-command that used to sit here could not fail.
-
-Green with no inline allows. A new `unwrap()`/`panic!()` anywhere in the
-production tree fails the build, which is the intended ratchet: this crate
-stays panic-free.
+The former blanket claim that any new panic fails a normal build was too
+strong: ordinary compilation does not run Clippy. Generated traversal, explicit
+exceptions and implicit panic paths require distinct evidence.

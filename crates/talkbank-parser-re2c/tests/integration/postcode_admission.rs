@@ -22,7 +22,7 @@ fn postcode_admission_matches_the_spec_at_file_and_fragment_boundaries() {
     let main_offset = source.find(main).unwrap();
     let postcode_start = source.find("[+").unwrap();
     let postcode_end = postcode_start + source[postcode_start..].find(']').unwrap() + 1;
-    let expected = Span::from_usize(postcode_start, postcode_end);
+    let expected = Span::new(postcode_start, postcode_end);
 
     for external_offset in [0, 200] {
         let errors = ErrorCollector::new();
@@ -37,8 +37,8 @@ fn postcode_admission_matches_the_spec_at_file_and_fragment_boundaries() {
             .collect();
         assert_eq!(diagnoses.len(), 1);
         assert_eq!(
-            diagnoses[0].location.span,
-            Span::from_usize(
+            diagnoses[0].location.span().expect("located diagnostic"),
+            Span::new(
                 postcode_start + external_offset,
                 postcode_end + external_offset
             )
@@ -56,7 +56,10 @@ fn postcode_admission_matches_the_spec_at_file_and_fragment_boundaries() {
         .filter(|error| error.code == ErrorCode::InvalidPostcode)
         .collect();
     assert_eq!(diagnoses.len(), 1);
-    assert_eq!(diagnoses[0].location.span, expected);
+    assert_eq!(
+        diagnoses[0].location.span().expect("located diagnostic"),
+        expected
+    );
 
     let errors = ErrorCollector::new();
     assert!(matches!(
@@ -69,7 +72,10 @@ fn postcode_admission_matches_the_spec_at_file_and_fragment_boundaries() {
         .filter(|error| error.code == ErrorCode::InvalidPostcode)
         .collect();
     assert_eq!(diagnoses.len(), 1);
-    assert_eq!(diagnoses[0].location.span, expected);
+    assert_eq!(
+        diagnoses[0].location.span().expect("located diagnostic"),
+        expected
+    );
 
     let legal = spec
         .examples()

@@ -23,8 +23,7 @@ pub(crate) mod node_dispatch;
 // Re-export commonly used functions
 #[allow(unused_imports)]
 pub(crate) use cst_assertions::{
-    SlotState, check_not_missing, expect_delimiter, expect_present, extract_utf8_text,
-    find_child_by_kind, present,
+    check_not_missing, expect_delimiter, extract_utf8_text, find_child_by_kind, present,
 };
 pub(crate) use error_analysis::{analyze_dependent_tier_error, analyze_error_node};
 pub(crate) use error_checking::{

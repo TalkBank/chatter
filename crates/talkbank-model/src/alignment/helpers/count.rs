@@ -278,11 +278,12 @@ pub fn count_tier_positions(content: &[UtteranceContent], domain: PositionalDoma
 /// # Examples
 /// ```
 /// use talkbank_model::alignment::{count_tier_positions_until, PositionalDomain};
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{UtteranceContent, Word};
 ///
 /// let content = vec![
-///     UtteranceContent::Word(Box::new(Word::simple("hello"))),
-///     UtteranceContent::Word(Box::new(Word::simple("world"))),
+///     UtteranceContent::Word(Box::new(Word::simple(Location::Unlocated, "hello"))),
+///     UtteranceContent::Word(Box::new(Word::simple(Location::Unlocated, "world"))),
 /// ];
 ///
 /// // Count items before index 1 (only first word)

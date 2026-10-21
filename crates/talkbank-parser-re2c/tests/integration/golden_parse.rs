@@ -176,7 +176,7 @@ fn compound_word() {
         words[2]
             .body
             .iter()
-            .any(|b| matches!(b, WordBodyItem::CompoundMarker))
+            .any(|b| matches!(b, WordBodyItem::CompoundMarker(_)))
     );
 }
 
@@ -214,7 +214,7 @@ fn word_with_lengthening() {
         words[0]
             .body
             .iter()
-            .any(|b| matches!(b, WordBodyItem::Lengthening(count) if count.get() == 2))
+            .any(|b| matches!(b, WordBodyItem::Lengthening(run) if run.count().get() == 2))
     );
 }
 
@@ -320,7 +320,7 @@ fn angle_bracket_group() {
         .tier_body
         .contents
         .iter()
-        .any(|c| matches!(c, ContentItem::Retrace(r) if r.is_group));
+        .any(|c| matches!(c, ContentItem::Retrace(r) if r.is_group()));
     assert!(has_retrace, "got {:?}", mt.tier_body.contents);
 }
 

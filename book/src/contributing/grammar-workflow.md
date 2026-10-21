@@ -3,28 +3,25 @@
 **Status:** Current
 **Last modified:** {{git-dates:page}}
 
-The tree-sitter grammar at `grammar/grammar.js` is the formal definition of the CHAT format. Changes require careful validation.
+The tree-sitter grammar at `grammar/grammar.js` defines Chatter's executable
+syntax, including shapes retained for recovery and diagnosis. The grammar
+alone does not establish CHAT semantic validity. Changes require review of
+both generated structure and the model's validation contracts.
 
-The following diagram shows the complete regeneration pipeline. Every
-step must pass before committing a grammar change.
+Use `just regen` for the consolidated source-generation batch required by the
+repository workflow, then run the relevant verification. The diagram is an
+overview of dependencies and review, not a second command scheduler or an
+automatic commit gate. The `justfile` owns the exact regeneration order.
 
 ```mermaid
 flowchart TD
     edit(["Edit grammar/grammar.js"])
-    generate["tree-sitter generate\n→ src/parser.c\n→ src/node-types.json"]
-    traversal["regenerate the typed traversal\n→ generated_traversal.rs"]
-    grammar_test["tree-sitter test\n(corpus tests)"]
-    rust_test["cargo test -p talkbank-parser\n(CST-to-model conversion)"]
-    equiv["parser equivalence\n(corpus/reference/ files)"]
-    spec_check{"Grammar change\naffects spec examples?"}
-    test_gen["spec/tools generators\n→ grammar/test/corpus/generated/\n→ parser-tests generated tests\n→ validation fixture corpus"]
-    snapshot["observation snapshot\n(codes + roundtrip per spec example)\nadjudicate every diff"]
-    commit(["Commit"])
+    regen["just regen\nparser, traversal + metadata bridge,\nregistries, conformance, specs and audits"]
+    review["Review generated changes\nand adjudicate observations"]
+    checks["Affected grammar, parser, equivalence\nand roundtrip contracts"]
+    checkpoint(["Reviewed local commit\nPublication remains separate"])
 
-    edit --> generate --> traversal --> grammar_test --> rust_test --> equiv --> spec_check
-    spec_check -->|Yes| test_gen --> snapshot
-    spec_check -->|No| snapshot
-    snapshot --> commit
+    edit --> regen --> review --> checks --> checkpoint
 ```
 
 ## Step-by-Step Procedure
@@ -40,8 +37,7 @@ Modify `grammar.js` in the `grammar/` directory. Key design principles:
 ### 2. Generate the Parser
 
 ```bash
-cd grammar
-tree-sitter generate
+(cd grammar && tree-sitter generate)
 ```
 
 This produces `src/parser.c` and `src/node-types.json`. Never edit these files by hand.
@@ -232,7 +228,7 @@ the integration tests still require conformance support.
 ### 4. Run Grammar Tests
 
 ```bash
-tree-sitter test
+(cd grammar && tree-sitter test)
 ```
 
 Every test under `grammar/test/corpus/` must pass. Tests live there
@@ -245,7 +241,8 @@ and are partially auto-generated from specs (primarily via
 cargo test -p talkbank-parser
 ```
 
-This verifies the Rust parser wrapper handles all CST nodes correctly.
+This exercises the parser package's selected test targets. It does not prove
+that every possible CST shape or recovery state is handled correctly.
 
 ### 6. Run Parser Equivalence
 
@@ -253,15 +250,15 @@ This verifies the Rust parser wrapper handles all CST nodes correctly.
 cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus
 ```
 
-Every file in the reference corpus must parse correctly. Each `.cha` file is its own test, so failures are reported per file.
+The selected test compares the backends over the checked-in reference corpus.
+Confirm the named test actually runs and review its reported failures. A finite
+corpus comparison is not full grammar or error-recovery equivalence.
 
 ### 7. Regenerate Spec Tests
 
 If the grammar change affects any spec examples:
 
 ```bash
-just spec-gen
-
 just spec-gen      # every artifact derived from spec/
 just spec-check    # or: is the committed copy current?
 ```
@@ -300,7 +297,8 @@ response that is always wrong. The roundtrip gate stays green either way.
 ### Adding a New Token
 
 1. Define the token in `grammar.js`
-2. Add handling in the Rust tier parser (match on the new node kind)
+2. Regenerate the typed traversal and add exhaustive handling of its associated
+   carriers in the Rust tier parser; do not add a parallel raw kind walker
 3. Add a spec construct example
 4. Run the relevant generation and verification steps
 

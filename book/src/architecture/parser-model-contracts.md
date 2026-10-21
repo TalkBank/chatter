@@ -1,118 +1,109 @@
 # Parser, Model, and API Contracts
 
 **Status:** Current
-**Last updated:** 2026-09-28 20:59 EDT
+**Last updated:** {{git-dates:page}}
 
-## Single-handle parser API
-`talkbank-parser` provides `TreeSitterParser` as the canonical API
-handle for all parsing, full-file and fragment methods live directly
-on the struct. Callers create one instance and pass
-`&TreeSitterParser` everywhere. The alternate `talkbank-parser-re2c`
-is opt-in and experimental (independent comparison and batch parsing)
-and produces the same `ChatFile` model.
+This page describes the boundaries between source parsing, recovery, model
+validation and serialization. For compiled examples, use
+[Library Usage](../chatter/integrating/library-usage.md); for compatibility,
+use [Versioning](../chatter/integrating/versioning.md). A current implementation
+description is not a promise that every pre-1.0 API is stable.
 
-## Contract for Batchalign
+## Parser entry points
 
-The Batchalign runtime (the `batchalign` crate) consumes these
-guarantees from the talkbank-* core crates:
+`TreeSitterParser` is the primary parser handle. Reuse an instance when
+processing multiple inputs. The native `talkbank-parser-re2c` backend is a
+separate implementation; shared model types do not establish identical recovery,
+diagnostics or complete behavioral equivalence. See
+[parser backends](parser-backends.md) for supported comparisons and fragment
+context.
 
-- parsing produces a typed `ChatFile` or an explicit parse-status signal
-- parse-health taint is visible to alignment consumers
-- alignment helpers operate on semantic model types, not raw text hacks
-- recovery never fabricates valid-looking placeholder semantics for malformed input
+The inherent `TreeSitterParser::parse_chat_file` method and the streaming
+`ChatParser` trait have different result contracts:
 
-The parser/model boundary stays honest enough for downstream
-workflows, `align`, `compare`, `benchmark`, morphotagging, to make
-their own validity decisions.
+| Boundary | Outcome | Diagnostics |
+| --- | --- | --- |
+| Inherent whole-file parse | `ParseProduct::Built { file, diagnostics }` or `Unbuildable { diagnostics }` | Retained in the product |
+| Streaming/fragment parse | `ParseOutcome::Parsed(value)` or `Rejected` | Reported separately through the supplied `ErrorSink` |
+| Required model admission | `ValidChatFile` or an explicit failure | Parsing and validation evidence must both be considered |
 
-## Canonical Contract Model
+There is no `Success / Partial / Failed` status field in `ParseOutcome`.
+A built model can still carry error diagnostics. Conversely, a rejected outcome
+does not authorize discarding diagnostics already emitted to the sink.
+For example, the trait word method is `parse_word`; the primary parser's
+inherent helper is `parse_word_fragment`. Do not mix their signatures.
 
-### Public Contract Layers
-1. Parse API Contract:
-  - stable function signatures,
-  - deterministic parse result envelope,
-  - clear partial-success semantics.
-2. Semantic Model Contract:
-  - stable core model fields,
-  - explicit unstable/internal fields policy.
-3. Diagnostic Contract:
-  - stable error code IDs and severity semantics,
-  - best-effort message text compatibility.
-4. Serialization Contract:
-  - deterministic output constraints,
-  - normalized formatting policy.
+## Recovery is not admission
 
-### Required Types
-- `ParseOutcome<T>`
-  - `value: T | omitted-by-status`
-  - `diagnostics: Vec<Diagnostic>`
-  - `status: Success | Partial | Failed`
-- `Diagnostic`
-  - `code`, `severity`, `category`, `message`, `location`, `context`, `suggestion`
+Recovery makes retained content available for inspection and editor diagnostics.
+It does not make malformed source valid. A caller must not treat
+`is_built()`, `is_parsed()`, or the absence of a panic as an admission proof.
 
-## Parser Role
-- `talkbank-parser`: the sole parser, used by CLI/LSP/API/batchalign3. `TreeSitterParser` is the only API handle, callers create one and pass `&TreeSitterParser` everywhere.
-- Tree-sitter GLR provides error recovery; the Rust traversal code converts CST to typed model.
-- Full-file methods: `parser.parse_chat_file()`, `parser.parse_chat_file_streaming()`.
-- Fragment methods: `parser.parse_word_fragment()`, `parser.parse_main_tier_fragment()`, etc.
+`parse_validated_with_parser` requires validation and returns `ValidChatFile`
+under the requested `ValidationPolicy`. Its admission boundary checks internal
+failure evidence before severity filtering, then rejects parse errors or an
+unbuildable product before model validation. Internal failure is not a verdict
+that the transcript is invalid.
 
-## Invariants
-1. Parsing with offset must shift all spans consistently.
-2. Parse-level and validation-level diagnostics must remain distinguishable.
-3. Serialization should preserve semantic equivalence and documented formatting rules.
-4. Roundtrip behavior must be testable per parser implementation.
-5. Parser functions that accept `ErrorSink` should not return `Option<T>` for fallible parse state.
+The optional-validation convenience APIs return a mutable `ChatFile` and may
+skip checks according to their options. Do not substitute them for required
+admission merely because both APIs can return a model.
 
-## API Versioning Policy (Pre-1.0, Strict)
-- Three intended contract levels:
-  - Stable-for-integrators
-  - Stable-internal
-  - Experimental
-- Mark every public function/type by contract level.
+The recovery design forbids inventing required text, words, enum choices or
+timestamps to make construction succeed. That is a requirement to verify at
+each producer/converter boundary, not a blanket claim that every backend
+already satisfies it. Inspect actual retained model and serialized output in
+regressions; an emitted error code alone cannot detect fabricated values.
+Source diagnostics must describe the original input, not invented replacements.
 
-This classification is not yet codified in a separate manifest file;
-the levels above are the working policy. Integrators should treat any
-unmarked surface as Experimental until contract levels are formally
-published.
+## Source identity and coordinates
 
-## Acceptance Criteria
-- Single canonical parse outcome envelope exposed for integrators.
-- Parser implementations conform to shared contract tests.
-- Contract-level annotations exist for all public API surfaces.
-- Documentation for parse/validate/serialize lifecycle is centralized and current.
+Keep the original UTF-8 source with the diagnostics that refer to it. Do not
+normalize line endings, trim whitespace or rebuild source from a model before
+using source byte offsets. Transformed text is a different coordinate space.
 
-## Recovery Contract: No Fabricated Semantic Values
-The parser contract must forbid sentinel semantic values during error recovery.
+`parse_source_with_parser` binds the original source and its parse in
+`ParsedSourceChat`. Calling `admit` consumes that state and checks complete
+rules and tier alignment before returning `AdmittedSourceChat`, which couples
+unchanged source bytes with an immutable admitted model. There is no public
+constructor that combines arbitrary text with an unrelated model proof.
 
-Disallowed recovery behavior:
-- returning arbitrary enum variants as fallback for unknown/missing nodes,
-- returning empty strings as stand-ins for required fields,
-- constructing fake words/chunks like `"missing"`, `"error"`, or other placeholders.
+`into_product` releases recovery data without that admission authority;
+`into_valid_file` relinquishes the source-byte binding. A transform that removes
+and regenerates tiers uses its separate replacement admission, not unchanged
+source preservation. See the [library guide](../chatter/integrating/library-usage.md).
 
-Required recovery behavior:
-1. Emit structured diagnostic with precise span and expected node kind.
-2. Return an explicit parse-status signal (`Partial`/`Failed`) through `ParseOutcome`.
-3. Omit invalid semantic node OR store it in explicit recovery metadata, never as a valid semantic value.
+For fragments, respect the API's source origin and contextual policy. A
+document-relative offset is not an index into a fragment string. Legacy
+synthetic wrappers and native fragments are not interchangeable evidence.
+See the [diagnostic contract](../chatter/integrating/diagnostic-contract.md)
+for checked presentation and client coordinate conversion.
 
-Current enforcement:
-- CI guardrail script tracks and blocks introduction of new `ErrorSink + Option` signatures.
-- See `scripts/check-errorsink-option-signatures.sh` and `scripts/errorsink_option_allowlist.txt`.
+## Serialization and downstream consumers
 
-Rationale:
-- fabricated semantic values create secondary, misleading diagnostics against synthetic data,
-- downstream tools cannot distinguish real user content from parser-generated placeholders,
-- equivalence and regression tests become noisy and non-actionable.
+CHAT serialization writes the model's representation. Semantic equivalence,
+byte-exact source preservation and validity are separate properties; state which
+one a test establishes. Derived word spelling is not an original source slice.
 
-For `batchalign3`, this is especially important because alignment workflows
-must be able to tell the difference between:
+Downstream alignment and transformation code should consume typed projections
+and explicit admission results. Parse-health metadata helps identify recovery;
+it is not a replacement for whole-document validation or an acoustic-quality
+judgment. The [JSON contract](../chatter/integrating/json-output.md) likewise
+distinguishes computed display fields, model structure and schema checks.
 
-- a malformed input that should taint or block alignment
-- a recoverable input where raw text can be preserved
-- a clean input that should proceed through the align/compare pipeline
+String representation is an implementation choice, not a universal storage
+restriction or allocation guarantee. Consult the owning types and
+[memory architecture](memory-and-ownership.md) instead of copying layouts into integrations.
 
-## String Storage Policy
+## Review and verification
 
-The model uses three string storage strategies:
-- **`Arc<str>` interning** (`interned_newtype!`): For high-frequency repeated values (POS tags, stems, speaker codes). Global interner avoids redundant allocations.
-- **`SmolStr`** (`string_newtype!`): For short strings (median 10-15 chars) that benefit from inline storage. O(1) clone, no heap allocation for strings ≤23 bytes.
-- **`String`**: Only for utility types outside the core model (e.g., `semantic_diff/`).
+For a boundary change, inspect its producers, consumers and failure paths
+together. Keep constructor, wire-format and policy controls even when typestate
+prevents an invalid transition later in the pipeline. Exercise the actual public
+API and observe diagnostics, model content and output where each matters.
+
+Use the [spec workflow](../contributing/spec-workflow.md) and
+[development checks](../contributing/dev-checks.md) for current verification.
+A signature-name scan cannot prove honest recovery, complete validation or
+backend conformance. Compatibility promises for 1.0 remain a separate
+[readiness requirement](../contributing/one-zero-readiness.md).

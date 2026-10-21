@@ -9,11 +9,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, ContentItemCaNoBreakLinkerChoice, SourceBindingError, SourceBound,
 };
 use crate::node_types::{CONTENT_ITEM, LINKER_QUICK_UPTAKE, TAB, WHITESPACES};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::helpers::ReadableRecovery;
 use crate::parser::tree_parsing::parser_helpers::find_child_by_kind;
 use talkbank_model::chars::{LEFT_SINGLE_QUOTE, RIGHT_SINGLE_QUOTE};
@@ -104,8 +105,8 @@ fn classify_outside_body_recovery(error_node: Node, source: &str) -> ParseError 
         return ParseError::new(
             ErrorCode::StructuralOrderError,
             Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(source, error_node.start_byte()..error_node.end_byte(), "\t"),
+            DiagnosticLocation::new(span_of(error_node)),
+            ErrorContext::new(source, span_of(error_node), "\t"),
             "Unexpected tab inside the main tier: the tab after the speaker code is the tier \
              delimiter, so a further tab breaks the line's structure"
                 .to_string(),
@@ -168,8 +169,8 @@ pub(crate) fn report_tree_shape(bad: Node, message: String, source: &str, errors
     errors.report(ParseError::new(
         ErrorCode::TreeParsingError,
         Severity::Error,
-        SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-        ErrorContext::new(source, bad.start_byte()..bad.end_byte(), ""),
+        DiagnosticLocation::new(span_of(bad)),
+        ErrorContext::new(source, span_of(bad), ""),
         message,
     ));
 }
@@ -180,8 +181,8 @@ pub(crate) fn illegal_curly_quote_error(node: Node, source: &str) -> ParseError 
     ParseError::new(
         ErrorCode::IllegalCurlyQuote,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), ""),
         format!(
             "Curly single quotation mark ({LEFT_SINGLE_QUOTE}/{RIGHT_SINGLE_QUOTE}) is not \
              a legal word character; CHAT requires the ASCII apostrophe (')"
@@ -223,8 +224,8 @@ pub(crate) fn misplaced_linker_error<'tree>(
         return ParseError::new(
             ErrorCode::EmptyCompoundPart,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), ""),
             "Compound marker '+' cannot have empty parts (++)".to_string(),
         )
         .with_suggestion("Remove one '+' or add content between compound markers");
@@ -235,8 +236,8 @@ pub(crate) fn misplaced_linker_error<'tree>(
     ParseError::new(
         ErrorCode::LinkerNotUtteranceInitial,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), ""),
         format!(
             "Linker '{linker_text}' must be utterance-initial; it links this \
              utterance to the previous one and cannot follow content"

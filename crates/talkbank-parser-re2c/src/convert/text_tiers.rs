@@ -10,7 +10,6 @@
 
 use crate::ast;
 use crate::source_text::SourceText;
-use crate::token::Token;
 use talkbank_model::model::*;
 use talkbank_model::{ErrorCode, ErrorSink, ParseError, ParseOutcome, Severity};
 
@@ -27,23 +26,30 @@ pub enum MorTierConvertError {
     UnrecognizedTerminator(String),
 }
 
-impl<'a> TryFrom<&ast::MorTier<'a>> for MorTier {
-    type Error = MorTierConvertError;
+/// Lower a `%mor` tier at `location` (its line's extent, or the whole input of
+/// a fragment). The terminator is placed at its own token.
+///
+/// A function rather than `TryFrom`, because placing a borrowed slice needs the
+/// text it was borrowed from and a trait conversion has nowhere to receive it.
+pub fn mor_tier_to_model(
+    tier: &ast::MorTier<'_>,
+    location: talkbank_model::Location,
+    source: SourceText<'_>,
+) -> Result<MorTier, MorTierConvertError> {
+    use talkbank_model::Terminator;
 
-    fn try_from(tier: &ast::MorTier<'a>) -> Result<Self, Self::Error> {
-        use talkbank_model::Terminator;
-
-        let items: Vec<Mor> = tier.items.iter().map(Mor::from).collect();
-        let terminator_node = tier
-            .terminator
-            .as_ref()
-            .ok_or(MorTierConvertError::MissingTerminator)?;
-        let terminator =
-            Terminator::try_from_chat_str(terminator_node.text().trim()).ok_or_else(|| {
-                MorTierConvertError::UnrecognizedTerminator(terminator_node.text().to_string())
-            })?;
-        Ok(MorTier::new_mor(items, terminator))
-    }
+    let items: Vec<Mor> = tier.items.iter().map(Mor::from).collect();
+    let terminator_node = tier
+        .terminator
+        .as_ref()
+        .ok_or(MorTierConvertError::MissingTerminator)?;
+    let terminator_text = terminator_node.text();
+    let terminator = Terminator::try_from_chat_str(
+        super::locate(source, terminator_text.trim()),
+        terminator_text.trim(),
+    )
+    .ok_or_else(|| MorTierConvertError::UnrecognizedTerminator(terminator_text.to_string()))?;
+    Ok(MorTier::new_mor(location, items, terminator))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -181,11 +187,15 @@ impl LoweredGra {
     ///
     /// The one route for a caller that HAS an utterance, which is every caller
     /// that lowers a whole file.
-    pub fn into_tier(self, health: &mut ParseHealth) -> GraTier {
+    pub fn into_tier(
+        self,
+        location: impl Into<talkbank_model::Location>,
+        health: &mut ParseHealth,
+    ) -> GraTier {
         if self.receipt.is_truncated() {
             health.taint(ParseHealthTier::Gra);
         }
-        self.receipt.into_tier()
+        self.receipt.into_tier(location)
     }
 
     /// The tier alone, for a caller with no utterance to record it on.
@@ -194,8 +204,8 @@ impl LoweredGra {
     /// `ParseHealth` to taint and nothing downstream that could read it. Named
     /// so that dropping the fact is a decision visible at the call site rather
     /// than a field nobody looked at.
-    pub fn tier_without_health(self) -> GraTier {
-        self.receipt.into_tier()
+    pub fn tier_without_health(self, location: impl Into<talkbank_model::Location>) -> GraTier {
+        self.receipt.into_tier(location)
     }
 }
 
@@ -246,6 +256,7 @@ impl<'a> From<&ast::LanguagesHeaderParsed<'a>> for LanguageCodes {
 pub(crate) fn convert_pho_tier(
     pho: &ast::PhoTier<'_>,
     tier_type: talkbank_model::model::dependent_tier::pho::PhoTierType,
+    location: talkbank_model::Location,
 ) -> talkbank_model::model::PhoTier {
     use talkbank_model::model::dependent_tier::pho::{PhoGroupWords, PhoItem, PhoWord};
 
@@ -264,11 +275,14 @@ pub(crate) fn convert_pho_tier(
             )),
         })
         .collect();
-    talkbank_model::model::PhoTier::new(tier_type, items)
+    talkbank_model::model::PhoTier::new(location, tier_type, items)
 }
 
 /// Convert our parsed SinTier to model SinTier.
-pub(crate) fn convert_sin_tier(sin: &ast::SinTierParsed) -> talkbank_model::model::SinTier {
+pub(crate) fn convert_sin_tier(
+    sin: &ast::SinTierParsed,
+    location: talkbank_model::Location,
+) -> talkbank_model::model::SinTier {
     use talkbank_model::model::dependent_tier::sin::{SinGroupGestures, SinItem};
     let items: Vec<SinItem> = sin
         .items
@@ -280,7 +294,7 @@ pub(crate) fn convert_sin_tier(sin: &ast::SinTierParsed) -> talkbank_model::mode
             }
         })
         .collect();
-    talkbank_model::model::SinTier::new(items)
+    talkbank_model::model::SinTier::new(location, items)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -289,8 +303,8 @@ pub(crate) fn convert_sin_tier(sin: &ast::SinTierParsed) -> talkbank_model::mode
 // ═══════════════════════════════════════════════════════════════
 
 /// Alias for `header_to_model`, used by ChatParser trait impl.
-pub fn header_parsed_to_model(h: &ast::HeaderParsed<'_>) -> Header {
-    header_to_model(h)
+pub fn header_parsed_to_model(h: &ast::HeaderParsed<'_>, source: SourceText<'_>) -> Header {
+    header_to_model(h, source)
 }
 
 /// Convert text tier parsed AST to BulletContent.
@@ -298,68 +312,90 @@ pub(crate) fn text_tier_to_bullet_content(parsed: &ast::TextTierParsed<'_>) -> B
     let segments: Vec<BulletContentSegment> = parsed
         .segments
         .iter()
-        .map(|seg| match seg {
-            ast::TextTierSegment::Text(s) => BulletContentSegment::text(*s),
-            ast::TextTierSegment::Bullet(tok) => match tok {
-                Token::MediaBullet {
-                    start_time,
-                    end_time,
-                    ..
-                } => {
-                    let (s, e) = super::items::bullet_times(start_time, end_time);
+        .filter_map(|seg| {
+            Some(match seg {
+                ast::TextTierSegment::Text(s) => BulletContentSegment::text(*s),
+                ast::TextTierSegment::Bullet(bullet) => {
+                    let (s, e) = bullet.times()?.pair();
                     BulletContentSegment::bullet(s, e)
                 }
-                _ => BulletContentSegment::text(tok.text()),
-            },
-            ast::TextTierSegment::Pic(tok) => BulletContentSegment::picture(tok.text()),
+                ast::TextTierSegment::Pic(tok) => BulletContentSegment::picture(tok.text()),
+            })
         })
         .collect();
     BulletContent::new(segments)
 }
 
 /// Convert parsed text tier to model ActTier.
-pub fn to_act_tier(parsed: &ast::TextTierParsed<'_>) -> ActTier {
-    ActTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_act_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> ActTier {
+    ActTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model CodTier.
-pub fn to_cod_tier(parsed: &ast::TextTierParsed<'_>) -> CodTier {
-    CodTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_cod_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> CodTier {
+    CodTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model ComTier.
-pub fn to_com_tier(parsed: &ast::TextTierParsed<'_>) -> ComTier {
-    ComTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_com_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> ComTier {
+    ComTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model ExpTier.
-pub fn to_exp_tier(parsed: &ast::TextTierParsed<'_>) -> ExpTier {
-    ExpTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_exp_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> ExpTier {
+    ExpTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model AddTier.
-pub fn to_add_tier(parsed: &ast::TextTierParsed<'_>) -> AddTier {
-    AddTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_add_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> AddTier {
+    AddTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model GpxTier.
-pub fn to_gpx_tier(parsed: &ast::TextTierParsed<'_>) -> GpxTier {
-    GpxTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_gpx_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> GpxTier {
+    GpxTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model IntTier.
-pub fn to_int_tier(parsed: &ast::TextTierParsed<'_>) -> IntTier {
-    IntTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_int_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> IntTier {
+    IntTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model SpaTier.
-pub fn to_spa_tier(parsed: &ast::TextTierParsed<'_>) -> SpaTier {
-    SpaTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_spa_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> SpaTier {
+    SpaTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Convert parsed text tier to model SitTier.
-pub fn to_sit_tier(parsed: &ast::TextTierParsed<'_>) -> SitTier {
-    SitTier::new(text_tier_to_bullet_content(parsed))
+pub fn to_sit_tier(
+    parsed: &ast::TextTierParsed<'_>,
+    location: talkbank_model::Location,
+) -> SitTier {
+    SitTier::new(location, text_tier_to_bullet_content(parsed))
 }
 
 /// Parse a `%sin` fragment through the same grammar used for whole files.
@@ -373,7 +409,11 @@ pub fn sin_tier_from_text(
         .parse(tokens.as_slice())
         .into_result()
     {
-        Ok(parsed) => talkbank_model::ParseOutcome::parsed(convert_sin_tier(&parsed)),
+        Ok(parsed) => talkbank_model::ParseOutcome::parsed(convert_sin_tier(
+            &parsed,
+            // A fragment's tier is the whole input.
+            talkbank_model::Location::Located(crate::source_text::SourceText::new(input).whole()),
+        )),
         Err(_) => talkbank_model::ParseOutcome::rejected(),
     }
 }
@@ -395,17 +435,23 @@ pub fn sin_tier_from_text(
 /// precodes and terminators. Two parsers for one tier is a divergence with
 /// nothing holding it shut, and this one was the fallback the other fell back
 /// TO, so both had to fail before anyone saw a difference.
-pub fn wor_tier_from_input(input: &str) -> Option<WorTier> {
+pub fn wor_tier_from_input(input: &str, errors: &impl ErrorSink) -> Option<WorTier> {
     use chumsky::Parser as _;
 
-    let (tokens, source) =
-        crate::parser::lex_to_tokens_and_source(input, crate::lexer::COND_MAIN_CONTENT);
-    let source = crate::source_text::SourceText::new(source);
-    crate::parser::dependent_tiers::wor_tier_parser()
-        .parse(tokens.as_slice())
+    let lexed = crate::parser::LexedSource::new(input, crate::lexer::COND_MAIN_CONTENT);
+    crate::parser::file::report_unrepresentable_bullet_times(&lexed, errors);
+    let source = lexed.source_text();
+    crate::parser::dependent_tiers::wor_tier_parser(source)
+        .parse(lexed.tokens())
         .into_result()
         .ok()
-        .map(|parsed| crate::convert::tiers::wor_tier_to_model(&parsed, source))
+        .map(|parsed| {
+            crate::convert::tiers::wor_tier_to_model(
+                &parsed,
+                source,
+                talkbank_model::Location::Located(source.whole()),
+            )
+        })
 }
 
 // `From<&ast::MainTier>` and `From<&ast::Utterance>` USED to live here, under
@@ -469,15 +515,6 @@ impl<'a> From<&ast::ParticipantEntryParsed<'a>> for ParticipantEntry {
     }
 }
 
-impl<'a> From<&ast::PhoTier<'a>> for talkbank_model::model::PhoTier {
-    fn from(pho: &ast::PhoTier<'a>) -> Self {
-        convert_pho_tier(
-            pho,
-            talkbank_model::model::dependent_tier::pho::PhoTierType::Pho,
-        )
-    }
-}
-
 impl<'a> From<&ast::PhoWordParsed<'a>> for talkbank_model::model::PhoWord {
     fn from(w: &ast::PhoWordParsed<'a>) -> Self {
         talkbank_model::model::PhoWord::new(w.segments.join("+"))
@@ -508,8 +545,8 @@ mod gra_lowering_tests {
         };
         let errors = ErrorCollector::new();
         let mut health = ParseHealth::untainted();
-        let tier =
-            gra_tier_to_model(&parsed, SourceText::new(body), &errors).into_tier(&mut health);
+        let tier = gra_tier_to_model(&parsed, SourceText::new(body), &errors)
+            .into_tier(talkbank_model::Location::Unlocated, &mut health);
         let codes = errors.to_vec().iter().map(|error| error.code).collect();
         LoweredCase {
             tier,

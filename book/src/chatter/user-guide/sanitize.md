@@ -1,7 +1,7 @@
 # Sanitize (`chatter debug sanitize`)
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** {{git-dates:page}}
 
 `chatter debug sanitize` strips contributor lexical content from a CHAT
 file while preserving structure (timing bullets, `%wor` per-word bullets,
@@ -11,10 +11,9 @@ complete de-identification guarantee**. Preserved identifiers, dates, gem labels
 display metadata and unknown recovery headers can retain identifying text. Review output under the
 applicable data-sharing rules before disclosing it.
 
-The command exists so engineering tooling, including LLM-assisted
-debugging, can operate on protected-corpus files (`aphasia/`,
-`dementia/`, `rhd/`, `fluency/Password/`, clinical-children corpora,
-etc.) without exposing contributor speech to commercial LLM services.
+The command prepares a lexical-redaction candidate for debugging. It does not
+authorize disclosure to a person, issue tracker or external service. Retained
+fields and diagnostic output can still contain identifying or source text.
 
 ## When to use it
 
@@ -23,9 +22,9 @@ review. Do not send its output to another tool or person merely because the
 command succeeded; unsupported fields and intentionally preserved metadata can
 still identify participants.
 
-When you need to ask a contributor for help debugging a specific
-file, frame the request as "run the sanitizer locally and send me
-the output" rather than asking for the raw file.
+When asking for a debugging example, request a locally sanitized and manually
+reviewed copy under the applicable sharing rules, not an unreviewed transcript
+or an automatic upload of the command's output.
 
 ## Usage
 
@@ -37,12 +36,34 @@ chatter debug sanitize input.cha
 chatter debug sanitize input.cha --output sanitized.cha
 ```
 
-Working location for sanitized files: prefer a stable, non-`/tmp`
-scratch directory (e.g. set `TB_SCRATCH_DIR` to a per-project dir
-under your workstation's persistent storage) for any state that
-should outlive a single command. macOS clears `/tmp` on reboot.
+Choose an access-controlled destination with suitable retention. The command
+does not configure a scratch directory or make output safe to share by choosing
+a filename. Preserve the original separately.
 
-## What is preserved (byte-exact)
+### Input and output boundaries
+
+If parsing builds a model with diagnostics, the CLI prints those diagnostics
+to stderr and sanitizes the recovered model. Only an unbuildable parse aborts
+at that boundary. There is no full CHAT validation pass before or after the
+redaction. Parse diagnostics can contain original text and paths: do not share
+stderr merely because stdout or the output file has been reviewed.
+
+For `--output`, the CLI retains the opened source and destination handles and
+refuses matching file identities, including hard-link and symbolic-link aliases.
+It writes through that same admitted destination handle rather than reopening
+the path after checking it. Identity/open errors refuse the write.
+
+Distinct existing regular files are still truncated and replaced, and a later
+I/O error can leave partial output. This is not atomic publication or a rollback
+guarantee; opening a new destination can leave an empty file on a later failure.
+Use a new destination, inspect any failed result before retrying, and keep the
+input unchanged. Shell redirection such as `> input.cha` is unsafe: the shell
+can truncate the input before Chatter starts, outside this identity check.
+
+## What is preserved in the model
+
+Serialization produces a new CHAT document. Preserving typed values is not a
+promise of byte-identical whitespace, line endings or original offsets.
 
 - Timing bullets `•start_end•` on the main tier.
 - `%wor` per-word bullets (`•start_end•` after each word); the words
@@ -59,7 +80,7 @@ should outlive a single command. macOS clears `/tmp` on reboot.
   `@Begin`/`@End`/`@UTF8`.
 - `%mor` POS categories and morphological features (e.g., `n|`, `-Past`).
 - `%gra` (numeric grammatical relations) and `%tim` (timing).
-- Untranscribed tokens `xxx` / `yyy` / `www`, preserving them changes
+- Untranscribed tokens `xxx` / `yyy` / `www`, replacing them changes
   semantic meaning, so they pass through unchanged.
 
 ## What is replaced or redacted
@@ -71,10 +92,11 @@ should outlive a single command. macOS clears `/tmp` on reboot.
 | `Shortening` text | `(x)` |
 | `%mor` lemmas (`MorWord.lemma`) | `lemmaN`; POS + features preserved |
 | `%wor` words | judged as timing recovery judges the tier, before the main tier is rewritten (count match, then word-by-word corroboration): a corroborating tier has each word become its paired main-tier word's display text, now that word's placeholder (`wN`, the same `N`; `w1w1` for a compound), so it still corroborates the main tier; a drifted or uncorroborated tier takes fresh placeholders rather than a manufactured agreement. Bullets preserved |
-| `%pho` / `%mod` / `%modsyl` / `%phosyl` / `%phoaln` / `%sin` | tier dropped |
+| `%pho` / `%mod` / `%modsyl` / `%phosyl` / `%phoaln` / `%sin` / `%xphoint` | tier dropped |
 | Free-text dependent tiers (`%com` `%add` `%exp` `%sit` `%spa` `%int` `%gpx` `%act` `%cod` `%eng` `%gls` `%ort` `%flo` `%def` `%coh` `%fac` `%par` `%alt` `%err`) | `[redacted]` |
 | `@Comment`, `@Transcriber`, `@Birthplace`, `@Activities`, `@Situation`, `@RoomLayout`, `@Location`, `@TapeLocation`, `@Warning`, `@Bck` | `[redacted]`; header identity and any speaker reference are retained |
-| `@Participants` participant-name field | dropped (`Participant_<SPEAKER_CODE>` is implied by speaker code + role) |
+| User-defined and unsupported dependent-tier bodies | Existing body replaced by `[redacted]`; absent body stays absent |
+| `@Participants` participant-name field | dropped; speaker code and role retained, no replacement name inferred |
 | `@ID` `custom_field` and `education` | cleared |
 | `Event` event_type (`&=imitates:Mary` → `&=redacted`) | `redacted` |
 | `Freecode` text (`[^ aside]` → `[^ redacted]`) | `redacted` |
@@ -104,30 +126,29 @@ flowchart LR
     Input["Source .cha\n(protected corpus)"] --> Parser["TreeSitterParser\n(talkbank-parser)"]
     Parser --> Model["ChatFile model\n(talkbank-model)"]
     Model --> Sanitize["sanitize()\n(talkbank-transform::redact)"]
-    Sanitize --> Walker["walk_words_mut\n+ header walker\n+ dep-tier walker\n+ scoped-annot walker"]
+    Sanitize --> Walker["Typed content walker\n+ headers and dependent tiers"]
     Walker --> WordMutation["Typed Word replacement\n+ derived-text refresh"]
     WordMutation --> Mutated["Mutated ChatFile\n(placeholders + redactions)"]
-    Mutated --> Writer["WriteChat\n(byte-exact bullets)"]
+    Mutated --> Writer["WriteChat\n(fresh serialization)"]
     Writer --> Output["Sanitized .cha\n(scratch path)"]
 ```
 
 The walker step replaces lexical segments in the typed word-content sequence,
 mutates `MorWord.lemma` fields, redacts free-text
 header / dep-tier / scoped-annotation strings, and drops phonological
-tiers. `WriteChat` then re-serializes, and because it serializes from
-typed content (not from `Word.raw_text`), every CA element, compound
-marker, clitic boundary, and timing bullet round-trips byte-exact.
+tiers. `WriteChat` then serializes the retained model values. A recovered input
+model is not proof that all original source structure survived parsing.
 
-Word content is externally read-only. Replacement must use `Word`'s mutation
-methods, which invalidate the derived `cleaned_text` cache. The sanitizer also
-rebuilds `raw_text` from the complete sanitized typed word on every path. That
-includes parser-recovery words containing only structural elements and the
-`xxx`/`yyy`/`www` pass-through path. This prevents either JSON-facing string
-field from retaining source lexical material or losing nonlexical word markers.
+Word replacement uses the model's mutation methods rather than independent
+edits to cached strings. `SanitizedDocument` keeps its inner model private and
+exposes CHAT writing; it is not a general validated-model or JSON-export
+capability. Sanitization changes text lengths, so original source spans must
+not be reused as positions in the new output.
 
 ## Out of v1 scope
 
-Documented for transparency; v2 work:
+The current strict policy does not perform the following operations; this list
+is not a promise of a later version:
 
 - Speaker-code anonymization (graph rewrite across `@Participants`,
   `@ID`, `*SPK:`, `@Birth`, `@L1Of`).

@@ -57,7 +57,7 @@ use talkbank_model::model::{BulletContent, BulletContentSegment, DependentTier, 
 use talkbank_parser::TreeSitterParser;
 
 /// One diagnostic: (code, span start, span end, message).
-type Diag = (String, u32, u32, String);
+type Diag = (String, usize, usize, String);
 
 /// Render one bullet segment as a stable structural tag for assertions.
 fn seg_tag(seg: &BulletContentSegment) -> String {
@@ -118,8 +118,8 @@ fn parse_text_tiers_and_diags(input: &str) -> (Vec<(&'static str, Vec<String>)>,
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })

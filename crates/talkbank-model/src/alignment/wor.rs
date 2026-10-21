@@ -172,11 +172,13 @@ impl WorTimingDrift {
 
 /// Main-tier and `%wor` lexical slots after equal counts were proved.
 ///
-/// Construction is private. The only public constructor is
-/// [`bind_wor_timing`], which proves only equal slot counts under the named
-/// policy. This state exposes only the shared count. Its private sequences are
-/// consumed by [`corroborate_wor_timing`], so a caller cannot read timing or
-/// construct a positional zip before canonical token correspondence succeeds.
+/// Construction is private to the projection's checked binding transitions,
+/// also reached through [`bind_wor_timing`]. They prove only equal slot counts
+/// under the named policy. This state exposes the count and borrowed word pairs,
+/// not corroborated timing slots. Its private sequences are
+/// consumed by [`corroborate_wor_timing`] before a caller can obtain corroborated
+/// timing slots. The borrowed words themselves retain their original fields;
+/// reading a bullet through a word is not timing admission.
 #[derive(Debug, PartialEq)]
 pub struct CountMatchedWorTimings<'main> {
     policy: WorSlotMembershipPolicy,

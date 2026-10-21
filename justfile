@@ -187,13 +187,10 @@ doc-check:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
     cargo test --doc --workspace
 
-# Run clippy exactly as CI does (.github/workflows/ci.yml): two passes.
-# Production code (lib + bins) is held strict; test targets get the panic /
-# unwrap / expect lints relaxed, since tests may unwrap fixtures by convention.
-# A single --all-targets pass would deny expect/unwrap in tests and diverge
-# from CI (producing false positives), so this mirrors the two-pass split.
-# CI owns clippy (see AGENTS.md clippy policy); run locally only when
-# working ON clippy findings.
+# Lint the root workspace in one pass. Production strictness and test-only
+# allowances live in source. The separate spec workspace uses clippy-spec;
+# release-lint combines them at the release boundary. Use the maintained
+# verification workflow, not a per-edit lint ritual.
 clippy:
     # Single pass: production strictness lives in the workspace [lints]
     # table, which reaches a crate only because that crate declares
@@ -314,6 +311,12 @@ clippy-spec:
 wasm-check:
     cargo check -p talkbank-model -p talkbank-parser-re2c --target wasm32-unknown-unknown --locked
 
+# The CLAN bridge's Windows executable-path admission, compiled from the real
+# C source against deterministic Win32 doubles on any host. This is a contract
+# test of the bridge's logic, not native Windows or CLAN GUI qualification.
+send2clan-win32-doubles:
+    bash crates/send2clan/tests/win32-doubles/run.sh
+
 # Every tracked shell script, at shellcheck's default severity.
 shellcheck:
     bash scripts/lint/shellcheck-all.sh
@@ -363,15 +366,16 @@ ci-gate-sync:
     python3 scripts/test_check_ci_gate_sync.py
     python3 scripts/check_ci_gate_sync.py
 
-# THE ONE PRE-PUSH GATE. Static checks plus every test CI runs, one stamp.
+# THE PRE-PUSH GATE. Locally owned publication checks, one content stamp.
 #
 # It used to be two halves, `gate-fast` and `gate-slow`, and the slow half
 # compiled the same code four or five times (tests, clippy, a feature-off
 # build in its own target dir, and a second cargo workspace for spec/, each
 # a separate cargo unit sharing no artifacts): 10 to 13 minutes, run nine
 # times in one day. Clippy and the feature-off build are release-time now
-# (`release-lint`), and per-push CI runs exactly what this runs, so a green
-# gate here IS a green CI. `git rev-parse --git-dir`, never a literal `.git`:
+# (`release-lint`). Selected CI workflows share recipes checked by ci-gate-sync;
+# a local pass does not prove hosted provisioning or another platform. Verify
+# CI on the exact candidate. `git rev-parse --git-dir`, never a literal `.git`:
 # in a worktree `.git` is a file.
 # Refuse a snapshot no test loads.
 #
@@ -496,16 +500,18 @@ doc-dates:
 # (traversal, node types, inventory, observation snapshot, ...). After any
 # change under grammar/, spec/ or the registries: `just regen`, then
 # `just test`, once.
-regen:
-    just schema-gen
+regen: symbols-gen grammar-gen form-markers-gen model-sources-gen node-types-gen traversal-gen schema-gen conformance-gen spec-gen check-mapping-gen
+
+grammar-gen:
     python3 scripts/generate_grammar.py
+
+node-types-gen:
     python3 scripts/generate_if_changed.py crates/talkbank-parser/src/node_types.rs node scripts/generate-node-types.js
-    just traversal-gen
-    just symbols-gen
-    just form-markers-gen
-    just conformance-gen
-    just spec-gen
-    just check-mapping-gen
+
+# Select the source-only package: selecting the runtime package would unify its
+# model-runtime feature and compile the consumer before repairing its sources.
+model-sources-gen:
+    cargo run --quiet --manifest-path {{ justfile_directory() }}/spec/Cargo.toml -p generators --bin model_sources_gen
 
 # The generator reads current traversal source without compiling its stale consumer.
 conformance-gen:
@@ -539,7 +545,7 @@ check-mapping-gen:
     cargo run --quiet -p talkbank-parser-tests --bin audit_check_parity
 
 [doc("Regenerate every artifact derived from spec/.")]
-spec-gen:
+spec-gen: model-sources-gen
     {{ spec_run }} spec_gen
 
 # Report whether every generated artifact is current. Writes nothing.
@@ -622,13 +628,13 @@ spec-corpus-candidates *ARGS:
 # spec/tools, which calls these same renderers.
 [doc("Regenerate every site carrying the CHAT form-marker inventory.")]
 form-markers-gen:
-    cargo run --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin gen_form_markers
+    cargo run --manifest-path {{ justfile_directory() }}/spec/Cargo.toml -p generators --bin gen_form_markers
 
 # Verify the committed re2c lexer matches lexer.re (and everything it includes).
 #
-# There is NO CI job for this: no workflow installs re2c, so this is the only
-# check that exists, and it has to be run by hand after any change to lexer.re
-# or to the generated form-marker code set it includes. It takes under a second.
+# Uses the exact generator version in re2c-version.toml. Run after changing
+# lexer.re or its generated includes; the local publication gate also invokes
+# this recipe. A currency check is not a parser-behavior test.
 verify-vendored-lexer:
     #!/usr/bin/env bash
     set -euo pipefail

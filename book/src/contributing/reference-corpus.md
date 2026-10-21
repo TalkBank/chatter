@@ -12,13 +12,19 @@ This page describes the tools that select, extend and measure the corpus.
 
 ## What the corpus must cover
 
-Every concrete grammar node type must be exercised by at least one reference
-file, so a grammar regression in any construct fails a gate. Constructs that do
-not occur in real-world data (rare terminators, `uptake_symbol`,
-`scoped_best_guess`, the `unsupported_*` nodes and `thumbnail_header`) are
-covered by small handcrafted files in the corpus rather than left uncovered.
-The language files are real conversations morphotagged with `%mor`/`%gra`, one
-per language, drawn from the corpus data.
+The node-incidence owner, `spec/tools/src/node_coverage.rs`, distinguishes
+required concrete nodes, invalid-by-construction nodes and nodes awaiting
+policy-aware review. Supertypes are accounted for separately. Unsupported and
+recovery syntax must not be added to the valid corpus merely to fill a node
+count; `unsupported_*` and `thumbnail_header` currently have explicit exclusions.
+An excluded node appearing in the corpus requires adjudication, not automatic
+promotion. A passing incidence check does not prove all grammar interactions,
+semantic rules or executable branches are covered.
+
+Preserve the distinction between authored controls and derived language
+examples. Inspect each example's provenance and redistribution permission;
+neither a directory name nor its `%mor`/`%gra` tiers establishes a common
+production history or permission to redistribute it.
 
 Node incidence is necessary, not sufficient: a word with a shortening and a
 word with a suffix do not witness their combination. Review ordered typed
@@ -92,25 +98,44 @@ This is a selected interaction matrix, not exhaustive morphology or coverage.
 |------|------|---------|
 | `corpus_node_coverage` | `spec/tools/src/bin/` | Reports which concrete grammar node types the corpus exercises |
 | `extract_corpus_candidates` | `spec/runtime-tools/src/bin/` | Scores and ranks candidate files in a corpus data directory for target languages |
-| `perturb_corpus` | `spec/tools/src/bin/` | Produces error files by mutating a valid `.cha` file, and mines real data for tree-sitter ERROR nodes |
+| `perturb_corpus` | `spec/tools/src/bin/` | Produces unreviewed text-mutation candidates, or reports syntax-recovery observations in mining mode |
 
 ### Selecting language files
 
-`extract_corpus_candidates` ranks files per target language. Its criteria:
+`extract_corpus_candidates` ranks files by node/tier variety, length and
+speaker count, with a morphology bonus. It rejects Tree-sitter ERROR and
+MISSING nodes; by default it also requires zero Rust parse diagnostics and
+zero validation diagnostics, including alignment. These checks use anonymous
+transcript context, not filename-aware admission. The corresponding CLI
+options can relax the Rust filters, so retain the actual options with results.
 
-- the file parses cleanly with tree-sitter (no ERROR nodes), which is mandatory;
-- short files (a `--max-lines` bound, default 200, preferring 15-100 lines);
-- varied tiers (`%mor`, `%gra`, `%pho`, `%com`);
-- multiple speakers preferred;
-- `Password` directories are skipped, for privacy.
+The current scanner selects the first three-character language entry rather
+than establishing every word's language. Files shorter than ten lines or above
+`--max-lines` (default 200) are skipped. `--max-files` bounds inspection and
+`--top` truncates ranked results. The required `--node-types` path is checked
+for existence; the ranking counts observed CST kinds rather than loading that
+file as a completeness denominator.
 
-Fresh `%mor`/`%gra` tiers for a selected file come from batchalign3
-`morphotag` run in place over its language directory.
+**The extractor does not currently exclude `Password` directories.** Point it
+only at an explicitly authorized, already curated input tree. Directory names
+are not a privacy or licensing boundary. Repository enumeration, traversal and
+selected-file read failures stop the command before it publishes a report;
+an existing output report is left unchanged on these failures. Deliberate caps,
+filters and top-N ranking still mean success is not an exhaustive inventory.
+Reports contain source
+paths; `--output` writes its report path without a no-overwrite guarantee.
+
+Selection does not authorize changing original transcripts, regenerating tiers
+in place, or publishing derived material. Preserve originals and retain the
+source relationship, permissions and any separately approved transformation
+before proposing a reference fixture.
 
 ### Producing error files
 
-`perturb_corpus --list` prints the mutation strategies; each takes a valid
-`.cha` file and applies one controlled mutation:
+`perturb_corpus --output-dir PATH --list` lists the legacy text strategies
+without writing candidates. The output-directory argument is required even
+for listing. Their names describe intent, not verified seed validity, a
+single-fault guarantee or an expected diagnostic:
 
 | Perturbation | Mutation |
 |-------------|----------|
@@ -126,19 +151,31 @@ Fresh `%mor`/`%gra` tiers for a selected file come from batchalign3
 | `duplicate-participants` | Duplicate the `@Participants` header |
 | `mor-terminator-mismatch` | Change the `%mor` terminator to differ from the main tier |
 
-`--mine DIR` scans a data directory for tree-sitter ERROR nodes, again
-excluding `Password` directories.
+For a source-bound main-tier terminator deletion from an admitted seed, prefer
+the separate command documented in
+[Spec Workflow](spec-workflow.md#mutation-candidates-are-not-golden-tests).
+That section also owns candidate promotion and output-collision behavior.
+Legacy text mutation does not validate its seed and can introduce multiple
+defects. Candidate output planning refuses duplicate/existing destinations and
+uses exclusive creation, but a later I/O failure can leave earlier new files.
+
+`--mine DIR` looks for Tree-sitter ERROR or MISSING nodes and writes
+`mining_summary.json`, not extracted CHAT fixtures. It filters paths with
+case-insensitive `Password` components or `-xml` suffixes, but does not prune
+those directory walks. Traversal and read failures may be skipped. Use only an
+authorized input scope; filtering is not permission or anonymization. The
+summary includes source paths and overwrites an existing summary; it is not
+covered by candidate-output no-overwrite admission.
 
 ## Design notes
 
-- **Perturbation beats mining for systematic coverage.** Well-curated corpora
-  contain almost no tree-sitter parse errors, and mining is slow on large
-  directories, so controlled mutation is the way to reach a specific error code.
-- **Parser recovery codes are hard to trigger.** Tree-sitter's error recovery
-  routes most malformed input through the generic path (E316) rather than the
-  specific recovery codes (E319-E322, E376), so examples for those codes
-  usually cannot reach them; their specs are `not_implemented` and say why.
-- **Some codes have no emission path** (internal or reserved codes such as
-  E001 and E002), so their specs document why no example is possible.
-- **Adding files is purely additive.** New reference files extend the gate
-  without disturbing existing ones.
+- Prefer rule-derived, reviewed controls over unbounded mining. An observed
+  recovery result is not the expectation for a new diagnostic test.
+- Diagnostic implementation status belongs to `spec/codes/error-codes.toml`;
+  claims and dispositions belong to the owning specs. Do not infer that an
+  internal diagnostic has no emission path because ordinary CHAT cannot
+  intentionally produce a tool fault.
+- Adding a reference changes every consumer that discovers the population.
+  Check the affected parsing, validation, roundtrip and transform contracts;
+  retain legal controls and review new exclusions rather than assuming that
+  an additive file is behaviorally isolated.

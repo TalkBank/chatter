@@ -65,16 +65,20 @@ as it was typed on the command line.
 
 ## Fixing each one
 
-- **E531:** decide which name is right. Usually `@Media` is updated to the file
-  name, which the suggestion in the diagnostic spells out.
-- **W109:** `chatter fix --code W109 --apply <file>` rewrites the `@Media` name
-  in NFC and changes nothing else. A file name that is not NFC must be renamed
+- **E531:** establish which transcript and recording belong together before
+  choosing the spelling. The diagnostic suggests the transcript's stem, but
+  that suggestion cannot establish recording identity.
+- **W109:** preview `chatter fix --code W109 <file>`. After review, adding
+  `--apply` rewrites only the `@Media` filename token in NFC. A file name that is not NFC must be renamed
   with a tool that keeps NFC; Finder does not.
 - **W110:** make the spellings identical: update `@Media`, or rename the
   transcript. There is no automatic fix, because chatter cannot see how the
   recording itself is spelled.
 
-In every case, rename the recording to match as well. Chatter validates the
-transcript, not the recording, so a recording spelled differently from its
-`@Media` name is invisible to it. Tools that look the recording up report
-that; batchalign3 matches recording names exactly on every host.
+After any correction, verify the actual recording's stored name and existing
+references. Rename it only if the reviewed correction requires that change;
+do not rename an unrelated recording merely to satisfy a matching-name rule.
+Preserve originals and review collisions before any rename. Chatter validates
+the transcript, not the recording, so it cannot certify that the named media
+exists or is the right recording. Check lookup and playback separately with the
+tool that consumes the media.

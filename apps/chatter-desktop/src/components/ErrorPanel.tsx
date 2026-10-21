@@ -9,6 +9,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { FileEntry, ParseError, RenderedDiagnostic } from "../types";
 import { fileOutcome, fileStatusLabel } from "../hooks/validationState";
+import { locationKey } from "../protocol/validation";
 
 type SeverityFilter = "all" | "Error" | "Warning";
 
@@ -147,7 +148,7 @@ export default function ErrorPanel({
 
       {filteredDiagnostics.map((diagnostic, i) => (
         <ErrorCard
-          key={`${diagnostic.error.code}-${diagnostic.error.location.start}-${i}`}
+          key={`${diagnostic.error.code}-${locationKey(diagnostic.error.location)}-${i}`}
           error={diagnostic.error}
           renderedHtml={diagnostic.renderedHtml}
           renderedText={diagnostic.renderedText}

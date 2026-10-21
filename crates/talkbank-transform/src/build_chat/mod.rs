@@ -70,7 +70,10 @@ pub fn build_chat(desc: &TranscriptDescription) -> Result<ChatFile, BuildChatErr
     let context = BuildChatContext::new(desc)?;
     let mut lines = build_header_lines(&context);
     lines.extend(build_utterance_lines(&context).map_err(BuildChatError::Build)?);
-    lines.push(Line::header(Header::End));
+    lines.push(Line::header(
+        talkbank_model::Location::Unlocated,
+        Header::End,
+    ));
 
     // `with_participants`, NOT `new`. `ChatFile::new` leaves the participant
     // map EMPTY -- its doc says it is for "when participant metadata has not

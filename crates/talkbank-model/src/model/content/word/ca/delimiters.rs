@@ -7,9 +7,9 @@
 //! - [CA Subwords](https://talkbank.org/0info/manuals/CHAT.html#CA_Subwords)
 //! - [CA Delimiters](https://talkbank.org/0info/manuals/CHAT.html#CA_Delimiters)
 
+use crate::ErrorSink;
 use crate::model::WriteChat;
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorSink, Span};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -47,10 +47,10 @@ pub use crate::generated::ca_symbols::CADelimiterType;
 /// # Usage
 ///
 /// ```rust
-/// use talkbank_model::{CADelimiter, CADelimiterType};
+/// use talkbank_model::{CADelimiter, CADelimiterType, Location};
 ///
-/// let faster = CADelimiter::new(CADelimiterType::Faster);
-/// let softer = CADelimiter::new(CADelimiterType::Softer);
+/// let faster = CADelimiter::new(Location::Unlocated, CADelimiterType::Faster);
+/// let softer = CADelimiter::new(Location::Unlocated, CADelimiterType::Softer);
 /// ```
 ///
 /// # References
@@ -74,9 +74,10 @@ pub struct CADelimiter {
     /// Delimiter variant.
     pub delimiter_type: CADelimiterType,
     /// Optional source location metadata.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[semantic_eq(skip)]
-    pub span: Option<Span>,
+    #[schemars(skip)]
+    pub location: crate::Location,
 }
 
 impl CADelimiter {
@@ -84,19 +85,11 @@ impl CADelimiter {
     ///
     /// Parser paths generally call this first and attach spans later if source
     /// tracking is available.
-    pub fn new(delimiter_type: CADelimiterType) -> Self {
+    pub fn new(location: impl Into<crate::Location>, delimiter_type: CADelimiterType) -> Self {
         Self {
             delimiter_type,
-            span: None,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata.
-    ///
-    /// Spans are optional and only affect diagnostics, never semantic equality.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = Some(span);
-        self
     }
 }
 

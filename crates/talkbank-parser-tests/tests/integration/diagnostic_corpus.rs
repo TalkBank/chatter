@@ -139,7 +139,7 @@ fn reference_word_wire_spelling_does_not_bypass_form_marker_validation() {
             wire["raw_text"] = spelling.into();
             wire["cleaned_text"] = "stale".into();
             let word: Word = serde_json::from_value(wire).expect("legacy computed fields ignored");
-            assert!(word.span.is_dummy());
+            assert!(word.location.span().is_none());
             assert_eq!(word.raw_text(), token);
             assert_eq!(serde_json::to_value(&word).expect("derived wire"), seed);
         }
@@ -217,9 +217,12 @@ fn retrace_specs_import_without_fabricating_source_labels() {
         assert!(!before.is_empty(), "{fixture}: declared violation");
         assert_eq!(before.len(), after.len());
         for (located, imported) in before.iter().zip(&after) {
-            assert!(!located.location.span.is_dummy());
+            assert!(matches!(
+                located.location,
+                talkbank_model::DiagnosticLocation::Known { .. }
+            ));
             assert!(!located.labels.is_empty());
-            assert!(imported.location.span.is_dummy());
+            assert!(imported.location == talkbank_model::DiagnosticLocation::Unlocated);
             assert!(imported.labels.is_empty(), "no byte-zero source label");
             assert_eq!(located.message, imported.message);
             assert_eq!(located.suggestion, imported.suggestion);
@@ -320,24 +323,30 @@ fn reference_editor_offsets_preserve_tier_ownership_and_half_open_boundaries() {
         assert_eq!(file.header_count(), file.headers().count());
         assert_eq!(file.utterance_count(), file.utterances().count());
         for utterance in file.utterances() {
-            let mut end = utterance.main.span.end;
-            for (span, marker) in std::iter::once((utterance.main.span, b'*')).chain(
+            let mut end = utterance.main.location.span().expect("located").end();
+            for (span, marker) in std::iter::once((utterance.main.location, b'*')).chain(
                 utterance
                     .dependent_tiers
                     .iter()
-                    .map(|entry| (entry.tier.span(), b'%')),
+                    .map(|entry| (entry.tier.location(), b'%')),
             ) {
                 assert!(
-                    !span.is_dummy() && span.start < span.end,
+                    !span.span().is_none()
+                        && span.span().expect("located").start()
+                            < span.span().expect("located").end(),
                     "reference tier has source coordinates"
                 );
                 assert_eq!(
-                    fixture.source().as_bytes()[span.start as usize],
+                    fixture.source().as_bytes()[span.span().expect("located").start()],
                     marker,
                     "tier span begins at its source marker: {}",
                     fixture.path().display()
                 );
-                for offset in [span.start, span.start + 1, span.end - 1] {
+                for offset in [
+                    span.span().expect("located").start(),
+                    span.span().expect("located").start() + 1,
+                    span.span().expect("located").end() - 1,
+                ] {
                     let selected = file
                         .utterance_containing(offset)
                         .expect("tier byte has an owner");
@@ -346,7 +355,7 @@ fn reference_editor_offsets_preserve_tier_ownership_and_half_open_boundaries() {
                         "lookup returns the owning object, not a similar turn"
                     );
                 }
-                end = end.max(span.end);
+                end = end.max(span.span().expect("located").end());
                 if marker == b'*' {
                     main_tiers += 1;
                 } else {
@@ -360,18 +369,16 @@ fn reference_editor_offsets_preserve_tier_ownership_and_half_open_boundaries() {
                 );
             }
         }
-        for (_, span) in file.headers_with_spans() {
-            if !span.is_dummy() {
+        for (_, span) in file.headers_with_locations() {
+            if !span.span().is_none() {
                 assert!(
-                    file.utterance_containing(span.start).is_none(),
+                    file.utterance_containing(span.span().expect("located").start())
+                        .is_none(),
                     "header is not speech"
                 );
             }
         }
-        assert!(
-            file.utterance_containing(fixture.source().len() as u32)
-                .is_none()
-        );
+        assert!(file.utterance_containing(fixture.source().len()).is_none());
     }
     assert!(
         main_tiers > 0 && dependent_tiers > 0,
@@ -453,7 +460,10 @@ fn code_spacing_specs_preserve_nested_sibling_boundaries() {
                     .find(&format!("]{following}"))
                     .expect("deleted separator")
                     + 1;
-                assert_eq!(diagnostics[0].location.span, Span::from_usize(start, start));
+                assert_eq!(
+                    diagnostics[0].location.span().expect("located diagnostic"),
+                    Span::new(start, start)
+                );
             }
             assert_eq!(
                 file.to_chat_string(),
@@ -762,7 +772,7 @@ fn untranscribed_timing_specs_constrain_following_speech() {
         let expected_span = turns[2]
             .media_bullet()
             .expect("following timed speech")
-            .span;
+            .location;
         let errors = ErrorCollector::new();
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let overlaps: Vec<_> = errors
@@ -771,7 +781,10 @@ fn untranscribed_timing_specs_constrain_following_speech() {
             .filter(|error| error.code == ErrorCode::SpeakerSelfOverlap)
             .collect();
         assert_eq!(overlaps.len(), 1, "example {example}: {overlaps:?}");
-        assert_eq!(overlaps[0].location.span, expected_span);
+        assert_eq!(
+            overlaps[0].location.span().expect("located diagnostic"),
+            expected_span.span().expect("located")
+        );
         assert_eq!(
             file.to_chat_string(),
             source,
@@ -926,8 +939,8 @@ fn nested_comma_specs_require_prior_spoken_content_at_the_actual_comma() {
             assert_eq!(diagnostics[0].code, ErrorCode::CommaAfterNonSpokenContent);
             let comma = source.find(" , ").expect("canonical comma") + 1;
             assert_eq!(
-                diagnostics[0].location.span,
-                Span::from_usize(comma, comma + 1)
+                diagnostics[0].location.span().expect("located diagnostic"),
+                Span::new(comma, comma + 1)
             );
         }
         assert_eq!(
@@ -981,8 +994,8 @@ fn date_specs_reject_signed_components_without_rewriting_source() {
             assert_eq!(value_errors[0].code, ErrorCode::InvalidDateFormat);
             assert_eq!(value_errors[0].severity, talkbank_model::Severity::Error);
             assert_eq!(
-                value_errors[0].location.span,
-                talkbank_model::Span::from_usize(0, 0)
+                value_errors[0].location,
+                talkbank_model::DiagnosticLocation::Unlocated
             );
             assert!(value_errors[0].message.contains(date.as_str()));
         }
@@ -1251,8 +1264,8 @@ fn language_candidate_specs_report_at_the_marked_word() {
             Claim::Invalid(word) => {
                 assert_eq!(diagnostics.len(), 1, "E519_{example}: {diagnostics:?}");
                 assert_eq!(diagnostics[0].code, ErrorCode::InvalidLanguageCode);
-                let span = diagnostics[0].location.span;
-                assert_eq!(&source[span.start as usize..span.end as usize], word);
+                let span = diagnostics[0].location.span().expect("located diagnostic");
+                assert_eq!(&source[span.start()..span.end()], word);
             }
         }
     }
@@ -1299,7 +1312,7 @@ fn postcode_specs_retain_opaque_labels_and_the_real_terminator() {
 /// canonical hidden headers, rather than fabricated diagnostic objects.
 #[test]
 fn reference_clan_coordinates_skip_and_refuse_hidden_headers() {
-    use talkbank_model::{SourceLocation, Span, resolve_clan_location};
+    use talkbank_model::{DiagnosticLocation, Span, resolve_clan_location};
     let corpus = ChatCorpus::reference().expect("canonical references");
     let mut hidden_witnesses = [0; 5];
     let mut visible_witnesses = 0;
@@ -1332,15 +1345,25 @@ fn reference_clan_coordinates_skip_and_refuse_hidden_headers() {
                 (Some(index + 1), None),
                 (None, Some(1)),
             ] {
-                let location = SourceLocation {
-                    span: Span::from_usize(offset, offset + content.len()),
-                    line: cached_line,
-                    column: cached_column,
+                // Only a complete one-based pair is a position; zero or
+                // partial cached coordinates leave the span to be measured.
+                let span = Span::new(offset, offset + content.len());
+                let location = match cached_line
+                    .zip(cached_column)
+                    .and_then(|(line, column)| talkbank_model::LineColumn::one_based(line, column))
+                {
+                    Some(position) => DiagnosticLocation::known_at(span, position),
+                    None => DiagnosticLocation::new(span),
                 };
                 let mapped = resolve_clan_location(&location, fixture.source());
                 if hidden.is_some() {
                     let error = mapped.expect_err("hidden header has no editor location");
-                    assert_eq!(error.source_line, index + 1);
+                    assert_eq!(
+                        error,
+                        talkbank_model::ClanLocationError::HiddenLine {
+                            source_line: index + 1
+                        }
+                    );
                     assert!(error.to_string().contains("hidden"));
                 } else {
                     let mapped = mapped.expect("visible reference line");
@@ -1495,7 +1518,7 @@ fn unicode_boundary_specs_preserve_words_and_locate_each_rejection() {
             .map(|character| {
                 let text = format!("a{character}b");
                 let start = source.find(&text).expect("authored word");
-                let span = Span::from_usize(start, start + text.len());
+                let span = Span::new(start, start + text.len());
                 (text, span)
             })
             .collect();
@@ -1510,7 +1533,10 @@ fn unicode_boundary_specs_preserve_words_and_locate_each_rejection() {
                     word.cleaned_text(),
                     "retain the tested scalar"
                 );
-                observed_words.push((word.cleaned_text().to_owned(), word.span));
+                observed_words.push((
+                    word.cleaned_text().to_owned(),
+                    word.location.span().expect("located word"),
+                ));
             });
         }
         assert_eq!(observed_words, expected, "Unicode example {example}");
@@ -1549,7 +1575,7 @@ fn unicode_boundary_specs_preserve_words_and_locate_each_rejection() {
         assert_eq!(
             observed
                 .iter()
-                .map(|error| error.location.span)
+                .map(|error| error.location.span().expect("located diagnostic"))
                 .collect::<Vec<_>>(),
             expected_spans,
             "one located error per rejected word in example {example}"
@@ -1622,8 +1648,14 @@ fn compound_specs_require_spoken_material_in_every_part() {
                     "{fixture}: {diagnostics:?}"
                 );
                 let start = source.find(word).expect("authored compound word");
-                let span = Span::from_usize(start, start + word.len());
-                assert!(diagnostics.iter().all(|error| error.location.span == span));
+                let span = Span::new(start, start + word.len());
+                assert!(
+                    diagnostics.iter().all(|error| error
+                        .location
+                        .span()
+                        .expect("located diagnostic")
+                        == span)
+                );
             }
         }
         assert_eq!(
@@ -1677,8 +1709,8 @@ fn punctuation_specs_preserve_source_and_locate_every_word() {
                             .find(word)
                             .expect("authored invalid word");
                     assert_eq!(
-                        error.location.span,
-                        Span::from_usize(start, start + word.len())
+                        error.location.span().expect("located diagnostic"),
+                        Span::new(start, start + word.len())
                     );
                     previous_end = start + word.len();
                 }
@@ -1717,7 +1749,9 @@ fn indexed_overlap_specs_locate_each_unmatched_speaker() {
                     .find(|utterance| utterance.main.speaker.as_str() == *speaker)
                     .expect("declared spec speaker")
                     .main
-                    .span
+                    .location
+                    .span()
+                    .expect("located utterance")
             })
             .collect();
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
@@ -1728,7 +1762,10 @@ fn indexed_overlap_specs_locate_each_unmatched_speaker() {
                 .all(|error| error.code == ErrorCode::UnbalancedOverlap),
             "unrelated diagnostic in E347_{example}: {observed:?}"
         );
-        let spans: Vec<_> = observed.iter().map(|error| error.location.span).collect();
+        let spans: Vec<_> = observed
+            .iter()
+            .map(|error| error.location.span().expect("located diagnostic"))
+            .collect();
         assert_eq!(
             spans, expected_spans,
             "unmatched speakers in E347_{example}"
@@ -1767,12 +1804,12 @@ fn attribute_specs_preserve_the_source_bound_lexical_boundary() {
             Attribute::Italic => {
                 let begin = source.find("\u{0002}\u{0003}").expect("italic start");
                 let end = source.find("\u{0002}\u{0004}").expect("italic end");
-                let expected = [begin, begin + 1, end, end + 1]
-                    .map(|offset| Span::from_usize(offset, offset + 1));
+                let expected =
+                    [begin, begin + 1, end, end + 1].map(|offset| Span::new(offset, offset + 1));
                 assert_eq!(
                     lexical
                         .iter()
-                        .map(|error| error.location.span)
+                        .map(|error| error.location.span().expect("located diagnostic"))
                         .collect::<Vec<_>>(),
                     expected
                 );
@@ -1805,8 +1842,8 @@ fn attribute_specs_preserve_the_source_bound_lexical_boundary() {
                             1 => {
                                 assert_eq!(lexical.len(), 1, "incomplete pair at EOF");
                                 assert_eq!(
-                                    lexical[0].location.span,
-                                    Span::from_usize(start, start + 1)
+                                    lexical[0].location.span().expect("located diagnostic"),
+                                    Span::new(start, start + 1)
                                 );
                                 assert!(lexical[0].message.contains("U+0002"));
                             }
@@ -2023,8 +2060,8 @@ fn speaker_specs_reject_non_ascii_at_the_source_boundary() {
             .collect();
         assert!(!syntax.is_empty(), "E307_{example}: {diagnostics:?}");
         for error in syntax {
-            let span = error.location.span;
-            assert!(source[span.start as usize..span.end as usize].contains(code));
+            let span = error.location.span().expect("located diagnostic");
+            assert!(source[span.start()..span.end()].contains(code));
             assert!(error.message.contains("ASCII"));
         }
     }
@@ -2185,7 +2222,7 @@ fn compound_specs_preserve_typed_marker_placement_and_error_span() {
                     word.content().last(),
                     Some(WordContent::CompoundMarker(_))
                 ));
-                Some(word.span)
+                Some(word.location)
             }
             Shape::Plain => {
                 assert!(
@@ -2214,7 +2251,10 @@ fn compound_specs_preserve_typed_marker_placement_and_error_span() {
         if let Some(span) = expected_span {
             assert_eq!(observed.len(), 1);
             assert_eq!(observed[0].code, ErrorCode::EmptyCompoundPart);
-            assert_eq!(observed[0].location.span, span);
+            assert_eq!(
+                observed[0].location.span().expect("located diagnostic"),
+                span.span().expect("located")
+            );
         } else {
             assert!(observed.is_empty());
         }
@@ -2262,7 +2302,14 @@ fn header_specs_locate_duplicate_ids_and_undeclared_id_languages() {
                 .nth(occurrence)
                 .expect("authored ID occurrence")
                 .0;
-            assert_eq!(observed[0].location.span.start as usize, start);
+            assert_eq!(
+                observed[0]
+                    .location
+                    .span()
+                    .expect("located diagnostic")
+                    .start(),
+                start
+            );
         } else {
             assert!(observed.is_empty(), "{spec}_{example}: {observed:?}");
         }
@@ -2297,9 +2344,9 @@ fn tab_specs_distinguish_continuations_from_mid_tier_recovery() {
             TabRole::MidTier => {
                 assert_eq!(parsed.len(), 1);
                 assert_eq!(parsed[0].code, ErrorCode::StructuralOrderError);
-                let span = parsed[0].location.span;
+                let span = parsed[0].location.span().expect("located diagnostic");
                 let fragment = source
-                    .get(span.start as usize..span.end as usize)
+                    .get(span.start()..span.end())
                     .expect("diagnostic remains source-bound");
                 assert!(fragment.contains('\t'), "locate the structural tab");
             }
@@ -2474,7 +2521,7 @@ fn tier_namespace_specs_preserve_complete_labels_and_diagnostics() {
         };
         assert_eq!(payload.label.as_str(), label);
         assert_eq!(payload.content.as_deref(), Some("unknown tier content"));
-        let span = payload.span;
+        let span = payload.location;
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let observed = errors.into_vec();
         assert_eq!(
@@ -2484,7 +2531,10 @@ fn tier_namespace_specs_preserve_complete_labels_and_diagnostics() {
         );
         for error in observed {
             assert_eq!(error.code, ErrorCode::UnsupportedDependentTier);
-            assert_eq!(error.location.span, span);
+            assert_eq!(
+                error.location.span().expect("located diagnostic"),
+                span.span().expect("located")
+            );
         }
     }
 }
@@ -2539,8 +2589,8 @@ fn empty_tier_specs_preserve_namespace_and_content_presence() {
         };
         assert_eq!(payload.label.as_str(), label);
         assert_eq!(payload.content.as_deref(), content);
-        let span = payload.span;
-        assert_eq!(tier.empty_content_span(), report_empty.then_some(span));
+        let span = payload.location;
+        assert_eq!(tier.empty_content_location(), report_empty.then_some(span));
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let observed = errors.into_vec();
         let empty_errors: Vec<_> = observed
@@ -2553,7 +2603,10 @@ fn empty_tier_specs_preserve_namespace_and_content_presence() {
             "E756_{example}: {observed:?}"
         );
         if let Some(error) = empty_errors.first() {
-            assert_eq!(error.location.span, span);
+            assert_eq!(
+                error.location.span().expect("located diagnostic"),
+                span.span().expect("located")
+            );
         }
         assert_eq!(
             observed.len(),
@@ -2572,7 +2625,7 @@ fn empty_tier_specs_preserve_namespace_and_content_presence() {
 
 #[test]
 fn reference_excerpt_admission_distinguishes_empty_from_invalid_ranges() {
-    use talkbank_model::{ErrorContext, SourceExcerptError, SourceLocation, Span};
+    use talkbank_model::{DiagnosticLocation, ErrorContext, SourceExcerptError, Span};
     let source = std::fs::read_to_string(
         workspace_root().join("corpus/reference/audio/chinese-adult-conversation.cha"),
     )
@@ -2583,30 +2636,29 @@ fn reference_excerpt_admission_distinguishes_empty_from_invalid_ranges() {
         .expect("reference contains a multibyte scalar");
     let end = start + character.len_utf8();
     for range in [0..0, start..end, source.len()..source.len()] {
-        let checked = SourceLocation::from_offsets_in_source(range.start, range.end, &source)
+        let checked = DiagnosticLocation::from_offsets_in_source(range.start, range.end, &source)
             .expect("reference range");
-        let line = checked.line.expect("checked source line");
-        let column = checked.column.expect("checked source column");
-        let explicit =
-            SourceLocation::from_offsets_with_position(range.start, range.end, line, column);
+        let position = checked.position().expect("checked source position");
+        let explicit = DiagnosticLocation::known_at(Span::new(range.start, range.end), position);
         assert_eq!(explicit, checked);
-        let relative = SourceLocation::from_range(range);
-        assert_eq!(relative.span, checked.span);
-        assert_eq!((relative.line, relative.column), (None, None));
-        assert_eq!(relative.with_position(line, column), checked);
-        let from_span: SourceLocation = checked.span.into();
-        assert_eq!(from_span.span, checked.span);
-        assert_eq!((from_span.line, from_span.column), (None, None));
+        let relative = DiagnosticLocation::from_range(range);
+        assert_eq!(relative.span(), checked.span());
+        assert_eq!(relative.position(), None);
+        let span = checked.span().expect("checked span");
+        assert_eq!(DiagnosticLocation::known_at(span, position), checked);
+        let from_span: DiagnosticLocation = span.into();
+        assert_eq!(from_span.span(), checked.span());
+        assert_eq!(from_span.position(), None);
     }
     let excerpt = ErrorContext::from_source_with_span(&source, start, end, &source[start..end])
         .expect("whole scalar is a valid source excerpt");
     assert_eq!(excerpt.source_text, character.to_string());
-    assert_eq!(excerpt.span, Span::from_usize(0, character.len_utf8()));
+    assert_eq!(excerpt.span, Span::new(0, character.len_utf8()));
     for offset in [0, start, source.len()] {
         let empty = ErrorContext::from_source_with_span(&source, offset, offset, "")
             .expect("valid insertion range");
         assert!(empty.source_text.is_empty());
-        assert_eq!(empty.span, Span::from_usize(0, 0));
+        assert_eq!(empty.span, Span::new(0, 0));
     }
     for (start, end) in [
         (1, 0),
@@ -2634,46 +2686,42 @@ fn reference_excerpt_admission_distinguishes_empty_from_invalid_ranges() {
 }
 
 fn assert_document_rebasing(errors: &[talkbank_model::ParseError], source: &str) -> (usize, usize) {
-    use talkbank_model::{ErrorSink, RebasedErrorSink, SourceLocation, Span};
+    use talkbank_model::{DiagnosticLocation, ErrorSink, RebasedErrorSink, Span};
     // Model a CHAT source embedded after a real prefix, without parsing the
     // envelope as CHAT or changing the diagnostic's independently owned snippet.
     let prefix = "embedded CHAT:\n";
-    let delta = i32::try_from(prefix.len()).expect("bounded prefix");
+    let delta = isize::try_from(prefix.len()).expect("bounded prefix");
     let mut checked = 0;
     let mut unlocated = 0;
     for error in errors {
-        if source
-            .get(error.location.span.start as usize..error.location.span.end as usize)
-            .is_none()
-        {
+        // An unlocated diagnostic has no coordinates to move; it is counted,
+        // not translated.
+        let Some(span) = error.location.span() else {
+            unlocated += 1;
+            continue;
+        };
+        if source.get(span.start()..span.end()).is_none() {
             continue;
         }
         let mut located = error.clone();
-        if error.location.span.is_dummy() {
-            unlocated += 1;
-        } else {
-            let (line, column) =
-                SourceLocation::calculate_line_column(error.location.span.start as usize, source);
-            located.location.line = Some(line);
-            located.location.column = Some(column);
-        }
+        located.location = DiagnosticLocation::known_at(
+            span,
+            talkbank_model::LineColumn::of_offset(span.start(), source),
+        );
         let received = ErrorCollector::new();
         RebasedErrorSink::new(&received, delta).report(located);
         let mut expected = error.clone();
         let shift = |span: Span| {
-            if span.is_dummy() {
-                return span;
-            }
             Span::new(
-                span.start
-                    .checked_add(prefix.len() as u32)
+                span.start()
+                    .checked_add(prefix.len())
                     .expect("source-sized offset"),
-                span.end
-                    .checked_add(prefix.len() as u32)
+                span.end()
+                    .checked_add(prefix.len())
                     .expect("source-sized offset"),
             )
         };
-        expected.location = SourceLocation::new(shift(error.location.span));
+        expected.location = DiagnosticLocation::new(shift(span));
         for label in &mut expected.labels {
             label.span = shift(label.span);
         }
@@ -2686,7 +2734,7 @@ fn assert_document_rebasing(errors: &[talkbank_model::ParseError], source: &str)
         let restored = ErrorCollector::new();
         RebasedErrorSink::new(&restored, -delta).report_all(translated);
         let mut expected = error.clone();
-        expected.location = SourceLocation::new(error.location.span);
+        expected.location = DiagnosticLocation::new(span);
         assert_eq!(
             restored.into_vec(),
             vec![expected],
@@ -2703,7 +2751,7 @@ fn assert_fragment_projection(
     errors: &[talkbank_model::ParseError],
     source: &str,
 ) -> (usize, usize) {
-    use talkbank_model::{ErrorSink, OffsetAdjustingErrorSink, SourceLocation, Span};
+    use talkbank_model::{DiagnosticLocation, ErrorSink, OffsetAdjustingErrorSink, Span};
     enum Delivery {
         Single,
         Vec,
@@ -2712,12 +2760,19 @@ fn assert_fragment_projection(
     let mut labeled = 0;
     let mut large_context = 0;
     for error in errors {
-        let origin = error.location.span.start as usize;
-        let Some(fragment) = source.get(origin..error.location.span.end as usize) else {
+        // An unlocated diagnostic identifies no source slice.
+        let Some(span) = error.location.span() else {
+            continue;
+        };
+        let origin = span.start();
+        let Some(fragment) = source.get(origin..span.end()) else {
             continue;
         };
         if let Some(original_context) = error.context.as_ref()
-            && !error.location.span.is_dummy()
+            && matches!(
+                error.location,
+                talkbank_model::DiagnosticLocation::Known { .. }
+            )
         {
             // A confirmed source range permits a fresh, snippet-relative
             // context. Keep the diagnostic's found/expected evidence verbatim;
@@ -2725,13 +2780,13 @@ fn assert_fragment_projection(
             let excerpt = talkbank_model::ErrorContext::from_source_with_span(
                 source,
                 origin,
-                error.location.span.end as usize,
+                error.location.span().expect("located diagnostic").end(),
                 original_context.found.clone(),
             )
             .expect("confirmed source range")
             .with_expected(original_context.expected.clone());
             assert_eq!(excerpt.source_text, fragment);
-            assert_eq!(excerpt.span, Span::from_usize(0, fragment.len()));
+            assert_eq!(excerpt.span, Span::new(0, fragment.len()));
             assert_eq!(
                 excerpt.line_offset,
                 Some(
@@ -2751,17 +2806,14 @@ fn assert_fragment_projection(
             assert_eq!(decoded, excerpt);
         }
         let project = |span: Span| {
-            Span::from_usize(
-                (span.start as usize)
-                    .saturating_sub(origin)
-                    .min(fragment.len()),
-                (span.end as usize)
-                    .saturating_sub(origin)
-                    .min(fragment.len()),
+            Span::new(
+                (span.start()).saturating_sub(origin).min(fragment.len()),
+                (span.end()).saturating_sub(origin).min(fragment.len()),
             )
         };
         let mut expected = error.clone();
-        expected.location = SourceLocation::new(project(error.location.span));
+        expected.location =
+            DiagnosticLocation::new(project(error.location.span().expect("located diagnostic")));
         for label in &mut expected.labels {
             label.span = project(label.span);
         }
@@ -2790,7 +2842,7 @@ fn assert_fragment_projection(
 
 #[test]
 fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
-    use talkbank_model::SourceLocation;
+    use talkbank_model::DiagnosticLocation;
     let corpus = ChatCorpus::read(
         &workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors"),
     )
@@ -2802,6 +2854,7 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
     let mut projected_large_contexts = 0;
     let mut rebased_diagnostics = 0;
     let mut rebased_unlocated = 0;
+    let mut invalid_contexts = std::collections::BTreeSet::new();
     for fixture in corpus.fixtures() {
         let sink = ErrorCollector::new();
         let _admission = talkbank_transform::parse_validated_with_parser(
@@ -2825,10 +2878,27 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
         // Source-aware API admission is separate from display enrichment:
         // it must preserve real diagnostic spans, not clamp malformed input.
         for diagnostic in &original {
+            // Raw snippets have their own coordinate space even before a
+            // caller supplies the producing source for display attachment.
+            // Collect the whole inventory so one failure does not hide others.
+            if let Some(context) = &diagnostic.context
+                && context
+                    .source_text
+                    .get(context.span.start()..context.span.end())
+                    .is_none()
+            {
+                invalid_contexts.insert(format!(
+                    "{}: {} context {:?} outside {} UTF-8 bytes",
+                    fixture.path().display(),
+                    diagnostic.code,
+                    context.span,
+                    context.source_text.len(),
+                ));
+            }
             for label in &diagnostic.labels {
-                let located = SourceLocation::from_offsets_in_source(
-                    label.span.start as usize,
-                    label.span.end as usize,
+                let located = DiagnosticLocation::from_offsets_in_source(
+                    label.span.start(),
+                    label.span.end(),
                     fixture.source(),
                 )
                 .unwrap_or_else(|error| {
@@ -2838,45 +2908,59 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
                         diagnostic.code,
                     )
                 });
-                assert_eq!(located.span, label.span);
+                assert_eq!(located.span().expect("located diagnostic"), label.span);
                 assert!(
                     fixture
                         .source()
-                        .get(label.span.start as usize..label.span.end as usize,)
+                        .get(label.span.start()..label.span.end(),)
                         .is_some(),
                     "label must select complete UTF-8 source bytes"
                 );
             }
-            let span = diagnostic.location.span;
-            if span.is_dummy() {
-                continue;
-            }
-            let located = SourceLocation::from_offsets_in_source(
-                span.start as usize,
-                span.end as usize,
+            let span = diagnostic.location.span().expect("located diagnostic");
+            let located = DiagnosticLocation::from_offsets_in_source(
+                span.start(),
+                span.end(),
                 fixture.source(),
             )
             .expect("concrete diagnostic range belongs to its source");
-            let point =
-                SourceLocation::from_offset_in_source(span.start as usize, fixture.source())
-                    .expect("diagnostic start belongs to its source");
-            let (line, column) = index.line_col_of(span.start);
-            assert_eq!(located.span, span);
+            let point = DiagnosticLocation::from_offset_in_source(span.start(), fixture.source())
+                .expect("diagnostic start belongs to its source");
+            let (line, column) = index.line_col_of(span.start());
+            assert_eq!(located.span().expect("located diagnostic"), span);
             assert_eq!(
-                (located.line, located.column),
+                (
+                    located.position().map(|p| p.line.get()),
+                    located.position().map(|p| p.column.get())
+                ),
                 (Some(line + 1), Some(column + 1))
             );
-            assert_eq!((point.line, point.column), (located.line, located.column));
-            assert_eq!(point.span.start, point.span.end);
+            assert_eq!(
+                (
+                    point.position().map(|p| p.line.get()),
+                    point.position().map(|p| p.column.get())
+                ),
+                (
+                    located.position().map(|p| p.line.get()),
+                    located.position().map(|p| p.column.get())
+                )
+            );
+            assert_eq!(
+                point.span().expect("located diagnostic").start(),
+                point.span().expect("located diagnostic").end()
+            );
         }
         let end = fixture.source().len();
-        let eof = SourceLocation::from_offset_in_source(end, fixture.source())
+        let eof = DiagnosticLocation::from_offset_in_source(end, fixture.source())
             .expect("zero-width EOF location is legitimate");
-        assert_eq!(eof.span.start as usize, end);
-        assert_eq!(eof.span.start, eof.span.end);
-        assert!(SourceLocation::from_offset_in_source(end + 1, fixture.source()).is_err());
-        assert!(SourceLocation::from_offsets_in_source(1, 0, fixture.source()).is_err());
-        assert!(SourceLocation::from_offsets_in_source(0, end + 1, fixture.source()).is_err());
+        assert_eq!(eof.span().expect("located diagnostic").start(), end);
+        assert_eq!(
+            eof.span().expect("located diagnostic").start(),
+            eof.span().expect("located diagnostic").end()
+        );
+        assert!(DiagnosticLocation::from_offset_in_source(end + 1, fixture.source()).is_err());
+        assert!(DiagnosticLocation::from_offsets_in_source(1, 0, fixture.source()).is_err());
+        assert!(DiagnosticLocation::from_offsets_in_source(0, end + 1, fixture.source()).is_err());
         let rendered: Vec<_> = enhance_errors_with_index(&original, &index).collect();
         assert_eq!(original.len(), rendered.len());
         let shared_source =
@@ -2964,7 +3048,11 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
             );
             // Coordinates are bytes, not Unicode scalar or display columns.
             // Count source newlines independently of the indexed lookup.
-            let offset = presentation.location().span.start as usize;
+            let offset = presentation
+                .location()
+                .span()
+                .expect("located diagnostic")
+                .start();
             let prefix = &fixture.source().as_bytes()[..offset];
             let line = prefix.iter().filter(|byte| **byte == b'\n').count() + 1;
             let column = offset
@@ -2974,13 +3062,25 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
                     .map_or(0, |position| position + 1)
                 + 1;
             assert_eq!(
-                presentation.location().line,
+                presentation.position().line.get(),
+                line,
+                "{}",
+                fixture.path().display()
+            );
+            assert_eq!(
+                presentation.position().column.get(),
+                column,
+                "{}",
+                fixture.path().display()
+            );
+            assert_eq!(
+                presentation.location().position().map(|p| p.line.get()),
                 Some(line),
                 "{}",
                 fixture.path().display()
             );
             assert_eq!(
-                presentation.location().column,
+                presentation.location().position().map(|p| p.column.get()),
                 Some(column),
                 "{}",
                 fixture.path().display()
@@ -2990,12 +3090,18 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
             assert!(
                 context
                     .source_text()
-                    .get(context.span().to_range())
+                    .get(context.span().start()..context.span().end())
                     .is_some(),
                 "invalid display span: {} {after:?}",
                 fixture.path().display()
             );
-            for label in presentation.labels() {
+            for (raw_label, label) in before.labels.iter().zip(presentation.labels()) {
+                assert_eq!(
+                    label.message(),
+                    raw_label.message,
+                    "projection must preserve label wording: {}",
+                    fixture.path().display()
+                );
                 assert!(
                     context.source_text().get(label.span().to_range()).is_some(),
                     "invalid display label: {} {after:?}",
@@ -3006,6 +3112,11 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
             rendered_count += 1;
         }
     }
+    assert!(
+        invalid_contexts.is_empty(),
+        "raw diagnostic contexts must be snippet-relative:\n{}",
+        invalid_contexts.into_iter().collect::<Vec<_>>().join("\n"),
+    );
     assert!(
         rendered_count > 0 && labeled_count > 0,
         "specs must witness both primary and labeled diagnostics"
@@ -3018,9 +3129,13 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
         rebased_diagnostics > 0,
         "specs must exercise document translation"
     );
-    assert!(
-        rebased_unlocated > 0 && rebased_unlocated < rebased_diagnostics,
-        "specs must exercise both located and explicitly unlocated diagnostics"
+    // Every value a parser builds is located, and header payloads report at
+    // their header's line, so a diagnostic over a parsed spec always has
+    // coordinates. Unlocated diagnostics belong to programmatic construction
+    // and JSON import, which the public error-type tests exercise directly.
+    assert_eq!(
+        rebased_unlocated, 0,
+        "every diagnostic over a parsed spec is located"
     );
 }
 

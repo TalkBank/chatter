@@ -15,11 +15,11 @@ fn reference_display_events_preserve_style_and_byte_mapping() {
         let lines = talkbank_model::errors::line_map::LineMap::new(source);
         let index = talkbank_model::errors::line_map::SourceIndex::new(source);
         assert_eq!(index.source(), source);
-        let source_len = u32::try_from(source.len()).expect("reference fits source coordinates");
-        let mut end = 0u32;
+        let source_len = source.len();
+        let mut end = 0usize;
         for (line, text) in source.split_inclusive('\n').enumerate() {
             assert_eq!(lines.line_start(line), end);
-            end += u32::try_from(text.len()).expect("reference line fits source coordinates");
+            end += text.len();
             assert_eq!(lines.line_end(line, source_len), end);
         }
         assert_eq!(
@@ -35,7 +35,6 @@ fn reference_display_events_preserve_style_and_byte_mapping() {
         }
         let (mut line, mut column) = (0, 0);
         for (offset, byte) in source.bytes().enumerate() {
-            let offset = u32::try_from(offset).expect("admitted reference offset");
             assert_eq!(index.line_col_of(offset), (line, column));
             if byte == b'\n' {
                 line += 1;
@@ -48,8 +47,8 @@ fn reference_display_events_preserve_style_and_byte_mapping() {
         // Out-of-source offsets select the final line; columns remain byte
         // distances rather than silently becoming a clamped source position.
         assert_eq!(
-            index.line_col_of(u32::MAX),
-            (line, (u32::MAX - lines.line_start(line)) as usize)
+            index.line_col_of(usize::MAX),
+            (line, usize::MAX - lines.line_start(line))
         );
         let mapped = process_for_plain_display_mapped(source);
         let mut processor = ChatTextProcessor::new(source);
@@ -211,18 +210,18 @@ fn spec_findings_preserve_evidence_through_presentation_policies() {
                     serde_json::from_value(wire).expect("public profile reconstruction");
                 assert_eq!(restored, (kind, profile));
             }
-            let span = finding.location.span;
+            let span = finding
+                .location
+                .span()
+                .unwrap_or_else(|| panic!("located diagnostic: {finding:?}"));
             let byte_range: std::ops::Range<usize> = span.into();
             assert_eq!(byte_range, span.to_range());
-            assert_eq!(talkbank_model::Span::from(byte_range), span);
-            for range in [span.to_text_range(), span.into()] {
-                assert_eq!(talkbank_model::Span::from(range), span);
-            }
+            assert_eq!(talkbank_model::Span::try_from(byte_range), Ok(span));
             assert!(span.contains_span(span));
-            assert_eq!(span.contains_offset(span.start), !span.is_empty());
-            assert!(!span.contains_offset(span.end));
+            assert_eq!(span.contains_offset(span.start()), !span.is_empty());
+            assert!(!span.contains_offset(span.end()));
             if span.len() > 1 {
-                let point = talkbank_model::Span::new(span.start + 1, span.start + 1);
+                let point = talkbank_model::Span::new(span.start() + 1, span.start() + 1);
                 assert!(span.contains_span(point));
                 assert!(point.is_empty());
                 assert!(
@@ -230,7 +229,7 @@ fn spec_findings_preserve_evidence_through_presentation_policies() {
                     "empty insertion span covers no bytes"
                 );
                 assert!(!point.overlaps(span), "overlap is symmetric");
-                let byte = talkbank_model::Span::new(point.start, point.end + 1);
+                let byte = talkbank_model::Span::new(point.start(), point.end() + 1);
                 assert!(
                     span.overlaps(byte) && byte.overlaps(span),
                     "a widened point covers a byte"
@@ -243,17 +242,20 @@ fn spec_findings_preserve_evidence_through_presentation_policies() {
                 talkbank_model::ParseError::build(finding.code)
                     .message(finding.message.clone())
                     .at(
-                        finding.location.span.start as usize,
-                        finding.location.span.end as usize,
+                        finding.location.span().expect("located diagnostic").start(),
+                        finding.location.span().expect("located diagnostic").end(),
                     ),
                 talkbank_model::ParseError::build(finding.code)
-                    .at_span(finding.location.span)
+                    .at_span(finding.location.span().expect("located diagnostic"))
                     .message(finding.message.clone()),
             ] {
                 let located = located.finish();
-                assert_eq!(located.location.span, finding.location.span);
-                assert_eq!(located.location.line, None);
-                assert_eq!(located.location.column, None);
+                assert_eq!(
+                    located.location.span().expect("located diagnostic"),
+                    finding.location.span().expect("located diagnostic")
+                );
+                assert_eq!(located.location.position().map(|p| p.line.get()), None);
+                assert_eq!(located.location.position().map(|p| p.column.get()), None);
             }
             if let Some(context) = &finding.context {
                 let contextual = talkbank_model::ParseError::build(finding.code)
@@ -261,7 +263,7 @@ fn spec_findings_preserve_evidence_through_presentation_policies() {
                     .location(finding.location)
                     .context_from_source(
                         context.source_text.clone(),
-                        context.span.start as usize..context.span.end as usize,
+                        context.span.start()..context.span.end(),
                         context.found.clone(),
                     )
                     .finish();
@@ -283,7 +285,10 @@ fn spec_findings_preserve_evidence_through_presentation_policies() {
                     finding.message.clone(),
                 );
                 assert_eq!(from_span.context, Some(actual));
-                assert_eq!(from_span.location.span, context.span);
+                assert_eq!(
+                    from_span.location.span().expect("located diagnostic"),
+                    context.span
+                );
                 assert_eq!(from_span.severity, finding.severity);
                 assert_eq!(from_span.message, finding.message);
             }
@@ -460,24 +465,36 @@ fn missing_end_spec_keeps_its_legitimate_eof_location_when_rendered() {
             panic!("one missing-end diagnosis")
         };
         assert_eq!(error.code.as_str(), "E502");
-        let span = error.location.span;
-        assert_eq!(span.start as usize, source.len());
-        assert_eq!(span.start, span.end);
+        let span = error.location.span().expect("located diagnostic");
+        assert_eq!(span.start(), source.len());
+        assert_eq!(span.start(), span.end());
         let index = SourceIndex::new(source);
-        let (line, column) = index.line_col_of(span.start);
+        let (line, column) = index.line_col_of(span.start());
         let rendered: Vec<_> = enhance_errors_with_index(&diagnostics, &index).collect();
         let rendered = &rendered[0];
         assert_eq!(
-            rendered.location().expect("admitted EOF").span,
+            rendered
+                .location()
+                .expect("admitted EOF")
+                .span()
+                .expect("located diagnostic"),
             span,
             "EOF is not an out-of-bounds offset"
         );
         assert_eq!(
-            rendered.location().expect("admitted EOF").line,
+            rendered
+                .location()
+                .expect("admitted EOF")
+                .position()
+                .map(|p| p.line.get()),
             Some(line + 1)
         );
         assert_eq!(
-            rendered.location().expect("admitted EOF").column,
+            rendered
+                .location()
+                .expect("admitted EOF")
+                .position()
+                .map(|p| p.column.get()),
             Some(column + 1)
         );
         let context = rendered.context().expect("display context");

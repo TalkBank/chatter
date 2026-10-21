@@ -1,6 +1,6 @@
 //! LSP capability declarations advertised during `initialize`.
 //!
-//! [`build_initialize_result`] returns the static `InitializeResult` that tells
+//! [`build_initialize_result`] returns the negotiated `InitializeResult` that tells
 //! the editor which features the server supports. Centralising this in one module
 //! makes it straightforward to audit advertised capabilities against actual handler
 //! implementations in [`super::requests`].
@@ -16,8 +16,24 @@ use tower_lsp::lsp_types::*;
 use super::execute_commands::ExecuteCommandName;
 use crate::semantic_tokens::SemanticTokensProvider;
 
-/// Build the static `InitializeResult` describing supported LSP features.
-pub(super) fn build_initialize_result() -> InitializeResult {
+/// Evidence that this client accepts revision-bound workspace edits.
+pub(crate) struct VersionedEdits(());
+
+impl VersionedEdits {
+    pub(super) fn negotiate(client: &ClientCapabilities) -> Option<Self> {
+        client
+            .workspace
+            .as_ref()?
+            .workspace_edit
+            .as_ref()?
+            .document_changes
+            .filter(|supported| *supported)
+            .map(|_| Self(()))
+    }
+}
+
+/// Advertise quick fixes only when the client can enforce their revision binding.
+pub(super) fn build_initialize_result(edits: Option<&VersionedEdits>) -> InitializeResult {
     InitializeResult {
         capabilities: ServerCapabilities {
             position_encoding: Some(PositionEncodingKind::UTF16),
@@ -25,7 +41,7 @@ pub(super) fn build_initialize_result() -> InitializeResult {
                 TextDocumentSyncKind::INCREMENTAL,
             )),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
-            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+            code_action_provider: Some(CodeActionProviderCapability::Simple(edits.is_some())),
             completion_provider: Some(CompletionOptions {
                 trigger_characters: Some(vec![
                     "*".to_string(),

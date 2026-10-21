@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
@@ -110,21 +111,13 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 285,
-                      "start": 283
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 },
                 {
                   "content": {
-                    "element_type": "pitch_up",
-                    "span": {
-                      "end": 288,
-                      "start": 285
-                    }
+                    "element_type": "pitch_up"
                   },
                   "type": "ca_element"
                 },
@@ -134,11 +127,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 295,
-                      "start": 293
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 }
@@ -164,21 +153,13 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 306,
-                      "start": 304
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 308,
-                      "start": 306
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 },
@@ -188,21 +169,13 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 320,
-                      "start": 318
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 322,
-                      "start": 320
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 }
@@ -228,31 +201,19 @@ expression: snapshot
               "content": [
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 333,
-                      "start": 331
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 },
                 {
                   "content": {
-                    "element_type": "pitch_up",
-                    "span": {
-                      "end": 336,
-                      "start": 333
-                    }
+                    "element_type": "pitch_up"
                   },
                   "type": "ca_element"
                 },
                 {
                   "content": {
-                    "element_type": "pitch_down",
-                    "span": {
-                      "end": 339,
-                      "start": 336
-                    }
+                    "element_type": "pitch_down"
                   },
                   "type": "ca_element"
                 },
@@ -262,11 +223,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 348,
-                      "start": 346
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 }
@@ -298,11 +255,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 362,
-                      "start": 360
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 },
@@ -311,12 +264,7 @@ expression: snapshot
                   "type": "text"
                 },
                 {
-                  "content": {
-                    "span": {
-                      "end": 374,
-                      "start": 373
-                    }
-                  },
+                  "content": {},
                   "type": "compound_marker"
                 },
                 {
@@ -331,11 +279,7 @@ expression: snapshot
                 },
                 {
                   "content": {
-                    "delimiter_type": "softer",
-                    "span": {
-                      "end": 383,
-                      "start": 381
-                    }
+                    "delimiter_type": "softer"
                   },
                   "type": "ca_delimiter"
                 }

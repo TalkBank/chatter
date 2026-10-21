@@ -6,12 +6,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Unicode_Option>
 
 use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, Span,
 };
 use crate::generated_traversal::{
     AsRawNode, CaDelimiterNode, CaElementNode, SourceBound, SourceBoundKind,
 };
 use crate::model::{CADelimiter, CADelimiterType, CAElement, CAElementType};
+use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
 
 /// Closed within this module: a generated CA kind determines both the symbol
@@ -28,7 +29,7 @@ impl<'tree> CaToken<'tree> for CaElementNode<'tree> {
     const LABEL: &'static str = "element";
 
     fn from_char(ch: char, span: Span) -> Option<Self::Output> {
-        CAElementType::from_char(ch).map(|kind| CAElement::new(kind).with_span(span))
+        CAElementType::from_char(ch).map(|kind| CAElement::new(span, kind))
     }
 }
 
@@ -37,7 +38,7 @@ impl<'tree> CaToken<'tree> for CaDelimiterNode<'tree> {
     const LABEL: &'static str = "delimiter";
 
     fn from_char(ch: char, span: Span) -> Option<Self::Output> {
-        CADelimiterType::from_char(ch).map(|kind| CADelimiter::new(kind).with_span(span))
+        CADelimiterType::from_char(ch).map(|kind| CADelimiter::new(span, kind))
     }
 }
 
@@ -68,7 +69,7 @@ fn parse_ca_token<'tree, T: CaToken<'tree>>(
     }
     let text = typed.text();
     let source = typed.source();
-    let span = Span::from_usize(node.start_byte(), node.end_byte());
+    let span = span_of(node);
     // Present CA tokens are single symbols from the shared generated registry.
     // Empty or unknown text means a producer or source-association fault;
     // actual MISSING recovery was handled above.
@@ -76,8 +77,8 @@ fn parse_ca_token<'tree, T: CaToken<'tree>>(
         errors.report(ParseError::new(
             ErrorCode::InternalError,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.byte_range(), ""),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), ""),
             format!("Empty CA {} token", T::LABEL),
         ));
         return ParseOutcome::rejected();
@@ -88,8 +89,8 @@ fn parse_ca_token<'tree, T: CaToken<'tree>>(
             errors.report(ParseError::new(
                 ErrorCode::InternalError,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.byte_range(), ""),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, span_of(node), ""),
                 format!("Unknown CA {} character '{ch}'", T::LABEL),
             ));
             ParseOutcome::rejected()

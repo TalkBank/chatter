@@ -25,7 +25,12 @@ mod tests {
         errors
             .into_vec()
             .into_iter()
-            .map(|e| (e.code.as_str().to_owned(), e.location.span.start as usize))
+            .map(|e| {
+                (
+                    e.code.as_str().to_owned(),
+                    e.location.span().expect("located diagnostic").start(),
+                )
+            })
             .collect()
     }
 
@@ -52,8 +57,18 @@ mod tests {
         let offset = input.find('\u{1}').expect("present");
         let found: Vec<_> = control_characters(&input).collect();
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].location.span.start as usize, offset);
-        assert_eq!(found[0].location.span.end as usize, offset + 1);
+        assert_eq!(
+            found[0]
+                .location
+                .span()
+                .expect("located diagnostic")
+                .start(),
+            offset
+        );
+        assert_eq!(
+            found[0].location.span().expect("located diagnostic").end(),
+            offset + 1
+        );
         let e315: Vec<usize> = codes_of(&input)
             .into_iter()
             .filter(|(c, _)| c == "E315")
@@ -80,7 +95,7 @@ mod tests {
     fn a_non_underline_attribute_pair_is_reported_character_by_character() {
         let input = document("*CHI:\t\u{2}\u{3}hey\u{2}\u{4} you .");
         let offsets: Vec<usize> = control_characters(&input)
-            .map(|error| error.location.span.start as usize)
+            .map(|error| error.location.span().expect("located diagnostic").start())
             .collect();
         let lead = input.find('\u{2}').expect("present");
         assert_eq!(offsets, [lead, lead + 1, lead + 5, lead + 6]);

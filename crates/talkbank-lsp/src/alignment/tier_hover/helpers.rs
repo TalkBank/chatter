@@ -48,8 +48,8 @@ pub fn format_gra_alignment_text(mor_tier: &MorTier, relation: &GrammaticalRelat
 }
 
 /// Convert an LSP position into a document byte offset.
-pub fn position_to_offset(document: &str, position: Position) -> u32 {
-    utils::position_to_offset(document, position) as u32
+pub fn position_to_offset(document: &str, position: Position) -> usize {
+    utils::position_to_offset(document, position)
 }
 
 /// Find the source-side index aligned to `target_index`.
@@ -75,36 +75,36 @@ pub fn find_target_index_for_source<P: IndexPair>(
 }
 
 /// Find `%mor` item index at `offset` within `tier_span`.
-pub fn find_mor_item_index_at_offset(tree: &Tree, tier_span: Span, offset: u32) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, MOR_CONTENT, offset)
+pub fn find_mor_item_index_at_offset(tree: &Tree, span: Span, offset: usize) -> Option<usize> {
+    find_node_index_at_offset(tree, span, MOR_CONTENT, offset)
 }
 
 /// Find `%pho` item index at `offset` within `tier_span`.
-pub fn find_pho_item_index_at_offset(tree: &Tree, tier_span: Span, offset: u32) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, PHO_GROUP, offset)
+pub fn find_pho_item_index_at_offset(tree: &Tree, span: Span, offset: usize) -> Option<usize> {
+    find_node_index_at_offset(tree, span, PHO_GROUP, offset)
 }
 
 /// Find `%sin` item index at `offset` within `tier_span`.
-pub fn find_sin_item_index_at_offset(tree: &Tree, tier_span: Span, offset: u32) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, SIN_GROUP, offset)
+pub fn find_sin_item_index_at_offset(tree: &Tree, span: Span, offset: usize) -> Option<usize> {
+    find_node_index_at_offset(tree, span, SIN_GROUP, offset)
 }
 
 /// Find `%gra` relation index at `offset` within `tier_span`.
-pub fn find_gra_item_index_at_offset(tree: &Tree, tier_span: Span, offset: u32) -> Option<usize> {
-    find_node_index_at_offset(tree, tier_span, GRA_RELATION, offset)
+pub fn find_gra_item_index_at_offset(tree: &Tree, span: Span, offset: usize) -> Option<usize> {
+    find_node_index_at_offset(tree, span, GRA_RELATION, offset)
 }
 
 /// Find which rendered text item contains `offset` inside a text-only tier span.
 pub fn find_text_item_index_at_offset<T>(
     span: Span,
     items: &[T],
-    offset: u32,
+    offset: usize,
     document: &str,
     item_len: impl Fn(&T) -> usize,
 ) -> Option<usize> {
-    let tier_text = document.get(span.start as usize..span.end as usize)?;
+    let tier_text = document.get(span.to_range())?;
     let content_start = tier_text.find(":\t").map(|p| p + 2)?;
-    let content_offset = span.start + u32::try_from(content_start).ok()?;
+    let content_offset = span.start() + content_start;
     let content = &tier_text[content_start..];
 
     let mut pos = 0usize;
@@ -114,8 +114,8 @@ pub fn find_text_item_index_at_offset<T>(
         }
 
         let rendered_len = item_len(item);
-        let item_start = content_offset + u32::try_from(pos).ok()?;
-        let item_end = item_start + u32::try_from(rendered_len).ok()?;
+        let item_start = content_offset + pos;
+        let item_end = item_start + rendered_len;
         if offset >= item_start && offset <= item_end {
             return Some(idx);
         }
@@ -127,24 +127,19 @@ pub fn find_text_item_index_at_offset<T>(
 }
 
 /// Generic node-index resolver for tier-local items of one tree-sitter kind.
-fn find_node_index_at_offset(
-    tree: &Tree,
-    tier_span: Span,
-    kind: &str,
-    offset: u32,
-) -> Option<usize> {
+fn find_node_index_at_offset(tree: &Tree, span: Span, kind: &str, offset: usize) -> Option<usize> {
     let root = tree.root_node();
     let mut stack = vec![root];
     let mut current_idx = 0usize;
 
     while let Some(node) = stack.pop() {
-        if !node_overlaps_span(node, tier_span) {
+        if !node_overlaps_span(node, span) {
             continue;
         }
 
-        if !node.is_missing() && node.kind() == kind && node_inside_span(node, tier_span) {
-            let start = node.start_byte() as u32;
-            let end = node.end_byte() as u32;
+        if !node.is_missing() && node.kind() == kind && node_inside_span(node, span) {
+            let start = node.start_byte();
+            let end = node.end_byte();
             if offset >= start && offset <= end {
                 return Some(current_idx);
             }
@@ -163,16 +158,16 @@ fn find_node_index_at_offset(
 
 /// Return `true` when a tree-sitter node intersects the given span.
 fn node_overlaps_span(node: Node, span: Span) -> bool {
-    let start = node.start_byte() as u32;
-    let end = node.end_byte() as u32;
-    end >= span.start && start <= span.end
+    let start = node.start_byte();
+    let end = node.end_byte();
+    end >= span.start() && start <= span.end()
 }
 
 /// Return `true` when a tree-sitter node is fully inside the given span.
 fn node_inside_span(node: Node, span: Span) -> bool {
-    let start = node.start_byte() as u32;
-    let end = node.end_byte() as u32;
-    start >= span.start && end <= span.end
+    let start = node.start_byte();
+    let end = node.end_byte();
+    start >= span.start() && end <= span.end()
 }
 
 #[cfg(test)]
@@ -209,7 +204,7 @@ mod tests {
     #[test]
     fn text_item_lookup_tracks_offsets_inside_tier_content() {
         let document = "%modsyl:\tab cde";
-        let span = Span::from_usize(0, document.len());
+        let span = Span::new(0, document.len());
         let items = ["ab", "cde"];
 
         assert_eq!(

@@ -50,7 +50,11 @@ fn leading_zero_specs_preserve_multiplicity_order_and_overflow_precedence() {
                         .starts_with(&format!("Bullet {role} time")),
                     "{name}"
                 );
-                assert_eq!(diagnostic.location.span, bullet.span, "{name}");
+                assert_eq!(
+                    diagnostic.location.span().expect("located diagnostic"),
+                    bullet.location.span().expect("located"),
+                    "{name}"
+                );
             }
         }
     }
@@ -115,7 +119,7 @@ fn overlap_specs_preserve_orphan_origin_locations() {
             .utterances()
             .enumerate()
             .filter(|(index, _)| orphan_indices.contains(index))
-            .map(|(_, utterance)| utterance.main.span)
+            .map(|(_, utterance)| utterance.main.location)
             .collect();
         file.validate_with_rules(
             talkbank_model::RuleSelection::new(),
@@ -126,7 +130,11 @@ fn overlap_specs_preserve_orphan_origin_locations() {
         assert_eq!(diagnostics.len(), expected.len(), "{name}");
         for (diagnostic, span) in diagnostics.iter().zip(expected) {
             assert_eq!(diagnostic.code, ErrorCode::UnbalancedOverlap, "{name}");
-            assert_eq!(diagnostic.location.span, span, "{name}");
+            assert_eq!(
+                diagnostic.location.span().expect("located diagnostic"),
+                span.span().expect("located"),
+                "{name}"
+            );
         }
     }
 }
@@ -158,8 +166,11 @@ fn missing_speaker_spec_is_rejected_without_inventing_a_prefix_slot() {
         );
         for error in diagnostics {
             assert_eq!(error.severity, talkbank_model::Severity::Error);
-            assert!(error.location.span.start <= error.location.span.end);
-            assert!((error.location.span.end as usize) <= source.len());
+            assert!(
+                error.location.span().expect("located diagnostic").start()
+                    <= error.location.span().expect("located diagnostic").end()
+            );
+            assert!((error.location.span().expect("located diagnostic").end()) <= source.len());
         }
     }
 }
@@ -192,7 +203,7 @@ fn reference_overlap_summaries_distinguish_absence_from_timed_groups() {
                     .utterances()
                     .nth(anchor.utterance_index)
                     .expect("origin");
-                assert_eq!(anchor.utterance_span(), utterance.main.span);
+                assert_eq!(anchor.utterance_location(), utterance.main.location);
                 assert_eq!(anchor.speaker, utterance.main.speaker);
                 assert_eq!(
                     anchor.bullet,
@@ -248,12 +259,8 @@ fn underline_specs_preserve_pairing_and_marker_locations() {
             } else {
                 "\u{2}\u{2}"
             };
-            let span = diagnostic.location.span;
-            assert_eq!(
-                &source[span.start as usize..span.end as usize],
-                marker,
-                "{name}"
-            );
+            let span = diagnostic.location.span().expect("located diagnostic");
+            assert_eq!(&source[span.start()..span.end()], marker, "{name}");
         }
     }
 }
@@ -328,8 +335,8 @@ fn ca_replacement_specs_count_each_authored_marker_once() {
         assert_eq!(diagnostics.len(), expected, "{name}");
         for diagnostic in diagnostics {
             assert_eq!(diagnostic.code, ErrorCode::UnbalancedCADelimiter);
-            let span = diagnostic.location.span;
-            assert_eq!(&source[span.start as usize..span.end as usize], "°quiet");
+            let span = diagnostic.location.span().expect("located diagnostic");
+            assert_eq!(&source[span.start()..span.end()], "°quiet");
         }
     }
 }
@@ -372,7 +379,10 @@ fn gra_subtype_specs_preserve_label_and_diagnostic_location() {
         for diagnostic in diagnostics {
             assert_eq!(diagnostic.code, ErrorCode::GraRelationHeadNotUniversal);
             assert_eq!(diagnostic.severity, Severity::Error);
-            assert_eq!(diagnostic.location.span, tier.span);
+            assert_eq!(
+                diagnostic.location.span().expect("located diagnostic"),
+                tier.location.span().expect("located")
+            );
             assert!(diagnostic.message.contains("1|2|NSUBJJ-CUSTOM-PART"));
             assert!(diagnostic.message.contains("(head \"NSUBJJ\")"));
         }
@@ -415,7 +425,7 @@ fn empty_birth_date_spec_preserves_typed_header_and_validation() {
 /// quotation attribution, first-turn completion, and interruption consumption.
 #[test]
 fn linker_specs_bind_lifecycle_locations_and_selected_policy() {
-    use talkbank_model::RuleSelection;
+    use talkbank_model::{ParseValidateOptions, RuleSelection};
     let parser = TreeSitterParser::new().expect("parser");
     for (name, code, turn, strict_count) in [
         (
@@ -448,7 +458,12 @@ fn linker_specs_bind_lifecycle_locations_and_selected_policy() {
             let parse_errors = ErrorCollector::new();
             let file = parser.parse_chat_file_streaming(&source, &parse_errors);
             assert!(parse_errors.is_empty(), "{name}");
-            let target_span = file.utterances().nth(turn).expect("target turn").main.span;
+            let target_span = file
+                .utterances()
+                .nth(turn)
+                .expect("target turn")
+                .main
+                .location;
             if code == ErrorCode::MissingTrailingOffTerminator {
                 // The control has a real trailing-off token; both deletion
                 // variants retain typed absence, including CA's legal absence.
@@ -466,6 +481,24 @@ fn linker_specs_bind_lifecycle_locations_and_selected_policy() {
             let errors = ErrorCollector::new();
             file.validate_with_rules(rules, &errors, TranscriptName::Anonymous);
             let diagnostics = errors.into_vec();
+            let options = ParseValidateOptions::default().with_validation();
+            let options = if strict {
+                options.with_strict_linkers()
+            } else {
+                options
+            };
+            let mut via_options = file.clone();
+            let dispatched =
+                talkbank_model::validate_chat_file_with_options(&mut via_options, &options);
+            assert_eq!(
+                dispatched,
+                if diagnostics.is_empty() {
+                    Ok(())
+                } else {
+                    Err(diagnostics.clone())
+                },
+                "{name}: model options must preserve complete strict={strict} evidence",
+            );
             let selected: Vec<_> = diagnostics
                 .iter()
                 .filter(|error| error.code == code)
@@ -476,7 +509,31 @@ fn linker_specs_bind_lifecycle_locations_and_selected_policy() {
                 "{name}: strict={strict}"
             );
             for error in selected {
-                assert_eq!(error.location.span, target_span, "{name}");
+                assert_eq!(
+                    error.location.span().expect("located diagnostic"),
+                    target_span.span().expect("located"),
+                    "{name}"
+                );
+                assert!(
+                    error.context.is_none(),
+                    "{name}: AST-only linker checks must not fabricate source snippets"
+                );
+                let display = talkbank_model::SourceDiagnostic::with_index(
+                    error.clone(),
+                    &talkbank_model::SourceIndex::new(&source),
+                );
+                // Presentation expands tabs, so its snippet is not byte-identical
+                // to the source. The attached location stays source-relative.
+                display.context().expect("source-owned linker presentation");
+                assert_eq!(
+                    display
+                        .location()
+                        .expect("source-owned linker location")
+                        .span()
+                        .expect("located diagnostic"),
+                    target_span.span().expect("located"),
+                    "{name}: checked attachment must select the actual utterance",
+                );
             }
         }
     }

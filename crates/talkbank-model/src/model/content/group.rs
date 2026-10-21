@@ -15,7 +15,6 @@
 //! - [Quotation](https://talkbank.org/0info/manuals/CHAT.html#Quotation)
 
 use super::{BracketedContent, WriteChat};
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -46,9 +45,9 @@ pub struct Group {
     pub trailing_space: Option<smol_str::SmolStr>,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl Group {
@@ -56,20 +55,12 @@ impl Group {
     ///
     /// This is the default constructor for parser output and test fixtures;
     /// preserved trailing space can be attached separately when needed.
-    pub fn new(content: BracketedContent) -> Self {
+    pub fn new(location: impl Into<crate::Location>, content: BracketedContent) -> Self {
         Self {
             content,
             trailing_space: None,
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata used by diagnostics.
-    ///
-    /// Span metadata is excluded from semantic equality.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Stores trailing whitespace that appears before the closing bracket.
@@ -226,28 +217,21 @@ pub struct Quotation {
     pub content: BracketedContent,
 
     /// Source location metadata for diagnostics.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl Quotation {
     /// Build a quotation with dummy span metadata.
     ///
     /// This constructor is convenient when source offsets are unavailable.
-    pub fn new(content: BracketedContent) -> Self {
+    pub fn new(location: impl Into<crate::Location>, content: BracketedContent) -> Self {
         Self {
             content,
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Build a quotation with explicit source span metadata.
-    ///
-    /// Use this when parser paths already own precise source offsets.
-    pub fn with_span(content: BracketedContent, span: Span) -> Self {
-        Self { content, span }
     }
 
     /// Returns `true` when the inner payload has no items.

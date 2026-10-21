@@ -5,13 +5,35 @@
 
 use crate::generated_traversal::{
     AsRawNode, KindSlot, NamedKind, NoChild, SourceBound, SourceBoundKind, SourceField,
-    SourceSlotView, TypesHeaderNode,
+    SourceSlotView, TypesActivityNode, TypesDesignNode, TypesGroupNode, TypesHeaderNode,
 };
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
+use crate::node_types::TYPES_HEADER;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::{GeneratedPosition, report_cst_failure};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, TypesHeader};
+
+/// The field's generated kind owns its position; callers supply no selector.
+trait RequiredTypesField<'tree>: SourceBoundKind<'tree> + NamedKind {
+    /// The generated carrier and field of this required position, named in
+    /// a producer-fault report when the walk leaves it empty.
+    const POSITION: GeneratedPosition;
+}
+
+impl<'tree> RequiredTypesField<'tree> for TypesDesignNode<'tree> {
+    const POSITION: GeneratedPosition = GeneratedPosition::new("TypesHeaderChildren.child_2");
+}
+
+impl<'tree> RequiredTypesField<'tree> for TypesActivityNode<'tree> {
+    const POSITION: GeneratedPosition = GeneratedPosition::new("TypesHeaderChildren.child_6");
+}
+
+impl<'tree> RequiredTypesField<'tree> for TypesGroupNode<'tree> {
+    const POSITION: GeneratedPosition = GeneratedPosition::new("TypesHeaderChildren.child_10");
+}
 
 /// Parse Types header from tree-sitter node
 ///
@@ -55,14 +77,13 @@ pub fn parse_types_header<'tree>(
     else {
         surface_displaced(
             &children.children().unexpected,
-            "types_header",
+            TYPES_HEADER,
             source,
             errors,
         );
         return super::super::unknown_header(
             node,
             source,
-            "@Types",
             "Expected @Types:\tdesign, activity, group",
             "Missing design field in @Types header",
         );
@@ -73,14 +94,13 @@ pub fn parse_types_header<'tree>(
     else {
         surface_displaced(
             &children.children().unexpected,
-            "types_header",
+            TYPES_HEADER,
             source,
             errors,
         );
         return super::super::unknown_header(
             node,
             source,
-            "@Types",
             "Expected @Types:\tdesign, activity, group",
             "Missing activity field in @Types header",
         );
@@ -91,14 +111,13 @@ pub fn parse_types_header<'tree>(
     else {
         surface_displaced(
             &children.children().unexpected,
-            "types_header",
+            TYPES_HEADER,
             source,
             errors,
         );
         return super::super::unknown_header(
             node,
             source,
-            "@Types",
             "Expected @Types:\tdesign, activity, group",
             "Missing group field in @Types header",
         );
@@ -106,7 +125,7 @@ pub fn parse_types_header<'tree>(
 
     surface_displaced(
         &children.children().unexpected,
-        "types_header",
+        TYPES_HEADER,
         source,
         errors,
     );
@@ -118,13 +137,21 @@ pub fn parse_types_header<'tree>(
 /// Read one mandatory `@Types` field from its source-bound positional slot.
 ///
 /// `slot` is the field's `child_N` slot (e.g. `KindSlot<TypesDesignNode>`);
-/// `header` is the bound `@Types` header (used for the missing-field diagnostic
-/// span); `label` is the field name (`types_design` / `types_activity` /
-/// `types_group`) used to build the preserved diagnostic messages and context.
-/// The slot match is EXHAUSTIVE over every `NodeSlot` variant; there is
-/// deliberately no `_` catch-all that could silently drop a recovery slot.
-/// Source-read failures propagate separately from authored missing-field errors.
-fn read_types_field<'tree, T: SourceBoundKind<'tree> + NamedKind>(
+/// its kind's `RequiredTypesField::POSITION` names the generated carrier
+/// and field in a producer-fault report; `header` is the bound `@Types`
+/// header, whose node locates both the missing-field diagnostic and the
+/// producer-fault report. The slot match is EXHAUSTIVE over
+/// every `NodeSlot` variant; there is deliberately no `_` catch-all that
+/// could silently drop a recovery slot. Source-read failures propagate
+/// separately from authored missing-field errors.
+///
+/// Reachability (coverage drive batch 4, 2026-10-19): a sweep of 1,345
+/// single-edit mutations of a `@Types` line put none of the three field
+/// positions in `Missing` or `Error` (a broken line is refused at the file
+/// level as E316 before this header is built), so the "Missing <field>"
+/// report is entered by no authored file and stays for the states the slot
+/// type admits.
+fn read_types_field<'tree, T: RequiredTypesField<'tree>>(
     slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
     header: SourceBound<'tree, '_, TypesHeaderNode<'tree>>,
     errors: &impl ErrorSink,
@@ -133,18 +160,34 @@ fn read_types_field<'tree, T: SourceBoundKind<'tree> + NamedKind>(
     let source = header.source();
     match slot.view() {
         SourceSlotView::Present(field) => Ok(ParseOutcome::parsed(field.read()?.text().to_owned())),
-        // The pre-migration `find_child_text` returned `None` for an absent /
-        // missing / error / unexpected field child, funnelling to the SAME
-        // "Missing <label> in @Types header" diagnostic at the HEADER NODE span.
-        // Preserve that exactly.
-        SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) | SourceSlotView::Error(_) => {
+        // The pre-migration `find_child_text` returned `None` for any
+        // non-present field child (absent, missing, error or unexpected),
+        // funnelling all of them to the SAME "Missing <label> in @Types
+        // header" diagnostic at the HEADER NODE span. The MISSING and ERROR
+        // states keep that report; an absent position is the fault below.
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), "types_header"),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, span_of(node), TYPES_HEADER),
                 format!("Missing {} in @Types header", T::KIND.name()),
             ));
+            Ok(ParseOutcome::rejected())
+        }
+        // A required field the walk left empty is a generator or grammar
+        // fault, not a field the header lacks. Until 2026-10-19 it took the
+        // "Missing <field>" report for content never read.
+        SourceSlotView::Absent(NoChild) => {
+            report_cst_failure(
+                node,
+                source,
+                crate::CstFailure::AbsentRequiredPosition {
+                    rule: TYPES_HEADER,
+                    position: T::POSITION,
+                },
+                errors,
+            );
             Ok(ParseOutcome::rejected())
         }
         SourceSlotView::Unexpected(never) => match never {},

@@ -28,8 +28,8 @@ fn missing_encoding_keeps_the_document_and_locates_the_single_refusal() {
                     assert_eq!(errors.len(), 1, "{}: {errors:?}", parser.parser_name());
                     assert_eq!(errors[0].code, ErrorCode::MissingUTF8Header);
                     assert_eq!(
-                        errors[0].location.span,
-                        Span::at((offset + input.len()) as u32),
+                        errors[0].location.span().expect("located diagnostic"),
+                        Span::at(offset + input.len()),
                         "{}",
                         parser.parser_name()
                     );
@@ -90,18 +90,21 @@ fn header_lexer_extents_survive_file_lowering_and_rebasing() {
             .lines
             .iter()
             .filter_map(|line| match line {
-                Line::Header { span, .. } => Some(*span),
+                Line::Header { location: span, .. } => Some(*span),
                 Line::Utterance(_) => None,
             })
             .collect();
         let expected: Vec<_> = input
             .split_inclusive('\n')
             .scan(offset, |start, text| {
-                let span = Span::from_usize(*start, *start + text.len());
+                let span = Span::new(*start, *start + text.len());
                 *start += text.len();
                 Some((text, span))
             })
-            .filter_map(|(text, span)| text.starts_with('@').then_some(span))
+            .filter_map(|(text, span)| {
+                text.starts_with('@')
+                    .then_some(talkbank_model::Location::Located(span))
+            })
             .collect();
         assert_eq!(actual, expected);
         assert!(errors.is_empty());
@@ -223,7 +226,12 @@ fn metadata_headers_legal_specs_agree_through_files_and_fragments() {
                 assert!(right_errors.is_empty(), "{:?}", right_errors.to_vec());
                 let mut compared = 0;
                 for line in &left.document().lines {
-                    let Line::Header { header, span, .. } = line else {
+                    let Line::Header {
+                        header,
+                        location: span,
+                        ..
+                    } = line
+                    else {
                         continue;
                     };
                     if !matches!(
@@ -232,7 +240,8 @@ fn metadata_headers_legal_specs_agree_through_files_and_fragments() {
                     ) {
                         continue;
                     }
-                    let input = &source[span.start as usize - origin..span.end as usize - origin];
+                    let header_span = span.span().expect("located");
+                    let input = &source[header_span.start() - origin..header_span.end() - origin];
                     let left_errors = ErrorCollector::new();
                     let left_fragment =
                         ChatParser::parse_header(&tree, input, origin, &left_errors)
@@ -322,8 +331,10 @@ fn metadata_headers_types_mutations_detect_faults_through_isolated_headers() {
                 .any(|error| error.severity == talkbank_model::Severity::Error)
         );
         for error in completed.diagnostics() {
-            assert!(error.location.span.start as usize >= origin);
-            assert!(error.location.span.end as usize <= origin + input.len());
+            assert!(error.location.span().expect("located diagnostic").start() >= origin);
+            assert!(
+                error.location.span().expect("located diagnostic").end() <= origin + input.len()
+            );
         }
     }
     let tree = talkbank_parser::TreeSitterParser::new().unwrap();

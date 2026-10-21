@@ -5,7 +5,7 @@
 
 Dependent tiers appear on lines beginning with `%` immediately after an utterance. They provide annotations linked to the main tier content.
 
-CHAT defines four structural categories of dependent tiers:
+Chatter represents dependent tiers in four broad structural categories:
 
 1. **Structured linguistic tiers**: parsed into typed AST nodes with word-level alignment
 2. **Phon phonological tiers**: syllabification and segmental alignment from the Phon project
@@ -14,7 +14,13 @@ CHAT defines four structural categories of dependent tiers:
 
 ## Structured Linguistic Tiers
 
-These tiers have rich, parsed representations in the data model. Each token aligns 1-to-1 with an alignable word on the main tier (excluding retraces, pauses, and events). Terminators (`.`, `?`, `!`) must match the main tier terminator.
+These tiers have typed representations, but they do not share one universal
+word count. `%mor` uses morphosyntactic units; `%gra` uses MOR chunks, including
+clitics and a terminator chunk when present. `%pho`, `%mod` and `%sin` use their
+own positional domains, which handle pauses, groups and retraces differently.
+`%wor` is a separate timing sidecar, not a structural count-validity check.
+See the [alignment rules](https://github.com/TalkBank/chatter/blob/main/spec/docs/ALIGNMENT_RULES.md)
+for domain-specific membership and terminator handling.
 
 ### %mor, Morphological Analysis
 
@@ -41,7 +47,10 @@ The `%gra` tier aligns with `%mor` chunks (clitics expand into multiple chunks).
 
 ### %pho / %mod, Phonological Transcription
 
-The `%pho` tier records actual pronunciation; `%mod` records target/model pronunciation. Both use the same format: space-separated phonetic tokens aligned 1-to-1 with main tier words.
+The `%pho` tier records actual pronunciation; `%mod` records target/model
+pronunciation. Both align to Pho-domain units on the main tier. Simple word
+sequences align word by word, but pauses and phonological groups also affect
+the unit inventory; this is not a count of whitespace-separated words alone.
 
 ```chat
 *CHI:	I want three cookies .
@@ -99,19 +108,21 @@ same-count timing reuse.
 word-level alignment rule:
 
 - **Regular words** count.
-- **Fillers** (`&-um`, `&-uh`, `&-you_know`) count; they are real spoken words with
-  known phoneme sequences.
-- **Fragments** (`&+...`) **do NOT count**: incomplete phoneme sequences; the FA engine
-  cannot reliably anchor partial phonological material.
-- **Nonwords** (`&~...`) **do NOT count**: interactional/gestural sounds without stable
-  lexical phoneme content for alignment.
-- **Untranscribed placeholders** (`xxx`, `yyy`, `www`) **do NOT count**: they have no
-  known phoneme sequence; CTC forced alignment cannot produce timings for unknown material.
+- **Fillers** (`&-um`, `&-uh`, `&-you_know`) count.
+- **Fragments** (`&+...`) **do NOT count** under the current policy.
+- **Nonwords** (`&~...`) **do NOT count** under the current policy.
+- **Untranscribed placeholders** (`xxx`, `yyy`, `www`) **do NOT count**.
 - **Replacements** keep the **original spoken word slot** for `%wor`; the
   replacement text matters for `%mor`, not `%wor`. If the original slot is untranscribed
   or a fragment/nonword, it is still excluded.
 - **Retrace scope does not change `%wor` membership.**
 - **Overlap markers do not change `%wor` membership.**
+
+These are the named `FilteredLexicalV1` membership rules, not empirical proof
+of what every acoustic aligner can or cannot time. Inclusion does not establish
+a known pronunciation or accurate interval. The
+[timing contract](../architecture/wor-timing.md#current-membership-policy)
+owns the policy and its checked consumer transitions.
 
 `%wor` is a timing-annotation tier. Its word count equals the number of Wor-domain
 words and may differ from a naive main-tier word count. CHAT validation does not
@@ -125,32 +136,12 @@ reuse without making the legacy CHAT file invalid.
 %wor:	I want cookies .
 ```
 
-Exact corpus-shaped contrast:
-
-```chat
-*CHI:	<one &+ss> [/] one play ground .
-%wor:	one •321809_321969• play •322049_322310• ground •322390_322890• .
-# &+ss is a fragment, excluded from %wor regardless of retrace context.
-
-*EXP:	&+ih <the what> [/] what's letter &+th is this ?
-%wor:	the •49103_49163• what •49183_50205• what's •50205_50405• letter •50405_50685• is •50946_51046• this •51086_51586• ?
-# Fragments &+ih and &+th excluded; regular words remain.
-
-*EXP:	what's is dis [: this] ?
-%wor:	what's •37050_37471• is •37491_37631• dis •37631_38131• ?
-
-*CHI:	xxx snack .
-%wor:	snack •884668_885168• .
-# xxx has no phoneme sequence, excluded from %wor; only snack appears.
-
-*CHI:	&~um a boat .
-%wor:	a •1073779_1073799• boat •1076861_1077361• .
-# &~um is a nonword, excluded from %wor.
-
-*CHI:	&-mm [<] bananas are good .
-%wor:	mm •1949506_1949566• bananas •1949566_1949766• are •1949846_1949987• good •1950067_1950567• .
-# &-mm is a filler, included in %wor (real spoken word with alignable phoneme sequence).
-```
+For example, `<one &+ss> [/] one play ground` contributes two distinct
+`one` slots, then `play` and `ground`: the retraced word remains, while the
+fragment does not. `gonna [: going to]` contributes the original `gonna` slot,
+not two replacement slots. These are membership examples, not measured timing
+intervals. Equal counts or matching display text do not prove acoustic accuracy
+or immutable common origin.
 
 ```mermaid
 flowchart TD
@@ -170,10 +161,10 @@ flowchart TD
 
 These tiers originate from the [Phon](https://www.phon.ca/)
 project and provide syllable-annotated phonological transcription and segmental
-alignment. Older exports serialize them as `%x`-prefixed user-defined tiers
-(`%xmodsyl`, `%xphosyl`, `%xphoaln`); current Phon exports use the official
-unprefixed tier names (see [Phon Tiers](phon-tiers.md)). Phon stores phonological data in its own XML format. As of Phon
-4.0.0-beta.9 (2026-06-25), Phon reads and writes CHAT natively.
+alignment. Chatter accepts both unprefixed names and `%x`-prefixed aliases
+(`%xmodsyl`, `%xphosyl`, `%xphoaln`, `%xphoint`), and serializes the prefixed
+form. See [Phon Tiers](phon-tiers.md) for interval syntax and the complete
+validation contract; input aliases do not certify any exporter's output.
 
 ### %modsyl / %phosyl, Syllabified Phonology
 
@@ -185,15 +176,16 @@ etc.). Words are space-separated and align 1-to-1 with the corresponding
 
 ```chat
 *CHI:	the best .
-%mod:	ðə bɛst .
-%modsyl:	ð:Oə:N b:Oɛ:Ns:Ct:C .
-%pho:	ðə bɛs .
-%phosyl:	ð:Oə:N b:Oɛ:Ns:C .
+%mod:	ðə bɛst
+%modsyl:	ð:Oə:N b:Oɛ:Ns:Ct:C
+%pho:	ðə bɛs
+%phosyl:	ð:Oə:N b:Oɛ:Ns:C
 ```
 
 **Alignment:** Content-based, stripping position codes (`:N`, `:O`, `:C`, etc.)
-and stress markers (`ˈ`, `ˌ`) from `%modsyl` should yield the same phonemes
-as `%mod`. Same for `%phosyl` → `%pho`.
+from `%modsyl` must reproduce the corresponding `%mod` word exactly,
+including stress markers (`ˈ`, `ˌ`). The same applies to `%phosyl` → `%pho`.
+Pause fillers must reproduce the same pause token rather than `phone:CODE` units.
 
 ### %phoaln, Phone Alignment
 
@@ -206,8 +198,10 @@ notation; `∅` marks insertions or deletions.
 %phoaln:	ð↔ð,ə↔ə b↔b,ɛ↔ɛ,s↔s,t↔∅
 ```
 
-**Alignment:** Positional, word-by-word, word N in `%phoaln` aligns with
-word N in both `%mod` and `%pho`.
+**Alignment:** Word-by-word, with independent source positions. A one-sided
+pause such as `(..)↔∅` consumes a `%mod` slot but no `%pho` slot; `∅↔(..)`
+does the reverse. Other alignment words consume both source slots, including
+ordinary non-pause insertions and deletions.
 
 **Parsing strategy:** Same as `%pho`/`%mod`, we parse just enough structure
 for alignment (word boundaries for `%modsyl`/`%phosyl`, alignment pairs for
@@ -222,27 +216,15 @@ syllabification tier and its parent IPA tier:
 |-------|------------|
 | `%modsyl` word count ≠ `%mod` word count | E725 |
 | `%phosyl` word count ≠ `%pho` word count | E726 |
-| `%phoaln` word count ≠ `%mod` word count | E727 |
-| `%phoaln` word count ≠ `%pho` word count | E728 |
+| `%phoaln` effective model-slot count ≠ `%mod` word count | E727 |
+| `%phoaln` effective actual-slot count ≠ `%pho` word count | E728 |
 
 These checks are gated on `ParseHealth`, if either tier in a pair has parse
 errors, the alignment check is suppressed to avoid false positives.
 
-### Known Export Word-Count Mismatch (Existing Corpus Files)
-
-A subset of existing corpus CHAT files map `%mod`/`%pho` to orthography words
-one to one, silently dropping extras, while their syllabification tiers
-(`%modsyl`, `%phosyl`, `%phoaln`) carry the full IPA word set, undropped. In
-child phonology data where children produce more IPA words than orthographic
-targets (~4% of Phon corpus files), this creates tier-to-tier word count
-mismatches. The mismatches originate in the Phon XML source data
-(orthography vs. IPA word count discrepancies) and are handled inconsistently
-across tiers in the resulting CHAT file.
-
-As of Phon 4.0.0-beta.9 (2026-06-25), Phon reads and writes CHAT natively; we
-have not yet seen output from that native export and do not know whether it
-reproduces this inconsistency. Files already affected remain in the corpora
-and must continue to validate against the behavior described above.
+Count diagnostics establish a mismatch in the supplied CHAT, not its cause.
+See [Interpreting mismatches](phon-tiers.md#interpreting-mismatches) before
+changing a transcription or attributing a discrepancy to an exporter.
 
 ## Bullet-Content Tiers
 
@@ -265,7 +247,7 @@ convention, a word selector such as `<w4>` scopes the code that follows it
 (it names which main-tier word the code applies to) rather than being a code
 in its own right.
 
-Example with timing:
+Example without optional timing:
 
 ```chat
 *CHI:	gimme that .
@@ -293,11 +275,20 @@ These tiers contain plain text with no bullets, timing, or structural alignment:
 
 ## User-Defined Tiers
 
-Tiers prefixed with `%x` (e.g., `%xcod`, `%xact`) are user-defined dependent tiers. They are preserved during parsing and roundtrip but receive no structural validation beyond basic format checks. **Any `%x`-prefixed tier is always accepted**, this is the open extension point for project-specific annotation.
+Tiers prefixed with `%x` (e.g., `%xcod`, `%xact`) are the extension point for
+project-specific annotation. Their content does not acquire the structural
+alignment contract of a standard tier merely by resembling its name. The
+extension is still subject to parsing and applicable format checks; a `%x`
+prefix is not a blanket guarantee that malformed input will be accepted.
 
 ## The Supported Set Is Closed
 
-A dependent tier is valid in chatter **only if** it is one of the standard tiers documented above (the structured, Phon, bullet-content, and text tiers) **or** a `%x`-prefixed user-defined tier. Any other `%`-tier is invalid CHAT, and chatter rejects the file with error **E605** (`UnsupportedDependentTier`). This is a closed set by design: `chatter validate` is the binding judgment on CHAT validity, so an unrecognized dependent tier is an error, not a warning.
+Chatter recognizes the standard tier set and the `%x` user-defined extension.
+An unsupported dependent-tier name is reported as **E605**
+(`UnsupportedDependentTier`), not merely a warning. Recognition is necessary,
+not sufficient: a recognized tier can still contain invalid syntax or violate
+its domain's rules. The implementation enforces the supported contract; its
+output alone does not settle a disputed format rule or prove a data defect.
 
 ### Deliberate Divergence from CLAN: Retired Legacy Tiers
 

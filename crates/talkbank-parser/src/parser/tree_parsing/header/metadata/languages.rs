@@ -3,17 +3,33 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Languages_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Codes>
+//!
+//! **Reachability of the recovery arms (coverage drive batch 4,
+//! 2026-10-19).** The slot-state census over 1,082 single-edit mutations of
+//! a two-code `@Languages` line, with the repository census of 2026-09-09,
+//! put exactly two positions here into a recovery state: the first code
+//! `Missing` (`@Languages:\t`, E507 example 2) and a repeat element `Error`
+//! (a doubled comma, `@Languages:\teng,, spa`, E316 example 14, the
+//! `UnparsableGroup` fault).
+//! The comma and whitespace arms inside a recognised group, an ERROR node at
+//! a code position and a MISSING subsequent code were reached by no authored
+//! file; they stay for the states the slot types admit and report the node
+//! they are given. `parse_language_code`'s refusal of an empty text guards
+//! what the token regex `/[a-z]{2,4}/` already excludes.
 
 use crate::CstFailure;
 use crate::generated_traversal::{
     AsRawNode, KindSlot, LanguageCodeNode, LanguagesHeaderNode, NoChild, SourceBound, SourceField,
     SourceSlotView,
 };
-use crate::node_types::LANGUAGES_HEADER;
+use crate::node_types::{LANGUAGES_CONTENTS, LANGUAGES_HEADER};
+use crate::parser::typed_cst::ExtractCanonical;
 use tree_sitter::Node;
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
+use crate::parser::typed_cst::{GeneratedPosition, report_cst_failure};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, LanguageCode};
 
@@ -64,8 +80,8 @@ impl LanguageListFault<'_> {
         errors.report(ParseError::new(
             ErrorCode::EmptyLanguagesHeader,
             Severity::Error,
-            SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-            ErrorContext::new(source, bad.byte_range(), "languages_contents"),
+            DiagnosticLocation::new(span_of(bad)),
+            ErrorContext::new(source, span_of(bad), LANGUAGES_CONTENTS),
             message,
         ));
     }
@@ -85,8 +101,8 @@ pub(super) fn parse_language_code<'tree>(
             errors.report(ParseError::new(
                 ErrorCode::EmptyLanguagesHeader,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(typed.source(), node.byte_range(), "language_code"),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(typed.source(), span_of(node), "language_code"),
                 format!("Invalid @Languages code: {error}"),
             ));
             ParseOutcome::rejected()
@@ -96,25 +112,45 @@ pub(super) fn parse_language_code<'tree>(
 
 /// The grammatical role fixes the wording; callers cannot provide arbitrary
 /// expected-node text independently of the language-code slot.
+#[derive(Clone, Copy)]
 enum LanguagePosition {
     First,
     Subsequent,
 }
 
+impl LanguagePosition {
+    /// The generated carrier and field of the code slot, for a producer
+    /// fault. The repeat group is an inline sequence with no node of its
+    /// own, so its element index is not part of the name.
+    fn generated_position(self) -> GeneratedPosition {
+        match self {
+            Self::First => GeneratedPosition::new("LanguagesContentsChildren.child_0"),
+            Self::Subsequent => GeneratedPosition::new("LanguagesContentsChild1Children.child_3"),
+        }
+    }
+}
+
 /// One admission policy for both required and repeated language-code slots.
-/// Recovery never enters the validated model constructor.
+/// Recovery never enters the validated model constructor. `contents` is the
+/// `languages_contents` node, where a producer fault with no node of its own
+/// is located.
 fn parse_language_slot<'tree>(
     slot: SourceField<'_, 'tree, '_, KindSlot<'tree, LanguageCodeNode<'tree>>>,
     position: LanguagePosition,
+    contents: Node<'tree>,
     errors: &impl ErrorSink,
 ) -> Result<ParseOutcome<LanguageCode>, CstFailure> {
     let source = slot.source();
     Ok(match slot.view() {
         SourceSlotView::Present(code) => parse_language_code(code.read()?, errors),
+        // A MISSING first code (`@Languages:\t`) is reached and pinned
+        // (E507, example 2); a MISSING subsequent code is not.
         SourceSlotView::Missing(node) => {
-            check_not_missing(node.raw_node(), source, errors, "languages_contents");
+            check_not_missing(node.raw_node(), source, errors, LANGUAGES_CONTENTS);
             ParseOutcome::rejected()
         }
+        // An ERROR node standing for a code: unreached by any authored file
+        // (module doc); a list fault arrives as an ERROR repeat element.
         SourceSlotView::Error(bad) => {
             LanguageListFault::UnexpectedCode {
                 node: bad.raw_node(),
@@ -123,7 +159,21 @@ fn parse_language_slot<'tree>(
             .report(source, errors);
             ParseOutcome::rejected()
         }
-        SourceSlotView::Absent(NoChild) => ParseOutcome::rejected(),
+        // A required position the walk left empty is a generator or grammar
+        // fault (the grammar has no fail-closed partials). Until 2026-10-19
+        // this arm rejected with no diagnostic at all.
+        SourceSlotView::Absent(NoChild) => {
+            report_cst_failure(
+                contents,
+                source,
+                CstFailure::AbsentRequiredPosition {
+                    rule: LANGUAGES_CONTENTS,
+                    position: position.generated_position(),
+                },
+                errors,
+            );
+            ParseOutcome::rejected()
+        }
         SourceSlotView::Unexpected(never) => match never {},
     })
 }
@@ -137,7 +187,7 @@ fn expect_language_separator<'tree, T: AsRawNode<'tree>>(
     match slot.view() {
         SourceSlotView::Present(_) | SourceSlotView::Absent(NoChild) => {}
         SourceSlotView::Missing(node) => {
-            check_not_missing(node.raw_node(), node.source(), errors, "languages_contents");
+            check_not_missing(node.raw_node(), node.source(), errors, LANGUAGES_CONTENTS);
         }
         SourceSlotView::Error(node) => on_bad(node.raw_node()),
         SourceSlotView::Unexpected(never) => match never {},
@@ -180,39 +230,13 @@ pub fn parse_languages_header<'tree>(
     // sibling of `languages_contents`.
     super::super::report_header_structural_errors(node, LANGUAGES_HEADER, source, errors);
 
-    // Only present contents enter list admission. Preserve the existing
-    // missing-contents diagnostic for every recovery state.
-    let grammar = crate::parser::typed_cst::canonical_grammar()?;
-    let children = typed.extract_admitted(grammar)?;
-    let SourceSlotView::Present(contents_node) = children.field_child_2().slot().view() else {
-        errors.report(ParseError::new(
-            ErrorCode::EmptyLanguagesHeader,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(
-                source,
-                node.start_byte()..node.end_byte(),
-                "languages_header",
-            ),
-            "Missing languages_contents in @Languages header",
-        ));
-        surface_displaced(
-            &children.children().unexpected,
-            "languages_header",
-            source,
-            errors,
-        );
-        return super::super::unknown_header(
-            node,
-            source,
-            "@Languages",
-            "Expected @Languages:\t<code>[, <code>...]",
-            "Missing languages_contents in @Languages header",
-        );
-    };
+    // The ordinary envelope proves the list body present. Its nested codes
+    // and separators retain their own recovery and source admission.
+    let children = crate::parser::typed_cst::extract_envelope(typed)?;
+    let SourceSlotView::Present(contents_node) = children.field_child_2().slot().view();
     surface_displaced(
         &children.children().unexpected,
-        "languages_header",
+        LANGUAGES_HEADER,
         source,
         errors,
     );
@@ -220,12 +244,15 @@ pub fn parse_languages_header<'tree>(
     // Decompose `languages_contents` into its typed child slots: `child_0` is
     // the required first `language_code`; `child_1` is the typed repeat of
     // `(optional(whitespaces), comma, whitespaces, language_code)` groups.
-    let contents_children = contents_node.read()?.extract_admitted(grammar)?;
+    let contents_bound = contents_node.read()?;
+    let contents_raw = contents_bound.raw_node();
+    let contents_children = contents_bound.extract_canonical()?;
 
     codes.extend(
         parse_language_slot(
             contents_children.field_child_0().slot(),
             LanguagePosition::First,
+            contents_raw,
             errors,
         )?
         .into_option(),
@@ -259,6 +286,7 @@ pub fn parse_languages_header<'tree>(
                     parse_language_slot(
                         group.field_child_3().slot(),
                         LanguagePosition::Subsequent,
+                        contents_raw,
                         errors,
                     )?
                     .into_option(),
@@ -271,7 +299,7 @@ pub fn parse_languages_header<'tree>(
                 for displaced in group.field_unexpected().iter() {
                     surface_displaced(
                         &[displaced.raw_node()],
-                        "languages_contents",
+                        LANGUAGES_CONTENTS,
                         displaced.source(),
                         errors,
                     );
@@ -287,7 +315,7 @@ pub fn parse_languages_header<'tree>(
 
     surface_displaced(
         &contents_children.children().unexpected,
-        "languages_contents",
+        LANGUAGES_CONTENTS,
         source,
         errors,
     );

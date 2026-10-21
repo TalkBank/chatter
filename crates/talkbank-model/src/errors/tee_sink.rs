@@ -36,8 +36,8 @@ mod tests {
     //! Tee sink tests.
 
     use crate::{
-        ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
-        TeeErrorSink,
+        DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError,
+        Severity, TeeErrorSink,
     };
 
     /// Tee sinks should forward diagnostics to both downstream sinks.
@@ -50,8 +50,8 @@ mod tests {
         tee.report(ParseError::new(
             ErrorCode::InternalError,
             Severity::Error,
-            SourceLocation::from_offsets(0, 1),
-            ErrorContext::new("test", 0..1, "t"),
+            DiagnosticLocation::from_offsets(0, 1),
+            ErrorContext::new("test", crate::Span::new(0, 1), "t"),
             "test error",
         ));
 

@@ -43,6 +43,9 @@ pub(in crate::parser) fn parse_dependent_tiers<'a>(
         if *pos < tokens.len() {
             *pos += 1; // consume newline
         }
+        // The tier's extent: its prefix through its line ending, as the
+        // tree-sitter grammar and this backend's headers measure a line.
+        let extent = lexed.extent(line_start..*pos);
 
         let content_range = if kind.is_some() {
             match lexed.dependent_content_span(line_start..*pos, content_end) {
@@ -51,7 +54,7 @@ pub(in crate::parser) fn parse_dependent_tiers<'a>(
                     errors.report(ParseError::new(
                         talkbank_model::ErrorCode::InternalError,
                         talkbank_model::Severity::Error,
-                        talkbank_model::SourceLocation::from_offsets(
+                        talkbank_model::DiagnosticLocation::from_offsets(
                             prefix_span.start,
                             prefix_span.end,
                         ),
@@ -69,6 +72,7 @@ pub(in crate::parser) fn parse_dependent_tiers<'a>(
                 tier,
                 separator,
                 content_range,
+                extent,
             })
         };
 
@@ -81,7 +85,7 @@ pub(in crate::parser) fn parse_dependent_tiers<'a>(
             errors.report(ParseError::new(
                 talkbank_model::ErrorCode::MalformedTierHeader,
                 talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::from_offsets(prefix_span.start, last_span.end),
+                talkbank_model::DiagnosticLocation::from_offsets(prefix_span.start, last_span.end),
                 None,
                 "Dependent tier label must be followed by a colon and a tab",
             ));
@@ -113,7 +117,7 @@ pub(in crate::parser) fn parse_dependent_tiers<'a>(
                                 ParseError::new(
                                     talkbank_model::errors::codes::ErrorCode::MorItemEmptyPos,
                                     talkbank_model::Severity::Error,
-                                    talkbank_model::SourceLocation::new(item.span()),
+                                    talkbank_model::DiagnosticLocation::new(item.span()),
                                     None,
                                     format!("MOR item '{text}' has an empty part-of-speech field"),
                                 )
@@ -135,7 +139,7 @@ pub(in crate::parser) fn parse_dependent_tiers<'a>(
                             push(DependentTierParsed::RejectedMor(RejectedMorTier::report(
                                 prefix,
                                 tier_tokens,
-                                Span::from_usize(prefix_span.start, last_span.end),
+                                Span::new(prefix_span.start, last_span.end),
                                 errors,
                             )));
                         } else {
@@ -213,7 +217,7 @@ pub(in crate::parser) fn parse_dependent_tiers<'a>(
                 }
             }
             DependentBodyKind::Wor => {
-                match dependent_tiers::wor_tier_parser()
+                match dependent_tiers::wor_tier_parser(lexed.source_text())
                     .parse(tier_tokens)
                     .into_result()
                 {

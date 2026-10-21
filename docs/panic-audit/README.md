@@ -11,11 +11,11 @@ table.
 
 ## The policy
 
-Each audited crate sets the panic-shape clippy lints to `deny` in its own
-`[lints.clippy]` table, rather than inheriting the workspace `warn` floor:
+The root Cargo manifest denies the panic-shape Clippy lints. Each of the six
+crates below opts in with `[lints] workspace = true`:
 
 ```toml
-[lints.clippy]
+[workspace.lints.clippy]
 unwrap_used   = "deny"
 expect_used   = "deny"
 panic         = "deny"
@@ -26,18 +26,19 @@ unimplemented = "deny"
 
 Consequences:
 
-- Production code **cannot** introduce a new `unwrap()`, `expect()`,
+- Clippy rejects a new `unwrap()`, `expect()`,
   `panic!()`, `unreachable!()`, `todo!()`, or `unimplemented!()` without an
-  explicit, reviewed `#[allow(clippy::...)]` at the site.
+  applicable allowance. Ordinary Cargo compilation does not run Clippy.
+  Existing module-wide allowances cover more than their motivating call;
+  they must be reviewed as permissions, not per-site proofs.
 - **Test code is exempt.** Each crate relaxes these lints under
   `#![cfg_attr(test, allow(...))]` in its `lib.rs`/`main.rs`: assertion
   macros panic by design and fixture `unwrap()` is the standard Rust testing
   idiom, so denying them in tests would be noise with no production analogue.
-- Every remaining production `#[allow(clippy::...)]` carries an **inline
-  justification comment** immediately above it, stating the invariant that
-  makes the call infallible (or why the panic is the correct behavior). The
-  inline comments are the authoritative per-site record; these pages are the
-  policy and the index.
+- Each production allowance needs a reviewed justification stating the
+  invariant and its evidence. Existing comments are rationale, not proof that
+  every allowed call is infallible. These pages are an index, not a completed
+  audit of all compiled configurations.
 
 ## Why a comment and not a `Result`
 
@@ -49,31 +50,30 @@ can fail on real input is converted to a typed `Result`, not annotated.
 
 ## Regenerating the site list
 
-The current production panic-allow sites for a crate:
+Locate lint declarations and allowances for a crate:
 
 ```bash
-rg -n --glob '!**/tests/**' --glob '!**/*_tests.rs' \
-  'allow\(clippy::(unwrap_used|expect_used|panic|unreachable)\)' \
+rg -n 'clippy::(unwrap_used|expect_used|panic|unreachable|todo|unimplemented)' \
   crates/<crate>/src
 ```
 
-Checking that every site is justified (a comment sits immediately above each
-allow) is done by a separate audit script that is not part of this
-repository.
+Classify each match in its enclosing configuration; this includes multiline
+attributes and test modules inside production files. Search results alone do
+not identify runtime sites. Inspect build scripts, generated includes and
+dependencies separately. No unshipped audit script is required by this guide.
 
 ## Per-crate pages
 
-| Crate | Production panic sites | Notes |
+| Crate | Selected review boundary | Notes |
 |-------|------------------------|-------|
-| [talkbank-parser](talkbank-parser.md) | none | `deny` with zero exceptions |
-| [talkbank-parser-re2c](talkbank-parser-re2c.md) | 1 module-level + 4 inline | generated-lexer panic + retrace/internal-invariant |
-| [talkbank-model](talkbank-model.md) | 2 inline | index unwrap after `is_none` short-circuit |
-| [talkbank-transform](talkbank-transform.md) | inline (largest surface) | guarded slices, embedded-JSON statics, infallible writes |
-| [chatter](chatter.md) | inline | command-routing `unreachable!` catch-alls |
-| [talkbank-lsp](talkbank-lsp.md) | 6 inline | request-routing `unreachable!` catch-alls |
+| [talkbank-parser](talkbank-parser.md) | CST/source admission | distinguish test attributes from production |
+| [talkbank-parser-re2c](talkbank-parser-re2c.md) | lexer and conversion allowances | generated and handwritten boundaries |
+| [talkbank-model](talkbank-model.md) | overlap index admission | removed unwrap pattern |
+| [talkbank-transform](talkbank-transform.md) | embedded JSON initialization | runtime parsing of embedded bytes |
+| [chatter](chatter.md) | decoding and serialization | source-bound invariants |
+| [talkbank-lsp](talkbank-lsp.md) | initialization and command routing | typed failures and request families |
 
-Counts drift as code moves; treat the source (the inline annotations) as
-authoritative and regenerate with the command above.
+These are selected boundaries, not exhaustive counts or panic-freedom proofs.
 
 ## Verification
 
@@ -81,14 +81,18 @@ authoritative and regenerate with the command above.
 just clippy
 ```
 
-That is the whole check, for every crate at once, and it is the same command
-CI runs. The panic family is denied by the workspace `[lints.clippy]` table,
-which reaches a package only when that package declares `[lints] workspace =
-true`; all twelve now do. To look at one crate while working on it:
+This selects the root workspace's all-target lint pass. The separate spec
+workspace uses `just clippy-spec`; `just release-lint` owns the consolidated
+release boundary. Follow [Developer Verification Checks](../../book/src/contributing/dev-checks.md),
+not a per-edit lint ritual. To select a crate when scoped linting is needed:
 
 ```bash
 cargo clippy -p <crate> --all-targets --locked
 ```
+
+Record source, features, target and results. Restriction lints cover particular
+code shapes, not all indexing, arithmetic, allocation, dependency or generated
+failures. A passing lint command does not establish panic freedom.
 
 **The command this section used to give could not fail, and that is worth
 stating rather than quietly replacing.** It was:

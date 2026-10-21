@@ -1,11 +1,12 @@
-//! The generated artifacts that need the live PARSER, and therefore cannot
-//! live in `spec/tools`.
+//! The generated artifacts that need production model diagnostics or the
+//! combined artifact registry, and therefore cannot live in `spec/tools`.
 //!
 //! This is the second half of the registry whose first half is
 //! [`generators::artifacts::ARTIFACTS`]. The split is not organisational: it is
 //! the dependency boundary this crate exists to draw. `spec/tools` reads
-//! markdown and writes files and never links the parser or model; anything
-//! that has to RUN the parser belongs here.
+//! markdown and writes files without linking `talkbank-parser` or
+//! `talkbank-model`. It does use Tree-sitter and the CHAT grammar for CST
+//! extraction; production model conversion and diagnostic observation live here.
 //!
 //! That criterion said "needs the live `ErrorCode` enum" until R1's review,
 //! and by then it was false of everything left in the crate: the snapshot
@@ -20,13 +21,13 @@ use std::path::Path;
 use anyhow::Result;
 use generators::artifacts::{Artifact, GeneratedFiles, Ownership};
 
-/// The observation snapshot, which regenerates BEFORE everything else.
+/// The observation snapshot, which precedes its derived corpus artifacts.
 ///
 /// R3 of the spec-system redesign: for every spec example, what the current
 /// binary actually emits, by stage, and whether the parsed model serializes
 /// back byte-exact. A diff is adjudicated, never silently regenerated.
 ///
-/// Its own slice rather than a row below, because [`all`] yields it FIRST:
+/// Its own slice rather than a row below, because [`after_bootstrap`] yields it first:
 /// since R4, the tree-sitter corpus DERIVES its membership from this file, so
 /// generating in declaration order would read a stale snapshot on any
 /// behaviour change and need a second run to converge. The registry is a DAG
@@ -83,7 +84,9 @@ fn build_book_artifact_table(_repo_root: &Path) -> Result<GeneratedFiles> {
     table.push_str("|---|---|---|\n");
     for artifact in all() {
         let ownership = match artifact.ownership {
-            Ownership::WholeDirectory => "the whole directory, cleared on every run",
+            Ownership::WholeDirectory => {
+                "the whole directory; unchanged files retained, obsolete files pruned"
+            }
             Ownership::NamedFiles { .. } => "only the files it produces",
         };
         table.push_str(&format!(
@@ -104,9 +107,16 @@ fn build_book_artifact_table(_repo_root: &Path) -> Result<GeneratedFiles> {
 /// order, so the other two could drift out of it silently. "Every artifact" is
 /// a concept; this is where it lives.
 ///
-/// The order is deliberate: the pure-markdown half first, so a failure there
-/// is reported before the half that has to link the model runs.
+/// Inventory order includes bootstrap sources first. Those sources are written
+/// in a separate process before compiling this crate, never by its writer.
 pub fn all() -> impl Iterator<Item = &'static Artifact> {
+    generators::artifacts::BOOTSTRAP_ARTIFACTS
+        .iter()
+        .chain(after_bootstrap())
+}
+
+/// Artifacts safe to write after compiling against current bootstrap sources.
+pub fn after_bootstrap() -> impl Iterator<Item = &'static Artifact> {
     // Topological order, not declaration order: the snapshot first, because
     // the tree-sitter corpus in the generators half reads it as an input.
     SNAPSHOT_ARTIFACT

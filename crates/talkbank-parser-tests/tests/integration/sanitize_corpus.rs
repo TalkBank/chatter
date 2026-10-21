@@ -48,12 +48,12 @@ fn reference_sanitization_is_parseable_deterministic_and_idempotent() {
             ));
         }
         assert_eq!(
-            original.headers_with_spans().count(),
-            parsed.headers_with_spans().count()
+            original.headers_with_locations().count(),
+            parsed.headers_with_locations().count()
         );
         for ((before, _), (after, _)) in original
-            .headers_with_spans()
-            .zip(parsed.headers_with_spans())
+            .headers_with_locations()
+            .zip(parsed.headers_with_locations())
         {
             assert_eq!(before.name(), after.name(), "header kind must survive");
             let redacted = match after {

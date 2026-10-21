@@ -85,13 +85,16 @@ fn run_cases(stem: &str, cases: &[Case]) {
                     ));
                 }
                 for expected in control.file().utterances() {
-                    if expected.main.span.start as usize == candidate.original_tier.start {
+                    if expected.main.location.span().expect("located").start()
+                        == candidate.original_tier.start
+                    {
                         continue;
                     }
-                    let range = candidate.translated(expected.main.span);
+                    let range =
+                        candidate.translated(expected.main.location.span().expect("located"));
                     if !file.utterances().any(|actual| {
-                        actual.main.span.start as usize == range.start
-                            && actual.main.span.end as usize == range.end
+                        actual.main.location.span().expect("located").start() == range.start
+                            && actual.main.location.span().expect("located").end() == range.end
                             && expected.semantic_eq(actual)
                     }) {
                         failures.push(format!(
@@ -169,12 +172,17 @@ fn check_retention(candidate: &Candidate<'_>, file: &ChatFile, failures: &mut Ve
         .control
         .file()
         .utterances()
-        .find(|utterance| utterance.main.span.start as usize == candidate.original_tier.start)
+        .find(|utterance| {
+            utterance.main.location.span().expect("located").start()
+                == candidate.original_tier.start
+        })
         .expect("admitted target")
         .main;
     let Some(actual) = file
         .utterances()
-        .find(|utterance| utterance.main.span.start as usize == candidate.tier.start)
+        .find(|utterance| {
+            utterance.main.location.span().expect("located").start() == candidate.tier.start
+        })
         .map(|utterance| &utterance.main)
     else {
         failures.push("source-owned target main tier lost".to_owned());
@@ -223,7 +231,7 @@ fn check_retention(candidate: &Candidate<'_>, file: &ChatFile, failures: &mut Ve
         let modeled_separator = actual
             .separator
             .trailing_space()
-            .map(|span| span.start as usize..span.end as usize);
+            .map(|span| span.start()..span.end());
         if modeled_separator != native_separator {
             failures.push(
                 "separator provenance lost or inferred from nonadjacent whitespace".to_owned(),
@@ -243,8 +251,10 @@ fn check_retention(candidate: &Candidate<'_>, file: &ChatFile, failures: &mut Ve
         let range = token.raw_node().byte_range();
         if actual
             .content
-            .language_code_span
-            .map(|span| span.start as usize..span.end as usize)
+            .language_code
+            .as_ref()
+            .and_then(|precode| precode.location.span())
+            .map(|span| span.to_range())
             != Some(range.clone())
         {
             failures.push(format!(
@@ -257,16 +267,21 @@ fn check_retention(candidate: &Candidate<'_>, file: &ChatFile, failures: &mut Ve
                 .content
                 .language_code
                 .as_ref()
-                .is_some_and(|code| spelling == format!("[- {}]", code.as_str()))
+                .is_some_and(|precode| spelling == format!("[- {}]", precode.code.as_str()))
             {
                 failures.push("healthy positioned language token lost its decoded code".to_owned());
             }
         }
     }
-    if let Some(span) = actual.content.language_code_span {
+    if let Some(span) = actual
+        .content
+        .language_code
+        .as_ref()
+        .and_then(|precode| precode.location.span())
+    {
         if !tokens
             .iter()
-            .any(|token| token.raw_node().byte_range() == (span.start as usize..span.end as usize))
+            .any(|token| token.raw_node().byte_range() == (span.start()..span.end()))
         {
             failures.push("model language span has no source-owned native token".to_owned());
         }
@@ -300,13 +315,15 @@ fn check_retention(candidate: &Candidate<'_>, file: &ChatFile, failures: &mut Ve
             failures.push("initial linker multiplicity changed during prelude lowering".to_owned());
         }
         for (original, token) in expected.content.linkers.iter().zip(&actual.content.linkers) {
-            let original_range = original.span.start as usize..original.span.end as usize;
+            let original_range = original.location.span().expect("located").start()
+                ..original.location.span().expect("located").end();
             let retained_range = if original_range == candidate.edit {
                 candidate.edit.start..candidate.edit.start + candidate.replacement_len
             } else {
-                candidate.translated(original.span)
+                candidate.translated(original.location.span().expect("located"))
             };
-            let range = token.span.start as usize..token.span.end as usize;
+            let range = token.location.span().expect("located").start()
+                ..token.location.span().expect("located").end();
             if range != retained_range
                 || candidate.source.get(range) != Some(token.to_string().as_str())
             {
@@ -320,7 +337,7 @@ fn check_retention(candidate: &Candidate<'_>, file: &ChatFile, failures: &mut Ve
         // These malformed-precode cases move original linkers under a native ERROR.
         // A non-Present slot is not evidence that the source contained no linkers.
         for original in &expected.content.linkers {
-            let range = candidate.translated(original.span);
+            let range = candidate.translated(original.location.span().expect("located"));
             if !recovery_ranges
                 .iter()
                 .any(|error| error.start <= range.start && range.end <= error.end)

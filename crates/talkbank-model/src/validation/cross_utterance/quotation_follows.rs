@@ -8,7 +8,7 @@
 use super::UtterancePosition;
 use super::helpers::has_quoted_linker;
 use crate::model::Terminator;
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ParseError, Severity};
 
 /// Validate Pattern A quotation-follows sequencing at a file-bound position.
 ///
@@ -31,15 +31,10 @@ pub(super) fn check_quotation_follows(position: &UtterancePosition<'_, '_>) -> V
         // Check if it has +" linker
         if !has_quoted_linker(next_utt) {
             errors.push(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::UnbalancedQuotationCrossUtterance,
                     Severity::Error,
-                    SourceLocation::new(utterance.main.span),
-                    ErrorContext::new(
-                        format!("*{}: ... +\"/. ", speaker),
-                        utterance.main.span,
-                        "quotation follows terminator",
-                    ),
+                    utterance.main.location,
                     format!(
                         "Quotation follows terminator (+\"/. ) not followed by quoted utterance (+\") from same speaker ({})",
                         speaker
@@ -67,15 +62,10 @@ pub(super) fn check_quotation_follows(position: &UtterancePosition<'_, '_>) -> V
                     && matches!(term, Terminator::QuotedPeriodSimple { .. })
                 {
                     errors.push(
-                        ParseError::new(
+                        ParseError::at_location(
                             ErrorCode::UnbalancedQuotationCrossUtterance,
                             Severity::Error,
-                            SourceLocation::new(check_utt.main.span),
-                            ErrorContext::new(
-                                format!("*{}: +\" ... +\". ", speaker),
-                                check_utt.main.span,
-                                "mixed quotation patterns",
-                        ),
+                            check_utt.main.location,
                         "Mixed quotation patterns - cannot use both +\"/. (quotation follows) and +\". (quotation precedes) in same sequence",
                     )
                     .with_suggestion("Use normal terminator (., ?, !) for quoted utterances in quotation follows pattern")
@@ -87,15 +77,10 @@ pub(super) fn check_quotation_follows(position: &UtterancePosition<'_, '_>) -> V
     } else {
         // No next utterance by same speaker - error
         errors.push(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::UnbalancedQuotationCrossUtterance,
                 Severity::Error,
-                SourceLocation::new(utterance.main.span),
-                ErrorContext::new(
-                    format!("*{}: ... +\"/. ", speaker),
-                    utterance.main.span,
-                    "quotation follows terminator",
-                ),
+                utterance.main.location,
                 format!(
                     "Quotation follows terminator (+\"/. ) not followed by any subsequent utterance from same speaker ({})",
                     speaker

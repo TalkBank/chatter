@@ -8,7 +8,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Eg_Header>
 
 use crate::model::{Header, SpeakerCode};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use std::collections::{HashMap, HashSet};
 
 /// How often one header name occurs, keeping the location a duplicate report
@@ -17,15 +17,18 @@ use std::collections::{HashMap, HashSet};
 #[derive(Clone, Copy)]
 enum Occurrences {
     Once,
-    Repeated { count: usize, first_repeat: Span },
+    Repeated {
+        count: usize,
+        first_repeat: crate::Location,
+    },
 }
 
 impl Occurrences {
-    fn record(&mut self, span: Span) {
+    fn record(&mut self, location: crate::Location) {
         *self = match *self {
             Occurrences::Once => Occurrences::Repeated {
                 count: 2,
-                first_repeat: span,
+                first_repeat: location,
             },
             Occurrences::Repeated {
                 count,
@@ -52,13 +55,13 @@ fn label_or_empty(label: Option<&str>) -> &str {
 /// file with no lines and this function read as offset 0; a file with no
 /// lines ends at 0, so the caller says that and the fallback is gone.
 pub(crate) fn check_headers(
-    headers: &[(&Header, Span)],
+    headers: &[(&Header, crate::Location)],
     errors: &impl ErrorSink,
     source_len: usize,
 ) {
     let mut header_counts: HashMap<String, Occurrences> = HashMap::new();
     let mut declared_participants: HashSet<SpeakerCode> = HashSet::new();
-    let mut id_speakers: Vec<(SpeakerCode, Span)> = Vec::new();
+    let mut id_speakers: Vec<(SpeakerCode, crate::Location)> = Vec::new();
 
     for (header, span) in headers {
         let name_lower = header.name().to_lowercase();
@@ -94,11 +97,11 @@ pub(crate) fn check_headers(
             first_repeat: span,
         }) = header_counts.get(&name_lower)
         {
-            let mut err = ParseError::new(
+            let err = ParseError::new(
                 ErrorCode::DuplicateHeader,
                 Severity::Error,
-                SourceLocation::at_offset(span.start as usize),
-                ErrorContext::new(*name, 0..name.len(), *name),
+                DiagnosticLocation::from(span),
+                ErrorContext::new(*name, crate::Span::new(0, name.len()), *name),
                 format!(
                     "Duplicate @{} header: found {} occurrences, but only one is allowed",
                     name, count
@@ -108,7 +111,6 @@ pub(crate) fn check_headers(
                 "Remove the extra @{} headers so only one remains",
                 name
             ));
-            err.location.span = span;
             errors.report(err);
         }
     }
@@ -124,8 +126,8 @@ pub(crate) fn check_headers(
                 ParseError::new(
                     ErrorCode::MissingRequiredHeader,
                     Severity::Error,
-                    SourceLocation::at_offset(eof_offset),
-                    ErrorContext::new("", 0..0, ""),
+                    DiagnosticLocation::at_offset(eof_offset),
+                    ErrorContext::new("", crate::Span::new(0, 0), ""),
                     format!("Missing required @{} header in file preamble", required),
                 )
                 .with_suggestion(format!(
@@ -142,8 +144,8 @@ pub(crate) fn check_headers(
             ParseError::new(
                 ErrorCode::MissingUTF8Header,
                 Severity::Error,
-                SourceLocation::at_offset(eof_offset),
-                ErrorContext::new("", 0..0, ""),
+                DiagnosticLocation::at_offset(eof_offset),
+                ErrorContext::new("", crate::Span::new(0, 0), ""),
                 "Missing @UTF8 header: every CHAT file must declare its encoding",
             )
             .with_suggestion("Add @UTF8 as the very first line of the file"),
@@ -155,8 +157,8 @@ pub(crate) fn check_headers(
             ParseError::new(
                 ErrorCode::MissingEndHeader,
                 Severity::Error,
-                SourceLocation::at_offset(eof_offset),
-                ErrorContext::new("", 0..0, ""),
+                DiagnosticLocation::at_offset(eof_offset),
+                ErrorContext::new("", crate::Span::new(0, 0), ""),
                 "Missing @End header at end of file",
             )
             .with_suggestion("Add @End as the last line of the file"),
@@ -197,11 +199,15 @@ pub(crate) fn check_headers(
     for (speaker, span) in &id_speakers {
         if !speaker.as_str().is_empty() && !declared_participants.contains(speaker) {
             let speaker_str = speaker.as_str();
-            let mut err = ParseError::new(
+            let err = ParseError::new(
                 ErrorCode::SpeakerNotDefined,
                 Severity::Error,
-                SourceLocation::at_offset(span.start as usize),
-                ErrorContext::new(speaker_str, 0..speaker_str.len(), speaker_str),
+                DiagnosticLocation::from(*span),
+                ErrorContext::new(
+                    speaker_str,
+                    crate::Span::new(0, speaker_str.len()),
+                    speaker_str,
+                ),
                 format!(
                     "Speaker '{}' referenced in @ID header but not declared in @Participants",
                     speaker_str
@@ -211,7 +217,6 @@ pub(crate) fn check_headers(
                 "Add '{}' to the @Participants line, or remove this @ID header",
                 speaker_str
             ));
-            err.location.span = *span;
             errors.report(err);
         }
     }
@@ -227,7 +232,7 @@ pub(crate) fn check_headers(
 /// - `@Participants` must appear before `@ID`
 ///
 /// This corresponds to CLAN CHECK errors 61 and 125.
-fn check_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+fn check_header_order(headers: &[(&Header, crate::Location)], errors: &impl ErrorSink) {
     let mut saw_participants = false;
 
     for (header, span) in headers {
@@ -236,27 +241,29 @@ fn check_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                 saw_participants = true;
             }
             Header::Options { .. } if !saw_participants => {
-                let mut err = ParseError::new(
+                let err = ParseError::new(
                     ErrorCode::HeaderOutOfOrder,
                     Severity::Error,
-                    SourceLocation::at_offset(span.start as usize),
-                    ErrorContext::new("@Options", 0.."@Options".len(), "@Options"),
+                    DiagnosticLocation::from(*span),
+                    ErrorContext::new(
+                        "@Options",
+                        crate::Span::new(0, "@Options".len()),
+                        "@Options",
+                    ),
                     "@Options must appear after @Participants",
                 )
                 .with_suggestion("Move @Options to after the @Participants header");
-                err.location.span = *span;
                 errors.report(err);
             }
             Header::ID(_) if !saw_participants => {
-                let mut err = ParseError::new(
+                let err = ParseError::new(
                     ErrorCode::HeaderOutOfOrder,
                     Severity::Error,
-                    SourceLocation::at_offset(span.start as usize),
-                    ErrorContext::new("@ID", 0.."@ID".len(), "@ID"),
+                    DiagnosticLocation::from(*span),
+                    ErrorContext::new("@ID", crate::Span::new(0, "@ID".len()), "@ID"),
                     "@ID must appear after @Participants",
                 )
                 .with_suggestion("Move @ID to after the @Participants header");
-                err.location.span = *span;
                 errors.report(err);
             }
             _ => {}
@@ -275,7 +282,10 @@ fn check_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
 ///
 /// This corresponds to CLAN CHECK error 127 ("Header must follow @ID: or
 /// @Birth of or @Birthplace of or @L1 of header").
-fn check_constant_participant_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+fn check_constant_participant_header_order(
+    headers: &[(&Header, crate::Location)],
+    errors: &impl ErrorSink,
+) {
     // The only headers that may legally precede a constant participant header:
     // an `@ID` header, or another constant participant header.
     fn is_allowed_predecessor(header: &Header) -> bool {
@@ -299,11 +309,11 @@ fn check_constant_participant_header_order(headers: &[(&Header, Span)], errors: 
         if let Some(keyword) = keyword
             && !prev.is_some_and(is_allowed_predecessor)
         {
-            let mut err = ParseError::new(
+            let err = ParseError::new(
                 ErrorCode::ConstantHeaderOutOfOrder,
                 Severity::Error,
-                SourceLocation::at_offset(span.start as usize),
-                ErrorContext::new(keyword, 0..keyword.len(), keyword),
+                DiagnosticLocation::from(*span),
+                ErrorContext::new(keyword, crate::Span::new(0, keyword.len()), keyword),
                 format!(
                     "{keyword} must immediately follow the @ID block, before any changeable header"
                 ),
@@ -311,7 +321,6 @@ fn check_constant_participant_header_order(headers: &[(&Header, Span)], errors: 
             .with_suggestion(
                 "Move this header to directly after the @ID headers, before any @Comment, @Date, or other changeable header",
             );
-            err.location.span = *span;
             errors.report(err);
         }
 
@@ -331,7 +340,7 @@ fn check_constant_participant_header_order(headers: &[(&Header, Span)], errors: 
 ///
 /// This corresponds to CLAN CHECK error 126 ("@ID header must immediately
 /// follow @Participants: or @Options header").
-fn check_id_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+fn check_id_header_order(headers: &[(&Header, crate::Location)], errors: &impl ErrorSink) {
     let mut saw_participants = false;
     let mut prev: Option<&Header> = None;
     for (header, span) in headers {
@@ -348,17 +357,16 @@ fn check_id_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                 )
             });
             if saw_participants && !preceded_validly {
-                let mut err = ParseError::new(
+                let err = ParseError::new(
                     ErrorCode::IdHeaderOutOfOrder,
                     Severity::Error,
-                    SourceLocation::at_offset(span.start as usize),
-                    ErrorContext::new("@ID", 0.."@ID".len(), "@ID"),
+                    DiagnosticLocation::from(*span),
+                    ErrorContext::new("@ID", crate::Span::new(0, "@ID".len()), "@ID"),
                     "@ID must immediately follow @Participants / @Options (or another @ID), with no changeable header in between",
                 )
                 .with_suggestion(
                     "Move this @ID up to directly follow @Participants / @Options, before any @Comment or other changeable header",
                 );
-                err.location.span = *span;
                 errors.report(err);
             }
         }
@@ -374,7 +382,10 @@ fn check_id_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
 /// speaker. Each speaker has exactly one `@ID`, so a repeat is a duplicate
 /// declaration. Empty speaker codes are skipped (an absent code is a different
 /// error, not a duplicate).
-fn check_duplicate_id_headers(id_speakers: &[(SpeakerCode, Span)], errors: &impl ErrorSink) {
+fn check_duplicate_id_headers(
+    id_speakers: &[(SpeakerCode, crate::Location)],
+    errors: &impl ErrorSink,
+) {
     let mut seen: HashSet<&str> = HashSet::new();
     for (speaker, span) in id_speakers {
         let code = speaker.as_str();
@@ -382,15 +393,14 @@ fn check_duplicate_id_headers(id_speakers: &[(SpeakerCode, Span)], errors: &impl
             continue;
         }
         if !seen.insert(code) {
-            let mut err = ParseError::new(
+            let err = ParseError::new(
                 ErrorCode::DuplicateSpeakerDeclaration,
                 Severity::Error,
-                SourceLocation::at_offset(span.start as usize),
-                ErrorContext::new(code, 0..code.len(), code),
+                DiagnosticLocation::from(*span),
+                ErrorContext::new(code, crate::Span::new(0, code.len()), code),
                 format!("Speaker '{code}' has more than one @ID header"),
             )
             .with_suggestion("Declare each speaker with exactly one @ID header");
-            err.location.span = *span;
             errors.report(err);
         }
     }
@@ -408,7 +418,7 @@ fn check_duplicate_id_headers(id_speakers: &[(SpeakerCode, Span)], errors: &impl
 ///
 /// This corresponds to CLAN CHECK error 125 ("@Options header must immediately
 /// follow @Participants: header").
-fn check_options_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+fn check_options_header_order(headers: &[(&Header, crate::Location)], errors: &impl ErrorSink) {
     let mut saw_participants = false;
     let mut prev: Option<&Header> = None;
     for (header, span) in headers {
@@ -419,17 +429,16 @@ fn check_options_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSi
             // The only valid immediate predecessor of @Options is @Participants.
             let preceded_validly = matches!(prev, Some(Header::Participants { .. }));
             if saw_participants && !preceded_validly {
-                let mut err = ParseError::new(
+                let err = ParseError::new(
                     ErrorCode::OptionsHeaderOutOfOrder,
                     Severity::Error,
-                    SourceLocation::at_offset(span.start as usize),
-                    ErrorContext::new("@Options", 0.."@Options".len(), "@Options"),
+                    DiagnosticLocation::from(*span),
+                    ErrorContext::new("@Options", crate::Span::new(0, "@Options".len()), "@Options"),
                     "@Options must immediately follow @Participants, before the @ID block or any other header",
                 )
                 .with_suggestion(
                     "Move this @Options up to directly follow @Participants, before any @ID or @Comment header",
                 );
-                err.location.span = *span;
                 errors.report(err);
             }
         }
@@ -441,7 +450,7 @@ fn check_options_header_order(headers: &[(&Header, Span)], errors: &impl ErrorSi
 /// (E549).
 ///
 /// Corresponds to CLAN CHECK error 13 ("Duplicate speaker declaration").
-fn check_duplicate_participants(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+fn check_duplicate_participants(headers: &[(&Header, crate::Location)], errors: &impl ErrorSink) {
     use std::collections::HashSet;
     for (header, span) in headers {
         if let Header::Participants { entries } = header {
@@ -449,15 +458,14 @@ fn check_duplicate_participants(headers: &[(&Header, Span)], errors: &impl Error
             for entry in entries.as_slice() {
                 let code = entry.speaker_code.as_str();
                 if !seen.insert(code) {
-                    let mut err = ParseError::new(
+                    let err = ParseError::new(
                         ErrorCode::DuplicateSpeakerDeclaration,
                         Severity::Error,
-                        SourceLocation::at_offset(span.start as usize),
-                        ErrorContext::new(code, 0..code.len(), code),
+                        DiagnosticLocation::from(*span),
+                        ErrorContext::new(code, crate::Span::new(0, code.len()), code),
                         format!("Speaker '{code}' is declared more than once in @Participants"),
                     )
                     .with_suggestion("Declare each participant exactly once in @Participants");
-                    err.location.span = *span;
                     errors.report(err);
                 }
             }
@@ -468,20 +476,20 @@ fn check_duplicate_participants(headers: &[(&Header, Span)], errors: &impl Error
 /// One or more still-open begins for a label. Closing the last begin consumes
 /// this state instead of leaving a zero-count entry in the active-scope map.
 struct OpenGemScope {
-    first: Span,
-    repeated: Vec<Span>,
+    first: crate::Location,
+    repeated: Vec<crate::Location>,
 }
 
 impl OpenGemScope {
-    fn open(first: Span) -> Self {
+    fn open(location: crate::Location) -> Self {
         Self {
-            first,
+            first: location,
             repeated: Vec::new(),
         }
     }
 
-    fn reopen(&mut self, span: Span) {
-        self.repeated.push(span);
+    fn reopen(&mut self, location: crate::Location) {
+        self.repeated.push(location);
     }
 
     fn close(mut self) -> Option<Self> {
@@ -501,7 +509,7 @@ impl OpenGemScope {
 /// - E528: Labels match between paired @Bg/@Eg
 /// - E529: Nested @Bg with same label (opening @Bg while already in that scope)
 /// - E530: @G (lazy gem) inside @Bg/@Eg scope
-fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
+fn check_gem_balance(headers: &[(&Header, crate::Location)], errors: &impl ErrorSink) {
     use std::collections::hash_map::Entry;
 
     // Different labels may overlap; this is not a global LIFO stack.
@@ -519,11 +527,11 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                     Entry::Occupied(mut entry) => {
                         entry.get_mut().reopen(*span);
                         let label_str = label_or_empty(key);
-                        let mut err = ParseError::new(
+                        let err = ParseError::new(
                             ErrorCode::NestedBeginGem,
                             Severity::Error,
-                            SourceLocation::at_offset(span.start as usize),
-                            ErrorContext::new("", 0..0, ""),
+                            DiagnosticLocation::from(*span),
+                            ErrorContext::new("", crate::Span::new(0, 0), ""),
                             if label_str.is_empty() {
                                 "Nested @Bg: cannot open a new @Bg while already inside a @Bg scope with the same label"
                                     .to_string()
@@ -538,7 +546,6 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                             "Close the current @Bg scope with @Eg before opening another @Bg with the same label"
                                 .to_string(),
                         );
-                        err.location.span = *span;
                         errors.report(err);
                     }
                 }
@@ -547,11 +554,11 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                 // E530: Check if any @Bg scope is open
                 if !open_scopes.is_empty() {
                     let label_str = label_or_empty(label.as_ref().map(|l| l.as_str()));
-                    let mut err = ParseError::new(
+                    let err = ParseError::new(
                         ErrorCode::LazyGemInsideScope,
                         Severity::Error,
-                        SourceLocation::at_offset(span.start as usize),
-                        ErrorContext::new("", 0..0, ""),
+                        DiagnosticLocation::from(*span),
+                        ErrorContext::new("", crate::Span::new(0, 0), ""),
                         if label_str.is_empty() {
                             "@G (lazy gem) cannot appear inside @Bg/@Eg scope".to_string()
                         } else {
@@ -565,7 +572,6 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                         "Move @G outside of @Bg/@Eg scope, or use @Bg/@Eg markers instead"
                             .to_string(),
                     );
-                    err.location.span = *span;
                     errors.report(err);
                 }
             }
@@ -580,11 +586,11 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                     None => {
                         if !open_scopes.is_empty() {
                             let label_str = label_or_empty(key);
-                            let mut err = ParseError::new(
+                            let err = ParseError::new(
                                 ErrorCode::GemLabelMismatch,
                                 Severity::Error,
-                                SourceLocation::at_offset(span.start as usize),
-                                ErrorContext::new("", 0..0, ""),
+                                DiagnosticLocation::from(*span),
+                                ErrorContext::new("", crate::Span::new(0, 0), ""),
                                 if label_str.is_empty() {
                                     "Gem label mismatch between @Bg/@Eg markers".to_string()
                                 } else {
@@ -594,16 +600,15 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                                     )
                                 },
                             );
-                            err.location.span = *span;
                             errors.report(err);
                         }
                         // End without any matching begin (different label)
                         let label_str = label_or_empty(key);
-                        let mut err = ParseError::new(
+                        let err = ParseError::new(
                             ErrorCode::UnmatchedEndGem,
                             Severity::Error,
-                            SourceLocation::at_offset(span.start as usize),
-                            ErrorContext::new("", 0..0, ""),
+                            DiagnosticLocation::from(*span),
+                            ErrorContext::new("", crate::Span::new(0, 0), ""),
                             if label_str.is_empty() {
                                 "Unmatched @Eg (no matching @Bg)".to_string()
                             } else {
@@ -621,7 +626,6 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                                 label_str, label_str
                             )
                         });
-                        err.location.span = *span;
                         errors.report(err);
                     }
                 }
@@ -630,7 +634,7 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
         }
     }
 
-    // Check for unclosed scopes, no specific header to point at (scope was opened earlier)
+    // Check for unclosed scopes, pointing at the @Bg that opened each one.
     for (label_opt, scope) in open_scopes {
         let count = scope.count();
         let label_str = label_or_empty(label_opt);
@@ -638,8 +642,8 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
             ParseError::new(
                 ErrorCode::UnmatchedBeginGem,
                 Severity::Error,
-                SourceLocation::at_offset(0),
-                ErrorContext::new("", 0..0, ""),
+                DiagnosticLocation::from(scope.first),
+                ErrorContext::new("", crate::Span::new(0, 0), ""),
                 if label_str.is_empty() {
                     format!("Unmatched @Bg: {} @Bg without matching @Eg", count)
                 } else {
@@ -663,8 +667,8 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
 // on 2026-09-08.
 //
 // All twenty-four handed `check_header_order`, `check_gem_balance` and their
-// siblings a `Vec<(&Header, Span)>` assembled in the test, every position
-// `Span::DUMMY`. Both facts under test are properties of a header BLOCK, which
+// siblings a header sequence assembled in the test, every position the
+// (since deleted) `Span::DUMMY` sentinel. Both facts under test are properties of a header BLOCK, which
 // a `.cha` file states directly, so the assembled sequence was a second way of
 // writing what the format already writes, with nothing forcing the two to
 // describe the same thing. The coverage it produced was fabrication-backed:

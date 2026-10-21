@@ -9,16 +9,15 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 use crate::generated_traversal::{
-    AsRawNode, GraContentsChildren, GraContentsNode, GraDependentTierChildren,
+    AdmittedGraContentsChildren, AsRawNode, GraContentsNode, GraDependentTierChildren,
     GraDependentTierNode, GraRelationNode, KindSlot, NoChild, RangeAdmittedChildren, Ranged,
     ReadableSlot, SourceBound, SourceChildren, SourceSlice, WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::{ParsedDependentTier, dependent_tier_separator};
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::model::{GraLowering, GraLoweringReceipt, GraTier};
-use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, TierSeparator,
-};
+use talkbank_model::{ErrorSink, TierSeparator};
 
 use super::relation::parse_gra_relation;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -32,9 +31,9 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_dis
 /// ```
 ///
 /// Source-bound extraction retains the owner through body, repeats and relation
-/// fields. Missing, Error and Absent report E708 and return a truncated tier. Unexpected is
-/// uninhabited in the generated kind slot. Lexical recovery remains explicit;
-/// neither source ownership nor the caller's error gate proves it impossible.
+/// fields. Per-rule admission proves the ordinary composite body present.
+/// Nested relation recovery remains explicit; an envelope capability does not
+/// certify the fields inside the body or the caller's CHAT validity judgment.
 /// Source/reconstruction failures propagate as `CstFailure`, not CHAT invalidity.
 pub fn parse_gra_tier<'tree>(
     typed: SourceBound<'tree, '_, GraDependentTierNode<'tree>>,
@@ -46,15 +45,32 @@ pub fn parse_gra_tier<'tree>(
 /// Root extraction and separator provenance share one immutable source owner.
 #[must_use]
 struct GraTierReading<'tree, 'source> {
-    children: SourceChildren<'tree, 'source, GraDependentTierChildren<'tree>>,
+    children: SourceChildren<
+        'tree,
+        'source,
+        GraDependentTierChildren<
+            'tree,
+            crate::generated_traversal::KindAdmitted,
+            crate::generated_traversal::Raw,
+            crate::generated_traversal::RequiredPresence,
+        >,
+    >,
     separator: TierSeparator,
 }
 
 /// Only this consumed phase can decode or preserve the selected root's model.
 #[must_use]
 struct RangedGraTier<'tree, 'source> {
-    children:
-        RangeAdmittedChildren<'tree, 'source, GraDependentTierChildren<'tree, Ranged<'source>>>,
+    children: RangeAdmittedChildren<
+        'tree,
+        'source,
+        GraDependentTierChildren<
+            'tree,
+            crate::generated_traversal::KindAdmitted,
+            Ranged<'source>,
+            crate::generated_traversal::RequiredPresence,
+        >,
+    >,
     separator: TierSeparator,
 }
 
@@ -62,8 +78,8 @@ impl<'tree, 'source> GraTierReading<'tree, 'source> {
     fn extract(
         typed: SourceBound<'tree, 'source, GraDependentTierNode<'tree>>,
     ) -> Result<Self, crate::CstFailure> {
-        let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
-        let separator = dependent_tier_separator(children.children().child_1.slot());
+        let children = crate::parser::typed_cst::extract_envelope(typed)?;
+        let separator = dependent_tier_separator(children.children().child_1.slot())?;
         Ok(Self {
             children,
             separator,
@@ -93,7 +109,7 @@ impl RangedGraTier<'_, '_> {
         // Document-level structural recovery keeps an Unknown placeholder at
         // the real slot. It is not native lost-contents lowering evidence.
         ParsedDependentTier::new(
-            GraTier::new_gra(Vec::new()).with_span(span_of(self.children.parent().raw_node())),
+            GraTier::new_gra(span_of(self.children.parent().raw_node()), Vec::new()),
             self.separator,
         )
     }
@@ -127,37 +143,22 @@ fn parse_gra_root_contents<'tree, 'source>(
     children: &RangeAdmittedChildren<
         'tree,
         'source,
-        GraDependentTierChildren<'tree, Ranged<'source>>,
+        GraDependentTierChildren<
+            'tree,
+            crate::generated_traversal::KindAdmitted,
+            Ranged<'source>,
+            crate::generated_traversal::RequiredPresence,
+        >,
     >,
     errors: &impl ErrorSink,
 ) -> Result<GraTier, crate::CstFailure> {
     let parent = children.parent();
-    let source = parent.source();
     let node = parent.raw_node();
     let span = span_of(node);
 
-    Ok(match &children.children().child_2.slot {
-        ReadableSlot::Present(contents) => parse_gra_relations(*contents, errors)?
-            .into_tier()
-            .with_span(span),
-        ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
-            errors.report(ParseError::new(
-                ErrorCode::MalformedGrammarRelation,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                "Missing gra_contents node in %gra tier".to_string(),
-            ));
-            // TRUNCATED, not empty: the `%gra:` line is there and its
-            // contents node is not, so whatever the author wrote was lost. An
-            // empty tier reported as whole would be judged as a complete graph
-            // with no relations.
-            GraLoweringReceipt::lost_contents()
-                .into_tier()
-                .with_span(span)
-        }
-        ReadableSlot::Unexpected(never) => match *never {},
-    })
+    let crate::generated_traversal::SlotView::Present(contents) =
+        children.children().child_2.slot.view();
+    Ok(parse_gra_relations(*contents, errors)?.into_tier(span))
 }
 
 /// Decode every `gra_relation` under a `gra_contents` node into the relation
@@ -182,15 +183,17 @@ fn parse_gra_relations<'tree>(
     typed: SourceBound<'tree, '_, GraContentsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<GraLoweringReceipt, crate::CstFailure> {
-    let contents = typed
-        .extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?
-        .admit_ranges()?;
+    let contents = typed.extract_canonical()?.admit_ranges()?;
     lower_gra_relations(&contents, errors)
 }
 
 /// The whole contents carrier owns its first relation, inline repeats and extras.
 fn lower_gra_relations<'tree, 'source>(
-    contents: &RangeAdmittedChildren<'tree, 'source, GraContentsChildren<'tree, Ranged<'source>>>,
+    contents: &RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedGraContentsChildren<'tree, Ranged<'source>>,
+    >,
     errors: &impl ErrorSink,
 ) -> Result<GraLoweringReceipt, crate::CstFailure> {
     let mut lowering = GraLowering::with_capacity(contents.children().child_1.slot.len() + 1);
@@ -253,15 +256,19 @@ fn push_gra_separator<'tree, 'source>(
 
 /// Decode one relation slot, recording its actual result in the lowering owner.
 ///
-/// Missing composite relations are diagnosed without fabricating a declaration. Present
-/// relations are retained only after successful field admission; no default is
+/// Compiled admission excludes MISSING composite relations. Present relations
+/// are retained only after successful field admission; no default is
 /// fabricated for a rejected relation. Error is diagnosed and Absent emits
 /// nothing. Lexical fields retain their independent recovery checks.
 ///
 /// Only a Present relation is a declaration. Its parsed/rejected result is
 /// recorded atomically; Error/Absent does not invent a declaration or relation.
 fn push_gra_relation<'tree, 'source>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, GraRelationNode<'tree>>, Ranged<'source>>,
+    slot: &crate::generated_traversal::NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, GraRelationNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
     lowering: &mut GraLowering,
 ) -> Result<(), crate::CstFailure> {
@@ -276,14 +283,7 @@ fn push_gra_relation<'tree, 'source>(
                 "gra_contents",
             ));
         }
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "gra_contents",
-            );
-        }
+        ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Absent(NoChild) => {}
     }
@@ -354,7 +354,12 @@ mod range_tests {
                         Err(SourceBindingError::ForeignTree)
                     ));
                     let reading = GraTierReading::extract(tier).expect("kind-admitted root");
-                    let before = match reading.children.field_child_2().slot().view() {
+                    let broad = tier
+                        .extract_admitted(
+                            crate::parser::typed_cst::canonical_grammar().expect("binding"),
+                        )
+                        .expect("broad root observation");
+                    let before = match broad.field_child_2().slot().view() {
                         SourceSlotView::Present(_) => 0,
                         SourceSlotView::Missing(_) => 3,
                         SourceSlotView::Error(_) => 1,
@@ -365,13 +370,9 @@ mod range_tests {
                     assert_eq!(ranged.children.parent().raw_node(), tier.raw_node());
                     assert_eq!(ranged.children.parent().text(), tier.text());
                     assert_eq!(ranged.children.parent().source(), source);
-                    let after = match &ranged.children.children().child_2.slot {
-                        ReadableSlot::Present(_) => 0,
-                        ReadableSlot::Error(_) => 1,
-                        ReadableSlot::Absent(NoChild) => 2,
-                        ReadableSlot::Missing(_) => 3,
-                        ReadableSlot::Unexpected(never) => match *never {},
-                    };
+                    let crate::generated_traversal::SlotView::Present(_) =
+                        ranged.children.children().child_2.slot.view();
+                    let after = 0;
                     assert_eq!(after, before, "range admission retains {name}'s body state");
                     body_states[after] += 1;
                     let checks = ranged.children.checked_range_count();
@@ -385,26 +386,19 @@ mod range_tests {
                         .parse(&errors)
                         .expect("native lowering is distinct from CHAT validity")
                         .into_entry(DependentTier::Gra);
-                    assert_eq!(entry.span(), span_of(tier.raw_node()));
+                    assert_eq!(
+                        entry.location(),
+                        talkbank_model::Location::Located(span_of(tier.raw_node()))
+                    );
                     assert_eq!(entry.separator, separator);
-                    if before != 0 {
-                        let DependentTier::Gra(tier) = entry.tier else {
-                            panic!("gra construction preserves its variant");
-                        };
-                        assert!(tier.relations().is_empty());
-                        assert_eq!(tier.completeness(), GraCompleteness::Truncated);
-                        assert!(
-                            errors
-                                .to_vec()
-                                .iter()
-                                .any(|error| { error.code == ErrorCode::MalformedGrammarRelation })
-                        );
-                    }
                     if tier.raw_node().has_error() {
                         let recovered = recover_gra_tier_with_separator(tier)
                             .expect("document structural-recovery root")
                             .into_entry(DependentTier::Gra);
-                        assert_eq!(recovered.span(), span_of(tier.raw_node()));
+                        assert_eq!(
+                            recovered.location(),
+                            talkbank_model::Location::Located(span_of(tier.raw_node()))
+                        );
                         assert_eq!(recovered.separator, separator);
                         let DependentTier::Gra(tier) = recovered.tier else {
                             panic!("recovered gra preserves its variant");

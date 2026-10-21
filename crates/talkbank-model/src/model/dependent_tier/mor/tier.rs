@@ -101,9 +101,9 @@ pub struct MorTier {
     pub terminator: Terminator,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl MorTier {
@@ -117,12 +117,17 @@ impl MorTier {
     /// one. Parsers handling malformed input that lacks a terminator must
     /// return a typed parse-outcome diagnostic rather than calling this
     /// constructor with a placeholder.
-    pub fn new(tier_type: MorTierType, items: Vec<Mor>, terminator: Terminator) -> Self {
+    pub fn new(
+        location: impl Into<crate::Location>,
+        tier_type: MorTierType,
+        items: Vec<Mor>,
+        terminator: Terminator,
+    ) -> Self {
         Self {
             tier_type,
             items: items.into(),
             terminator,
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
     }
 
@@ -131,8 +136,12 @@ impl MorTier {
     ///
     /// This is the common constructor used by parser outputs and tests
     /// when no alternate tier kind is needed.
-    pub fn new_mor(items: Vec<Mor>, terminator: Terminator) -> Self {
-        Self::new(MorTierType::Mor, items, terminator)
+    pub fn new_mor(
+        location: impl Into<crate::Location>,
+        items: Vec<Mor>,
+        terminator: Terminator,
+    ) -> Self {
+        Self::new(location, MorTierType::Mor, items, terminator)
     }
 
     /// Returns `true` when tier type is `%mor`.
@@ -161,15 +170,6 @@ impl MorTier {
     /// corresponding %gra tier is updated to match.
     pub fn items_mut(&mut self) -> &mut [Mor] {
         &mut self.items.0
-    }
-
-    /// Attach source span for diagnostics.
-    ///
-    /// Parser-generated values should set this to real offsets so `%mor` validation
-    /// reports can point back to the original transcript line.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Count total number of chunks (including post-clitics and terminator).
@@ -382,7 +382,7 @@ impl MorTier {
     /// Checks for empty POS/lemma/feature fields and reports `E711` diagnostics
     /// for each violation found.
     pub fn validate_content(&self, errors: &impl crate::ErrorSink) {
-        validate_mor_content(&self.items, self.span, errors);
+        validate_mor_content(&self.items, self.location, errors);
     }
 }
 
@@ -457,18 +457,22 @@ impl crate::validation::Validate for MorItems {
 /// Structural alignment checks are intentionally out of scope here; this helper
 /// only validates per-token lexical morphology content.
 ///
-pub fn validate_mor_content(items: &[Mor], span: crate::Span, errors: &impl crate::ErrorSink) {
+pub fn validate_mor_content(
+    items: &[Mor],
+    location: crate::Location,
+    errors: &impl crate::ErrorSink,
+) {
     use super::word::MorWord;
     use crate::{ErrorCode, ParseError, Severity};
 
     /// Validates a single `%mor` word for empty POS/lemma/feature fields.
-    fn check_word(word: &MorWord, span: crate::Span, errors: &impl crate::ErrorSink) {
+    fn check_word(word: &MorWord, location: crate::Location, errors: &impl crate::ErrorSink) {
         if word.lemma.is_empty() {
             errors.report(
-                ParseError::at_span(
+                ParseError::at_location(
                     ErrorCode::MorEmptyContent,
                     Severity::Error,
-                    span,
+                    location,
                     format!("%mor word has empty lemma (POS='{}')", word.pos.as_str()),
                 )
                 .with_suggestion("Ensure the lemma is not empty"),
@@ -476,10 +480,10 @@ pub fn validate_mor_content(items: &[Mor], span: crate::Span, errors: &impl crat
         }
         if word.pos.is_empty() {
             errors.report(
-                ParseError::at_span(
+                ParseError::at_location(
                     ErrorCode::MorEmptyContent,
                     Severity::Error,
-                    span,
+                    location,
                     format!(
                         "%mor word has empty POS category (lemma='{}')",
                         word.lemma.as_str()
@@ -491,10 +495,10 @@ pub fn validate_mor_content(items: &[Mor], span: crate::Span, errors: &impl crat
         for feature in &word.features {
             if feature.is_empty() {
                 errors.report(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::MorEmptyContent,
                         Severity::Error,
-                        span,
+                        location,
                         format!(
                             "%mor word has empty feature (lemma='{}')",
                             word.lemma.as_str()
@@ -508,10 +512,10 @@ pub fn validate_mor_content(items: &[Mor], span: crate::Span, errors: &impl crat
 
     for item in items {
         // Check main word
-        check_word(&item.main, span, errors);
+        check_word(&item.main, location, errors);
         // Check post-clitics
         for clitic in &item.post_clitics {
-            check_word(clitic, span, errors);
+            check_word(clitic, location, errors);
         }
     }
 }
@@ -543,11 +547,12 @@ mod tests {
     /// Builds a `%mor` tier fixture with a terminator.
     ///
     /// The terminator mirrors common corpus shape and keeps chunk accounting realistic.
-    fn make_tier(items: Vec<Mor>) -> MorTier {
+    fn make_tier(location: impl Into<crate::Location>, items: Vec<Mor>) -> MorTier {
         MorTier::new_mor(
+            crate::Location::Unlocated,
             items,
             crate::model::content::Terminator::Period {
-                span: crate::Span::DUMMY,
+                location: location.into(),
             },
         )
     }
@@ -557,10 +562,13 @@ mod tests {
     /// This is the baseline guard for the validator's non-error path.
     #[test]
     fn test_mor_valid_content_no_errors() {
-        let tier = make_tier(vec![
-            make_mor(make_word("noun", "dog")),
-            make_mor(make_word("verb", "run").with_feature(MorFeature::new("Past"))),
-        ]);
+        let tier = make_tier(
+            crate::Location::Unlocated,
+            vec![
+                make_mor(make_word("noun", "dog")),
+                make_mor(make_word("verb", "run").with_feature(MorFeature::new("Past"))),
+            ],
+        );
         let errors = ErrorCollector::new();
         tier.validate_content(&errors);
         assert!(errors.into_vec().is_empty());
@@ -571,7 +579,10 @@ mod tests {
     /// The message should explicitly mention the missing lemma component.
     #[test]
     fn test_mor_empty_lemma_produces_e711() {
-        let tier = make_tier(vec![make_mor(make_word("noun", ""))]);
+        let tier = make_tier(
+            crate::Location::Unlocated,
+            vec![make_mor(make_word("noun", ""))],
+        );
         let errors = ErrorCollector::new();
         tier.validate_content(&errors);
         let errs = errors.into_vec();
@@ -585,7 +596,10 @@ mod tests {
     /// This protects against malformed `|lemma` forms.
     #[test]
     fn test_mor_empty_pos_category_produces_e711() {
-        let tier = make_tier(vec![make_mor(make_word("", "dog"))]);
+        let tier = make_tier(
+            crate::Location::Unlocated,
+            vec![make_mor(make_word("", "dog"))],
+        );
         let errors = ErrorCollector::new();
         tier.validate_content(&errors);
         let errs = errors.into_vec();
@@ -600,7 +614,7 @@ mod tests {
     #[test]
     fn test_mor_empty_feature_produces_e711() {
         let word = make_word("verb", "walk").with_feature(MorFeature::new(""));
-        let tier = make_tier(vec![make_mor(word)]);
+        let tier = make_tier(crate::Location::Unlocated, vec![make_mor(word)]);
         let errors = ErrorCollector::new();
         tier.validate_content(&errors);
         let errs = errors.into_vec();
@@ -611,10 +625,13 @@ mod tests {
 
     #[test]
     fn semantic_index_of_item_start_counts_prior_chunks() {
-        let tier = make_tier(vec![
-            make_mor(make_word("pron", "it")).with_post_clitic(make_word("aux", "be")),
-            make_mor(make_word("noun", "cookie")),
-        ]);
+        let tier = make_tier(
+            crate::Location::Unlocated,
+            vec![
+                make_mor(make_word("pron", "it")).with_post_clitic(make_word("aux", "be")),
+                make_mor(make_word("noun", "cookie")),
+            ],
+        );
 
         assert_eq!(
             tier.semantic_index_of_item_start(MorItemIndex::new(0)),
@@ -628,16 +645,22 @@ mod tests {
 
     #[test]
     fn governing_head_for_item_uses_gra_chunk_space() {
-        let tier = make_tier(vec![
-            make_mor(make_word("pron", "it")).with_post_clitic(make_word("aux", "be")),
-            make_mor(make_word("noun", "foreign")),
-        ]);
-        let gra = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 2, "EXPL"),
-            GrammaticalRelation::new(2, 0, "ROOT"),
-            GrammaticalRelation::new(3, 2, "DEP"),
-            GrammaticalRelation::new(4, 2, "PUNCT"),
-        ]);
+        let tier = make_tier(
+            crate::Location::Unlocated,
+            vec![
+                make_mor(make_word("pron", "it")).with_post_clitic(make_word("aux", "be")),
+                make_mor(make_word("noun", "foreign")),
+            ],
+        );
+        let gra = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 2, "EXPL"),
+                GrammaticalRelation::new(2, 0, "ROOT"),
+                GrammaticalRelation::new(3, 2, "DEP"),
+                GrammaticalRelation::new(4, 2, "PUNCT"),
+            ],
+        );
 
         assert_eq!(
             tier.governing_head_for_item(&gra, MorItemIndex::new(1))
@@ -648,11 +671,17 @@ mod tests {
 
     #[test]
     fn splice_coordinated_normalizes_resulting_head_zero_relation_to_root() {
-        let mut tier = make_tier(vec![make_mor(make_word("noun", "dog"))]);
-        let mut gra = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 0, "ROOT"),
-            GrammaticalRelation::new(2, 1, "PUNCT"),
-        ]);
+        let mut tier = make_tier(
+            crate::Location::Unlocated,
+            vec![make_mor(make_word("noun", "dog"))],
+        );
+        let mut gra = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 0, "ROOT"),
+                GrammaticalRelation::new(2, 1, "PUNCT"),
+            ],
+        );
 
         tier.splice_coordinated(
             &mut gra,
@@ -676,15 +705,21 @@ mod tests {
 
     #[test]
     fn splice_range_coordinated_normalizes_resulting_head_zero_relation_to_root() {
-        let mut tier = make_tier(vec![
-            make_mor(make_word("noun", "old")),
-            make_mor(make_word("noun", "tail")),
-        ]);
-        let mut gra = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 0, "ROOT"),
-            GrammaticalRelation::new(2, 1, "NMOD"),
-            GrammaticalRelation::new(3, 1, "PUNCT"),
-        ]);
+        let mut tier = make_tier(
+            crate::Location::Unlocated,
+            vec![
+                make_mor(make_word("noun", "old")),
+                make_mor(make_word("noun", "tail")),
+            ],
+        );
+        let mut gra = GraTier::new_gra(
+            crate::Location::Unlocated,
+            vec![
+                GrammaticalRelation::new(1, 0, "ROOT"),
+                GrammaticalRelation::new(2, 1, "NMOD"),
+                GrammaticalRelation::new(3, 1, "PUNCT"),
+            ],
+        );
 
         tier.splice_range_coordinated(
             &mut gra,

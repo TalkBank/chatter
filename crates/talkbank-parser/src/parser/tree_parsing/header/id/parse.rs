@@ -16,60 +16,86 @@
 //! Required and optional field presence retain their recovery policies; an
 //! admission failure is an internal producer failure, not an empty CHAT field.
 //! Structural pipes and whitespace carry no model payload.
+//!
+//! **Reachability of the recovery arms (coverage drive batch 4,
+//! 2026-10-19).** The slot-state census over 4,707 single-edit mutations of
+//! two `@ID` lines put the speaker and role positions only in `Present`, the
+//! optional field repeats in `Error` (a stray delimiter inside a field, which
+//! `optional_field!` leaves to the whole-tree backstop) and the final pipe in
+//! `Missing` (a truncated `@ID`). The languages field was never `Missing` or
+//! `Error`, and nothing inside `id_languages` was either: `report_recovery`
+//! there is entered by no authored file. Those arms stay for the states the
+//! slot types admit; an `Absent` required position reports the producer
+//! fault.
 
 use crate::generated_traversal::{
     AsRawNode, IdContentsNode, IdHeaderNode, IdRoleNode, IdSpeakerNode, Never, NoChild,
     ReadableSlot, SourceBound, SourceBoundKind, SourceSlotView,
 };
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
+use crate::node_types::{ID_CONTENTS, ID_HEADER, ID_LANGUAGES};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::{CstFailure, GeneratedPosition, report_cst_failure};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, LanguageCodes, Sex};
 
-/// The field's generated kind owns its diagnostic; callers supply no policy selector.
+/// The field's generated kind owns its position; callers supply no policy selector.
 trait RequiredIDField<'tree>: SourceBoundKind<'tree> {
-    const ERROR: ErrorCode;
-    const MESSAGE: &'static str;
+    /// The generated carrier and field of this required position, named in
+    /// a producer-fault report when the walk leaves it empty.
+    const POSITION: GeneratedPosition;
 }
 
 impl<'tree> RequiredIDField<'tree> for IdSpeakerNode<'tree> {
-    const ERROR: ErrorCode = ErrorCode::EmptyIDSpeaker;
-    const MESSAGE: &'static str = "Missing id_speaker field in @ID header";
+    const POSITION: GeneratedPosition = GeneratedPosition::new("IdContentsChildren.child_4");
 }
 
 impl<'tree> RequiredIDField<'tree> for IdRoleNode<'tree> {
-    const ERROR: ErrorCode = ErrorCode::EmptyIDRole;
-    const MESSAGE: &'static str =
-        "Empty role field in @ID header: the role (8th field) must not be blank";
+    const POSITION: GeneratedPosition = GeneratedPosition::new("IdContentsChildren.child_14");
 }
 
-/// Decode only a range-admitted required field; recovery still rejects its payload.
-fn required_field<'tree, 'source, T, M>(
-    slot: &ReadableSlot<'tree, 'source, SourceBound<'tree, 'source, T>, M, Never, NoChild>,
+/// Decode only a range-admitted required field; recovery rejects its payload.
+///
+/// A MISSING or ERROR node at the position is reported by the document's
+/// whole-tree backstop, as `optional_field!` already relies on, and rejects
+/// the field, which makes the header `Unknown`. The header fragment route
+/// (`parse_header_fragment`) lowers a header without that backstop, so
+/// there the rejection is unreported, a gap the coverage drive records
+/// rather than closes here. Reachability (coverage drive
+/// batch 4, 2026-10-19): across 4,707 single-edit mutations of two `@ID`
+/// lines the speaker and role positions were only ever `Present`; a
+/// truncated `@ID` puts its MISSING node at the final pipe and leaves the
+/// role an empty PRESENT token, which the model's `check_id_header` reports
+/// as E515. Until 2026-10-19 this arm reported E511 or E515 itself, a mirror
+/// of that model rule at a recovery node nobody read, with the model's own
+/// wording. An `Absent` required position is the walk's fault.
+fn required_field<'tree, 'source, T, M, E>(
+    slot: &ReadableSlot<SourceBound<'tree, 'source, T>, M, E, Never, NoChild>,
     contents: SourceBound<'tree, '_, IdContentsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<String>
 where
     T: RequiredIDField<'tree>,
 {
-    let id_contents = contents.raw_node();
-    let source = contents.source();
-    let ReadableSlot::Present(value) = slot else {
-        errors.report(ParseError::new(
-            T::ERROR,
-            Severity::Error,
-            SourceLocation::from_offsets(id_contents.start_byte(), id_contents.end_byte()),
-            ErrorContext::new(
-                source,
-                id_contents.start_byte()..id_contents.end_byte(),
-                "id_contents",
-            ),
-            T::MESSAGE,
-        ));
-        return ParseOutcome::rejected();
-    };
-    ParseOutcome::parsed(value.text().to_owned())
+    match slot {
+        ReadableSlot::Present(value) => ParseOutcome::parsed(value.text().to_owned()),
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => ParseOutcome::rejected(),
+        ReadableSlot::Absent(NoChild) => {
+            report_cst_failure(
+                contents.raw_node(),
+                contents.source(),
+                CstFailure::AbsentRequiredPosition {
+                    rule: ID_CONTENTS,
+                    position: T::POSITION,
+                },
+                errors,
+            );
+            ParseOutcome::rejected()
+        }
+        ReadableSlot::Unexpected(never) => match *never {},
+    }
 }
 
 /// Select the typed field from its generated whitespace/field repeat.
@@ -96,27 +122,10 @@ pub fn parse_id_header<'tree>(
     let source = typed.source();
     let node = typed.raw_node();
 
-    // Retain the missing-payload diagnostic for every non-present slot state;
+    // Per-rule admission proves this ordinary composite payload present;
     // source-range admission is a distinct producer obligation.
-    let header_children = typed.extract();
-    let SourceSlotView::Present(contents) = header_children.field_child_2().slot().view() else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), "id_header"),
-            "Missing id_contents child in id_header",
-        ));
-        surface_displaced(
-            &header_children.children().unexpected,
-            "id_header",
-            source,
-            errors,
-        );
-        return Ok(unknown_id_header(
-            "ID header CST node is missing id_contents",
-        ));
-    };
+    let header_children = crate::parser::typed_cst::extract_envelope(typed)?;
+    let SourceSlotView::Present(contents) = header_children.field_child_2().slot().view();
     let id_contents = contents.read()?;
 
     // Decompose id_contents into its typed field slots. The NEW backend does NOT
@@ -134,11 +143,11 @@ pub fn parse_id_header<'tree>(
         Err(failure) => {
             surface_displaced(
                 &header_children.children().unexpected,
-                "id_header",
+                ID_HEADER,
                 source,
                 errors,
             );
-            surface_displaced(&displaced, "id_contents", source, errors);
+            surface_displaced(&displaced, ID_CONTENTS, source, errors);
             return Err(failure.into());
         }
     };
@@ -156,8 +165,8 @@ pub fn parse_id_header<'tree>(
                 errors.report(ParseError::new(
                     ErrorCode::EmptyIDLanguage,
                     Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.byte_range(), "id_languages"),
+                    DiagnosticLocation::new(span_of(node)),
+                    ErrorContext::new(source, span_of(node), ID_LANGUAGES),
                     "Malformed id_languages field in @ID header",
                 ));
                 ParseOutcome::Rejected
@@ -201,26 +210,23 @@ pub fn parse_id_header<'tree>(
 
     surface_displaced(
         &header_children.children().unexpected,
-        "id_header",
+        ID_HEADER,
         source,
         errors,
     );
     for displaced in &contents.unexpected {
         surface_displaced(
             std::slice::from_ref(&displaced.raw_node()),
-            "id_contents",
+            ID_CONTENTS,
             displaced.source(),
             errors,
         );
     }
 
-    let (language, speaker, role) = match (language, speaker, role) {
-        (
-            ParseOutcome::Parsed(language),
-            ParseOutcome::Parsed(speaker),
-            ParseOutcome::Parsed(role),
-        ) => (language, speaker, role),
-        _ => return Ok(unknown_id_header("ID header contains malformed fields")),
+    let (ParseOutcome::Parsed(language), ParseOutcome::Parsed(speaker), ParseOutcome::Parsed(role)) =
+        (language, speaker, role)
+    else {
+        return Ok(unknown_id_header("ID header contains malformed fields"));
     };
 
     // No Rust-side trimming needed, the grammar's optional($.whitespaces)

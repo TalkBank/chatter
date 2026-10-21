@@ -16,7 +16,7 @@ mod types;
 pub use self::path::{PathSegment, SemanticPath};
 
 // Re-export core types
-pub use context::{SemanticDiffContext, normalize_span, normalize_span_option};
+pub use context::SemanticDiffContext;
 pub use report::SemanticDiffReport;
 pub use types::{DEFAULT_MAX_DIFFS, SemanticDiffKind, SemanticDifference};
 

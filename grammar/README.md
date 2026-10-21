@@ -1,7 +1,7 @@
 # tree-sitter-talkbank
 
 **Status:** Current
-**Last modified:** 2026-05-30 21:24 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/grammar/README.md)
 
 [![CI](https://github.com/TalkBank/chatter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TalkBank/chatter/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/tree-sitter-talkbank)](https://www.npmjs.com/package/tree-sitter-talkbank)
@@ -13,89 +13,47 @@ CHAT (Codes for the Human Analysis of Transcripts) is a standardized format for 
 
 ### The CHAT Manual
 
-The official CHAT manual is the authoritative reference for the transcription format. The Word document is the source of truth; the HTML and PDF are generated from it.
+The CHAT manual is the external format reference. Chatter's authored specs,
+validation policies and recorded compatibility decisions define its tested
+implementation contract; successful grammar recognition alone does not prove
+that contract or complete format support.
 
 - **Word** (authoritative): [talkbank.org/0info/manuals/CHAT.docx](https://talkbank.org/0info/manuals/CHAT.docx)
 - **HTML** (generated): [talkbank.org/0info/manuals/CHAT.html](https://talkbank.org/0info/manuals/CHAT.html)
 - **PDF** (generated): [talkbank.org/0info/manuals/CHAT.pdf](https://talkbank.org/0info/manuals/CHAT.pdf)
 
-### What it parses
+### Syntax and validation
 
-```
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child Child, MOT Mother
-@ID:	eng|Brown|CHI|2;6.|female|||Target_Child|||
-@Date:	12-SEP-1962
-*CHI:	want more cookie .          <- main tier (speaker + utterance + terminator)
-%mor:	v|want qn|more n|cookie     <- morphology tier
-%gra:	1|0|ROOT 2|3|DET 3|1|OBJ  <- grammatical relations tier
-*MOT:	here you go .
-@End
-```
+The grammar recognizes headers, main and dependent tiers, annotations, overlap
+markers and Conversation Analysis notation, with recovery for malformed input.
+The actual root is `source_file`, whose alternatives include `full_document`
+and selected fragments. A complete-document parse nests its headers and
+utterances under `full_document`; it does not produce a root named `document`.
 
-The grammar produces a full concrete syntax tree (CST) covering headers, main tiers, dependent tiers (morphology, phonology, grammar relations), annotations, overlap markers, CA transcription features, and more. See the repository's [grammar architecture guide](https://github.com/TalkBank/chatter/blob/main/grammar/GRAMMAR.md).
+Use an authored [reference transcript](../corpus/reference/core/basic-conversation.cha)
+to inspect the current CST rather than copying a handwritten tree into tests.
+From this directory, after the development prerequisites are installed:
 
-### Parse tree walkthrough
-
-For a minimal valid CHAT file:
-
-```
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child, MOT Mother
-@ID:	eng|corpus|CHI|3;00.|female|typical||Child|||
-@ID:	eng|corpus|MOT|||||Mother|||
-*CHI:	want more cookie .
-@End
+```sh
+npx --no-install tree-sitter parse ../corpus/reference/core/basic-conversation.cha
 ```
 
-The grammar produces this CST (simplified):
-
-```
-(document
-  (utf8_header)
-  (begin_header)
-  (languages_header)
-  (participants_header)
-  (id_header)
-  (id_header)
-  (line
-    (utterance
-      (main_tier
-        (star) speaker: (speaker)        ;; *CHI
-        (colon) (tab)
-        (tier_body
-          content: (contents
-            (content_item               ;; "want"
-              (word_with_optional_annotations
-                word: (standalone_word)))
-            (whitespaces)
-            (content_item               ;; "more"
-              (word_with_optional_annotations
-                word: (standalone_word)))
-            (whitespaces)
-            (content_item               ;; "cookie"
-              (word_with_optional_annotations
-                word: (standalone_word)))
-            (whitespaces))
-          ending: (utterance_end
-            (period)                    ;; terminator
-            (newline))))))
-  (end_header))
-```
-
-Every byte is accounted for, whitespace, structural punctuation, and content are all explicit nodes. The companion Rust parser crate [`talkbank-parser`](https://crates.io/crates/talkbank-parser) walks this CST to build a semantic AST.
+Inspect the output for its root, selected structure and recovery nodes.
+This command does not run Chatter's model validation. Whitespace is explicit
+in the grammar (`extras: []`), but not every source byte has a distinct named
+node. Keep the original source alongside the CST. The companion
+[`talkbank-parser`](../crates/talkbank-parser/README.md) lowers that evidence
+into a typed model; see the [grammar architecture](GRAMMAR.md) and
+[parser/model contracts](../book/src/architecture/parser-model-contracts.md).
 
 ## Bindings
 
 The actively supported downstream binding is Rust (used by `talkbank-parser`).
 
-Other language bindings in `bindings/` are currently scaffold-level and not the primary maintenance target for v0.1.
+Other language bindings in `bindings/` remain scaffold-level; their presence
+does not establish packaging, editor integration or platform acceptance.
 
-For Rust-specific installation and usage details, see `bindings/rust/README.md`.
+For Rust source-checkout usage, see the [binding guide](bindings/rust/README.md).
 
 ## Editor support
 
@@ -108,7 +66,8 @@ The `queries/` directory provides tree-sitter queries for:
 
 These are the minimal boilerplate query files used by the default language bindings.
 
-Additional editor query families (for example folds/indents/textobjects) are post-v1 TODOs.
+Additional editor query families and native-client behavior need separate
+implementation and verification; query files are not an editor acceptance test.
 
 ## Documentation
 
@@ -127,9 +86,8 @@ This grammar lives inside the broader [`TalkBank/chatter`](https://github.com/Ta
 
 ```bash
 npm ci                         # Install dependencies (locked)
-npx tree-sitter generate      # Generate parser from grammar.js
-npx tree-sitter test          # Run the test suite
-npx tree-sitter parse file.cha # Parse a CHAT file
+npx --no-install tree-sitter test           # Grammar corpus only
+npx --no-install tree-sitter parse file.cha # Inspect syntax, not model validity
 npm start                      # Launch the web playground
 ```
 
@@ -143,7 +101,13 @@ Several files in this repository are generated and should not be edited by hand:
 - **`src/generated_symbol_sets.js`**: symbol constants imported by `grammar.js`, generated from the [CHAT spec symbol registry](https://github.com/TalkBank/chatter/tree/main/spec/symbols)
 - **`test/corpus/`**: test cases generated from CHAT format [specifications](https://github.com/TalkBank/chatter/tree/main/spec) via the `spec/tools` generator binaries
 
-Contributors working on the grammar itself only need `tree-sitter generate` and `tree-sitter test`. Regenerating symbol sets uses `just symbols-gen`; regenerating the test corpus uses the current `spec/tools` commands documented in `book/src/contributing/spec-workflow.md`.
+Grammar edits also affect generated node types, traversal consumers and other
+derived artifacts. Use the consolidated `just regen` recipe from the repository
+root, with prerequisites and review steps from
+[Grammar Workflow](../book/src/contributing/grammar-workflow.md) and
+[Spec Workflow](../book/src/contributing/spec-workflow.md). Then verify the
+affected grammar/parser/model contracts. Running only `tree-sitter generate`
+and `tree-sitter test` does not establish consumer currency or release readiness.
 
 ## License
 

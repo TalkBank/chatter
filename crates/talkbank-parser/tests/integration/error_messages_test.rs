@@ -50,18 +50,18 @@ fn test_no_error_node_keyword_in_messages() {
             );
 
             // Verify error span is within input bounds
-            let span = &error.location.span;
+            let span = &error.location.span().expect("located diagnostic");
             assert!(
-                span.start <= input.len() as u32,
+                span.start() <= input.len(),
                 "Error span start {} exceeds input length {}. Input: {}",
-                span.start,
+                span.start(),
                 input.len(),
                 input.escape_debug()
             );
             assert!(
-                span.end <= input.len() as u32,
+                span.end() <= input.len(),
                 "Error span end {} exceeds input length {}. Input: {}",
-                span.end,
+                span.end(),
                 input.len(),
                 input.escape_debug()
             );
@@ -108,18 +108,18 @@ fn test_error_messages_dont_expose_internals() {
             );
 
             // Verify error span is within input bounds
-            let span = &error.location.span;
+            let span = &error.location.span().expect("located diagnostic");
             assert!(
-                span.start <= input.len() as u32,
+                span.start() <= input.len(),
                 "Error span start {} exceeds input length {}. Input: {}",
-                span.start,
+                span.start(),
                 input.len(),
                 input.escape_debug()
             );
             assert!(
-                span.end <= input.len() as u32,
+                span.end() <= input.len(),
                 "Error span end {} exceeds input length {}. Input: {}",
-                span.end,
+                span.end(),
                 input.len(),
                 input.escape_debug()
             );
@@ -151,7 +151,8 @@ fn test_error_spans_point_to_problem_locations() {
         assert!(!errors.is_empty(), "malformed input must not pass silently");
         assert!(
             errors.iter().any(|error| {
-                let range = error.location.span.start as usize..error.location.span.end as usize;
+                let range = error.location.span().expect("located diagnostic").start()
+                    ..error.location.span().expect("located diagnostic").end();
                 error.code == talkbank_model::ErrorCode::UnparsableContent
                     && range.contains(&25)
                     && recovery.contains(&range)
@@ -159,9 +160,9 @@ fn test_error_spans_point_to_problem_locations() {
             "diagnostic must retain the producer's recovery span: {errors:?}"
         );
         for error in errors {
-            let span = error.location.span;
+            let span = error.location.span().expect("located diagnostic");
             assert!(
-                input.get(span.start as usize..span.end as usize).is_some(),
+                input.get(span.start()..span.end()).is_some(),
                 "diagnostic must stay within readable source coordinates"
             );
         }
@@ -173,9 +174,12 @@ fn test_error_spans_point_to_problem_locations() {
 /// Regression for a real-transcript finding: an unparsable main
 /// tier (`&- um and .`, the split filler prefix) produced an E305 whose span
 /// was `0..line_len`, i.e. fragment-local coordinates never rebased onto the
-/// file, so the diagnostic rendered on line 1 over the header block. The
-/// `report_missing_child` recovery used `0..original_input.len()` as its span;
-/// every span it reports must lie inside the offending line instead.
+/// file, so the diagnostic rendered on line 1 over the header block.
+/// That historical recovery used a fragment-local span. This public regression
+/// checks the diagnostics emitted by the current parser, not that a particular
+/// missing-child fallback still runs. Reporter ownership has separate direct
+/// boundary controls. Context highlights must also be readable in their own
+/// source, independently of the document location.
 #[test]
 fn test_recovery_diagnostics_are_located_on_the_offending_line() {
     let header = "@UTF8
@@ -190,24 +194,37 @@ fn test_recovery_diagnostics_are_located_on_the_offending_line() {
         "{header}{bad_line}@End
 "
     );
-    let line_start = header.len() as u32;
-    let line_end = (header.len() + bad_line.len()) as u32;
+    let line_start = header.len();
+    let line_end = header.len() + bad_line.len();
 
     let errors = parse_and_collect_errors(&input);
     assert!(
         !errors.is_empty(),
         "the split filler prefix must produce diagnostics"
     );
+    let mut contexts = 0;
     for error in &errors {
-        let span = error.location.span;
+        let span = error.location.span().expect("located diagnostic");
         assert!(
-            span.start >= line_start && span.end <= line_end,
+            span.start() >= line_start && span.end() <= line_end,
             "diagnostic located outside the offending line              (span {}..{}, line is {line_start}..{line_end}): {:?}",
-            span.start,
-            span.end,
+            span.start(),
+            span.end(),
             error
         );
+        if let Some(context) = &error.context {
+            let range = context.span.start()..context.span.end();
+            assert!(
+                context.source_text.get(range).is_some(),
+                "context range must belong to its stored UTF-8 source: {error:?}"
+            );
+            contexts += 1;
+        }
     }
+    assert!(
+        contexts > 0,
+        "the regression must exercise a displayed context"
+    );
 }
 
 /// A parse-recovered main tier must not cascade into structural claims

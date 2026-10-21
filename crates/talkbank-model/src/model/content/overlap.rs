@@ -57,7 +57,7 @@
 
 use super::WriteChat;
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -82,17 +82,18 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Simple Example
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{OverlapIndex, OverlapPoint, OverlapPointKind};
 ///
 /// // Mother's overlap points (top)
-/// let begin = OverlapPoint::new(OverlapPointKind::TopOverlapBegin, None);
-/// let end = OverlapPoint::new(OverlapPointKind::TopOverlapEnd, None);
+/// let begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapBegin, None);
+/// let end = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapEnd, None);
 /// assert_eq!(begin.to_string(), "⌈");
 /// assert_eq!(end.to_string(), "⌉");
 ///
 /// // Child's overlap points (bottom)
-/// let begin = OverlapPoint::new(OverlapPointKind::BottomOverlapBegin, None);
-/// let end = OverlapPoint::new(OverlapPointKind::BottomOverlapEnd, None);
+/// let begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::BottomOverlapBegin, None);
+/// let end = OverlapPoint::new(Location::Unlocated, OverlapPointKind::BottomOverlapEnd, None);
 /// assert_eq!(begin.to_string(), "⌊");
 /// assert_eq!(end.to_string(), "⌋");
 /// ```
@@ -100,11 +101,12 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Indexed Example
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{OverlapIndex, OverlapPoint, OverlapPointKind};
 ///
 /// // Multiple overlaps require single-digit indices (2-9)
-/// let overlap1_begin = OverlapPoint::new(OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(2)));
-/// let overlap2_begin = OverlapPoint::new(OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(3)));
+/// let overlap1_begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(2)));
+/// let overlap2_begin = OverlapPoint::new(Location::Unlocated, OverlapPointKind::TopOverlapBegin, Some(OverlapIndex::new(3)));
 /// assert_eq!(overlap1_begin.to_string(), "⌈2");
 /// assert_eq!(overlap2_begin.to_string(), "⌈3");
 /// ```
@@ -206,10 +208,10 @@ pub struct OverlapPoint {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index: Option<OverlapIndex>,
     /// Source location metadata for diagnostics.
-    #[serde(skip)]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub span: Option<Span>,
+    pub location: crate::Location,
 }
 
 impl OverlapPoint {
@@ -217,20 +219,16 @@ impl OverlapPoint {
     ///
     /// This keeps direct model construction concise; parser-produced values can
     /// attach real spans via [`Self::with_span`].
-    pub fn new(kind: OverlapPointKind, index: Option<OverlapIndex>) -> Self {
+    pub fn new(
+        location: impl Into<crate::Location>,
+        kind: OverlapPointKind,
+        index: Option<OverlapIndex>,
+    ) -> Self {
         Self {
             kind,
             index,
-            span: None,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata for diagnostics.
-    ///
-    /// Span data does not alter serialized overlap marker text.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = Some(span);
-        self
     }
 }
 
@@ -238,27 +236,13 @@ impl Validate for OverlapIndex {
     /// Enforces CHAT overlap-index range (single digit `2` through `9`).
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
         if !matches!(self.0, 2..=9) {
-            let index_str = self.0.to_string();
-            let span = match context.field_span {
-                Some(span) => span,
-                None => crate::Span::from_usize(0, index_str.len()),
-            };
-            let location = match context.field_span {
-                Some(span) => SourceLocation::new(span),
-                None => SourceLocation::at_offset(0),
-            };
-            let source_text = match context.field_text.clone() {
-                Some(text) => text,
-                None => index_str.clone(),
-            };
-            // DEFAULT: Missing label falls back to "overlap_index" for error messaging.
-            let label = context.field_label.unwrap_or("overlap_index");
+            let location = context.field_diagnostic_location();
             errors.report(
                 ParseError::new(
                     ErrorCode::InvalidOverlapIndex,
                     Severity::Error,
                     location,
-                    ErrorContext::new(source_text, span, label),
+                    None,
                     format!("Overlap index {} is invalid", self.0),
                 )
                 .with_suggestion("Overlap indices must be a single digit from 2 to 9"),

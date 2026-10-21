@@ -12,7 +12,6 @@
 //! because a hand-built terminator has no source, and the writer reads no
 //! span.
 
-use talkbank_model::Span;
 use talkbank_model::model::{
     BulletContent, ChatFile, ComTier, GraTier, GrammaticalRelation, Header, LanguageCode, Line,
     MainTier, Terminator, Utterance, UtteranceContent, Word, WordText,
@@ -23,11 +22,15 @@ use talkbank_model::non_empty_literal;
 #[test]
 fn utterance_round_trip_simple() {
     let main = MainTier::new(
+        talkbank_model::MainTierLocations::UNLOCATED,
         "CHI",
-        vec![UtteranceContent::Word(Box::new(Word::new(WordText::from(
-            non_empty_literal!("hello"),
-        ))))],
-        Terminator::Period { span: Span::DUMMY },
+        vec![UtteranceContent::Word(Box::new(Word::new(
+            talkbank_model::Location::Unlocated,
+            WordText::from(non_empty_literal!("hello")),
+        )))],
+        Terminator::Period {
+            location: talkbank_model::Location::Unlocated,
+        },
     );
     let utterance = Utterance::new(main);
     let output = utterance.to_chat();
@@ -42,18 +45,26 @@ fn utterance_round_trip_simple() {
 #[test]
 fn utterance_round_trip_with_dependent_tiers() {
     let main = MainTier::new(
+        talkbank_model::MainTierLocations::UNLOCATED,
         "CHI",
-        vec![UtteranceContent::Word(Box::new(Word::new(WordText::from(
-            non_empty_literal!("hello"),
-        ))))],
-        Terminator::Period { span: Span::DUMMY },
+        vec![UtteranceContent::Word(Box::new(Word::new(
+            talkbank_model::Location::Unlocated,
+            WordText::from(non_empty_literal!("hello")),
+        )))],
+        Terminator::Period {
+            location: talkbank_model::Location::Unlocated,
+        },
     );
 
     let utterance = Utterance::new(main)
-        .with_gra(GraTier::new_gra(vec![GrammaticalRelation::new(
-            1, 0, "ROOT",
-        )]))
-        .with_com(ComTier::new(BulletContent::from_text("comment text")));
+        .with_gra(GraTier::new_gra(
+            talkbank_model::Location::Unlocated,
+            vec![GrammaticalRelation::new(1, 0, "ROOT")],
+        ))
+        .with_com(ComTier::new(
+            talkbank_model::Location::Unlocated,
+            BulletContent::from_text("comment text"),
+        ));
 
     let output = utterance.to_chat();
     assert!(output.contains("*CHI:\thello ."), "Expected main tier");
@@ -65,16 +76,23 @@ fn utterance_round_trip_with_dependent_tiers() {
 #[test]
 fn chat_file_round_trip() {
     let lines = vec![
-        Line::header(Header::Utf8),
-        Line::header(Header::Languages {
-            codes: vec![LanguageCode::new("eng").expect("test literal is non-empty")].into(),
-        }),
+        Line::header(talkbank_model::Location::Unlocated, Header::Utf8),
+        Line::header(
+            talkbank_model::Location::Unlocated,
+            Header::Languages {
+                codes: vec![LanguageCode::new("eng").expect("test literal is non-empty")].into(),
+            },
+        ),
         Line::utterance(Utterance::new(MainTier::new(
+            talkbank_model::MainTierLocations::UNLOCATED,
             "CHI",
-            vec![UtteranceContent::Word(Box::new(Word::new(WordText::from(
-                non_empty_literal!("hello"),
-            ))))],
-            Terminator::Period { span: Span::DUMMY },
+            vec![UtteranceContent::Word(Box::new(Word::new(
+                talkbank_model::Location::Unlocated,
+                WordText::from(non_empty_literal!("hello")),
+            )))],
+            Terminator::Period {
+                location: talkbank_model::Location::Unlocated,
+            },
         ))),
     ];
 

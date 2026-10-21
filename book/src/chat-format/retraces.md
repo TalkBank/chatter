@@ -17,8 +17,13 @@ marked with a trailing bracket code:
 |--------|------|---------|
 | `[/]` | Partial repetition | Speaker repeats the same words |
 | `[//]` | Full correction | Speaker restarts with different words |
-| `[///]` | Multiple correction | Multiple false starts |
-| `[/-]` | Reformulation | Speaker rephrases with different structure |
+| `[///]` | Reformulation | Speaker reformulates the message |
+| `[/-]` | Abandoned start | Speaker changes direction without retracing |
+
+The [CHAT manual](https://talkbank.org/0info/manuals/CHAT.html) supplies these
+surface meanings. Chatter's historical Rust variant names differ:
+`Multiple` represents `[///]`, and `Reformulation` represents `[/-]`.
+The variant name is not a linguistic classification.
 
 ### Single-Word Retraces
 
@@ -71,7 +76,7 @@ flowchart TD
     UC --> RW["ReplacedWord"]
     UC --> Retrace
     UC --> AG["AnnotatedGroup"]
-    UC --> Other["...20 other variants"]
+    UC --> Other["Other content variants"]
 
     Retrace --> BC["BracketedContent"]
     Retrace --> RK["RetraceKind"]
@@ -85,15 +90,11 @@ The `Retrace` struct wraps the retraced content in a `BracketedContent`
 container, which can hold any combination of words, replaced words, and
 other content items:
 
-```rust,ignore
-// crates/talkbank-model/src/model/content/retrace.rs
-pub struct Retrace {
-    pub content: BracketedContent,  // the retraced words
-    pub kind: RetraceKind,          // Partial, Full, Multiple, Reformulation
-    pub is_group: bool,             // <word> [/] vs word [/]
-    pub span: Span,
-}
-```
+The source definition is `model/content/retrace.rs` in `talkbank-model`.
+Besides `content` and `kind`, `is_group` preserves angle-bracket spelling,
+`span` locates the construct, and optional `marker_span` locates the marker
+itself when the parser retained that evidence. Source-free values must not
+invent marker offsets.
 
 ### Where the annotations live
 
@@ -129,14 +130,10 @@ in alignment counting, word extraction, or retokenization.
 
 Making `Retrace` a top-level `UtteranceContent` variant means:
 
-1. **The compiler enforces handling, WHERE the match is exhaustive.** Every
-   `match` on `UtteranceContent` must have a `Retrace` arm. The caveat is real:
-   a site matching a retrace behind a `_ =>` arm compiles unchanged when a
-   variant such as `AnnotatedRetrace` is added and silently answers wrong (at
-   five sites it did, one of them the gate in front of all retrace
-   validation). A first-class variant guarantees
-   exhaustiveness only where the matches are already exhaustive, which is why
-   this codebase bans catch-alls over content enums.
+1. **Exhaustive matches expose unhandled variants.** Catch-all arms can hide
+   a newly added variant, so first-class representation alone is not proof
+   that every consumer handles it correctly. Shared structural views and
+   scoped wildcard-match lints help keep that handling explicit.
 2. **Domain-aware gating is centralized.** The content walker checks the
    `Retrace` variant once, not at every annotation-inspection site.
 3. **Alignment counting is simple.** The count function returns `0` for
@@ -171,18 +168,12 @@ flowchart LR
     WOA -->|"parse_word_content()\n(word.rs)"| RET
 ```
 
-Three cases in `parse_word_content()`:
-
-1. **Word + retrace** (`I [/]`), wrap `Word` in `BracketedItem::Word`
-   inside `Retrace`
-2. **Word + replacement + retrace** (`tika@u [: kitty] [* p:n] [//]`),
-   build `ReplacedWord`, then wrap in `BracketedItem::ReplacedWord`
-   inside `Retrace`
-3. **Word + replacement, no retrace** (`tika@u [: kitty]`), emit bare
-   `ReplacedWord`
-
-Group retraces (`<content> [/]`) are handled in `group/parser.rs` via
-the same structural wrapping.
+`parse_word_content()` first builds the word or replaced-word core, then calls
+`fold_marker_chain` on the ordered markers. That fold preserves the distinction
+between annotations before and after a retrace, including adjacent retraces.
+`parse_group_content()` in `group/parser.rs` uses the same fold with a group
+core. These are the primary parser's conversion owners, not a claim about
+every backend's implementation.
 
 ## Alignment Behavior
 
@@ -195,7 +186,7 @@ flowchart TD
     RT -->|"Mor domain"| SKIP["SKIP\n(return 0)\nNot morphologically analyzed"]
     RT -->|"Pho domain"| COUNT["COUNT\nPhonologically produced"]
     RT -->|"Sin domain"| COUNT2["COUNT\nGesturally produced"]
-    RT -->|"Wor domain"| COUNT3["RECURSE\napply retrace-aware %wor leaf rule"]
+    RT -->|"Wor domain"| COUNT3["RECURSE\napply FilteredLexicalV1 leaf rule"]
 
     style SKIP fill:#faa,stroke:#333
     style COUNT fill:#afa,stroke:#333
@@ -209,26 +200,30 @@ start or error; it was produced phonologically but is not part of the
 intended linguistic structure. The correction after the retrace marker
 carries the morphological analysis.
 
-**Why %pho/%sin/%wor include retraces:** These tiers document what was
-*actually produced*, the sounds, gestures, and timing of the speech as
-it happened, including false starts. The retrace was physically spoken,
-so it appears in these tiers.
+**Why traversal enters retraces outside %mor:** Retraced material was
+produced, so `%pho`, `%sin` and `%wor` can select positions within it.
+Entering a container does not mean every leaf participates in every domain.
+In particular, `%wor` selects only the current timing policy's eligible words.
 
 For `%wor`, retrace ancestry does **not** change leaf-level membership:
 
-- spoken word tokens count both inside and outside retrace
-- that includes fillers, fragments, nonwords, and untranscribed placeholders
-- overlap annotations do not affect `%wor` membership
+- eligible regular words and fillers count both inside and outside retraces;
+- phonological fragments (`&+`), nonwords (`&~`), untranscribed markers
+  (`xxx`, `yyy`, `www`) and omissions are excluded in either location;
+- overlap annotations do not change this leaf-level policy.
 
-Exact corpus-shaped contrast:
+For example, the retraced `one` below remains eligible, but `&+ss` does not:
 
 ```chat
 *CHI:	<one &+ss> [/] one play ground .
-%wor:	one •321008_321148• ss •321148_321368• one •321809_321969• play •322049_322310• ground •322390_322890• .
-
-*CHI:	&+ih <the what> [/] what's letter &+th is this ?
-%wor:	ih •49063_49103• the •49103_49163• what •49183_50205• what's •50205_50405• letter •50405_50685• th •50886_50946• is •50946_51046• this •51086_51586• ?
 ```
+
+The selected lexical sequence is `one`, `one`, `play`, `ground`. This is
+membership, not evidence of available or acoustically correct timings. A parsed
+legacy `%wor` tier can use a different convention; do not delete its words or
+declare the CHAT invalid just to force a count match. See
+[`%wor` timing semantics](../architecture/wor-timing.md) for binding, lexical
+corroboration and timing admission.
 
 ### Implementation
 
@@ -268,9 +263,10 @@ for retrace-sensitive membership.
 
 ### The three retrace rules
 
-`validation/retrace/` runs three checks over ONE traversal of the tier
-(`visit.rs`), which reaches every retrace including those nested inside another
-retrace's content.
+`validation/retrace/` separates node visitation (`visit.rs`) from the
+serialized-order leaf/checkpoint collection (`collection/`) needed to inspect
+what follows a marker. Both use `ContentStructure`; the visitor reaches nested
+retraces rather than treating an outer retrace as a leaf.
 
 | Code | Rule | Example rejected |
 |------|------|------------------|
@@ -283,19 +279,10 @@ inner retrace still holds a word, so E378 stays silent; in `<&=sigh> [/] &=sigh`
 there is no second marker, so E377 stays silent. The repairs differ too: drop a
 marker for E377, retrace the words rather than the vocalization for E378.
 
-Both were adjudicated with the CHAT maintainer on 2026-08-07. On adjacent
-markers: "clearly a mistake ... It's an error." On a marker over an event: "No,
-not legal. You can't retrace a laugh." He gave the legal alternative half an
-hour earlier in the same thread, and it is why E378 tests for absent WORDS
-rather than for a present event:
-
-```text
-*PAR:	<the floor on the &=laughs water> [//] the floor on the xxx .
-```
-
-E378 recurses because 205 corpus retraces hold their words one level down, in an
-annotated group or a quotation (`<<the dog> [?]> [/] the dog`), and a rule
-testing the immediate children would reject every one of them. Untranscribed
+E378 tests for absent words, not for a present event: an event alongside
+words does not by itself invalidate a retrace. Words can occur deeper inside
+an annotated group or quotation (`<<the dog> [?]> [/] the dog`), so testing
+only immediate children would incorrectly reject such content. Untranscribed
 material counts as words on purpose: `xxx`, `yyy` and `www` lower as words, so
 retracing speech nobody could make out stays valid.
 
@@ -305,33 +292,24 @@ two hand-written copies of that knowledge can disagree, as about `PhoGroup` and
 `SinGroup`, which silently stops E377 firing inside `‹...›` with no test able
 to see it.
 
-Be precise about the scope: the retrace validators classify through it, and the alignment walkers do not.
-They need to know WHICH container they are in, so a tier domain can skip a
-phonological group but not a quotation, and `Container` deliberately does not
-carry that. Settling those payloads is the prerequisite for migrating them.
+Alignment walkers also use `ContentStructure`, through the domain policy in
+`alignment/helpers/descent.rs`. Structural classification answers what an item
+contains; domain policy separately decides whether to enter it, count it as an
+atomic position, or exclude it.
 
 ### Alignment Validation (E705)
 
-E705 fires when the main tier has more alignable items than %mor. If
-retraces are correctly parsed as `Retrace` nodes; they are excluded
-from the count and E705 does not fire. If a retrace is accidentally
-parsed as a bare `ReplacedWord` (the bug fixed in `c90b9bf`), it is
-counted and triggers a false E705.
+Correctly represented retraces are excluded from the `%mor` count. This
+prevents retraced words from causing a false E705 mismatch; it does not
+guarantee that the remaining main-tier and `%mor` positions agree.
 
 ## Regression Tests
 
-`tests/retrace_replaced_word_regression.rs` contains 6 targeted tests:
-
-| Test | Pattern | Verifies |
-|------|---------|----------|
-| `single_word_retrace_with_replacement_full` | `word [: repl] [* err] [//]` | Retrace wraps ReplacedWord |
-| `single_word_retrace_with_replacement_partial` | `word [: repl] [* err] [/]` | Partial retrace with replacement |
-| `single_word_retrace_with_replacement_multiple` | `word [: repl] [* err] [///]` | Multiple retrace with replacement |
-| `single_word_retrace_with_replacement_no_error_marker` | `word [: repl] [///]` | No `[*]` still produces Retrace |
-| `single_word_retrace_without_replacement` | `word [//]` | Baseline (no replacement) |
-| `retrace_with_replacement_does_not_cause_e705` | Full pipeline with %mor | No false E705 |
-
-Reference corpus entries: `corpus/reference/annotation/retrace.cha`
+Source diagnostic cases live in
+`crates/talkbank-parser-tests/tests/integration/retrace_diagnostics_from_source.rs`;
+the reference example is `corpus/reference/annotation/retrace.cha`.
+The error specifications for E370, E377 and E378 own the diagnostic contracts.
+These are evidence entry points, not a claim of complete retrace coverage.
 
 ## See Also
 

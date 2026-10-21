@@ -21,12 +21,18 @@ pub(super) fn check_retained<'tree, T: SourceBoundKind<'tree>>(
 
 #[test]
 fn reference_word_root_ranges_preserve_fields_and_count_selected_work() {
-    // SAFETY: both generated exports have static lifetime and use the linked
-    // grammar's parser header, just as the production kind-admission owner does.
+    // SAFETY: all bridge exports have static lifetime and use the linked
+    // grammar's parser header and reviewed engine, as the production owner does.
     let grammar = unsafe {
         CompiledLanguage::from_bridge(
             tree_sitter_talkbank::LANGUAGE.into(),
             tree_sitter_talkbank::LANGUAGE_METADATA_BRIDGE,
+            talkbank_parser::generated_traversal::RequiredPresenceBridge {
+                create: tree_sitter_talkbank::REQUIRED_GRAPH_NEW,
+                destroy: tree_sitter_talkbank::REQUIRED_GRAPH_DROP,
+                check: tree_sitter_talkbank::REQUIRED_RULE,
+                prefix: tree_sitter_talkbank::REQUIRED_PREFIX,
+            },
         )
     }
     .admit_generated()

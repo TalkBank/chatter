@@ -64,6 +64,20 @@ placement are compile errors, not implicit inclusion. `SemanticEq` admits one
 field plan shared with its companion `SemanticDiff`; `SpanShift` admits its own
 policy. Generated enum bindings do not depend on user field spelling, including
 raw identifiers and names such as `offset` or `delta`.
+Recursive field operations use qualified trait calls: an inherent method named
+`semantic_eq`, `semantic_diff_into` or `shift_spans_after` cannot override the
+corresponding trait operation inside a generated implementation.
+
+The derives accept zero-variant enums as uninhabited types, emitting
+an exhaustive match on the dereferenced receiver. They do not fabricate a
+variant name, comparison result, validation tag or span movement for an impossible value.
+One-variant enums retain ordinary field comparison, diff and shifting behavior.
+
+`SpanShift` infers bounds on type parameters referenced by participating field
+types, not parameters used only in skipped fields. Explicit bounds and where
+clauses remain intact. Opaque type macros conservatively retain bounds on every
+type parameter. These are parameter bounds, not minimal bounds inferred from
+resolved wrapper or associated types.
 
 Diff context selection is unchanged: among syntactically span-like named fields,
 prefer `span`, then `speaker_span`, then the last candidate. Tuple enum variants
@@ -79,6 +93,14 @@ needs exactly one `#[code("...")]` literal, ascending by the existing parsed
 prefix/numeric key; `UnknownError` is required. An optional `#[status(planned)]`
 or `#[status(opt_in)]` selects one enforcement state. Absence means Active;
 malformed, duplicate and misplaced metadata is not absence.
+
+Variant `cfg` and nested `cfg_attr` gates apply to the generated enum, lookup
+arms and fixed-size `all`/`planned`/`opt_in` arrays. The consuming compiler
+evaluates predicates; the macro does not evaluate target configuration on its
+host. Metadata and ordering apply to all declarations seen by the macro, even
+conditionally disabled ones; code/status annotations must be unconditional.
+Every enabled registry must retain `UnknownError`. Conditional non-configuration
+attributes remain on their original declaration, not on generated match arms.
 
 ```rust
 use talkbank_derive::error_code_enum;

@@ -74,7 +74,10 @@ fn authored_bullet_constructs_preserve_timing_and_continuation() {
             ] {
                 assert_eq!((bullet.timing.start_ms, bullet.timing.end_ms), times);
                 assert_eq!(
-                    document.get(bullet.span.start as usize..bullet.span.end as usize),
+                    document.get(
+                        bullet.location.span().expect("located").start()
+                            ..bullet.location.span().expect("located").end()
+                    ),
                     Some(spelling),
                 );
             }
@@ -189,7 +192,7 @@ fn reference_text_tier_constructors_preserve_structure_and_output() {
                         let tier = $tier;
                         let output = entry.tier.to_chat_string();
                         assert_eq!(tier.to_chat(), output);
-                        let rebuilt = <$kind>::new(tier.content.clone()).with_span(tier.span);
+                        let rebuilt = <$kind>::new(tier.location, tier.content.clone());
                         assert_eq!(&rebuilt, tier, "{}", fixture.path().display());
                         assert_eq!(rebuilt.is_empty(), tier.content.is_empty());
                         assert_eq!(rebuilt.to_chat(), output);
@@ -197,11 +200,14 @@ fn reference_text_tier_constructors_preserve_structure_and_output() {
                         // serialization of timing, picture or continuation nodes.
                         if let [BulletContentSegment::Text(text)] = tier.content.segments.as_slice()
                         {
-                            let plain = <$kind>::from_text(text.text.clone());
+                            let plain = <$kind>::from_text(
+                                talkbank_model::Location::Unlocated,
+                                text.text.clone(),
+                            );
                             assert!(plain.semantic_eq(tier));
                             assert_eq!(plain.to_chat(), output);
                             assert_eq!(plain.is_empty(), tier.is_empty());
-                            assert!(plain.span.is_dummy());
+                            assert!(plain.location.span().is_none());
                             plain_witnesses[$index] += 1;
                         } else {
                             structured_witnesses += 1;
@@ -250,7 +256,6 @@ fn reference_comment_edits_preserve_nontext_segments_and_wire_contracts() {
                 continue;
             };
             let mut segments = content.segments.clone();
-            assert_eq!(segments.is_empty(), segments.is_empty());
             for segment in &mut segments {
                 if let BulletContentSegment::Text(text) = segment {
                     // Simulate a caller-supplied replacement of an admitted

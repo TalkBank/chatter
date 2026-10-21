@@ -19,7 +19,7 @@ use chumsky::Parser as _;
 
 use crate::ast::*;
 use crate::token::{Token, TokenDiscriminants};
-use talkbank_model::{ErrorSink, ParseError, Span};
+use talkbank_model::{ErrorSink, ParseError};
 
 mod dependent;
 use super::main_tier;
@@ -32,23 +32,22 @@ pub(super) use dependent::parse_dependent_tiers;
 /// parser (`main_tier/content/group/parser.rs`); token-level here
 /// because the lexer tokenizes whitespace explicitly, so the pattern
 /// is directly visible in the stream.
-fn report_space_inside_angle_group<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    for pair in tokens.windows(2) {
-        let position =
-            if matches!(pair[0], Token::LessThan(_)) && matches!(pair[1], Token::Whitespace(_)) {
-                Some("after '<'")
-            } else if matches!(pair[0], Token::Whitespace(_))
-                && matches!(pair[1], Token::GreaterThan(_))
-            {
-                Some("before '>'")
-            } else {
-                None
-            };
-        if let Some(position) = position {
+fn report_space_inside_angle_group(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
+    let range = 0..lexed.tokens().len();
+    for ((left, left_span), (right, right_span)) in lexed
+        .located(range.clone())
+        .zip(lexed.located(range).skip(1))
+    {
+        let offending_space = match (left, right) {
+            (Token::LessThan(_), Token::Whitespace(_)) => Some((right_span, "after '<'")),
+            (Token::Whitespace(_), Token::GreaterThan(_)) => Some((left_span, "before '>'")),
+            _ => None,
+        };
+        if let Some((span, position)) = offending_space {
             errors.report(ParseError::new(
                 talkbank_model::errors::codes::ErrorCode::SpaceInsideAngleGroup,
                 talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
+                talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                 None,
                 format!("Space is not allowed {position} in an angle-bracket group"),
             ));
@@ -56,10 +55,12 @@ fn report_space_inside_angle_group<'a>(tokens: &[Token<'a>], errors: &impl Error
     }
 }
 
-/// Report missing separators at source-located annotation boundaries.
-/// Replacements require whitespace before their opening bracket (E375/E316);
-/// rich scoped annotations and retraces require it before a following word
-/// (E757). Lexer locations stay paired with the admitted token categories.
+/// Report a missing separator before an annotation (E375): a replacement or
+/// any annotation token written directly after a word or a closing `>`/`”`.
+/// Lexer locations stay paired with the admitted token categories. The
+/// opposite glue, a code running into the following word (E757), is the
+/// model's rule, which fires on the located wrappers this backend builds;
+/// this pass used to mirror it while those wrappers were unlocated.
 fn report_annotation_spacing(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
     let range = 0..lexed.tokens().len();
     for ((left, _), (right, span)) in lexed
@@ -78,23 +79,9 @@ fn report_annotation_spacing(lexed: &super::LexedSource<'_>, errors: &impl Error
             errors.report(ParseError::new(
                 talkbank_model::ErrorCode::ContentAnnotationParseError,
                 talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+                talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                 None,
                 "Annotation must be separated from its preceding content by whitespace",
-            ));
-        }
-        let closes_a_code = matches!(left, Token::RightBracket(_))
-            || matches!(
-                super::classify::token_to_parsed_annotation(left.clone()),
-                Some(ParsedAnnotation::Scoped(_) | ParsedAnnotation::Retrace(_))
-            );
-        if closes_a_code && matches!(right, Token::Word { .. }) {
-            errors.report(ParseError::new(
-                talkbank_model::ErrorCode::CodeGluedToFollowingContent,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::from_offsets(span.start, span.end),
-                None,
-                "Bracketed code must be separated from the following word by a space",
             ));
         }
     }
@@ -182,20 +169,15 @@ fn scan_main_tier_line(main_tier_tokens: &[Token<'_>]) -> LineScan {
 /// the raw digit text exists only here: the model stores `u64`
 /// milliseconds, so the representation is invisible downstream. The
 /// bullet still parses; the diagnostic alone makes the file invalid.
-fn report_leading_zero_bullet_times<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    for tok in tokens {
-        if let Token::MediaBullet {
-            start_time,
-            end_time,
-            ..
-        } = tok
-        {
-            for (component, which) in [(start_time, "start"), (end_time, "end")] {
+fn report_leading_zero_bullet_times(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
+    for (tok, span) in lexed.located(0..lexed.tokens().len()) {
+        if let Token::MediaBullet { bullet } = tok {
+            for (component, which) in bullet.spellings() {
                 if component.len() > 1 && component.starts_with('0') {
                     errors.report(ParseError::new(
                         talkbank_model::errors::codes::ErrorCode::LeadingZeroBulletTime,
                         talkbank_model::Severity::Error,
-                        talkbank_model::SourceLocation::new(Span::DUMMY),
+                        talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                         None,
                         format!(
                             "Bullet {which} time '{component}' has a leading zero; \
@@ -208,58 +190,32 @@ fn report_leading_zero_bullet_times<'a>(tokens: &[Token<'a>], errors: &impl Erro
     }
 }
 
-/// Report E360 for every media-bullet timestamp whose digits do not fit a
-/// `u64`, mirroring the tree-sitter parser's own rejection.
-///
-/// Token-level for the same reason as the check above: the raw digit text
-/// exists only here. Once the conversion has run, both timestamps are `0` and
-/// nothing downstream can tell an overflowed bullet from `0_0`. Unlike that
-/// check this reports at the token's REAL span, which `LexedSource::token_at`
-/// has always carried; a first draft copied the sibling's `Span::DUMMY` and
-/// the fabricated-AST ratchet refused it, correctly.
-///
-/// # What this costs, and why it is still worth doing here
-///
-/// The conversion's `unwrap_or(0)` is unchanged, so the model still carries a
-/// fabricated pair and the file still draws E362 ("start must be less than
-/// end", of `0` and `0`) and E752 behind this. Those two are the fabrication
-/// speaking, and removing them means making the conversion fallible through
-/// five call sites that hold no error sink. What this does fix is the rule the
-/// user is told about: before it, a bullet re2c could not represent was
-/// reported ONLY as a backwards range, which is a statement about the input
-/// that the input does not support.
-fn report_unrepresentable_bullet_times(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
+/// Report the lexer's refused numeric components at their original locations.
+/// File and WOR-fragment entry points share this owner; conversion consumes
+/// only admitted values, without reparsing or fabricating a replacement pair.
+pub(crate) fn report_unrepresentable_bullet_times(
+    lexed: &super::LexedSource<'_>,
+    errors: &impl ErrorSink,
+) {
     for (index, tok) in lexed.tokens().iter().enumerate() {
-        let Token::MediaBullet {
-            start_time,
-            end_time,
-            ..
-        } = tok
-        else {
+        let Token::MediaBullet { bullet } = tok else {
             continue;
         };
-        for (component, which) in [(start_time, "start"), (end_time, "end")] {
-            if component.parse::<u64>().is_err() {
-                // A REAL span, taken from the lexer's own parallel storage.
-                // The sibling check above reports at `Span::DUMMY`, and
-                // copying that here is what the fabricated-AST ratchet
-                // refused: a diagnostic that cannot say where it happened
-                // imports the sentinel this project is removing. `token_at`
-                // has carried the location all along.
-                let (_, at) = lexed.token_at(index);
-                errors.report(ParseError::new(
-                    talkbank_model::errors::codes::ErrorCode::InvalidMediaBullet,
-                    talkbank_model::Severity::Error,
-                    talkbank_model::SourceLocation::new(talkbank_model::Span::from_usize(
-                        at.start, at.end,
-                    )),
-                    None,
-                    format!(
-                        "Invalid media bullet: the {which} time '{component}' is \
+        for (component, which) in bullet.overflows() {
+            // The same lexer run owns this token and its original extent.
+            let (_, at) = lexed.token_at(index);
+            errors.report(ParseError::new(
+                talkbank_model::errors::codes::ErrorCode::InvalidMediaBullet,
+                talkbank_model::Severity::Error,
+                talkbank_model::DiagnosticLocation::new(talkbank_model::Span::new(
+                    at.start, at.end,
+                )),
+                None,
+                format!(
+                    "Invalid media bullet: the {which} time '{component}' is \
                          numeric but too large to read as milliseconds"
-                    ),
-                ));
-            }
+                ),
+            ));
         }
     }
 }
@@ -272,9 +228,9 @@ pub(crate) fn parse_file_with_errors<'a>(
 ) -> ChatFile<'a> {
     let tokens = lexed.tokens();
     let source = lexed.source();
-    report_leading_zero_bullet_times(tokens, errors);
+    report_leading_zero_bullet_times(lexed, errors);
     report_unrepresentable_bullet_times(lexed, errors);
-    report_space_inside_angle_group(tokens, errors);
+    report_space_inside_angle_group(lexed, errors);
     report_annotation_spacing(lexed, errors);
     let mut pos = 0;
     let mut lines = Vec::new();
@@ -424,11 +380,9 @@ pub(crate) fn parse_file_with_errors<'a>(
                 // characters (E256; CLAN CHECK 138/139). The lexer recognizes
                 // each as an `IllegalCurlyQuote` token. Emit E256 for each and
                 // strip them before parsing, so the surrounding words survive,
-                // matching the tree-sitter parser which drops the recognized
-                // `illegal_curly_quote` node and keeps the adjacent words. The
+                // retaining the adjacent words. The
                 // chumsky combinators have no `ErrorSink` access, so the
-                // diagnostic is emitted here, mirroring the MISSING-token
-                // recovery policy (see this crate's AGENTS.md).
+                // diagnostic is emitted here from its original lexer location.
                 //
                 // Misplaced linkers (E766, linker after content) get the same
                 // treatment: report each by name and strip it, so the rest of
@@ -450,13 +404,15 @@ pub(crate) fn parse_file_with_errors<'a>(
                     // per-token membership test.
                     let mut next_misplaced = scan.misplaced_linkers.iter().copied().peekable();
                     let mut filtered: Vec<Token<'a>> = Vec::with_capacity(main_tier_tokens.len());
-                    for (idx, tok) in main_tier_tokens.iter().enumerate() {
+                    for (idx, (tok, span)) in lexed.located(start..pos).enumerate() {
                         if let Token::IllegalCurlyQuote(s) = tok {
                             errors.report(
                                 ParseError::new(
                                     talkbank_model::errors::codes::ErrorCode::IllegalCurlyQuote,
                                     talkbank_model::Severity::Error,
-                                    talkbank_model::SourceLocation::new(Span::DUMMY),
+                                    talkbank_model::DiagnosticLocation::from_offsets(
+                                        span.start, span.end,
+                                    ),
                                     None,
                                     format!(
                                         "Curly single quotation mark ({s}) is not a legal word \
@@ -472,7 +428,7 @@ pub(crate) fn parse_file_with_errors<'a>(
                                 ParseError::new(
                                     talkbank_model::errors::codes::ErrorCode::LinkerNotUtteranceInitial,
                                     talkbank_model::Severity::Error,
-                                    talkbank_model::SourceLocation::new(Span::DUMMY),
+                                    talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                                     None,
                                     "Linker must be utterance-initial; it links this utterance \
                                      to the previous one and cannot follow content"
@@ -492,11 +448,18 @@ pub(crate) fn parse_file_with_errors<'a>(
                     std::borrow::Cow::Borrowed(main_tier_tokens)
                 };
 
-                match main_tier::main_tier_parser()
+                // The grammar proves the line's shape over the (possibly
+                // filtered) token stream; the line machine places the line
+                // from its own spans. A head the grammar accepted but the
+                // machine cannot find is an internal fault, reported as such
+                // rather than lowered without a location.
+                let located = main_tier::main_tier_parser(lexed.source_text())
                     .parse(tier_input.as_ref())
                     .into_result()
-                {
-                    Ok(main_tier) => {
+                    .ok()
+                    .map(|tier| (tier, lexed.main_tier_locations(start..pos)));
+                match located {
+                    Some((main_tier, Some(locations))) => {
                         // Recovery is not validity: this front end parses a
                         // LEADING postfix annotation (retrace / overlap /
                         // replacement) as a standalone `Annotation` item, but
@@ -513,29 +476,33 @@ pub(crate) fn parse_file_with_errors<'a>(
                                 errors,
                             );
                         }
-                        // Recovery is not validity: a `<...>` group with no
-                        // following annotation only parses via a synthesized
-                        // retrace (Retrace::synthesized_missing_annotation). CLAN
-                        // rejects it ("< > should be followed by [ ]"), so surface
-                        // the matching MISSING diagnostic (E342) here, where the
-                        // ErrorSink is available, mirroring the tree-sitter
-                        // backstop. The AST (and SemanticEq) is unchanged.
-                        if has_synthesized_missing_annotation(&main_tier.tier_body.contents) {
-                            report_error(
-                                errors,
+                        // A retained bare angle group is recovery, not valid
+                        // CHAT. Its native structure proves the missing annotation;
+                        // the original lexer region locates the containing tier.
+                        if has_unannotated_group(&main_tier.tier_body.contents) {
+                            lexed.report_error(
+                                start..pos,
                                 talkbank_model::errors::codes::ErrorCode::MissingRequiredElement,
-                                talkbank_model::Severity::Error,
-                                main_tier_tokens,
                                 "angle-bracket group must be followed by an annotation ([ ])",
+                                errors,
                             );
                         }
                         let dep_tiers = parse_dependent_tiers(lexed, &mut pos, errors);
                         lines.push(Line::Utterance(Box::new(Utterance {
-                            main_tier,
+                            main_tier: LocatedMainTier::new(main_tier, locations),
                             dependent_tiers: dep_tiers,
                         })));
                     }
-                    Err(_) => {
+                    Some((_, None)) => {
+                        lexed.report_error(
+                            start..pos,
+                            talkbank_model::errors::codes::ErrorCode::InternalError,
+                            "main tier parsed from a line that does not begin `*SPK:`",
+                            errors,
+                        );
+                        skip_orphan_dependent_tiers(tokens, &mut pos);
+                    }
+                    None => {
                         // Report E321: unparsable utterance.
                         lexed.report_error(
                             start..pos,
@@ -543,20 +510,7 @@ pub(crate) fn parse_file_with_errors<'a>(
                             "utterance could not be parsed",
                             errors,
                         );
-                        // Skip any dependent tiers that follow; they're orphaned
-                        // without a valid main tier.
-                        while pos < tokens.len()
-                            && matches!(
-                                TokenDiscriminants::from(&tokens[pos]),
-                                TokenDiscriminants::TierPrefix
-                                    | TokenDiscriminants::IncompleteTierPrefix
-                            )
-                        {
-                            pos = skip_to_newline(tokens, pos);
-                            if pos < tokens.len() {
-                                pos += 1;
-                            }
-                        }
+                        skip_orphan_dependent_tiers(tokens, &mut pos);
                     }
                 }
             }
@@ -582,12 +536,11 @@ pub(crate) fn parse_file_with_errors<'a>(
                 if pos < tokens.len() {
                     pos += 1;
                 }
-                report_error(
-                    errors,
+                lexed.report_error(
+                    line_start..pos,
                     talkbank_model::errors::codes::ErrorCode::UnparsableLine,
-                    talkbank_model::Severity::Error,
-                    &tokens[line_start..pos],
                     "orphan dependent tier (no preceding main tier)",
+                    errors,
                 );
             }
 
@@ -603,19 +556,23 @@ pub(crate) fn parse_file_with_errors<'a>(
                 errors.report(ParseError::new(
                     talkbank_model::ErrorCode::UnexpectedLineType,
                     talkbank_model::Severity::Error,
-                    talkbank_model::SourceLocation::from_offsets(span.start, span.end),
-                    talkbank_model::ErrorContext::new(source, span.clone(), "unsupported_line"),
+                    talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
+                    talkbank_model::ErrorContext::new(
+                        source,
+                        talkbank_model::Span::new(span.start, span.end),
+                        "unsupported_line",
+                    ),
                     "Unsupported line skipped",
                 ));
             }
 
             // Unknown tokens, report and skip
             _ => {
-                let tok = &tokens[pos];
+                let (tok, span) = lexed.token_at(pos);
                 errors.report(ParseError::new(
                     talkbank_model::errors::codes::ErrorCode::UnexpectedSyntax,
                     talkbank_model::Severity::Error,
-                    talkbank_model::SourceLocation::new(Span::DUMMY),
+                    talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                     None,
                     format!("unhandled token in parse_chat_file: {:?}", tok.text()),
                 ));
@@ -644,34 +601,11 @@ fn has_orphan_annotation(items: &[ContentItem<'_>]) -> bool {
     })
 }
 
-fn has_synthesized_missing_annotation(items: &[ContentItem<'_>]) -> bool {
+fn has_unannotated_group(items: &[ContentItem<'_>]) -> bool {
     items.iter().any(|item| {
-        matches!(item, ContentItem::Retrace(r) if r.synthesized_missing_annotation)
-            || has_synthesized_missing_annotation(item.children())
+        matches!(item, ContentItem::Group(group) if group.annotations.is_empty())
+            || has_unannotated_group(item.children())
     })
-}
-
-/// Report a parse error with a specific error code.
-fn report_error(
-    errors: &impl ErrorSink,
-    code: talkbank_model::errors::codes::ErrorCode,
-    severity: talkbank_model::Severity,
-    tokens: &[Token<'_>],
-    context: &str,
-) {
-    let preview: String = tokens
-        .iter()
-        .take(5)
-        .map(|t| t.text())
-        .collect::<Vec<_>>()
-        .join(" ");
-    errors.report(ParseError::new(
-        code,
-        severity,
-        talkbank_model::SourceLocation::new(Span::DUMMY),
-        None,
-        format!("{context}: {preview}..."),
-    ));
 }
 
 /// Advance position to the Newline token (or end of tokens).
@@ -682,4 +616,20 @@ fn skip_to_newline(tokens: &[Token<'_>], mut pos: usize) -> usize {
         pos += 1;
     }
     pos
+}
+
+/// Dependent tiers after a main tier that did not lower are orphaned without
+/// it; consume them so they are not reported as orphans in their own right.
+fn skip_orphan_dependent_tiers(tokens: &[Token<'_>], pos: &mut usize) {
+    while *pos < tokens.len()
+        && matches!(
+            TokenDiscriminants::from(&tokens[*pos]),
+            TokenDiscriminants::TierPrefix | TokenDiscriminants::IncompleteTierPrefix
+        )
+    {
+        *pos = skip_to_newline(tokens, *pos);
+        if *pos < tokens.len() {
+            *pos += 1;
+        }
+    }
 }

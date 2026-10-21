@@ -3,127 +3,63 @@
 **Status:** Current
 **Last modified:** {{git-dates:page}}
 
-This chapter documents the key algorithms and data structure decisions across
-the TalkBank Rust crates.
+This chapter is a map of algorithm boundaries, not a second specification of
+every enum variant or parser method. The linked chapters own the detailed
+contracts; generated API documentation owns exact signatures.
 
-## CHAT AST Representation
+## Owned CHAT model
 
-The CHAT model is a tree of owned enums. The two central types are:
+A `ChatFile` contains ordered header and utterance lines. Each utterance carries
+main-tier content and dependent tiers. Nested groups make main-tier content a
+tree, so counting top-level items is not the same as counting words.
 
-- **`UtteranceContent`**: 24 variants covering all main-tier content
-- **`BracketedItem`**: 22 variants for content inside groups/brackets
+See [Memory and Ownership](memory-and-ownership.md) for owned values, interned
+strings, source spans and revision-bound analysis. Enum variant counts and
+allocation measurements are not architectural invariants.
 
-```mermaid
-flowchart TD
-    file["ChatFile"]
-    header["Headers\n(@Languages, @Participants, ...)"]
-    utt["Utterance"]
-    mc["MainContent\nVec&lt;UtteranceContent&gt;"]
-    dt["DependentTiers\n(%mor, %pho, %gra, ...)"]
+## Parsing and admission
 
-    file --> header
-    file --> utt
-    utt --> mc
-    utt --> dt
+The Tree-sitter backend converts a concrete syntax tree to the typed model.
+Grammar acceptance, conversion, recovery and model validation are separate
+boundaries. A recovered model is not evidence that its input was valid.
 
-    mc --> word["Word / AnnotatedWord / ReplacedWord"]
-    mc --> group["Group / PhoGroup / SinGroup / Quotation"]
-    mc --> marker["Pause / Separator / OverlapPoint / ..."]
-    group --> bi["BracketedContent\nVec&lt;BracketedItem&gt;"]
-    bi --> word2["Word / ReplacedWord / Separator"]
-    bi --> nested["Nested groups"]
-```
+[Parsing](parsing.md) describes the backends and public parsing surface.
+Use the current parser trait/API for fragments rather than inventing a
+method name by appending `_fragment`. Keep generated grammar artifacts with
+their generating inputs; see [Repository Architecture](repo-architecture.md).
 
-**Memory layout:** Large variants (e.g., `AnnotatedWord` with scoped annotations)
-are `Box`ed to keep the enum's stack size bounded.
+## Traversal and structural alignment
 
-### Content Walker
+Traversal must follow the selected domain's treatment of words, groups,
+retracing and replacement content. A generic recursive walk is not a substitute
+for tier-specific eligibility.
 
-**Location:** `talkbank-model/src/alignment/helpers/walk/`
+[Alignment](alignment.md) owns those rules and the structural alignment
+algorithms. Structural alignment relates main-tier units to dependent-tier
+items; it does not establish acoustic timing.
 
-Closure-based recursive traversal centralizing the walk over all 24+22 variants:
+`%wor` consumers instead use the checked timing transitions described in
+[`%wor` Timing Semantics](wor-timing.md). Matching counts alone cannot establish
+word identity or acoustic correctness.
 
-```rust,ignore
-pub fn for_each_leaf<'a>(
-    content: &'a [UtteranceContent],
-    domain: Option<AlignmentDomain>,
-    f: &mut impl FnMut(ContentLeaf<'a>),
-)
-```
+## Structural merge and lexical evidence
 
-**Domain-aware gating:**
-- `Some(Mor)`: skips retrace groups (retrace words aren't morphologically analyzed)
-- `Some(Pho | Sin)`: skips PhoGroup/SinGroup (treated as atomic by those tiers)
-- `None`: recurses everything unconditionally
+[Merge Architecture](merge-architecture.md) describes ordered-source assembly,
+source-bound selection and the validation/reporting transitions. It is not a
+global sort of independently flattened utterances.
 
-Both immutable (`for_each_leaf`) and mutable (`for_each_leaf_mut`) versions exist.
-Used by talkbank-model, talkbank-transform word extraction, and other
-typed CHAT traversals across the workspace.
+[Merge Domain Types](merge-domain-types.md) distinguishes lexical scores,
+confidence states, mapping syntax and output validation. Lexical similarity
+can support a speaker decision but cannot prove recording identity.
 
-## Parsing Strategies
+## Cache and deterministic output
 
-### Tree-Sitter (Canonical Parser)
+[Validation Cache](parser-and-grammar/validation-cache.md) owns the CHAT
+validation-cache contract. Cache reuse must preserve the relevant input and
+policy identity; a cache hit does not create new semantic evidence.
 
-```mermaid
-flowchart LR
-    src["Source .cha text"]
-    ts["tree-sitter C parser\n(generated from grammar.js)"]
-    cst["CST (Tree)"]
-    conv["Recursive descent\nover CST nodes"]
-    model["ChatFile (owned AST)"]
-    errors["ErrorSink\n(diagnostics)"]
-
-    src --> ts --> cst --> conv --> model
-    conv --> errors
-```
-
-- Grammar defined in `grammar/grammar.js` (source of truth)
-- `parser.c` is generated, never edit directly
-- CST-to-model conversion: recursive dispatch on node kind, skip `WHITESPACES`,
-  report unrecognized nodes via `ErrorSink`
-- **Strict + catch-all pattern:** Known header values get named grammar rules
-  (syntax highlighting); unknown values hit a catch-all (flagged by validator)
-
-### Fragment Parsing
-
-`TreeSitterParser` provides fragment methods for parsing individual CHAT
-fragments (a word, a tier line) directly. Methods like
-`parser.parse_word_fragment()`, `parser.parse_main_tier_fragment()`, etc.
-are used when synthesizing CHAT from non-CHAT sources (ASR output, UD
-annotations).
-
-## Structural Tier Alignment
-
-**Location:** `talkbank-model/src/alignment/traits.rs`
-
-Generic `positional_align()` pairs main-tier words with dependent-tier items by
-position (O(n)). Traits: `AlignableTier`, `TierAlignmentResult`, `AlignableContent`.
-
-- `%pho` and `%sin` use generic positional alignment
-- `%mor`, `%gra`, domain-specific custom implementations
-- Mismatch diagnostics via `similar` crate (Patience diff algorithm, O(n log n))
-
-`%wor` is not part of this structural alignment family. Timing consumers use
-the checked `Missing | Drifted | CountMatched` transition documented in
-[`%wor` Timing Semantics](wor-timing.md).
-
-## Caching
-
-The CHAT-core validation cache is documented separately in
-[Validation Cache](parser-and-grammar/validation-cache.md). The
-upstream `batchalign3` project documents its own audio-task cache
-(FA / UTR ASR / media conversion) separately.
-
-## Text Processing
-
-### Regex Compilation
-
-All regex patterns use `LazyLock<Regex>` from `std::sync`, compiled once at
-first use, lock-free thereafter. Never call `Regex::new()` inside functions or
-loops.
-
-### Deterministic Output
-
-- `BTreeMap` for all test/snapshot JSON (lexicographic key ordering)
-- `IndexMap` for participant/speaker ordering (preserves encounter order per spec)
-- Frequency results collected into `BTreeMap<NormalizedWord, Count>`
+Choose collection order at each boundary: source order matters for transcript
+events, while a wire format may define sorted keys. Neither all hash maps nor
+all ordered maps are a universal correctness rule. Likewise, cache expensive
+regex construction where its actual call pattern warrants it; a blanket claim
+that every regex in the workspace has the same lifetime is not a contract.

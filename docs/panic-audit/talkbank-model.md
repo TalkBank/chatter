@@ -1,31 +1,18 @@
 # Panic audit: talkbank-model
 
 **Status:** Reference
-**Last updated:** 2026-06-13 21:07 EDT
+**Last updated:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/panic-audit/talkbank-model.md)
 
-See [README](README.md) for the shared policy. This page records the
-crate-specific panic surface.
+See [shared policy](README.md) for enforcement and verification limits.
+The package inherits the workspace restriction lints.
 
-## Surface
+The former overlap-loop unwrap examples are no longer present:
+[cross_utterance/mod.rs](../../crates/talkbank-model/src/validation/cross_utterance/mod.rs)
+uses `let Some(index) = orphan.region.index else { continue; }` in both
+orphan loops. The admitted index is available directly, without a later unwrap.
+This local control-flow invariant does not prove that every model, validation
+or alignment operation cannot panic.
 
-Two inline `#[allow(clippy::unwrap_used)]` sites, both in
-`src/validation/cross_utterance/mod.rs`, both the same pattern.
-
-- The orphaned-top and the companion loop each `continue` early when
-  `orphan.region.index.is_none()`. Reaching the line below that guard
-  therefore proves the `Option` is `Some`, so
-  `orphan.region.index.unwrap()` cannot fail. The inline comment names the
-  control-flow invariant ("`is_none()` short-circuits the `continue` above;
-  reaching this line guarantees `Some(...)`").
-
-Everything else in the data model, validation, and alignment layers returns
-typed errors (`thiserror` domain types) or reports through the validation
-sink rather than panicking.
-
-Test code is exempt via `#![cfg_attr(test, allow(...))]` in `src/lib.rs`.
-
-## Verification
-
-`just clippy`, which covers this crate along with every other. See
-[README](README.md#verification) for what it checks and why the per-crate
-command that used to sit here could not fail.
+The build script has separate allowances. Build-time generation, test-only
+attributes, runtime operations and dependencies need distinct review. Do not
+infer runtime panic freedom from a search limited to explicit allowances.

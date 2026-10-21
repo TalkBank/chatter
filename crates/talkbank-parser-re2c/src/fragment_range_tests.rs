@@ -29,8 +29,8 @@ fn inline_zero_bullet_diagnostics_keep_fragment_origins() {
                 parser.parser_name()
             );
             assert_eq!(
-                bullets[0].location.span,
-                Span::from_usize(offset + start, offset + input.len())
+                bullets[0].location.span().expect("located diagnostic"),
+                Span::new(offset + start, offset + input.len())
             );
         }
     }
@@ -53,8 +53,8 @@ fn fragment_ranges_support_the_full_unsigned_coordinate_space() {
                 .into_option()
                 .unwrap();
             assert_eq!(
-                word.span,
-                Span::from_usize(offset, offset + input.len()),
+                word.location,
+                talkbank_model::Location::Located(Span::new(offset, offset + input.len())),
                 "{}",
                 parser.parser_name()
             );
@@ -68,7 +68,8 @@ fn fragment_ranges_support_the_full_unsigned_coordinate_space() {
 #[test]
 fn fragment_ranges_reject_overflow_before_parsing() {
     fn check(parser: &impl ChatParser) {
-        for offset in [u32::MAX as usize, usize::MAX] {
+        // Document offsets are `usize`; only a range whose end overflows is refused.
+        for offset in [usize::MAX - 1, usize::MAX] {
             let errors = ErrorCollector::new();
             assert!(parser.parse_word("hello", offset, &errors).is_rejected());
             assert!(
@@ -114,11 +115,15 @@ fn fragment_ranges_keep_synthetic_material_outside_document_coordinates() {
             parser.parser_name(),
             errors.into_vec()
         );
+        // Past the former 32-bit coordinate limit, a fragment is still located.
         let errors = ErrorCollector::new();
         assert!(
             parser
                 .parse_com_tier("x\n", u32::MAX as usize - 1, &errors)
-                .is_rejected()
+                .is_parsed(),
+            "{}: {:?}",
+            parser.parser_name(),
+            errors.into_vec()
         );
     }
     check(&talkbank_parser::TreeSitterParser::new().unwrap());
@@ -138,12 +143,12 @@ fn fragment_ranges_rebase_diagnostics_without_moving_their_snippet() {
             .find(|e| e.code == ErrorCode::TierValidationError)
             .unwrap();
         assert_eq!(
-            error.location.span,
-            Span::from_usize(offset, offset + input.len())
+            error.location.span().expect("located diagnostic"),
+            Span::new(offset, offset + input.len())
         );
         let context = error.context.as_ref().unwrap();
         assert_eq!(context.source_text, input);
-        assert!(context.span.end as usize <= input.len());
+        assert!(context.span.end() <= input.len());
     }
     check(&talkbank_parser::TreeSitterParser::new().unwrap());
     check(&crate::Re2cParser::new());
@@ -179,17 +184,17 @@ fn a_gra_relation_diagnostic_is_reported_at_the_caller_s_offset() {
             .find(|e| e.code == ErrorCode::UnexpectedGrammarNode)
             .unwrap_or_else(|| panic!("{}: expected E710, got {errors:?}", parser.parser_name()));
         assert!(
-            error.location.span.start as usize >= offset,
+            error.location.span().expect("located diagnostic").start() >= offset,
             "{}: reported at {:?}, which is inside the FRAGMENT rather than at \
              the caller's offset {offset}",
             parser.parser_name(),
-            error.location.span
+            error.location.span().expect("located diagnostic")
         );
         assert!(
-            (error.location.span.end as usize) <= offset + input.len(),
+            (error.location.span().expect("located diagnostic").end()) <= offset + input.len(),
             "{}: reported past the end of the fragment: {:?}",
             parser.parser_name(),
-            error.location.span
+            error.location.span().expect("located diagnostic")
         );
     }
     check(&talkbank_parser::TreeSitterParser::new().unwrap());

@@ -12,8 +12,12 @@
 ## Error Handling
 
 - No panics for recoverable conditions, use `thiserror`/`miette` for error types
-- Library code uses the `ErrorSink` trait for error reporting, not `Result`
-- Use `ParseOutcome<T>` in parser code (parsed or rejected)
+- Use `ErrorSink` for streamed diagnostics and typed `Result` errors for
+  fallible operations; these are different contracts, not competing styles.
+- Streaming parser APIs return `ParseOutcome<T>` (parsed or rejected) with
+  diagnostics in the sink. Whole-document Tree-sitter parsing returns
+  `ParseProduct` (built or unbuildable) with collected diagnostics. Neither
+  outcome alone certifies validity; see [Parser, Model, and API Contracts](../architecture/parser-model-contracts.md).
 
 ## Logging
 
@@ -51,14 +55,15 @@ Preferred crates:
 ## Testing
 
 - Prefer spec-driven tests over hand-written tests for parser behavior
-- Use `cargo test` for unit tests (except doctests)
+- Select the needed Cargo package, target, features and test filter explicitly;
+  `--tests` excludes doctests, while bare `cargo test` can include them.
 - Snapshot tests with `insta` for complex output comparisons
 
 ## Generated Files
 
 Never hand-edit generated artifacts:
 - `parser.c`: generated from `grammar.js`
-- `grammar/test/corpus/`: generated from specs
+- `grammar/test/corpus/generated/`: generated from specs; `manual/` is authored
 - `crates/talkbank-parser-tests/tests/integration/generated/`: generated from specs
 - `crates/talkbank-model/src/generated/symbol_sets.rs`: generated from symbol registry
 
@@ -71,13 +76,13 @@ Always regenerate from source inputs.
 - Rust **2024 edition**.
 - `cargo fmt` before committing. Use `cargo fmt` (not standalone
   `rustfmt`) for workspace-consistent formatting.
-- **Prefer `cargo test`** for faster parallel-per-test
-  execution. Use `cargo test --doc` for doctests (they are not part of the normal run
-  those).
+- Use the scoped commands in [Developer Verification Checks](dev-checks.md).
+  `just test` selects workspace test binaries with `--tests`; doctests are
+  separate in that recipe, not inherently excluded by bare `cargo test`.
 - **Clippy is release-time**, in `just release-lint` and in
   `release-lint.yml` on a tag, never per push and never per edit: each
-  pass is its own cargo unit that recompiles the workspace. It is a
-  single pass (`--workspace --all-targets`) carrying `-D warnings`, so
+  pass can require additional compilation. The recipe covers both Cargo
+  workspaces and a feature-off build; its Clippy commands carry `-D warnings`, so
   ANY finding is red, not only a violation of the panic family the
   workspace `[lints]` table denies; test code relaxes that family via
   in-source attributes. A finding you intend to keep gets a scoped
@@ -135,11 +140,13 @@ Always regenerate from source inputs.
 - **No primitive obsession.** Domain values must have domain types.
   Function signatures should be self-documenting through type
   names, not parameter names.
-- Use newtype structs (e.g., `struct TimestampMs(u64)`,
-  `struct SpeakerId(String)`) or the `interned_newtype!` /
-  `string_newtype!` macros from `talkbank-model`. Newtypes should
-  implement `Display`, `From`/`Into` for the underlying type, and
-  derive `Clone`, `Debug`, `PartialEq`, `Eq` as appropriate.
+- Use newtype structs or the model's existing wrapper constructors as
+  appropriate. Use `From` only for infallible conversions; constrained input
+  needs `TryFrom` or a checked constructor. Do not expose mutable/raw
+  constructors or derive deserialization in a way that bypasses admission. Derive `Clone`,
+  comparison or copying only when compatible with the value's ownership and
+  evidence role; a consumable capability must not become freely duplicable.
+  Keep constructor, wire and policy tests after introducing a newtype.
 - **Scope:** Applies to public API boundaries, struct fields, and
   function signatures. Local variables inside a function body may
   use bare primitives when the context is unambiguous.
@@ -192,8 +199,10 @@ Always regenerate from source inputs.
   or `.to_string_lossy()`.
 - Distinguish base filename (e.g., `MediaFilename` newtype, no
   extension) from full filesystem path (`PathBuf`).
-- Use `.display()` for user-facing output; `.to_string_lossy()`
-  only for cache keys or hashing.
+- Use `.display()` for user-facing output. Lossy text is not a unique path
+  identity and must not silently become a cache key or hash input. Preserve
+  native path identity, or explicitly admit a validated wire representation
+  appropriate to the cache/protocol.
 
 ### Configurability
 

@@ -16,10 +16,61 @@ pub(crate) async fn validate_and_publish(backend: &Backend, uri: Url, document: 
     }
 }
 
-/// A pull report names the same revision as its diagnostics.
+/// Source, URI, version and diagnostics from one admitted editor revision.
 pub(crate) struct RevisionDiagnostics {
-    pub(crate) version: i32,
-    pub(crate) items: Vec<Diagnostic>,
+    uri: Url,
+    document: Arc<OpenDocument>,
+    items: Vec<Diagnostic>,
+}
+
+/// A revision held current for a synchronous feature projection.
+pub(crate) struct CurrentRevisionDiagnostics<'a> {
+    snapshot: &'a RevisionDiagnostics,
+    // Borrowed from the document-map guard, so this admission cannot escape it.
+    _current: &'a Arc<OpenDocument>,
+}
+
+impl CurrentRevisionDiagnostics<'_> {
+    pub(crate) fn snapshot(&self) -> &RevisionDiagnostics {
+        self.snapshot
+    }
+}
+
+impl RevisionDiagnostics {
+    pub(crate) fn uri(&self) -> &Url {
+        &self.uri
+    }
+
+    pub(crate) fn version(&self) -> i32 {
+        self.document.version
+    }
+
+    pub(crate) fn source(&self) -> &str {
+        &self.document.source
+    }
+
+    pub(crate) fn items(&self) -> &[Diagnostic] {
+        &self.items
+    }
+
+    pub(crate) fn into_items(self) -> Vec<Diagnostic> {
+        self.items
+    }
+
+    /// No parse or await in the callback: the read guard pins this open revision.
+    pub(crate) fn with_current<T>(
+        &self,
+        backend: &Backend,
+        project: impl FnOnce(CurrentRevisionDiagnostics<'_>) -> T,
+    ) -> Option<T> {
+        let current = backend.documents.get(&self.uri)?;
+        Arc::ptr_eq(current.value(), &self.document).then(|| {
+            project(CurrentRevisionDiagnostics {
+                snapshot: self,
+                _current: current.value(),
+            })
+        })
+    }
 }
 
 /// Pull current analysis, including during the push debounce interval.
@@ -38,7 +89,8 @@ pub(crate) fn document_diagnostics(
         tower_lsp::jsonrpc::Error::new(tower_lsp::jsonrpc::ErrorCode::ContentModified)
     })?;
     Ok(Some(RevisionDiagnostics {
-        version: document.version,
+        uri: uri.clone(),
+        document,
         items,
     }))
 }
@@ -96,5 +148,61 @@ fn initialization_diagnostic(error: &BackendInitError) -> Diagnostic {
         related_information: None,
         tags: None,
         data: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn revision_projection_refuses_replacement_even_with_equal_source_and_version() {
+        let (service, _socket) = tower_lsp::LspService::new(Backend::new);
+        let backend = service.inner();
+        let uri = Url::parse("file:///revision-admission.cha").unwrap();
+        let source: Arc<str> = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/core/basic-conversation.cha"
+        ))
+        .into();
+        backend.documents.insert(
+            uri.clone(),
+            Arc::new(OpenDocument {
+                source: Arc::clone(&source),
+                version: 1,
+            }),
+        );
+        let original = document_diagnostics(backend, &uri).unwrap().unwrap();
+        assert_eq!(
+            original.with_current(backend, |current| current.snapshot().version()),
+            Some(1)
+        );
+        backend.documents.remove(&uri);
+        assert!(original.with_current(backend, |_| ()).is_none());
+        backend.documents.insert(
+            uri.clone(),
+            Arc::new(OpenDocument {
+                source: Arc::clone(&source),
+                version: 1,
+            }),
+        );
+        assert!(
+            original.with_current(backend, |_| ()).is_none(),
+            "reopen is not the old revision"
+        );
+        let reopened = document_diagnostics(backend, &uri).unwrap().unwrap();
+        assert_eq!(
+            reopened.with_current(backend, |current| current.snapshot().version()),
+            Some(1)
+        );
+        backend
+            .documents
+            .insert(uri.clone(), Arc::new(OpenDocument { source, version: 2 }));
+        assert!(reopened.with_current(backend, |_| ()).is_none());
+        let updated = document_diagnostics(backend, &uri).unwrap().unwrap();
+        assert_eq!(
+            updated.with_current(backend, |current| current.snapshot().version()),
+            Some(2)
+        );
     }
 }

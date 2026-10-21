@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Options_Header>
 
 use crate::model::{CodeSwitchSpan, LanguageCode, SpeakerCode};
-use crate::{ErrorCode, Span};
+use crate::{ErrorCode, Location};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -174,8 +174,12 @@ pub struct ValidationContext {
     /// Set by the main tier when a language marker is present (for example `*CHI@s:spa`).
     pub tier_language: Option<LanguageCode>,
 
-    /// Optional span for field-level validation (set by parent when needed)
-    pub field_span: Option<Span>,
+    /// Location of the field under validation, set by the parent when it
+    /// narrows to one child token; `Unlocated` until a parent narrows, and
+    /// also when the parent's own value has no location. One fact, one
+    /// spelling: "no narrowing" and "narrowed to an unlocated value" lead to
+    /// the same diagnostic, so nothing distinguishes them.
+    pub field_location: Location,
 
     /// Optional field text for validation context
     pub field_text: Option<String>,
@@ -213,7 +217,7 @@ impl Default for ValidationContext {
         Self {
             shared: Arc::new(SharedValidationData::default()),
             tier_language: None,
-            field_span: None,
+            field_location: Location::Unlocated,
             field_text: None,
             field_label: None,
             field_error_code: None,
@@ -240,7 +244,7 @@ impl ValidationContext {
         Self {
             shared,
             tier_language: None,
-            field_span: None,
+            field_location: Location::Unlocated,
             field_text: None,
             field_label: None,
             field_error_code: None,
@@ -311,12 +315,23 @@ impl ValidationContext {
         self
     }
 
-    /// Sets the active field span used when emitting diagnostics.
+    /// Sets the active field location used when emitting diagnostics.
     ///
     /// Parents typically call this before validating one child token.
-    pub fn with_field_span(mut self, span: Span) -> Self {
-        self.field_span = Some(span);
+    pub fn with_field_location(mut self, location: impl Into<Location>) -> Self {
+        self.field_location = location.into();
         self
+    }
+
+    /// Where a diagnostic about the field under validation points: the
+    /// location the parent narrowed to, or unlocated when no parent did.
+    ///
+    /// Header payloads and leaf tokens carry no location of their own, so
+    /// this is the one place that turns "no narrowing" into an honest
+    /// `Unlocated` rather than a fabricated offset.
+    #[must_use]
+    pub fn field_diagnostic_location(&self) -> crate::DiagnosticLocation {
+        crate::DiagnosticLocation::from(self.field_location)
     }
 
     /// Sets the active field text used in diagnostic context blocks.

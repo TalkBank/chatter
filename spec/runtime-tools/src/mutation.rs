@@ -78,8 +78,9 @@ impl<'source, 'name> AdmittedSeed<'source, 'name> {
 
     /// Delete one complete main-tier terminator per candidate.
     ///
-    /// Optional absent terminators produce no candidate. No text is re-parsed
-    /// or reserialized: source ranges come exclusively from this seed's model.
+    /// Absent and unlocated terminators produce no candidate: without a source
+    /// range there is nothing to delete. No text is re-parsed or reserialized:
+    /// source ranges come exclusively from this seed's model.
     pub fn terminator_deletions(
         &self,
     ) -> impl Iterator<Item = Result<DeletionCandidate<'_>, SpanMismatch>> {
@@ -89,9 +90,9 @@ impl<'source, 'name> AdmittedSeed<'source, 'name> {
                 .content
                 .terminator
                 .as_ref()
-                .map(|terminator| {
-                    let span = terminator.span();
-                    let range = span.start as usize..span.end as usize;
+                .and_then(|terminator| Some((terminator, terminator.location().span()?)))
+                .map(|(terminator, span)| {
+                    let range = span.to_range();
                     let expected = terminator.to_chat_string();
                     if range.is_empty() || self.source.get(range.clone()) != Some(expected.as_str())
                     {

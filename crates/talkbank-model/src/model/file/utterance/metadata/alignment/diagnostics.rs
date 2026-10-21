@@ -1,33 +1,5 @@
-use crate::{ErrorCode, ErrorContext, ErrorLabel, ParseError, Severity, SourceLocation, Span};
-
-/// Where a warning about two tier sides points: the first side with a known
-/// location, and `Span::DUMMY` when neither has one.
-///
-/// `left` is the span of a tier the caller holds; `right` is `None` when the
-/// partner side is a group of tiers none of which is present (`%xphoaln`
-/// with neither `%mod` nor `%pho`). A HELD tier's span can still be `0..0`:
-/// the re2c backend sets no tier spans yet, so every tier it builds carries
-/// the sentinel, and a `SourceLocation` has no way to say "unknown". That
-/// producer is the remaining hole, recorded in the fabrication handoff, not
-/// this module's to close; until it is, the sentinel is what such a warning
-/// carries, and the labels below are gated the same way so that no label
-/// points at byte 0 for a tier whose location is unknown.
-fn location_of(left: Span, right: Option<Span>) -> Span {
-    match [Some(left), right]
-        .into_iter()
-        .flatten()
-        .find(|span| !span.is_dummy())
-    {
-        Some(span) => span,
-        None => Span::DUMMY,
-    }
-}
-
-/// A tier's span as a location: `None` when the tier carries the sentinel
-/// (see [`location_of`]).
-pub(super) fn known_span(span: Span) -> Option<Span> {
-    (!span.is_dummy()).then_some(span)
-}
+use crate::alignment::location_of;
+use crate::{ErrorCode, ErrorLabel, ParseError, Severity};
 
 /// Build a warning emitted when parse-health taint blocks one alignment pass.
 /// The spans are as for [`location_of`].
@@ -35,10 +7,10 @@ pub(super) fn skipped_alignment_warning(
     alignment_name: &str,
     left_label: &str,
     left_clean: bool,
-    left_span: Span,
+    left_location: crate::Location,
     right_label: &str,
     right_clean: bool,
-    right_span: Option<Span>,
+    right_location: Option<crate::Location>,
 ) -> ParseError {
     let tainted = match (!left_clean, !right_clean) {
         (true, true) => format!("{left_label} and {right_label}"),
@@ -47,12 +19,11 @@ pub(super) fn skipped_alignment_warning(
         (false, false) => "an internal parse-health gate".to_string(),
     };
 
-    let location = location_of(left_span, right_span);
-    let mut error = ParseError::new(
+    let location = location_of(left_location, right_location);
+    let mut error = ParseError::at_location(
         ErrorCode::TierValidationError,
         Severity::Warning,
-        SourceLocation::new(location),
-        ErrorContext::new("", location.to_range(), ""),
+        location,
         format!(
             "Tier validation warning: skipped {} alignment because {} had parse errors during recovery",
             alignment_name, tainted
@@ -60,44 +31,10 @@ pub(super) fn skipped_alignment_warning(
     )
     .with_suggestion("Fix parse errors in the affected tier(s) first, then rerun validation");
 
-    if !left_clean && let Some(left_span) = known_span(left_span) {
+    if !left_clean && let Some(left_span) = left_location.span() {
         error.labels.push(ErrorLabel::new(left_span, left_label));
     }
-    if !right_clean && let Some(right_span) = right_span.and_then(known_span) {
-        error.labels.push(ErrorLabel::new(right_span, right_label));
-    }
-
-    error
-}
-
-/// Build a warning emitted when alignment is blocked by missing parse
-/// provenance. The spans are as for [`location_of`].
-pub(super) fn unknown_alignment_warning(
-    alignment_name: &str,
-    left_label: &str,
-    left_span: Span,
-    right_label: &str,
-    right_span: Option<Span>,
-) -> ParseError {
-    let location = location_of(left_span, right_span);
-    let mut error = ParseError::new(
-        ErrorCode::TierValidationError,
-        Severity::Warning,
-        SourceLocation::new(location),
-        ErrorContext::new("", location.to_range(), ""),
-        format!(
-            "Tier validation warning: skipped {} alignment because parse provenance is unknown for {} and {}",
-            alignment_name, left_label, right_label
-        ),
-    )
-    .with_suggestion(
-        "Run parser-backed validation or explicitly mark parse provenance before alignment checks",
-    );
-
-    if let Some(left_span) = known_span(left_span) {
-        error.labels.push(ErrorLabel::new(left_span, left_label));
-    }
-    if let Some(right_span) = right_span.and_then(known_span) {
+    if !right_clean && let Some(right_span) = right_location.and_then(crate::Location::span) {
         error.labels.push(ErrorLabel::new(right_span, right_label));
     }
 
@@ -106,18 +43,17 @@ pub(super) fn unknown_alignment_warning(
 
 pub(super) fn build_count_mismatch_error(
     source_count: usize,
-    source_span: Span,
+    source_location: crate::Location,
     source_label: &str,
     target_count: usize,
-    _target_span: Span,
+    _target_location: crate::Location,
     target_label: &str,
     code: ErrorCode,
 ) -> ParseError {
-    ParseError::new(
+    ParseError::at_location(
         code,
         Severity::Error,
-        SourceLocation::new(source_span),
-        ErrorContext::new("", source_span.to_range(), ""),
+        source_location,
         format!(
             "{} has {} words but {} has {}: word counts must match",
             source_label, source_count, target_label, target_count
@@ -142,7 +78,7 @@ pub(super) fn build_count_mismatch_error(
 pub(super) fn build_phoaln_count_mismatch_error(
     phoaln_raw_count: usize,
     effective_count: usize,
-    phoaln_span: Span,
+    location: crate::Location,
     target_count: usize,
     target_label: &str,
     code: ErrorCode,
@@ -159,14 +95,7 @@ pub(super) fn build_phoaln_count_mismatch_error(
              {target_count}: word counts must match"
         )
     };
-    ParseError::new(
-        code,
-        Severity::Error,
-        SourceLocation::new(phoaln_span),
-        ErrorContext::new("", phoaln_span.to_range(), ""),
-        detail,
-    )
-    .with_suggestion(format!(
+    ParseError::at_location(code, Severity::Error, location, detail).with_suggestion(format!(
         "Ensure %xphoaln aligns one-to-one with {target_label}, accounting for any one-sided \
          pause words"
     ))

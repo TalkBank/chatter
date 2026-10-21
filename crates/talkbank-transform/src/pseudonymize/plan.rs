@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use talkbank_model::Word;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
-use talkbank_model::{Span, Word};
 
 use super::word::WordPlan;
 use super::{ComponentDecision, PseudonymizationInput, WordRefusal};
@@ -90,7 +90,7 @@ impl WordPreview<'_> {
 /// A word that could not be safely planned; no proposal is created for it.
 pub struct RefusedWord {
     location: WordLocation,
-    span: Span,
+    source: talkbank_model::Location,
     reason: WordRefusal,
 }
 
@@ -100,8 +100,8 @@ impl RefusedWord {
         self.location
     }
     /// Location in the plan's protected original source.
-    pub fn span(&self) -> Span {
-        self.span
+    pub fn source(&self) -> talkbank_model::Location {
+        self.source
     }
 
     /// Value-free reason, suitable for ordinary diagnostic output.
@@ -282,14 +282,14 @@ fn assess_word<'input>(
                 }),
                 Err(reason) => result.refusals.push(RefusedWord {
                     location,
-                    span: word.span,
+                    source: word.location,
                     reason,
                 }),
             }
         }
         Err(reason) => result.refusals.push(RefusedWord {
             location,
-            span: word.span,
+            source: word.location,
             reason,
         }),
     }

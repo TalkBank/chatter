@@ -8,7 +8,6 @@
 //! aligned, or construction fails with a typed
 //! [`MorGraConstructionError`].
 
-use crate::Span;
 use crate::model::content::Terminator;
 use crate::model::dependent_tier::{GraTier, GrammaticalRelation, Mor, MorTier};
 
@@ -51,8 +50,9 @@ pub fn try_align_mor_gra(
     mor_items: Vec<Mor>,
     item_relations: Vec<GrammaticalRelation>,
     terminator_slot: MorGraTerminatorSlot,
-    span: Span,
+    location: impl Into<crate::Location>,
 ) -> Result<(MorTier, GraTier), MorGraConstructionError> {
+    let location: crate::Location = location.into();
     let mor_chunks: usize = mor_items.iter().map(|m| m.count_chunks()).sum();
     if mor_chunks != item_relations.len() {
         return Err(MorGraConstructionError::CountMismatch {
@@ -64,10 +64,10 @@ pub fn try_align_mor_gra(
         terminator,
         relation: terminator_relation,
     } = terminator_slot;
-    let mor = MorTier::new_mor(mor_items, terminator).with_span(span);
+    let mor = MorTier::new_mor(location, mor_items, terminator);
     let mut all_relations = item_relations;
     all_relations.push(terminator_relation);
-    let gra = GraTier::new_gra(all_relations).with_span(span);
+    let gra = GraTier::new_gra(location, all_relations);
     Ok((mor, gra))
 }
 
@@ -76,7 +76,7 @@ mod tests {
     //! These build their inputs by hand ON PURPOSE: `try_align_mor_gra` is a
     //! CONSTRUCTOR fed by a tagger with `Mor` items and relations it made,
     //! never by parsed text, so a hand-built argument list is exactly what
-    //! production hands it. Every `Span::DUMMY` here is the constructor's
+    //! production hands it. Every `crate::Location::Unlocated` here is the constructor's
     //! own span argument.
     use super::*;
     use crate::model::dependent_tier::{MorWord, PosCategory};
@@ -87,7 +87,9 @@ mod tests {
 
     fn term_slot(index: usize, head: usize) -> MorGraTerminatorSlot {
         MorGraTerminatorSlot {
-            terminator: Terminator::Period { span: Span::DUMMY },
+            terminator: Terminator::Period {
+                location: crate::Location::Unlocated,
+            },
             relation: GrammaticalRelation::new(index, head, "PUNCT"),
         }
     }
@@ -100,8 +102,13 @@ mod tests {
             GrammaticalRelation::new(1, 2, "NSUBJ"),
             GrammaticalRelation::new(2, 0, "ROOT"),
         ];
-        let (mor, gra) =
-            try_align_mor_gra(mors, item_relations, term_slot(3, 2), Span::DUMMY).expect("aligns");
+        let (mor, gra) = try_align_mor_gra(
+            mors,
+            item_relations,
+            term_slot(3, 2),
+            crate::Location::Unlocated,
+        )
+        .expect("aligns");
         assert_eq!(mor.count_chunks(), gra.len());
         assert_eq!(mor.count_chunks(), 3);
     }
@@ -114,8 +121,13 @@ mod tests {
             GrammaticalRelation::new(1, 0, "ROOT"),
             GrammaticalRelation::new(2, 0, "EXTRA"),
         ];
-        let err = try_align_mor_gra(mors, item_relations, term_slot(3, 1), Span::DUMMY)
-            .expect_err("should mismatch");
+        let err = try_align_mor_gra(
+            mors,
+            item_relations,
+            term_slot(3, 1),
+            crate::Location::Unlocated,
+        )
+        .expect_err("should mismatch");
         assert_eq!(
             err,
             MorGraConstructionError::CountMismatch {
@@ -135,8 +147,13 @@ mod tests {
             GrammaticalRelation::new(1, 0, "ROOT"),
             GrammaticalRelation::new(2, 1, "AUX"),
         ];
-        let (mor, gra) = try_align_mor_gra(vec![it], item_relations, term_slot(3, 1), Span::DUMMY)
-            .expect("aligns");
+        let (mor, gra) = try_align_mor_gra(
+            vec![it],
+            item_relations,
+            term_slot(3, 1),
+            crate::Location::Unlocated,
+        )
+        .expect("aligns");
         assert_eq!(mor.count_chunks(), 3);
         assert_eq!(gra.len(), 3);
     }
@@ -146,7 +163,8 @@ mod tests {
     #[test]
     fn empty_items_succeed() {
         let (mor, gra) =
-            try_align_mor_gra(vec![], vec![], term_slot(1, 0), Span::DUMMY).expect("aligns");
+            try_align_mor_gra(vec![], vec![], term_slot(1, 0), crate::Location::Unlocated)
+                .expect("aligns");
         assert_eq!(mor.count_chunks(), 1);
         assert_eq!(gra.len(), 1);
     }
@@ -164,8 +182,13 @@ mod tests {
             GrammaticalRelation::new(1, 0, "ROOT"),
             GrammaticalRelation::new(2, 1, "PUNCT"),
         ];
-        let err = try_align_mor_gra(mors, item_relations, term_slot(3, 1), Span::DUMMY)
-            .expect_err("caller mistake should be caught");
+        let err = try_align_mor_gra(
+            mors,
+            item_relations,
+            term_slot(3, 1),
+            crate::Location::Unlocated,
+        )
+        .expect_err("caller mistake should be caught");
         assert_eq!(
             err,
             MorGraConstructionError::CountMismatch {

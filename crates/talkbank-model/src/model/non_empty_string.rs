@@ -12,7 +12,7 @@
 //! - [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)
 
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -242,16 +242,7 @@ impl Validate for NonEmptyString {
             return;
         }
 
-        let span = match context.field_span {
-            Some(span) => span,
-            None => Span::from_usize(0, 0),
-        };
-        let location = match context.field_span {
-            Some(span) => SourceLocation::new(span),
-            None => SourceLocation::at_offset(0),
-        };
-        // DEFAULT: Missing field text is reported as empty to match the offending value.
-        let source_text = context.field_text.clone().unwrap_or_default();
+        let location = context.field_diagnostic_location();
         // DEFAULT: When no label is provided, describe the missing value as a generic string.
         let label = context.field_label.unwrap_or("string");
         // DEFAULT: Empty strings map to the canonical EmptyString error code.
@@ -262,7 +253,7 @@ impl Validate for NonEmptyString {
                 code,
                 Severity::Error,
                 location,
-                ErrorContext::new(source_text, span, label),
+                None,
                 format!("{} cannot be empty", label),
             )
             .with_suggestion("Provide a non-empty value"),

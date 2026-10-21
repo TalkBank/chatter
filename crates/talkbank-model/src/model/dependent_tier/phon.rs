@@ -46,7 +46,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
 
-use crate::Span;
 use crate::model::{Bullet, NonEmptyString};
 
 // ---------------------------------------------------------------------------
@@ -93,25 +92,23 @@ pub struct SylTier {
     pub words: Vec<NonEmptyString>,
 
     /// Source span for error reporting.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl SylTier {
     /// Creates a new syllabified tier from pre-split words.
-    pub fn new(tier_type: SylTierType, words: Vec<NonEmptyString>) -> Self {
+    pub fn new(
+        location: impl Into<crate::Location>,
+        tier_type: SylTierType,
+        words: Vec<NonEmptyString>,
+    ) -> Self {
         Self {
             tier_type,
             words,
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Returns `true` when this tier declares nothing. Derived from
@@ -524,24 +521,18 @@ pub struct PhoalnTier {
     pub words: Vec<WordAlignment>,
 
     /// Source span for error reporting.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl PhoalnTier {
     /// Creates a new phone alignment tier from pre-parsed word alignments.
-    pub fn new(words: Vec<WordAlignment>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, words: Vec<WordAlignment>) -> Self {
         Self {
             words,
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Returns `true` when this tier declares nothing. Derived from
@@ -641,24 +632,18 @@ pub struct XphointTier {
     pub groups: Vec<XphointGroup>,
 
     /// Source span for error reporting.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl XphointTier {
     /// Creates a new phone interval tier from parsed groups.
-    pub fn new(groups: Vec<XphointGroup>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, groups: Vec<XphointGroup>) -> Self {
         Self {
             groups,
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Returns `true` when this tier declares nothing. Derived from
@@ -771,7 +756,8 @@ fn parse_xphoint_bullet(tok: &str) -> Result<Bullet, XphointParseError> {
     let end: u64 = end
         .parse()
         .map_err(|_| XphointParseError::NonIntegerOffset(tok.to_string()))?;
-    Ok(Bullet::new(start, end))
+    // The token text carries no offsets of its own.
+    Ok(Bullet::new(crate::Location::Unlocated, start, end))
 }
 
 // ---------------------------------------------------------------------------
@@ -896,7 +882,7 @@ mod tests {
     fn roundtrip_phoaln() {
         let input = "a↔a,p↔p b↔b,ɛ↔ɛ,t↔t̪";
         let words = parse_phoaln_content(input).unwrap();
-        let tier = PhoalnTier::new(words);
+        let tier = PhoalnTier::new(crate::Location::Unlocated, words);
         assert_eq!(tier.to_string(), input);
     }
 
@@ -904,7 +890,7 @@ mod tests {
     fn roundtrip_phoaln_with_nulls() {
         let input = "∅↔ʔ,æ̃↔ʌ̃ b↔∅";
         let words = parse_phoaln_content(input).unwrap();
-        let tier = PhoalnTier::new(words);
+        let tier = PhoalnTier::new(crate::Location::Unlocated, words);
         assert_eq!(tier.to_string(), input);
     }
 
@@ -919,7 +905,7 @@ mod tests {
     #[test]
     fn syl_tier_roundtrip() {
         let words = parse_syl_content("ˈb:Oe:Ns:Ct:R m:Oɔ̃:N");
-        let tier = SylTier::new(SylTierType::Modsyl, words);
+        let tier = SylTier::new(crate::Location::Unlocated, SylTierType::Modsyl, words);
         assert_eq!(tier.to_string(), "ˈb:Oe:Ns:Ct:R m:Oɔ̃:N");
 
         let mut chat = String::new();
@@ -930,7 +916,7 @@ mod tests {
     #[test]
     fn phoaln_write_chat() {
         let words = parse_phoaln_content("a↔a,p↔p").unwrap();
-        let tier = PhoalnTier::new(words);
+        let tier = PhoalnTier::new(crate::Location::Unlocated, words);
         let mut chat = String::new();
         super::super::WriteChat::write_chat(&tier, &mut chat).unwrap();
         assert_eq!(chat, "%xphoaln:\ta↔a,p↔p");
@@ -1103,7 +1089,7 @@ mod tests {
         let content =
             "t \u{0015}0_110\u{0015} w \u{0015}110_220\u{0015} / b \u{0015}220_330\u{0015}";
         let groups = parse_xphoint_content(content).unwrap();
-        let tier = XphointTier::new(groups);
+        let tier = XphointTier::new(crate::Location::Unlocated, groups);
         assert_eq!(tier.to_string(), content);
     }
 

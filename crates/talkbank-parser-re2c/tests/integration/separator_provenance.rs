@@ -1,7 +1,9 @@
 //! Separator provenance, CA exemption and canonical serialization at file boundaries.
 
 use talkbank_model::model::{ChatFile, Line, TranscriptName, WriteChat};
-use talkbank_model::{ChatParser, ErrorCode, ErrorCollector, ParseOutcome, Span};
+use talkbank_model::{
+    ChatParser, ErrorCode, ErrorCollector, ParseOutcome, SourceDiagnostic, SourceIndex, Span,
+};
 
 fn separator_spans(file: &ChatFile) -> Vec<Span> {
     let mut spans = Vec::new();
@@ -39,7 +41,7 @@ fn verify_separator_source(
     let parse_errors = errors.into_vec();
     let expected_shifted: Vec<_> = expected
         .iter()
-        .map(|span| Span::from_usize(span.start as usize + offset, span.end as usize + offset))
+        .map(|span| Span::new(span.start() + offset, span.end() + offset))
         .collect();
     assert_eq!(separator_spans(&actual), expected_shifted);
     let errors = ErrorCollector::new();
@@ -48,7 +50,23 @@ fn verify_separator_source(
         .into_vec()
         .into_iter()
         .filter(|error| error.code == ErrorCode::LeadingSpaceOnMainTier)
-        .map(|error| error.location.span)
+        .map(|error| {
+            // Boundary behavior: validation owns absolute spans, not source text.
+            assert!(
+                error.context.is_none(),
+                "validation must not invent source context"
+            );
+            let span = error.location.span().expect("located diagnostic");
+            if offset == 0 {
+                let diagnostic = SourceDiagnostic::with_index(error, &SourceIndex::new(source));
+                let context = diagnostic.context().unwrap();
+                assert_eq!(
+                    &context.source_text()[context.span().to_range()],
+                    &source[span.start()..span.end()],
+                );
+            }
+            span
+        })
         .collect();
     let is_ca = source
         .lines()
@@ -84,7 +102,7 @@ fn separators_keep_source_spans_and_ca_policy_through_both_backends() {
                     .bytes()
                     .take_while(|byte| *byte == b' ')
                     .count();
-                (count > 0).then(|| Span::from_usize(start, start + count))
+                (count > 0).then(|| Span::new(start, start + count))
             })
             .collect();
         for offset in [0, 200] {

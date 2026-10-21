@@ -37,16 +37,15 @@ pub enum FrontendSourceContext {
 pub struct FrontendSourceLocation {
     #[serde(flatten)]
     span: talkbank_model::Span,
-    line: usize,
-    column: usize,
+    #[serde(flatten)]
+    position: talkbank_model::LineColumn,
 }
 
 impl From<&talkbank_model::DiagnosticPresentation> for FrontendSourceLocation {
     fn from(presentation: &talkbank_model::DiagnosticPresentation) -> Self {
         Self {
-            span: presentation.location().span,
-            line: presentation.line(),
-            column: presentation.column(),
+            span: presentation.file_span(),
+            position: presentation.position(),
         }
     }
 }

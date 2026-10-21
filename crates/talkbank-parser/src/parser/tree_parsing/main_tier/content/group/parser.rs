@@ -5,15 +5,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Group>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Annotations>
 
-use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsChildren,
-    GroupWithAnnotationsNode, NoChild, NodeSlot, SourceBound, SourceSlotView,
+    GroupWithAnnotationsNode, KindAdmitted, NodeSlot, SourceBound, SourceSlotView,
 };
 use crate::model::{BracketedContent, Group, UtteranceContent};
-use talkbank_model::ParseOutcome;
+use talkbank_model::{ParseOutcome, Span};
 use tree_sitter::Node;
 
 use super::super::super::annotations::parse_scoped_annotations;
@@ -21,6 +19,7 @@ use super::super::marker_chain::fold_marker_chain;
 use super::super::recovery::surface_main_tier_sink;
 use super::super::report_tree_shape;
 use super::contents::{contents_of, parse_group_contents};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::expect_delimiter;
 
 /// Which group delimiter the offending whitespace touches; drives the
@@ -49,8 +48,8 @@ fn report_space_inside_angle_group(
     errors.report(ParseError::new(
         ErrorCode::SpaceInsideAngleGroup,
         Severity::Error,
-        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
+        DiagnosticLocation::new(span_of(child)),
+        ErrorContext::new(source, span_of(child), ""),
         format!("Space is not allowed {position} in an angle-bracket group"),
     ));
 }
@@ -61,7 +60,11 @@ fn report_space_inside_angle_group(
 /// whether it is whitespace; interior whitespace between words is legal and
 /// never looked at. A `contents` of one whitespace item is reported once,
 /// as after `<`.
-fn report_edge_whitespace(contents: &ContentsChildren<'_>, source: &str, errors: &impl ErrorSink) {
+fn report_edge_whitespace(
+    contents: &ContentsChildren<'_, KindAdmitted>,
+    source: &str,
+    errors: &impl ErrorSink,
+) {
     if let NodeSlot::Present(ContentsChild0Choice::Whitespaces(first)) = contents.child_0.slot() {
         report_space_inside_angle_group(first.raw_node(), source, errors, AngleSide::AfterOpen);
     }
@@ -89,8 +92,7 @@ pub(crate) fn parse_group_content<'tree>(
     let node = typed.raw_node();
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
+        crate::parser::typed_cst::extract_inner(typed),
         typed.raw_node(),
         source,
         errors,
@@ -111,17 +113,7 @@ pub(crate) fn parse_group_content<'tree>(
         );
     });
 
-    let group_items = match contents_of(associated.field_content_2().slot(), errors, |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected 'contents' in group_with_annotations, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    }) {
+    let group_items = match contents_of(associated.field_content_2().slot(), errors) {
         Some(contents) => {
             report_edge_whitespace(contents.children(), source, errors);
             parse_group_contents(&contents, errors)
@@ -141,37 +133,13 @@ pub(crate) fn parse_group_content<'tree>(
         );
     });
 
-    // Composite annotations are required; Missing, Error and absence cannot
-    // contribute usable annotations.
+    // Presence proves the wrapper, not the annotation payload's validity.
     let markers = match associated.field_annotations().slot().view() {
         SourceSlotView::Present(annotations) => {
             match crate::parser::typed_cst::read_source_field(annotations, errors) {
                 Some(annotations) => parse_scoped_annotations(annotations, errors),
                 None => Vec::new(),
             }
-        }
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                source,
-                errors,
-                "group_with_annotations",
-            );
-            Vec::new()
-        }
-        SourceSlotView::Absent(NoChild) => Vec::new(),
-        SourceSlotView::Error(bad) => {
-            let bad = bad.raw_node();
-            report_tree_shape(
-                bad,
-                format!(
-                    "Expected 'base_annotations' in group_with_annotations, found '{}'",
-                    bad.kind()
-                ),
-                source,
-                errors,
-            );
-            Vec::new()
         }
     };
     // Group contents belong to the main-tier body even when recovery places
@@ -183,9 +151,30 @@ pub(crate) fn parse_group_content<'tree>(
         return ParseOutcome::rejected();
     }
 
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
+    let span = span_of(node);
+    // The group is placed at its brackets, `<` through `>`; the annotations
+    // after it belong to the wrapper the fold builds. A MISSING delimiter is
+    // a zero-width placeholder where recovery decided the bracket was, which
+    // is still a position; only an ERROR or absent slot has none, and then
+    // the node's own extent is what recovery produced.
+    let open = children
+        .child_0
+        .slot()
+        .known_or_placeholder()
+        .present_or_placeholder()
+        .map(|open| span_of(open.raw_node()).start());
+    let close = children
+        .child_2
+        .slot()
+        .known_or_placeholder()
+        .present_or_placeholder()
+        .map(|close| span_of(close.raw_node()).end());
+    let brackets = match (open, close) {
+        (Some(open), Some(close)) => Span::new(open, close),
+        _ => span,
+    };
     let bracketed = BracketedContent::new(group_items);
-    let group = Group::new(bracketed).with_span(span);
+    let group = Group::new(brackets, bracketed);
 
     ParseOutcome::parsed(fold_marker_chain(
         UtteranceContent::Group(group),

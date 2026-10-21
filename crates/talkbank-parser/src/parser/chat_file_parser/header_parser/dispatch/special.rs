@@ -23,8 +23,8 @@
 //! The three single-value option headers and three participant/value headers
 //! retain producer-bound source identity through their payload projections.
 //! Comment retains association through body admission, then uses the existing
-//! bullet-text leaf adapter. Options remains transitional. Malformed-slot recovery stays;
-//! finite coverage observations do not prove those states impossible.
+//! bullet-text leaf adapter. Ordinary eligible envelopes consume compiled
+//! per-rule admission; nested malformed-slot recovery stays broad.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Options_Header>
@@ -33,11 +33,10 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, CommentHeaderNode, KindSlot,
-    L1OfHeaderNode, NamedKind, NoChild, NumberHeaderNode, OptionNameNode, OptionsContentsNode,
-    OptionsHeaderNode, RecordingQualityHeaderNode, SourceBound, SourceBoundKind, SourceField,
-    SourceRecovery, SourceSlotView, SpeakerNode, TranscriptionHeaderNode, extract_options_contents,
-    extract_options_header,
+    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, CommentHeaderNode, L1OfHeaderNode,
+    NamedKind, NumberHeaderNode, OptionNameNode, OptionsContentsNode, OptionsHeaderNode,
+    RecordingQualityHeaderNode, SourceBound, SourceBoundKind, SourceField, SourceRecovery,
+    SourceSlotView, SpeakerNode, TranscriptionHeaderNode, extract_options_contents,
 };
 use crate::model::{self, ChatOptionFlag, Header};
 use crate::node_types::*;
@@ -59,11 +58,17 @@ pub(super) fn comment<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    // The bullet content child at the typed slot `child_2`. A missing content
-    // child reported no diagnostic before the typed traversal either (it fell
-    // through to `Header::Unknown` silently), so the non-Present path is
-    // likewise silent.
-    let children = typed.extract();
+    // The ordinary envelope proves this composite bullet body present.
+    // Nested bullet recovery and source-read failures remain independent.
+    let children = match crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(typed),
+        site.actual(),
+        site.input(),
+        errors,
+    ) {
+        Ok(children) => children,
+        Err(_) => return ParseOutcome::Rejected,
+    };
     let header = match children.field_child_2().slot().view() {
         SourceSlotView::Present(content) => {
             match crate::parser::typed_cst::read_source_field(content, errors) {
@@ -86,9 +91,7 @@ pub(super) fn comment<'tree>(
                 None => return ParseOutcome::Rejected,
             }
         }
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
-            site.unknown("Missing comment content", None)
-        }
+        SourceSlotView::Error(never) | SourceSlotView::Absent(never) => match never {},
     };
     surface_displaced(
         &children.children().unexpected,
@@ -105,7 +108,15 @@ pub(super) fn number<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let children = typed.extract();
+    let children = match crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(typed),
+        site.actual(),
+        site.input(),
+        errors,
+    ) {
+        Ok(children) => children,
+        Err(_) => return ParseOutcome::Rejected,
+    };
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -128,7 +139,15 @@ pub(super) fn recording_quality<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let children = typed.extract();
+    let children = match crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(typed),
+        site.actual(),
+        site.input(),
+        errors,
+    ) {
+        Ok(children) => children,
+        Err(_) => return ParseOutcome::Rejected,
+    };
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -151,7 +170,15 @@ pub(super) fn transcription<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let children = typed.extract();
+    let children = match crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(typed),
+        site.actual(),
+        site.input(),
+        errors,
+    ) {
+        Ok(children) => children,
+        Err(_) => return ParseOutcome::Rejected,
+    };
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -177,11 +204,11 @@ struct ParticipantValue<'source> {
 /// Read speaker first; refusal returns without reading the value, preserving
 /// diagnostic order. Only the generated speaker kind can supply participant text.
 /// Generic over each slot's `Missing` payload, as `read_source_content` is.
-fn two_slots<'value, 'tree: 'value, 'source, 'w, V, MS, MV>(
+fn two_slots<'value, 'tree: 'value, 'source, 'w, V, MS, MV, ES, EV, AS, AV>(
     site: &HeaderSite<'tree, '_>,
-    speaker: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, SpeakerNode<'tree>, MS>>,
+    speaker: SourceField<'value, 'tree, 'source, AnyKindSlot<SpeakerNode<'tree>, MS, ES, AS>>,
     speaker_words: &'w ContentSlot<'w>,
-    value: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, V, MV>>,
+    value: SourceField<'value, 'tree, 'source, AnyKindSlot<V, MV, EV, AV>>,
     value_words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
 ) -> Result<ParticipantValue<'source>, ContentReadError<'w>>
@@ -189,6 +216,10 @@ where
     V: SourceBoundKind<'tree> + NamedKind,
     MS: SourceRecovery<'value, 'tree, 'source>,
     MV: SourceRecovery<'value, 'tree, 'source>,
+    ES: SourceRecovery<'value, 'tree, 'source>,
+    EV: SourceRecovery<'value, 'tree, 'source>,
+    AS: crate::generated_traversal::Absence,
+    AV: crate::generated_traversal::Absence,
 {
     let speaker = read_source_content(site, speaker, speaker_words, errors)?;
     let value = read_source_content(site, value, value_words, errors)?;
@@ -251,7 +282,15 @@ pub(super) fn birthplace_of<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let children = typed.extract();
+    let children = match crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(typed),
+        site.actual(),
+        site.input(),
+        errors,
+    ) {
+        Ok(children) => children,
+        Err(_) => return ParseOutcome::Rejected,
+    };
     let header = match two_slots(
         &site,
         children.field_child_2().slot(),
@@ -290,7 +329,15 @@ pub(super) fn l1_of<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let children = typed.extract();
+    let children = match crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(typed),
+        site.actual(),
+        site.input(),
+        errors,
+    ) {
+        Ok(children) => children,
+        Err(_) => return ParseOutcome::Rejected,
+    };
     let participant_words = ContentSlot {
         missing: "Missing participant code in @L1 of header",
         suggested_fix: None,
@@ -338,25 +385,33 @@ pub(super) fn l1_of<'tree>(
 }
 
 /// `@Options` -> `Header::Options`.
-pub(super) fn options(
-    typed: OptionsHeaderNode<'_>,
-    input: &str,
+pub(super) fn options<'tree>(
+    typed: SourceBound<'tree, '_, OptionsHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    // The options_contents child at the typed slot `child_2`. An absent
-    // options_contents gave an empty flag list before the typed traversal and
-    // a MISSING node has no children (also empty), so every non-Present state
-    // yields an empty list. Validation reports E533 on the resulting empty
-    // @Options list downstream.
-    let children = extract_options_header(typed);
-    let flags = match present(children.child_2.slot()) {
-        Some(contents) => match option_flags(*contents, input, errors) {
-            ParseOutcome::Parsed(flags) => flags,
-            ParseOutcome::Rejected => return ParseOutcome::Rejected,
-        },
-        None => Vec::new(),
+    let input = typed.source();
+    let Ok(children) = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(typed),
+        typed.raw_node(),
+        input,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
     };
-    surface_displaced(&children.unexpected, OPTIONS_HEADER, input, errors);
+    let SourceSlotView::Present(contents) = children.field_child_2().slot().view();
+    let Some(contents) = crate::parser::typed_cst::read_source_field(contents, errors) else {
+        return ParseOutcome::Rejected;
+    };
+    let flags = match option_flags(contents.node(), contents.source(), errors) {
+        ParseOutcome::Parsed(flags) => flags,
+        ParseOutcome::Rejected => return ParseOutcome::Rejected,
+    };
+    surface_displaced(
+        &children.children().unexpected,
+        OPTIONS_HEADER,
+        input,
+        errors,
+    );
     ParseOutcome::parsed(Header::Options {
         options: flags.into(),
     })
@@ -375,7 +430,11 @@ fn option_flags(
 ) -> ParseOutcome<Vec<ChatOptionFlag>> {
     let children = extract_options_contents(options_contents);
     let mut flags = Vec::new();
-    let mut admit = |slot: &KindSlot<'_, OptionNameNode<'_>>| -> ParseOutcome<()> {
+    let mut admit = |slot: &crate::generated_traversal::NarrowedKindSlot<
+        '_,
+        OptionNameNode<'_>,
+    >|
+     -> ParseOutcome<()> {
         if let Some(name) = present(slot) {
             let ParseOutcome::Parsed(text) =
                 extract_utf8_text(name.raw_node(), input, errors, "option name")

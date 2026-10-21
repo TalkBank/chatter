@@ -8,8 +8,12 @@ fn parse_header(input: &str) -> crate::error::ParseResult<crate::model::Header> 
         crate::error::ParseErrors::from(vec![crate::error::ParseError::new(
             crate::error::ErrorCode::InternalError,
             crate::error::Severity::Error,
-            crate::error::SourceLocation::at_offset(0),
-            crate::error::ErrorContext::new(input, 0..input.len(), input),
+            crate::error::DiagnosticLocation::at_offset(0),
+            crate::error::ErrorContext::new(
+                input,
+                talkbank_model::Span::new(0, input.len()),
+                input,
+            ),
             format!("Failed to create parser: {err}"),
         )])
     })?;

@@ -1,26 +1,31 @@
 # CLAN Line Numbering
 
 **Status:** Current
-**Last modified:** 2026-05-29 17:31 EDT
+**Last modified:** {{git-dates:page}}
 
 When you click "Open in CLAN" in the desktop app or press Enter in the TUI,
-chatter sends the error location to the CLAN editor. CLAN opens the file and
-places the cursor at the error. This usually works seamlessly, but there is
-one caveat: CLAN and chatter count lines differently.
+Chatter resolves the error location for the CLAN editor and sends an open
+request. Successful coordinate resolution is not proof that the external
+application launched or placed its cursor correctly. One important boundary
+is that CLAN and Chatter count lines differently.
 
 ## Hidden Headers
 
-CLAN hides five header types from its editor display:
+Chatter's shared resolver follows these Mac CLAN hidden-header rules:
 
 | Header | Purpose |
 |--------|---------|
 | `@UTF8` | Character encoding declaration |
 | `@PID` | Persistent identifier |
-| `@Font` | Display font settings |
-| `@ColorWords` | Color coding rules |
+| `@Font: CAfont:...` | CAfont metadata only; ordinary font headers remain visible |
+| `@Color words:` | Color coding rules (the space is significant) |
 | `@Window` | Window position/size |
 
-These headers are present in the `.cha` file but invisible in CLAN's editor.
+Header names are matched case-insensitively and exactly, not as arbitrary
+prefixes. The font value may have leading spaces or tabs before `CAfont:`.
+`@ColorWords` is not the recognized `@Color words` spelling.
+
+These headers are present in the `.cha` file but omitted from the display mapping.
 CLAN's line numbers skip them entirely. A file that starts with `@UTF8` on
 line 1 will show `@Begin` as "line 1" in CLAN's display, even though it's
 actually line 2 in the file.
@@ -29,12 +34,15 @@ actually line 2 in the file.
 
 Chatter automatically adjusts line numbers before sending to CLAN:
 
-1. Compute the error's line number in the source file
+1. Use positive supplied line/column coordinates, or compute both from the
+   source byte offset if either coordinate is unavailable or zero
 2. Count how many hidden headers appear before that line
 3. Subtract the hidden count to get CLAN's line number
 4. Send the adjusted line number to CLAN
 
-This happens transparently, you don't need to do anything.
+The TUI uses its retained source; the desktop resolver reads the requested
+file. Coordinates and source must describe the same version of the document.
+This mapping does not itself detect edits made since a diagnostic was produced.
 
 ## Edge Case: Errors on Hidden Lines
 

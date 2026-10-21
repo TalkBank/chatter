@@ -5,9 +5,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#OverlapMarkers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, OverlapPointNode, SourceBound};
 use crate::model::{OverlapIndex, OverlapPoint, OverlapPointKind, UtteranceContent};
+use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
 
 /// Converts one overlap-point token node into `UtteranceContent`.
@@ -58,8 +59,8 @@ pub(crate) fn parse_overlap_point_token<'tree>(
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), text),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, span_of(node), text),
                 "Empty overlap point token".to_string(),
             ));
             return ParseOutcome::rejected();
@@ -76,8 +77,8 @@ pub(crate) fn parse_overlap_point_token<'tree>(
             errors.report(ParseError::new(
                 ErrorCode::UnbalancedOverlap,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), text),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, span_of(node), text),
                 format!(
                     "Unknown overlap point marker '{}' (U+{:04X})",
                     other, other as u32
@@ -92,6 +93,6 @@ pub(crate) fn parse_overlap_point_token<'tree>(
         .next()
         .and_then(|digit_char| digit_char.to_digit(10).map(OverlapIndex::new));
 
-    let span = crate::error::Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    ParseOutcome::parsed(OverlapPoint::new(kind, index).with_span(span))
+    let span = span_of(node);
+    ParseOutcome::parsed(OverlapPoint::new(span, kind, index))
 }

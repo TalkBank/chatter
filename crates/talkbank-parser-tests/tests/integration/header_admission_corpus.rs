@@ -219,8 +219,9 @@ fn participant_recovery_repeat_preserves_source_and_valid_siblings() {
                 assert!(
                     diagnostics.iter().any(|error| {
                         error.code == ErrorCode::EmptyParticipantsHeader
-                            && error.location.span.start as usize == range.start
-                            && error.location.span.end as usize == range.end
+                            && error.location.span().expect("located diagnostic").start()
+                                == range.start
+                            && error.location.span().expect("located diagnostic").end() == range.end
                     }),
                     "list recovery reports its actual source range: {diagnostics:?}"
                 );
@@ -270,8 +271,8 @@ fn participant_recovery_empty_header_retains_without_invented_entries() {
         assert!(
             diagnostics.iter().any(|error| {
                 error.code == ErrorCode::MissingRequiredElement
-                    && error.location.span.start as usize == range.start
-                    && error.location.span.end as usize == range.end
+                    && error.location.span().expect("located diagnostic").start() == range.start
+                    && error.location.span().expect("located diagnostic").end() == range.end
             }),
             "missing speaker retains its diagnostic point: {diagnostics:?}"
         );
@@ -287,9 +288,9 @@ fn participant_recovery_empty_header_retains_without_invented_entries() {
             .all(|error| error.code != ErrorCode::EmptyParticipantCode)
     );
     for error in &diagnostics {
-        let span = error.location.span;
+        let span = error.location.span().expect("located diagnostic");
         assert!(
-            source.get(span.start as usize..span.end as usize).is_some(),
+            source.get(span.start()..span.end()).is_some(),
             "diagnostic stays inside its real source: {error:?}"
         );
     }

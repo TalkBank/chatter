@@ -1,20 +1,23 @@
-# spec   docs   README
+# Specification references
 
-## Overview
-Short summary for `spec/docs/README.md`. This document is intentionally concise; legacy detail has been trimmed.
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/spec/docs/README.md)
 
-## Key Commands
-```bash
-cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.toml
-```
+The book owns the contributor workflow and system overview:
 
-## Status and Limitations
-- This is a brief reference; consult AGENTS.md files for full workflow guidance.
-- Update alongside code changes to keep commands and references accurate.
+- [Spec System](../../book/src/architecture/spec-system.md): schemas,
+  claims, generated owners and acceptance limits.
+- [Spec Workflow](../../book/src/contributing/spec-workflow.md): authoring,
+  bootstrap, regeneration and verification.
+- [Specification guidance](../AGENTS.md): scope and ownership rules.
 
-## See Also
-- AGENTS.md
-- spec/AGENTS.md
+These satellites cover specific authoring tasks:
 
----
-**Last modified:** 2026-09-24 00:21 EDT
+- [Error and construct formats](ERROR_SPEC_FORMAT.md)
+- [Writing error specs](WRITING_ERROR_SPECS.md)
+- [Curating construct candidates](CURATION_WORKFLOW.md)
+- [Alignment rules](ALIGNMENT_RULES.md)
+- [Grammar patterns](GRAMMAR_PATTERNS.md)
+- [CHAT-to-JSON pipeline](CHAT_TO_JSON_PIPELINE.md)
+
+Generated artifacts are edited through their owners. Observations are evidence
+to review, not authority to change a rule or its expected result.

@@ -39,9 +39,9 @@ pub struct Postcode {
     pub text: smol_str::SmolStr,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl Postcode {
@@ -49,19 +49,11 @@ impl Postcode {
     ///
     /// This is the default constructor for synthetic fixtures and transformed
     /// model values where source offsets are not preserved.
-    pub fn new(text: impl Into<smol_str::SmolStr>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, text: impl Into<smol_str::SmolStr>) -> Self {
         Self {
             text: text.into(),
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata used for diagnostics.
-    ///
-    /// Span values are ignored by semantic-equality comparisons.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 }
 
@@ -88,7 +80,7 @@ mod tests {
     /// Regression: simple postcode text roundtrips through `Display`.
     #[test]
     fn postcode_simple_roundtrip() {
-        let postcode = Postcode::new("bch");
+        let postcode = Postcode::new(crate::Location::Unlocated, "bch");
         let output = postcode.to_string();
         assert_eq!(output, "[+ bch]", "Postcode roundtrip failed");
     }
@@ -96,7 +88,7 @@ mod tests {
     /// Regression: postcode text with spaces is preserved during serialization.
     #[test]
     fn postcode_with_spaces_roundtrip() {
-        let postcode = Postcode::new("long text with spaces");
+        let postcode = Postcode::new(crate::Location::Unlocated, "long text with spaces");
         let output = postcode.to_string();
         assert_eq!(
             output, "[+ long text with spaces]",

@@ -5,11 +5,12 @@
 //! selected document loses errors outside it. Keep both scopes in one owner.
 
 use crate::generated_traversal::{
-    AsRawNode, FullDocumentChildren, FullDocumentNode, ParsedSource, SourceBound, SourceChildren,
-    SourceSlice,
+    AdmittedFullDocumentChildren, AsRawNode, FullDocumentNode, ParsedSource, SourceBound,
+    SourceChildren, SourceSlice,
 };
 use crate::node_types::SOURCE_FILE;
 use crate::parser::typed_cst::CstFailure;
+use crate::parser::typed_cst::ExtractCanonical;
 use tree_sitter::Node;
 
 /// The document position and its complete syntax-error scope, classified once.
@@ -33,7 +34,7 @@ enum DocumentShape<'tree> {
         document: SourceBound<'tree, 'tree, FullDocumentNode<'tree>>,
     },
     Recovered {
-        children: SourceChildren<'tree, 'tree, FullDocumentChildren<'tree>>,
+        children: SourceChildren<'tree, 'tree, AdmittedFullDocumentChildren<'tree>>,
     },
     NotADocument {
         node: SourceSlice<'tree, 'tree>,
@@ -45,7 +46,7 @@ enum DocumentShape<'tree> {
 /// nodes supplied alongside a separately selected document.
 #[allow(clippy::large_enum_variant)] // Borrowed generated carrier; keep root iteration allocation-free.
 pub(crate) enum DocumentPart<'tree> {
-    Document(SourceChildren<'tree, 'tree, FullDocumentChildren<'tree>>),
+    Document(SourceChildren<'tree, 'tree, AdmittedFullDocumentChildren<'tree>>),
     Recovery(SourceSlice<'tree, 'tree>),
 }
 
@@ -136,9 +137,7 @@ impl<'tree> DocumentRoot<'tree> {
         let selected = self.node();
         let syntax_root = self.parsed.root()?;
         let mut document = Some(match self.document {
-            DocumentShape::Complete { document } => {
-                document.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?
-            }
+            DocumentShape::Complete { document } => document.extract_canonical()?,
             DocumentShape::Recovered { children, .. } => {
                 // A reconstructed ERROR wrapper does not establish a complete
                 // document boundary. Its siblings remain whole-input recovery;
@@ -209,11 +208,8 @@ mod tests {
             assert_eq!(errors.len(), 1, "{errors:?}");
             assert_eq!(errors[0].code, expected_code);
             assert_eq!(
-                errors[0].location.span,
-                Span::new(
-                    start.try_into().expect("small fixture"),
-                    end.try_into().expect("small fixture")
-                ),
+                errors[0].location.span().expect("located diagnostic"),
+                Span::new(start, end),
             );
         }
     }
@@ -245,7 +241,14 @@ mod tests {
             let errors = errors.into_vec();
             assert_eq!(errors.len(), 1, "{errors:?}");
             assert_eq!(errors[0].code, ErrorCode::MissingEndHeader);
-            assert_eq!(errors[0].location.span.start as usize, input.len());
+            assert_eq!(
+                errors[0]
+                    .location
+                    .span()
+                    .expect("located diagnostic")
+                    .start(),
+                input.len()
+            );
         }
     }
 
@@ -264,13 +267,21 @@ mod tests {
                 .expect("recovered document");
             let utterance = file.utterances().next().expect("retained speech");
             assert_eq!(
-                utterance.main.span.start as usize,
+                utterance.main.location.span().expect("located").start(),
                 origin + source.find("*CHI").expect("spec speaker")
             );
-            assert_eq!(utterance.main.span.end as usize, origin + source.len());
             assert_eq!(
-                utterance.main.speaker_span.start,
-                utterance.main.span.start + 1
+                utterance.main.location.span().expect("located").end(),
+                origin + source.len()
+            );
+            assert_eq!(
+                utterance
+                    .main
+                    .speaker_location
+                    .span()
+                    .expect("located")
+                    .start(),
+                utterance.main.location.span().expect("located").start() + 1
             );
             assert!(errors.into_vec().is_empty());
         }

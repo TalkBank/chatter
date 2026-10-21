@@ -70,8 +70,14 @@ fn corroborated_word_timing_measures_each_child() {
         .iter()
         .map(|child| child.main.content.bullet.as_ref().expect("measured child"))
         .collect();
-    assert_eq!(bullets[0], &Bullet::new(100, 300));
-    assert_eq!(bullets[1], &Bullet::new(300, 600));
+    assert_eq!(
+        bullets[0],
+        &Bullet::new(talkbank_model::Location::Unlocated, 100, 300)
+    );
+    assert_eq!(
+        bullets[1],
+        &Bullet::new(talkbank_model::Location::Unlocated, 300, 600)
+    );
 }
 
 #[test]
@@ -244,11 +250,19 @@ fn replacement_word_timing_partitions_spoken_originals_not_replacement_targets()
         assert!(outcome.invalidated_tiers().is_empty());
         assert_eq!(
             outcome.children()[0].main.content.bullet,
-            Some(Bullet::new(start, start + 200))
+            Some(Bullet::new(
+                talkbank_model::Location::Unlocated,
+                start,
+                start + 200
+            ))
         );
         assert_eq!(
             outcome.children()[1].main.content.bullet,
-            Some(Bullet::new(start + 200, start + 400))
+            Some(Bullet::new(
+                talkbank_model::Location::Unlocated,
+                start + 200,
+                start + 400
+            ))
         );
         let last = &outcome.children()[1];
         assert_eq!(

@@ -39,9 +39,9 @@ pub(crate) fn parse_com_tier_with_separator<'tree>(
 ) -> Result<crate::parser::tier_parsers::ParsedDependentTier<ComTier>, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let children = crate::parser::typed_cst::extract_envelope(typed)?;
     let separator =
-        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot());
+        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot())?;
     crate::parser::tree_parsing::parser_helpers::surface_displaced(
         &children.children().unexpected,
         node.kind(),
@@ -51,7 +51,7 @@ pub(crate) fn parse_com_tier_with_separator<'tree>(
     let children = children.admit_ranges()?;
     let content = parse_optional_text_tier_content(&children, errors)?;
     Ok(crate::parser::tier_parsers::ParsedDependentTier::new(
-        ComTier::new(content).with_span(span),
+        ComTier::new(span, content),
         separator,
     ))
 }

@@ -76,6 +76,7 @@ concern rather than held as a flat bag:
   `--tui-mode`; one value stands in for a format, a quiet flag, an interface
   flag and an audit path, so no precedence between them is ever evaluated)
 - the resolved `--suppress` codes
+- renderer-facing `RunNotice` values
 
 (There is no traversal-mode field: every invocation is an explicit file
 list, so no traversal choice exists to carry.)
@@ -85,9 +86,11 @@ struct with explicit sub-objects and enums rather than a dozen flat fields.
 
 ### `ParseHealth` (talkbank-model)
 
-Stores taint as a compact tier bitset keyed by `ParseHealthTier` (no
-per-tier boolean fields), the shape this audit expects for fixed domain
-sets.
+`ParseHealth` stores taint as a compact tier bitset keyed by
+`ParseHealthTier`, not parallel booleans. The enclosing `ParseHealthState`
+distinguishes `Unknown`, parser-backed `Clean`, explicit `Constructed`, and
+`Tainted(ParseHealth)`. A zero bitset is not interchangeable with unknown
+provenance or proof of model validity.
 
 ```mermaid
 flowchart LR
@@ -95,24 +98,27 @@ flowchart LR
     set --> checks["Alignment safety checks"]
 ```
 
-## Open Hotspots
+## Review candidates
 
 ### TUI state bags
 
-Real state owners that still want grouping by concern (selection vs. progress
-vs. render flags vs. status):
+Inspect state ownership by concern (selection, progress, render flags and
+status) before proposing a change:
 
 - `crates/chatter/src/ui/validation_tui/state.rs` `TuiState`
 
 ### `Backend` (talkbank-lsp)
 
 `crates/talkbank-lsp/src/backend/state.rs` is a service-root aggregate.
-Defensible, but still wants grouping such as document caches, parse caches,
-validation state, language services.
+Review whether document/cache, validation and language-service responsibilities
+have coherent owners. Its field count alone does not demonstrate a defect.
+
+These are review prompts, not a current defect inventory or authorization for
+a broad refactor. Inspect current source and callers before changing a type.
 
 ### Metric structs
 
-`SpeakerEval`/`SpeakerKideval` are acceptable as report records. If output
+`SpeakerEval`/`SpeakerKideval` are examples of report records. If output
 renderers keep needing subsets (lexical metrics, morphosyntax metrics, error
 counts, derived scores), those records should eventually nest along those
 lines.

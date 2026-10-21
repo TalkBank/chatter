@@ -9,7 +9,7 @@
 //! both the TUI and desktop app use to convert a `ParseError`'s location into
 //! CLAN-compatible coordinates.
 
-use super::source_location::SourceLocation;
+use super::source_location::{DiagnosticLocation, LineColumn};
 use std::num::NonZeroUsize;
 
 /// CLAN-adjusted line and column for sending to the CLAN editor.
@@ -21,48 +21,64 @@ pub struct ClanLocation {
     pub column: usize,
 }
 
-/// Error returned when the error is on a line that CLAN hides.
+/// Why a diagnostic has no CLAN coordinate.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClanHiddenLineError {
-    /// The original 1-indexed line number in the source file.
-    pub source_line: usize,
+pub enum ClanLocationError {
+    /// The diagnostic is on a line that CLAN hides from its editor.
+    HiddenLine {
+        /// The original 1-indexed line number in the source file.
+        source_line: usize,
+    },
+    /// The diagnostic concerns a value with no source position.
+    Unlocated,
 }
 
-impl std::fmt::Display for ClanHiddenLineError {
+impl std::fmt::Display for ClanLocationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Error is on line {} which is a CLAN hidden header \
-             (@UTF8/@PID/@Color words/@Window or CAfont metadata), CLAN does not display this line",
-            self.source_line
-        )
+        match self {
+            Self::HiddenLine { source_line } => write!(
+                f,
+                "Error is on line {source_line} which is a CLAN hidden header \
+                 (@UTF8/@PID/@Color words/@Window or CAfont metadata), CLAN does not display this line",
+            ),
+            Self::Unlocated => write!(f, "Error has no source location to open in CLAN"),
+        }
     }
 }
 
-impl std::error::Error for ClanHiddenLineError {}
+impl std::error::Error for ClanLocationError {}
 
 /// Resolve a `ParseError`'s location into CLAN-compatible coordinates.
 ///
 /// Handles the full pipeline:
-/// 1. If `location.line`/`column` are populated, use them directly
-/// 2. Otherwise, compute from `location.span.start` byte offset and the source text
+/// 1. If the location carries its line and column, use them directly
+/// 2. Otherwise, compute them from the span start and the source text
 /// 3. Subtract hidden CLAN headers from the line number
 ///
-/// Returns `Err` if the error falls on a hidden header line.
+/// Returns `Err` if the error falls on a hidden header line, or if it has no
+/// source location at all.
 pub fn resolve_clan_location(
-    location: &SourceLocation,
+    location: &DiagnosticLocation,
     source: &str,
-) -> Result<ClanLocation, ClanHiddenLineError> {
-    let (line, column) = match (location.line, location.column) {
-        (Some(line), Some(column)) if line >= 1 && column >= 1 => (line, column),
-        _ => SourceLocation::calculate_line_column(location.span.start as usize, source),
+) -> Result<ClanLocation, ClanLocationError> {
+    let position = match *location {
+        DiagnosticLocation::Known {
+            position: Some(position),
+            ..
+        } => position,
+        DiagnosticLocation::Known {
+            span,
+            position: None,
+        } => LineColumn::of_offset(span.start(), source),
+        DiagnosticLocation::Unlocated => return Err(ClanLocationError::Unlocated),
     };
-
-    let clan_line = visible_line(source, line).ok_or(ClanHiddenLineError { source_line: line })?;
+    let line = position.line.get();
+    let clan_line =
+        visible_line(source, line).ok_or(ClanLocationError::HiddenLine { source_line: line })?;
 
     Ok(ClanLocation {
         line: clan_line.get(),
-        column,
+        column: position.column.get(),
     })
 }
 
@@ -104,11 +120,21 @@ mod tests {
     use super::*;
     use crate::Span;
 
-    fn loc(start: u32, end: u32, line: Option<usize>, column: Option<usize>) -> SourceLocation {
-        SourceLocation {
-            span: Span::new(start, end),
-            line,
-            column,
+    fn loc(
+        start: usize,
+        end: usize,
+        line: Option<usize>,
+        column: Option<usize>,
+    ) -> DiagnosticLocation {
+        let span = Span::new(start, end);
+        match (
+            line.and_then(NonZeroUsize::new),
+            column.and_then(NonZeroUsize::new),
+        ) {
+            (Some(line), Some(column)) => {
+                DiagnosticLocation::known_at(span, LineColumn { line, column })
+            }
+            _ => DiagnosticLocation::new(span),
         }
     }
 
@@ -142,8 +168,17 @@ mod tests {
         let result = resolve_clan_location(&loc(0, 5, Some(1), Some(1)), source);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.source_line, 1);
+        assert_eq!(err, ClanLocationError::HiddenLine { source_line: 1 });
         assert!(err.to_string().contains("hidden"));
+    }
+
+    #[test]
+    fn unlocated_diagnostic_has_no_clan_coordinate() {
+        let source = "@UTF8\n@Begin\n";
+        assert_eq!(
+            resolve_clan_location(&DiagnosticLocation::Unlocated, source),
+            Err(ClanLocationError::Unlocated)
+        );
     }
 
     #[test]

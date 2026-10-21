@@ -15,8 +15,8 @@ pub(crate) use overlap_point::{parse_overlap_point, parse_overlap_point_token};
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BaseContentItemChoiceBoundView, BaseContentItemNode, KindSlot, LongFeatureLabelNode,
-    NoChild, NodeSlot, RecoveryNode, SourceBound, SourceSlotView,
+    AsRawNode, BaseContentItemChoiceBoundView, BaseContentItemNode, LongFeatureLabelNode, NoChild,
+    NodeSlot, RecoveryNode, SourceBound, SourceSlotView,
 };
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
@@ -26,8 +26,7 @@ use super::nonword::parse_nonword_content;
 use super::report_tree_shape;
 use super::word::parse_word_content;
 use crate::parser::tree_parsing::parser_helpers::{
-    SlotState, check_not_missing, expect_delimiter, expect_present, extract_utf8_text,
-    parse_pause_node, surface_displaced,
+    check_not_missing, expect_delimiter, parse_pause_node, surface_displaced,
 };
 
 /// Parse one `base_content_item` into `UtteranceContent`.
@@ -84,23 +83,23 @@ pub(crate) fn parse_base_content<'tree>(
                 BaseContentItemChoiceBoundView::UnderlineBegin(node) => {
                     // Underline begin marker (U+0002 U+0001)
                     ParseOutcome::parsed(UtteranceContent::UnderlineBegin(
-                        talkbank_model::UnderlineMarker::from_span(span_of(node.node().raw_node())),
+                        talkbank_model::UnderlineMarker::new(span_of(node.node().raw_node())),
                     ))
                 }
                 BaseContentItemChoiceBoundView::UnderlineEnd(node) => {
                     // Underline end marker (U+0002 U+0002)
                     ParseOutcome::parsed(UtteranceContent::UnderlineEnd(
-                        talkbank_model::UnderlineMarker::from_span(span_of(node.node().raw_node())),
+                        talkbank_model::UnderlineMarker::new(span_of(node.node().raw_node())),
                     ))
                 }
                 BaseContentItemChoiceBoundView::LongFeature(node) => {
-                    long_feature::parse_long_feature(node.node(), source, errors)
+                    long_feature::parse_long_feature(node, errors)
                 }
                 BaseContentItemChoiceBoundView::Nonvocal(node) => {
-                    nonvocal::parse_nonvocal(node.node(), source, errors)
+                    nonvocal::parse_nonvocal(node, errors)
                 }
                 BaseContentItemChoiceBoundView::OtherSpokenEvent(node) => {
-                    other_spoken::parse_other_spoken_event(node.node(), source, errors)
+                    other_spoken::parse_other_spoken_event(node, errors)
                 }
             }
         }
@@ -122,8 +121,8 @@ pub(crate) fn parse_base_content<'tree>(
 /// reported as the marker losing its shape at `within`. A marker is built
 /// only when every one of its delimiters answers `true`, as the positional
 /// checks these replaced rejected on any structural defect.
-pub(super) fn delimiter<'tree, T, M, U: RecoveryNode<'tree>, A>(
-    slot: &NodeSlot<'tree, T, M, U, A>,
+pub(super) fn delimiter<'tree, T, M, E: RecoveryNode<'tree>, U: RecoveryNode<'tree>, A>(
+    slot: &NodeSlot<T, M, E, U, A>,
     what: &str,
     within: &str,
     source: &str,
@@ -143,27 +142,28 @@ pub(super) fn delimiter<'tree, T, M, U: RecoveryNode<'tree>, A>(
 }
 
 /// The label a marker's `long_feature_label` position carries, or `None`
-/// after its recovery state has been reported at `within`; `context` names
-/// the position for the decode diagnostic.
-pub(super) fn marker_label(
-    slot: &KindSlot<'_, LongFeatureLabelNode<'_>>,
+/// after its Missing state or source-read failure has been reported. The field
+/// owns its source; callers supply only the construct's diagnostic context.
+pub(super) fn marker_label<'value, 'tree: 'value, 'source>(
+    slot: crate::parser::typed_cst::RequiredLexicalField<
+        'value,
+        'tree,
+        'source,
+        LongFeatureLabelNode<'tree>,
+    >,
     within: &str,
-    context: &str,
-    source: &str,
     errors: &impl ErrorSink,
 ) -> Option<String> {
-    match expect_present(slot, within, source, errors) {
-        SlotState::Present(node) => {
-            match extract_utf8_text(node.raw_node(), source, errors, context) {
-                ParseOutcome::Parsed(text) => Some(text.to_owned()),
-                ParseOutcome::Rejected => None,
-            }
+    let source = slot.source();
+    match slot.view() {
+        SourceSlotView::Present(node) => crate::parser::typed_cst::read_source_field(node, errors)
+            .map(|node| node.text().to_owned()),
+        SourceSlotView::Missing(node) => {
+            check_not_missing(node.raw_node(), source, errors, within);
+            None
         }
-        SlotState::Absent | SlotState::Recovered => None,
     }
 }
 
-/// The span of a leaf or marker node.
-pub(super) fn span_of(node: tree_sitter::Node) -> talkbank_model::Span {
-    talkbank_model::Span::new(node.start_byte() as u32, node.end_byte() as u32)
-}
+/// The span of a leaf or marker node, for the sibling content modules.
+pub(super) use crate::parser::node_span::span_of;

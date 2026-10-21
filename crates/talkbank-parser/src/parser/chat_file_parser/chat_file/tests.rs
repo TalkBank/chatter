@@ -228,15 +228,25 @@ fn test_main_tier_span_is_set() -> Result<(), String> {
     let main_tier = &utterance.main;
 
     // Check that span is not DUMMY (0..0)
-    assert_ne!(main_tier.span.start, 0, "Span start should not be 0");
-    assert_ne!(main_tier.span.end, 0, "Span end should not be 0");
+    assert_ne!(
+        main_tier.location.span().expect("located").start(),
+        0,
+        "Span start should not be 0"
+    );
+    assert_ne!(
+        main_tier.location.span().expect("located").end(),
+        0,
+        "Span end should not be 0"
+    );
     assert!(
-        main_tier.span.end > main_tier.span.start,
+        main_tier.location.span().expect("located").end()
+            > main_tier.location.span().expect("located").start(),
         "Span should be non-empty"
     );
 
     // The span should cover "*CHI:\thello world\n"
-    let span_text = &content[main_tier.span.start as usize..main_tier.span.end as usize];
+    let span_text = &content[main_tier.location.span().expect("located").start()
+        ..main_tier.location.span().expect("located").end()];
     assert_eq!(
         span_text.get(0..5),
         Some("*CHI:"),
@@ -245,7 +255,8 @@ fn test_main_tier_span_is_set() -> Result<(), String> {
 
     println!(
         "MainTier span: {}..{}",
-        main_tier.span.start, main_tier.span.end
+        main_tier.location.span().expect("located").start(),
+        main_tier.location.span().expect("located").end()
     );
     println!("MainTier text: {:?}", span_text);
 
@@ -310,20 +321,25 @@ fn test_validation_error_has_proper_span() -> Result<(), String> {
     for error in &errors {
         println!(
             "Error: {} at span {}..{}",
-            error.message, error.location.span.start, error.location.span.end
+            error.message,
+            error.location.span().expect("located diagnostic").start(),
+            error.location.span().expect("located diagnostic").end()
         );
         if error.code.as_str() == "E304" {
             // Missing terminator error should have the main tier's span
             assert_ne!(
-                error.location.span.start, 0,
+                error.location.span().expect("located diagnostic").start(),
+                0,
                 "E304 error should have non-zero start"
             );
             assert_ne!(
-                error.location.span.end, 0,
+                error.location.span().expect("located diagnostic").end(),
+                0,
                 "E304 error should have non-zero end"
             );
             assert!(
-                error.location.span.end > error.location.span.start,
+                error.location.span().expect("located diagnostic").end()
+                    > error.location.span().expect("located diagnostic").start(),
                 "E304 error span should be non-empty"
             );
         }

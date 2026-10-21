@@ -94,12 +94,12 @@ impl GraLoweringReceipt {
     }
 
     /// Consumes the relations and their derived completeness together.
-    pub fn into_tier(self) -> GraTier {
+    pub fn into_tier(self, location: impl Into<crate::Location>) -> GraTier {
         let completeness = match self.retention {
             Retention::Retained => GraCompleteness::Whole,
             Retention::Truncated => GraCompleteness::Truncated,
         };
-        let mut tier = GraTier::new_gra(self.relations);
+        let mut tier = GraTier::new_gra(location, self.relations);
         tier.completeness = completeness;
         tier
     }

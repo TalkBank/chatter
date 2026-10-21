@@ -296,8 +296,8 @@ fn stress_word_recovery_specs_separate_typed_findings_from_carrier_safety() {
             (Absent, None) => {}
             (Proposed, Some(diagnostic)) => {
                 assert_eq!(
-                    diagnostic.location.span,
-                    talkbank_model::Span::from_usize(
+                    diagnostic.location.span().expect("located diagnostic"),
+                    talkbank_model::Span::new(
                         word.raw_node().start_byte(),
                         word.raw_node().end_byte()
                     ),
@@ -330,8 +330,8 @@ fn stress_word_recovery_specs_separate_typed_findings_from_carrier_safety() {
             }
             (Refused, Some(diagnostic)) => {
                 assert_eq!(
-                    diagnostic.location.span,
-                    talkbank_model::Span::from_usize(
+                    diagnostic.location.span().expect("located diagnostic"),
+                    talkbank_model::Span::new(
                         word.raw_node().start_byte(),
                         word.raw_node().end_byte()
                     ),

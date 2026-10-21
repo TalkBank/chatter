@@ -5,22 +5,29 @@ use super::visitor_word_range_admission::check_retained;
 use std::collections::BTreeSet;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser::generated_traversal::{
-    AsRawNode, CompiledLanguage, MorFeatureNode, MorPostCliticNode, MorWordNode, NodeSlot,
-    ReadableSlot,
+    AsRawNode, CompiledLanguage, MorFeatureNode, MorPostCliticNode, MorWordChildrenRule,
+    MorWordNode, NodeSlot, ReadableSlot,
 };
 
 #[test]
 fn reference_mor_ranges_retain_word_and_feature_fields_with_counted_work() {
-    // SAFETY: both exports are static and use the linked grammar's parser
-    // header, matching the production compiled-kind admission boundary.
+    // SAFETY: all bridge exports are static and use the linked grammar's parser
+    // header and reviewed engine, matching the production admission boundary.
     let grammar = unsafe {
         CompiledLanguage::from_bridge(
             tree_sitter_talkbank::LANGUAGE.into(),
             tree_sitter_talkbank::LANGUAGE_METADATA_BRIDGE,
+            talkbank_parser::generated_traversal::RequiredPresenceBridge {
+                create: tree_sitter_talkbank::REQUIRED_GRAPH_NEW,
+                destroy: tree_sitter_talkbank::REQUIRED_GRAPH_DROP,
+                check: tree_sitter_talkbank::REQUIRED_RULE,
+                prefix: tree_sitter_talkbank::REQUIRED_PREFIX,
+            },
         )
     }
     .admit_generated()
     .unwrap();
+    let word_rule = grammar.required_rule::<MorWordChildrenRule>().unwrap();
     let parser = TreeSitterParser::new().unwrap();
     let mut words = 0;
     let mut clitic_words = 0;
@@ -50,7 +57,7 @@ fn reference_mor_ranges_retain_word_and_feature_fields_with_counted_work() {
                     clitic_words += 1;
                 }
                 assert!(foreign.bind(word.raw_node()).is_err());
-                let selected = word.extract_admitted(&grammar).unwrap();
+                let selected = word.extract_required(&word_rule).unwrap();
                 let raw = selected.children();
                 assert!(raw.unexpected.is_empty());
                 assert!(raw.trailing_extras.is_empty());

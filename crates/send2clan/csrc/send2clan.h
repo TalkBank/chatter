@@ -32,13 +32,16 @@
  * 
  * @section platform_support Platform Support
  * 
- * - **macOS**: Full support using Apple Events and Launch Services
- * - **Windows**: Full support using Win32 APIs and message files
+ * - **macOS**: Apple Events and Launch Services implementation
+ * - **Windows**: Win32/message-file implementation; see integration limits below
  * - **Linux**: Returns non-zero error code (unsupported)
  * 
  * @section thread_safety Thread Safety
  * 
- * The library is thread-safe. Multiple threads can call send2clan() simultaneously.
+ * Windows sends share one message file without coordination, including across
+ * processes. Concurrent sends are not guaranteed to preserve each request.
+ * Installation queries, timeout flags and transport success do not establish
+ * native platform qualification or successful GUI navigation.
  * 
  * @section memory_management Memory Management
  * 
@@ -73,8 +76,8 @@
 /**
  * @brief Operation completed successfully
  *
- * CLAN was launched (if needed), message was sent, and file was opened at the
- * specified cursor position.
+ * The bridge reported transport success. This does not verify that CLAN opened
+ * the intended file, positioned its cursor, or displayed the complete message.
  */
 #define SEND2CLAN_SUCCESS 0
 
@@ -104,8 +107,9 @@
  * The library could not locate the CLAN application bundle (macOS) or executable
  * (Windows) on the system.
  *
- * macOS: Searched for bundle identifier "org.talkbank.clanc"
- * Windows: Searched registry and default installation paths
+ * macOS: Queries Launch Services with the implementation's "CLANc" identifier
+ * Windows: The registered InstallPath (or the default path when no TalkBank
+ * key exists) has no executable, or the registered value cannot be admitted
  *
  * Recovery: Install CLAN from https://dali.talkbank.org/clan/
  */
@@ -126,8 +130,8 @@
 /**
  * @brief Operation timed out
  *
- * The operation did not complete within the specified timeout period. CLAN may
- * be hung, unresponsive, or the timeout may be too short.
+ * A timeout-aware platform operation reported expiry. Not every operation is
+ * bounded by timeOut; this code does not establish an end-to-end deadline.
  *
  * Recovery: Increase timeout value; check CLAN responsiveness; restart CLAN
  */
@@ -188,21 +192,22 @@ extern "C" {
  * 3. **Message Delivery**: Sends file path, cursor position, and message to CLAN
  *
  * The function is **self-contained** - no initialization or cleanup required.
- * Multiple threads can call this function simultaneously without coordination.
+ * Windows callers share an uncoordinated message file. Do not overlap sends;
+ * a process-local lock does not coordinate independent sending processes.
  *
  * @section platform_behavior Platform-Specific Behavior
  *
  * **macOS:**
  * - Uses Apple Events to communicate with CLAN
- * - Targets bundle ID: "org.talkbank.clanc"
+ * - Queries bundle ID "CLANc"; sends an Apple Event to creator code 'MCed'
  * - Uses Launch Services to start CLAN if needed
- * - Timeout applies to both launch and message delivery
+ * - Launch ignores timeOut; the Apple Event wait uses it
  *
  * **Windows:**
  * - Creates message file in user's home directory
- * - Posts WM_APP message to CLAN's main window
+ * - Uses synchronous SendMessageA with WM_APP to CLAN's main window
  * - Uses ShellExecute to start CLAN if needed
- * - Timeout applies to both launch and message delivery
+ * - Launch and window lookup wait separately; SendMessageA is not timeout-bounded
  *
  * @section usage_example Basic Usage Example
  *
@@ -217,7 +222,7 @@ extern "C" {
  *         return 1;
  *     }
  *
- *     // Send file to CLAN with 30-second timeout
+ *     // Request a platform wait, not a whole-operation deadline
  *     int result = send2clan(
  *         30,                          // timeout in seconds
  *         "/Users/user/data/test.cha", // file path
@@ -238,25 +243,22 @@ extern "C" {
  *
  * @section thread_safety Thread Safety
  *
- * **Thread-safe**: Multiple threads can call this function concurrently without
- * external synchronization. The library uses a stateless design with no shared
- * mutable state.
+ * No concurrent-delivery guarantee. Windows requests share CLAN_Message.txt.
+ * Review coordination across all sending processes, not just threads in one caller.
  *
  * @section performance Performance Characteristics
  *
- * - **CLAN already running**: 100-500ms typical
- * - **CLAN needs launching**: 2-5 seconds (includes app startup)
- * - **Timeout scenario**: Up to timeOut seconds
+ * No latency bound is established. The combined formatted message can be
+ * truncated by the fixed C buffer. Retrying may repeat partial external effects.
  *
  * @section memory_management Memory Management
  *
- * - **No dynamic allocation**: Library does not allocate heap memory
+ * - **Platform resources**: Platform APIs may allocate resources internally
  * - **No cleanup required**: No resources to free after calling
  * - **String ownership**: All string parameters are read-only; caller retains ownership
  *
- * @param timeOut Timeout in seconds for the entire operation. Use 0 for platform
- *                default (typically 30 seconds). Negative values treated as 0.
- *                Recommended: 10-30 seconds for interactive use, 60+ for batch.
+ * @param timeOut Seconds for selected platform waits, not the entire operation.
+ *                Nonpositive values select platform-specific defaults.
  *
  * @param filePath Full path to the .cha file to open in CLAN. Must be:
  *                 - Non-NULL and non-empty
@@ -279,7 +281,7 @@ extern "C" {
  * @return SEND2CLAN_ERR_LAUNCH_FAILED (2) if CLAN launch attempt failed
  * @return SEND2CLAN_ERR_APP_NOT_FOUND (3) if CLAN not installed on system
  * @return SEND2CLAN_ERR_SEND_FAILED (4) if message delivery to CLAN failed
- * @return SEND2CLAN_ERR_TIMEOUT (5) if operation exceeded timeout period
+ * @return SEND2CLAN_ERR_TIMEOUT (5) if a timeout-aware wait reports expiry
  * @return SEND2CLAN_ERR_INVALID_PARAMETER (6) if any parameter fails validation
  * @return SEND2CLAN_ERR_UNKNOWN (99) for unexpected errors (report as bug)
  *
@@ -326,9 +328,9 @@ SEND2CLAN_API const char* send2clan_version(void);
 /**
  * @brief Get library capabilities as bit flags
  *
- * Returns a 32-bit capability mask indicating which features are available in
- * the current runtime environment. This allows applications to query support
- * before attempting operations.
+ * Returns legacy capability flags. Bits 2 and 3 are unconditional, including
+ * on unsupported platforms: they do not test Unicode delivery or whole-operation
+ * deadlines. Bit 1 inherits the installation-query limitations below.
  *
  * @section capability_bits Capability Bit Flags
  *
@@ -384,8 +386,7 @@ SEND2CLAN_API const char* send2clan_version(void);
  *
  * @section performance Performance
  *
- * Typical execution time: < 1ms on supported platforms, < 100ms on macOS if
- * CLAN availability check requires filesystem search.
+ * No latency bound is established for the installation query.
  *
  * @param capabilities Pointer to uint32_t where capability flags will be stored.
  *                     Must not be NULL. Previous value is overwritten.
@@ -414,7 +415,7 @@ SEND2CLAN_API int send2clan_get_capabilities(uint32_t* capabilities);
  *     return 1;
  * }
  *
- * // Safe to proceed with send2clan() calls
+ * // Target support does not guarantee successful delivery.
  * int result = send2clan(30, file, line, col, msg);
  * @endcode
  *
@@ -430,7 +431,7 @@ SEND2CLAN_API int send2clan_get_capabilities(uint32_t* capabilities);
  *
  * @section performance Performance
  *
- * Extremely fast (< 1µs) - just checks compile-time constants.
+ * Returns a build-target constant; this is not a live capability test.
  *
  * @return true if platform is macOS or Windows
  * @return false if platform is Linux or other unsupported OS
@@ -450,14 +451,19 @@ SEND2CLAN_API bool is_platform_supported(void);
  * @section platform_behavior Platform-Specific Detection
  *
  * **macOS:**
- * - Searches for bundle ID "org.talkbank.clanc" via Launch Services
- * - Checks /Applications/ and ~/Applications/ directories
- * - Returns true if bundle found and executable
+ * - Queries bundle ID "CLANc" via Launch Services
+ * - Returns true when the query returns at least one URL, not a launch proof
  *
  * **Windows:**
- * - Checks registry key HKEY_CURRENT_USER\\SOFTWARE\\TalkBank\\CLAN
- * - Checks default installation paths (C:\\Program Files\\CLAN, etc.)
- * - Returns true if CLANWin.exe found
+ * - Queries InstallPath in HKEY_LOCAL_MACHINE\\Software\\TalkBank\\CLAN
+ * - Uses C:\\TalkBank\\CLAN\\CLAN.EXE only when that key does not exist
+ * - Returns false, without probing any file, when the key exists but cannot
+ *   be opened, or InstallPath is unreadable, not REG_SZ, empty, contains an
+ *   embedded NUL, or is too long to hold "\\CLAN.EXE" within MAX_PATH
+ * - Checks file attributes, not executable launchability
+ * - launchCLANcApp()/send2clan() use the same admitted path and report
+ *   SEND2CLAN_ERR_APP_NOT_FOUND for the same refusals. Verified against Win32
+ *   test doubles; native Windows qualification remains separate.
  *
  * @section usage_example Example Usage
  *
@@ -471,14 +477,14 @@ SEND2CLAN_API bool is_platform_supported(void);
  *     return 1;
  * }
  *
- * // CLAN is available, safe to call send2clan()
+ * // Availability is only a hint; sending has independent failure modes.
  * int result = send2clan(30, file, line, col, msg);
  * @endcode
  *
  * @section caching Caching Recommendations
  *
- * This function may take 10-100ms on first call (filesystem/registry access).
- * Consider caching the result if calling frequently:
+ * A cached answer can become stale. This illustrative cache requires caller
+ * synchronization if shared between threads; it is not a delivery capability:
  *
  * @code{.c}
  * static bool clan_checked = false;
@@ -500,10 +506,9 @@ SEND2CLAN_API bool is_platform_supported(void);
  *
  * @section performance Performance
  *
- * - **Typical**: 10-100ms (filesystem or registry access)
- * - **Cache recommended** for repeated calls
+ * No latency bound is established. Cache invalidation belongs to the caller.
  *
- * @return true if CLAN application is found and appears launchable
+ * @return true if the platform location heuristic reports a match
  * @return false if CLAN not found or platform unsupported
  *
  * @see is_platform_supported()

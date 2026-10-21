@@ -4,20 +4,19 @@
 //! answers: the LSP's `code_action_fixes.rs` (~21 codes, a human accepts
 //! each action individually in an editor) and `chatter lint`'s own
 //! three-code copy (deleted 2026-07-31, a live unguarded byte writer). This
-//! module is the single answer both a future editor integration and a
-//! future batch CLI can consume, and it adds the judgment neither
-//! predecessor needed on its own: [`BatchSafety`].
+//! module supplies the answer exposed by [`crate::splice::FixFinding::catalog`].
+//! The producing diagnosis owns the source and finding; callers cannot resolve
+//! an arbitrary diagnostic against an unrelated parse. [`BatchSafety`] records
+//! the additional judgment needed before a proposal can be batch-selected.
 //!
 //! # Why a tier, not just a fix
 //!
 //! The LSP catalog can afford to be liberal because a human reviews and
 //! accepts each action individually. A batch CLI applying the same catalog
 //! over a corpus turns twenty reviewed decisions into twenty unreviewed
-//! ones. On 2026-05-06 a batch rewriter damaged 440 files and 679
-//! utterances in this corpus; only 5 of those were even detectable by
-//! re-validating, because the rest were structurally valid and
-//! semantically wrong. [`BatchSafety`] exists so that a caller can tell,
-//! per code, whether that risk applies:
+//! ones. A rewrite can remain structurally valid while changing meaning, so
+//! revalidation alone cannot establish preservation. [`BatchSafety`] makes
+//! that risk explicit for each proposal:
 //!
 //! - [`BatchSafety::Mechanical`]: one right answer, no semantic judgment.
 //!   Safe for a bare `--apply` to write unattended.
@@ -37,7 +36,7 @@
 //! malformed-header/speaker specimens to E316 grammar rejection; the catalog
 //! refuses those specimens rather than inventing the historical diagnostics.
 //!
-//! [`catalog_fix`] is not a mechanical port of
+//! The catalog exposed through [`crate::splice::FixFinding::catalog`] is not a mechanical port of
 //! `crates/talkbank-lsp/src/backend/features/code_action_fixes.rs`. Every
 //! ported code was checked against what the CURRENT `ErrorCode` variant and
 //! a real `chatter validate` run actually produce (`chatter validate` is
@@ -78,14 +77,12 @@
 //!   unreachable (`spec/errors/E322.md`: `Status: not_implemented`).
 //!   No catalog entry.
 //! - **E506** (LSP: `replace_diagnostic_range` with a participant
-//!   template): every real E506 diagnostic observed here carries
-//!   `location.span == Span::DUMMY` (`{0, 0}`), regardless of where the
-//!   empty `@Participants` header actually is. [`crate::splice::apply_edits`]
-//!   correctly refuses a `Replace` on the dummy span
-//!   ([`crate::splice::SpliceError::DummySpan`]) rather than guessing at
-//!   file start, so this module does not build an edit it knows will be
-//!   rejected. This is a `chatter` diagnostic-emission defect (E506 should
-//!   carry a real span), not a catalog design gap; fixing it is out of
+//!   template): every real E506 diagnostic observed here was unlocated
+//!   (formerly the `0..0` sentinel), regardless of where the empty
+//!   `@Participants` header actually is, and the catalog refuses an unlocated
+//!   diagnosis (`CatalogIneligibility::Unlocated`) rather than guessing at
+//!   file start. This is a `chatter` diagnostic-emission defect (E506 should
+//!   carry a real location), not a catalog design gap; fixing it is out of
 //!   this module's scope. No catalog entry until it is fixed upstream.
 //! - **E312 / E313 / E323** (LSP: append `]` / `)` / `:`): the fixes
 //!   themselves are sound in intent, but all three codes are currently
@@ -109,12 +106,14 @@
 //!   LSP's title states.
 //!
 //! Every ported entry additionally verifies the text actually at its span
-//! matches what the fix assumes before building an edit, and returns `None`
-//! rather than guessing when it does not. E241 is the entry that shows what
+//! matches what the fix assumes before building an edit, and reports a
+//! non-offer [`CatalogResolution`] rather than guessing when it does not.
+//! E241 is the entry that shows what
 //! that check should look like: it asks the model's vocabulary owner whether
 //! the span reads as a misspelled marker, rather than comparing it to a
 //! literal, which is what the rest of this catalog still does. The retained
-//! parse capability supplies source to [`catalog_fix`]
+//! diagnosis supplies its own parse capability to the private resolver behind
+//! [`crate::splice::FixFinding::catalog`]
 //! for exactly this: a diagnostic's span is trusted data about WHERE, never
 //! about WHAT is there.
 //!
@@ -144,7 +143,7 @@
 //! conflicting information is never a mechanical deletion proposal.
 
 use talkbank_model::model::content::word::MarkerSpelling;
-use talkbank_model::{ErrorCode, ParseError, Span};
+use talkbank_model::{DiagnosticLocation, ErrorCode, ParseError, Span};
 
 use super::engine::{EditProvenance, EditTarget, Replacement, SpliceEdit};
 mod proposal;
@@ -154,25 +153,53 @@ use refusal::CatalogRefusal;
 pub use refusal::{CatalogFault, CatalogIneligibility, CatalogResolution};
 type CatalogResult = Result<CatalogFix, CatalogRefusal>;
 
+/// The located part of a finding that a source-reading fix consumes: its code
+/// and the span it diagnoses. Built once in [`catalog_fix`], so no fix reads a
+/// diagnostic location that might be unlocated.
+#[derive(Clone, Copy)]
+struct Diagnosis {
+    code: ErrorCode,
+    span: Span,
+}
+
 /// Private resolver: only an owner-issued finding supplies this associated pair.
 pub(super) fn catalog_fix(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResolution {
     let source = parsed.source();
+    // Every fix except the whole-file header insertions reads the source at
+    // the diagnosis; an unlocated diagnostic gives it nowhere to look.
+    let located = || match error.location {
+        DiagnosticLocation::Known { span, .. } => Ok(Diagnosis {
+            code: error.code,
+            span,
+        }),
+        DiagnosticLocation::Unlocated => Err(CatalogIneligibility::Unlocated.into()),
+    };
     let result = match error.code {
-        ErrorCode::IllegalUntranscribed => e241_illegal_untranscribed(error, parsed),
-        ErrorCode::ConsecutiveStressMarkers => e244_consecutive_stress_markers(error, parsed),
-        ErrorCode::ConsecutiveCommas => e258_consecutive_commas(error, parsed),
-        ErrorCode::CommaAfterNonSpokenContent => e259_comma_after_non_spoken_content(error, parsed),
-        ErrorCode::MissingTerminator => e305_missing_terminator(error, parsed),
-        ErrorCode::EmptyUtterance => e306_empty_utterance(error, parsed),
-        ErrorCode::DuplicateHeader => e501_duplicate_header(error, parsed),
-        ErrorCode::MissingEndHeader => e502_missing_end_header(error, source),
-        ErrorCode::MissingUTF8Header => e503_missing_utf8_header(error),
-        ErrorCode::GraWithoutMor => e604_gra_without_mor(error, parsed),
-        ErrorCode::SpaceInsideAngleGroup => e750_space_inside_angle_group(error, parsed),
-        ErrorCode::MediaFilenameNonCanonicalUnicode => w109_media_name(error, parsed),
+        ErrorCode::IllegalUntranscribed => {
+            located().and_then(|d| e241_illegal_untranscribed(d, parsed))
+        }
+        ErrorCode::ConsecutiveStressMarkers => {
+            located().and_then(|d| e244_consecutive_stress_markers(d, parsed))
+        }
+        ErrorCode::ConsecutiveCommas => located().and_then(|d| e258_consecutive_commas(d, parsed)),
+        ErrorCode::CommaAfterNonSpokenContent => {
+            located().and_then(|d| e259_comma_after_non_spoken_content(d, parsed))
+        }
+        ErrorCode::MissingTerminator => located().and_then(|d| e305_missing_terminator(d, parsed)),
+        ErrorCode::EmptyUtterance => located().and_then(|d| e306_empty_utterance(d, parsed)),
+        ErrorCode::DuplicateHeader => located().and_then(|d| e501_duplicate_header(d, parsed)),
+        ErrorCode::MissingEndHeader => e502_missing_end_header(error.code, source),
+        ErrorCode::MissingUTF8Header => e503_missing_utf8_header(error.code),
+        ErrorCode::GraWithoutMor => located().and_then(|d| e604_gra_without_mor(d, parsed)),
+        ErrorCode::SpaceInsideAngleGroup => {
+            located().and_then(|d| e750_space_inside_angle_group(d, parsed))
+        }
+        ErrorCode::MediaFilenameNonCanonicalUnicode => {
+            located().and_then(|d| w109_media_name(d, parsed))
+        }
         _ => return CatalogResolution::Unsupported,
     };
     match result {
@@ -193,7 +220,7 @@ where
 {
     let mut node = parsed
         .root_node()
-        .descendant_for_byte_range(span.start as usize, span.end as usize)
+        .descendant_for_byte_range(span.start(), span.end())
         .ok_or(CatalogIneligibility::MissingCarrier)?;
     loop {
         if let Some(typed) = parsed.bind(node)?.typed::<T>() {
@@ -206,12 +233,12 @@ where
 /// Normalize only the generated CST's filename token in a clean media header.
 /// URL tokens and already-canonical names never produce edits.
 fn w109_media_name(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, MediaHeaderNode, SourceSlotView};
     use unicode_normalization::UnicodeNormalization;
-    let header = enclosing_node::<MediaHeaderNode>(parsed, error.location.span)?;
+    let header = enclosing_node::<MediaHeaderNode>(parsed, diagnosis.span)?;
     if header.raw_node().has_error() {
         return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
@@ -238,9 +265,9 @@ fn w109_media_name(
     }
     let range = filename.raw_node().byte_range();
     let edit = SpliceEdit::new_header_token(
-        EditTarget::Replace(Span::from_usize(range.start, range.end)),
+        EditTarget::Replace(Span::new(range.start, range.end)),
         Replacement::new(canonical),
-        error.code,
+        diagnosis.code,
     );
     Ok(CatalogFix::mechanical(vec![edit]))
 }
@@ -249,11 +276,11 @@ fn w109_media_name(
 /// [`MarkerSpelling::of`] classifies its spelling as a misspelled marker.
 /// Do not duplicate that vocabulary or erase omission/shortening notation.
 fn e241_illegal_untranscribed(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, StandaloneWordNode};
-    let span = error.location.span;
+    let span = diagnosis.span;
     let word = enclosing_node::<StandaloneWordNode>(parsed, span)?;
     if word.raw_node().byte_range() != span.to_range() {
         return Err(CatalogIneligibility::TokenMismatch.into());
@@ -268,7 +295,7 @@ fn e241_illegal_untranscribed(
     let edit = SpliceEdit::new(
         EditTarget::Replace(span),
         Replacement::new(intended.canonical()),
-        EditProvenance::Diagnostic(error.code),
+        EditProvenance::Diagnostic(diagnosis.code),
     );
     Ok(CatalogFix::mechanical(vec![edit]))
 }
@@ -278,7 +305,7 @@ fn e241_illegal_untranscribed(
 /// diagnostic span also covers (see the module-level doc for why the naive
 /// whole-span replace this was ported from is unsafe).
 fn e244_consecutive_stress_markers(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{
@@ -286,7 +313,7 @@ fn e244_consecutive_stress_markers(
     };
     // Only a checked primary token can become the previous primary witness.
     struct PrimaryStress<'tree, 'source>(SourceBound<'tree, 'source, StressMarkerNode<'tree>>);
-    let word = enclosing_node::<StandaloneWordNode>(parsed, error.location.span)?;
+    let word = enclosing_node::<StandaloneWordNode>(parsed, diagnosis.span)?;
     if word.raw_node().has_error() {
         return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
@@ -305,12 +332,12 @@ fn e244_consecutive_stress_markers(
             && previous.0.raw_node().end_byte() == current.0.raw_node().start_byte()
         {
             edits.push(SpliceEdit::new(
-                EditTarget::Replace(Span::from_usize(
+                EditTarget::Replace(Span::new(
                     current.0.raw_node().start_byte(),
                     current.0.raw_node().end_byte(),
                 )),
                 Replacement::new(""),
-                EditProvenance::Diagnostic(error.code),
+                EditProvenance::Diagnostic(diagnosis.code),
             ));
         }
         previous = Some(current);
@@ -325,22 +352,22 @@ fn e244_consecutive_stress_markers(
 /// E258 `ConsecutiveCommas`: the diagnostic span covers exactly one of the
 /// pair; deleting it collapses `",,"` to `","`.
 fn e258_consecutive_commas(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, TierBodyNode};
-    let comma = diagnostic_comma(parsed, error.location.span)?;
-    let body = enclosing_node::<TierBodyNode>(parsed, error.location.span)?;
+    let comma = diagnostic_comma(parsed, diagnosis.span)?;
+    let body = enclosing_node::<TierBodyNode>(parsed, diagnosis.span)?;
     if body.raw_node().has_error() {
         return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
     let edit = SpliceEdit::new(
-        EditTarget::Replace(Span::from_usize(
+        EditTarget::Replace(Span::new(
             comma.raw_node().start_byte(),
             comma.raw_node().end_byte(),
         )),
         Replacement::new(""),
-        EditProvenance::Diagnostic(error.code),
+        EditProvenance::Diagnostic(diagnosis.code),
     );
     Ok(CatalogFix::mechanical(vec![edit]))
 }
@@ -371,11 +398,11 @@ fn diagnostic_comma<'tree, 'source>(
 /// E258's redundant comma, this comma is the ONLY one at its position, so
 /// deleting it is a real content change rather than de-duplication.
 fn e259_comma_after_non_spoken_content(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, TierBodyNode, WhitespacesNode};
-    let span = error.location.span;
+    let span = diagnosis.span;
     let comma = diagnostic_comma(parsed, span)?;
     let body = enclosing_node::<TierBodyNode>(parsed, span)?;
     if body.raw_node().has_error() {
@@ -389,8 +416,7 @@ fn e259_comma_after_non_spoken_content(
             if let Some(space) = node?.typed::<WhitespacesNode>()
                 && space.raw_node().start_byte() == comma.raw_node().end_byte()
             {
-                delete_span =
-                    Span::from_usize(comma.raw_node().start_byte(), space.raw_node().end_byte());
+                delete_span = Span::new(comma.raw_node().start_byte(), space.raw_node().end_byte());
                 break;
             }
         }
@@ -398,7 +424,7 @@ fn e259_comma_after_non_spoken_content(
     let edit = SpliceEdit::new(
         EditTarget::Replace(delete_span),
         Replacement::new(""),
-        EditProvenance::Diagnostic(error.code),
+        EditProvenance::Diagnostic(diagnosis.code),
     );
     Ok(CatalogFix::semantic(vec![edit]))
 }
@@ -412,23 +438,21 @@ fn e259_comma_after_non_spoken_content(
 /// MOR inserts before its terminal newline. Neither splits CRLF or guesses
 /// structure from diagnostic text. Recovered tiers decline a proposal.
 fn e305_missing_terminator(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{
         AsRawNode, MainTierNode, MorDependentTierNode, NewlineNode, UtteranceEndNode,
     };
-    let anchor = match enclosing_node::<MainTierNode>(parsed, error.location.span) {
+    let anchor = match enclosing_node::<MainTierNode>(parsed, diagnosis.span) {
         Ok(main) => terminal_descendant::<UtteranceEndNode>(main.source_slice())?.source_slice(),
         Err(CatalogRefusal::Ineligible(CatalogIneligibility::MissingCarrier)) => {
-            let mor = enclosing_node::<MorDependentTierNode>(parsed, error.location.span)?;
+            let mor = enclosing_node::<MorDependentTierNode>(parsed, diagnosis.span)?;
             terminal_descendant::<NewlineNode>(mor.source_slice())?.source_slice()
         }
         Err(reason) => return Err(reason),
     };
-    let bytes = anchor.raw_node().start_byte();
-    let insert_at = u32::try_from(bytes)
-        .map_err(|_| CatalogRefusal::Fault(CatalogFault::CoordinateExtent { bytes }))?;
+    let insert_at = anchor.raw_node().start_byte();
     let alternatives = [
         (".", "Add '.' (declarative/default)"),
         ("?", "Add '?' (question)"),
@@ -440,7 +464,7 @@ fn e305_missing_terminator(
         edits: vec![SpliceEdit::new(
             EditTarget::InsertAt(insert_at),
             Replacement::new(format!(" {terminator}")),
-            EditProvenance::Diagnostic(error.code),
+            EditProvenance::Diagnostic(diagnosis.code),
         )],
     })
     .collect();
@@ -476,12 +500,12 @@ where
 /// E306: delete a complete, clean main-tier-only utterance. Dependent tiers
 /// must never be orphaned, reassigned or discarded by this semantic proposal.
 fn e306_empty_utterance(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, MainTierNode, UtteranceNode};
-    let main = enclosing_node::<MainTierNode>(parsed, error.location.span)?;
-    let owner = enclosing_node::<UtteranceNode>(parsed, error.location.span)?;
+    let main = enclosing_node::<MainTierNode>(parsed, diagnosis.span)?;
+    let owner = enclosing_node::<UtteranceNode>(parsed, diagnosis.span)?;
     if owner.raw_node().has_error() {
         return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
@@ -490,9 +514,9 @@ fn e306_empty_utterance(
     }
     let range = main.raw_node().byte_range();
     let edit = SpliceEdit::new(
-        EditTarget::Replace(Span::from_usize(range.start, range.end)),
+        EditTarget::Replace(Span::new(range.start, range.end)),
         Replacement::new(""),
-        EditProvenance::Diagnostic(error.code),
+        EditProvenance::Diagnostic(diagnosis.code),
     );
     Ok(CatalogFix::semantic(vec![edit]))
 }
@@ -543,7 +567,7 @@ impl<'tree, 'source> IdenticalHeaderDuplicate<'tree, 'source> {
         use talkbank_parser::generated_traversal::AsRawNode;
         let range = self.0.raw_node().byte_range();
         CatalogFix::mechanical(vec![SpliceEdit::new(
-            EditTarget::Replace(Span::from_usize(range.start, range.end)),
+            EditTarget::Replace(Span::new(range.start, range.end)),
             Replacement::new(""),
             EditProvenance::Diagnostic(code),
         )])
@@ -554,10 +578,10 @@ impl<'tree, 'source> IdenticalHeaderDuplicate<'tree, 'source> {
 /// Conflicts and recovered structure refuse a proposal. Header edit admission
 /// still reports OutsideAnyUtterance; this proof does not bypass that boundary.
 fn e501_duplicate_header(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
-    Ok(IdenticalHeaderDuplicate::admit(parsed, error.location.span)?.into_fix(error.code))
+    Ok(IdenticalHeaderDuplicate::admit(parsed, diagnosis.span)?.into_fix(diagnosis.code))
 }
 
 /// E502 `MissingEndHeader`: append `@End` at end of file, prefixing a
@@ -566,20 +590,16 @@ fn e501_duplicate_header(
 ///
 /// Header-scoped, so `chatter fix` cannot apply it today; see the note on
 /// `e501_duplicate_header` above.
-fn e502_missing_end_header(error: &ParseError, source: &str) -> CatalogResult {
+fn e502_missing_end_header(code: ErrorCode, source: &str) -> CatalogResult {
     let text = if source.ends_with('\n') {
         "@End\n"
     } else {
         "\n@End\n"
     };
     let edit = SpliceEdit::new(
-        EditTarget::InsertAt(u32::try_from(source.len()).map_err(|_| {
-            CatalogRefusal::Fault(CatalogFault::CoordinateExtent {
-                bytes: source.len(),
-            })
-        })?),
+        EditTarget::InsertAt(source.len()),
         Replacement::new(text),
-        EditProvenance::Diagnostic(error.code),
+        EditProvenance::Diagnostic(code),
     );
     Ok(CatalogFix::mechanical(vec![edit]))
 }
@@ -589,11 +609,11 @@ fn e502_missing_end_header(error: &ParseError, source: &str) -> CatalogResult {
 ///
 /// Header-scoped, so `chatter fix` cannot apply it today; see the note on
 /// `e501_duplicate_header` above.
-fn e503_missing_utf8_header(error: &ParseError) -> CatalogResult {
+fn e503_missing_utf8_header(code: ErrorCode) -> CatalogResult {
     let edit = SpliceEdit::new(
         EditTarget::InsertAt(0),
         Replacement::new("@UTF8\n"),
-        EditProvenance::Diagnostic(error.code),
+        EditProvenance::Diagnostic(code),
     );
     Ok(CatalogFix::mechanical(vec![edit]))
 }
@@ -604,11 +624,11 @@ fn e503_missing_utf8_header(error: &ParseError) -> CatalogResult {
 /// tiers and continuation lines do not affect ownership. Multiple GRA tiers
 /// refuse selection rather than guessing. Semantic: removes tier content.
 fn e604_gra_without_mor(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, GraDependentTierNode, UtteranceNode};
-    let utterance = enclosing_node::<UtteranceNode>(parsed, error.location.span)?;
+    let utterance = enclosing_node::<UtteranceNode>(parsed, diagnosis.span)?;
     let mut selected = None;
     for child in utterance.descendants() {
         if let Some(gra) = child?.typed::<GraDependentTierNode>() {
@@ -624,9 +644,9 @@ fn e604_gra_without_mor(
     let gra = selected.ok_or(CatalogIneligibility::MissingCarrier)?;
     let range = gra.raw_node().byte_range();
     let edit = SpliceEdit::new(
-        EditTarget::Replace(Span::from_usize(range.start, range.end)),
+        EditTarget::Replace(Span::new(range.start, range.end)),
         Replacement::new(""),
-        EditProvenance::Diagnostic(error.code),
+        EditProvenance::Diagnostic(diagnosis.code),
     );
     Ok(CatalogFix::semantic(vec![edit]))
 }
@@ -636,13 +656,13 @@ fn e604_gra_without_mor(
 /// hug the same group content; deleting only that separator changes neither
 /// tokens nor group structure.
 fn e750_space_inside_angle_group(
-    error: &ParseError,
+    diagnosis: Diagnosis,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     use talkbank_parser::generated_traversal::{
         AsRawNode, GroupWithAnnotationsNode, SourceSlotView, WhitespacesNode,
     };
-    let span = error.location.span;
+    let span = diagnosis.span;
     let whitespace = enclosing_node::<WhitespacesNode>(parsed, span)?;
     if whitespace.raw_node().byte_range() != span.to_range()
         || whitespace.text().is_empty()
@@ -668,7 +688,7 @@ fn e750_space_inside_angle_group(
     let edit = SpliceEdit::new_recovery_repair(
         EditTarget::Replace(span),
         Replacement::new(""),
-        error.code,
+        diagnosis.code,
     );
     Ok(CatalogFix::mechanical(vec![edit]))
 }

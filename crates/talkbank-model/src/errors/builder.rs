@@ -4,8 +4,7 @@ use super::Span;
 use super::codes::ErrorCode;
 use super::context::ErrorContext;
 use super::parse_error::ParseError;
-use super::source_location::{ErrorLabel, Severity, SourceLocation};
-use std::sync::OnceLock;
+use super::source_location::{DiagnosticLocation, ErrorLabel, Severity};
 
 /// Builder for constructing ParseError instances ergonomically.
 ///
@@ -94,17 +93,20 @@ impl<Message, Location> ParseErrorBuilder<Message, Location> {
     }
 
     /// Set the error location from byte offsets.
-    pub fn at(self, start: usize, end: usize) -> ParseErrorBuilder<Message, SourceLocation> {
-        self.location(SourceLocation::from_offsets(start, end))
+    pub fn at(self, start: usize, end: usize) -> ParseErrorBuilder<Message, DiagnosticLocation> {
+        self.location(DiagnosticLocation::from_offsets(start, end))
     }
 
     /// Set the error location from a Span.
-    pub fn at_span(self, span: Span) -> ParseErrorBuilder<Message, SourceLocation> {
-        self.location(SourceLocation::new(span))
+    pub fn at_span(self, span: Span) -> ParseErrorBuilder<Message, DiagnosticLocation> {
+        self.location(DiagnosticLocation::new(span))
     }
 
-    /// Set the error location from a SourceLocation.
-    pub fn location(self, location: SourceLocation) -> ParseErrorBuilder<Message, SourceLocation> {
+    /// Set the error location from a DiagnosticLocation.
+    pub fn location(
+        self,
+        location: DiagnosticLocation,
+    ) -> ParseErrorBuilder<Message, DiagnosticLocation> {
         ParseErrorBuilder {
             code: self.code,
             severity: self.severity,
@@ -135,7 +137,11 @@ impl<Message, Location> ParseErrorBuilder<Message, Location> {
         span: std::ops::Range<usize>,
         offending_text: impl Into<String>,
     ) -> Self {
-        self.context = Some(ErrorContext::new(source_text, span, offending_text));
+        self.context = Some(ErrorContext::new(
+            source_text,
+            crate::Span::new(span.start, span.end),
+            offending_text,
+        ));
         self
     }
 
@@ -165,7 +171,7 @@ impl<Message, Location> ParseErrorBuilder<Message, Location> {
     }
 }
 
-impl ParseErrorBuilder<String, SourceLocation> {
+impl ParseErrorBuilder<String, DiagnosticLocation> {
     /// Build the diagnostic after both required fields have been supplied.
     pub fn finish(self) -> ParseError {
         let help_url = Some(self.code.documentation_url());
@@ -179,7 +185,6 @@ impl ParseErrorBuilder<String, SourceLocation> {
             message: self.message,
             suggestion: self.suggestion,
             help_url,
-            source_cache: OnceLock::new(),
         }
     }
 }

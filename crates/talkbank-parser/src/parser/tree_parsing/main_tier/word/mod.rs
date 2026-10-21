@@ -12,13 +12,14 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Words>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, ReadableSlot, SourceBound, SourceSlotView, StandaloneWordChild0Choice,
     StandaloneWordChild2Choice, StandaloneWordNode, WordBodyChoiceSourceView, WordBodyNode,
 };
 use crate::model::Word;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::ExtractCanonical;
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::content::word::{
@@ -30,6 +31,7 @@ use talkbank_model::model::{EmptyText, NonEmptyString};
 mod language;
 mod pieces;
 mod tokens;
+use crate::parser::node_span::span_of;
 use pieces::push_slot;
 
 /// Convert a tree-sitter `standalone_word` node into the typed `Word` model.
@@ -55,8 +57,8 @@ pub fn convert_word_node<'tree>(
         errors.report(ParseError::new(
             ErrorCode::MalformedWordContent,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), ""),
             format!(
                 "Internal error: attempted to convert MISSING tree-sitter node at byte {}",
                 node.start_byte()
@@ -66,10 +68,9 @@ pub fn convert_word_node<'tree>(
     }
 
     let raw_text = typed.text();
-    let span = talkbank_model::Span::from_usize(node.start_byte(), node.end_byte());
+    let span = span_of(node);
 
-    let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into));
+    let extraction = typed.extract_canonical();
     let Ok(bound_children) =
         crate::parser::typed_cst::report_admission(extraction, node, source, errors)
     else {
@@ -109,14 +110,7 @@ pub fn convert_word_node<'tree>(
     let mut content_items: SmallVec<[WordContent; 2]> = SmallVec::new();
     match &children.child_1.slot {
         ReadableSlot::Present(body) => build_word_contents(*body, errors, &mut content_items),
-        ReadableSlot::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                missing.source(),
-                errors,
-                "standalone_word",
-            );
-        }
+        ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Error(_) | ReadableSlot::Absent(_) => {}
     }
@@ -191,8 +185,8 @@ pub fn convert_word_node<'tree>(
                 ParseError::new(
                     ErrorCode::UnparsableContent,
                     Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+                    DiagnosticLocation::new(span_of(node)),
+                    ErrorContext::new(source, span_of(node), ""),
                     "Unparsable content: word node produced empty text after parser recovery",
                 )
                 .with_suggestion(
@@ -215,8 +209,8 @@ pub fn convert_word_node<'tree>(
                 ParseError::new(
                     ErrorCode::StressNotBeforeSpokenMaterial,
                     Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+                    DiagnosticLocation::new(span_of(node)),
+                    ErrorContext::new(source, span_of(node), ""),
                     format!(
                         "Word '{}' contains no spoken material after markers are stripped",
                         raw_text.as_str()
@@ -242,8 +236,7 @@ pub fn convert_word_node<'tree>(
         content_items
     };
 
-    let mut word = Word::new(cleaned);
-    word.span = span;
+    let mut word = Word::new(span, cleaned);
     word.category = category;
     word.form_type = form_type;
     word.lang = lang;
@@ -287,8 +280,7 @@ fn build_word_contents<'tree>(
 ) {
     let source = body.source();
     let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| body.extract_admitted(grammar).map_err(Into::into)),
+        body.extract_canonical(),
         body.raw_node(),
         source,
         errors,

@@ -33,6 +33,17 @@ location separately. The comparison asks:
 - Whenever tree-sitter emits an error, does re2c emit some error?
 - How many diagnostic-code sets agree? This is informational, not acceptance.
 
+Every example is measured as authored and with CRLF and CR transport newlines.
+The variants retain the declared source filename and validation-rule selection;
+only newline bytes change. All variants contribute their failure inventories,
+so a passing transport cannot hide another transport's missed detection.
+
+The separate `equivalence_tests::equivalence_reference_corpus` control exercises
+every valid reference file under the same three transports. Both backends must
+accept without parse errors and agree semantically for each variant. This is
+cross-backend agreement per transport, not a comparison of each backend's model
+against its own authored-input model.
+
 Agreement alone cannot establish correctness: both backends could miss the
 same rule. Different code sets also require adjudication; the larger set is
 not automatically the better answer.
@@ -51,6 +62,63 @@ input. Retain valid controls and isolated invalid variants so an unrelated
 error cannot mask missing detection.
 
 ## Measured snapshot
+
+### Full-file transport comparison
+
+The expanded comparison measures 1,343 examples from 300 specifications under
+each of the three transports. Each has 881 required detections satisfied,
+462 inputs without a tree-sitter error, no missed detection and no internal
+failure. All 482 legal-claim examples and 19 not-implemented specifications
+remain included. Diagnostic code sets differ in 283 authored/CRLF examples
+and 277 CR examples; those differences do not change the detection verdict.
+
+The valid-reference control passes 483 observations (161 files × three
+transports). The nineteen-test error-parity selection and newline-conversion
+control also pass. These finite checks do not establish complete CHAT validity,
+fragment coverage, cross-transport model invariance or release acceptance.
+
+### Native comparison admission
+
+The standalone MOR, GRA and word comparisons now fail on a mismatch or
+rejection instead of merely printing a failure count. Each parser call owns
+its diagnostic sink. Only a returned model without error-severity findings
+can enter semantic comparison; an internal tool failure also refuses admission
+even if presented as a warning. Ordinary warning identity is not required.
+The batch reports every failed observation and refuses an empty population.
+
+Full-file reference comparisons now use this same checked admission owner.
+Their former severity-only filter admitted an internal failure reported as a
+warning; a planted finding on a real parsed reference reproduced that gap.
+The retained regression refuses that finding independently on either backend.
+The complete fourteen-test equivalence selection passes, including all 483
+reference transport observations and the reference fragment population below.
+
+A planted word substitution demonstrated the former false pass: five of six
+comparisons disagreed, yet the test returned success. The same substitution
+fails under the repaired verdict. Instrument controls retain mismatches,
+rejection, error-bearing models and internal failures in either backend,
+alongside accepted equality, ordinary warnings and empty-batch refusal.
+
+The existing 200 MOR, 200 GRA and six word controls remain. An additional
+reference-source comparison exercises 3,060 main-tier lexical words, 233 MOR
+bodies and 224 GRA bodies through their fragment APIs, using original source
+slices and document origins. Word calls retain the file's CA interpretation.
+These are finite semantic comparisons, not full contextual validation,
+source-span equality, recovery-model identity or canonical coverage evidence.
+
+```bash
+cargo test -p talkbank-parser-re2c --test integration equivalence_tests::
+```
+
+The marker-chain comparison uses the authored retrace reference for valid
+annotation order. Independent checks locate annotations on the retraced word,
+group or replacement when they precede the marker, and on the retrace when
+they follow it. Both backends must retain those meanings and accept the valid
+reference through parsing and validation. Invalid adjacent markers and
+wordless retraces instead belong to E377/E378's authored examples and the
+one-way detection test. They do not require equal recovered models. The
+legacy grouped reverse-order and event-context cases remain represented in
+those specs rather than disappearing with the invalid-model comparison.
 
 ### October 11 contract transition
 
@@ -337,6 +405,39 @@ misses the declared expectation in 35 of the measured cases.
 
 ## What this check does not prove
 
+The empty-container regression deletes only the inner material from existing
+angle-group, quotation, phonological-group and sign-group reference examples.
+It checks clean controls and error detection through file, utterance and
+main-tier APIs at two caller origins. The native parser now requires checked
+nonempty contents before completing each enclosed construct; an empty tier
+body remains a separate case. This is syntax admission, not identical recovery
+or diagnostic placement across backends.
+
+The dependent-group regression separately deletes the contents of `%pho`,
+`%mod` and `%sin` groups. It retains authored reference bodies (with a `%mod`
+label control for the shared phonology grammar), checking file, utterance,
+dependent-tier and typed tier-body APIs at two caller origins. The native
+phonology/sign combinators require a first item before constructing a group.
+All 48 paired observations require clean controls or actual parse errors;
+internal failures and later alignment validation cannot satisfy rejection.
+This does not impose a nonempty invariant on every tier body or shared AST.
+
+The native file-recovery location control separately checks existing E748,
+E750, E256, E766, E342 and E404 examples with LF, CRLF and CR at zero and
+nonzero UTF-8 caller origins. Eleven fault cases and three legal controls make
+84 observations. The file dispatcher consumes the same lexer owner's token
+or line regions instead of dummy locations or reconstructed token previews.
+Missing group annotations deliberately use the broader main-tier region;
+this is not cross-backend source-location equality or complete span coverage.
+
+The bare-group recovery regression uses E342's original example and the nested
+scope legal/deletion pair. All three retain their written content under
+serialization through the file, utterance and main-tier APIs at both caller
+origins. The invalid inputs still report an error; the legal control is clean.
+The native AST no longer uses a fabricated complete retrace or a synthesized
+annotation flag. This is a source-preservation contract for those authored
+cases, not a demand for identical recovery across backends.
+
 This comparison measures one-way error detection over all authored examples;
 diagnostic-code sets are retained only as informational measurements.
 It does not establish equal source spans, recovery models, serialization,
@@ -358,6 +459,14 @@ comparisons are investigation evidence, not a validity or release gate.
 
 For the broader release criteria and evidence, see
 [1.0 readiness](../../../book/src/contributing/one-zero-readiness.md).
+
+## Fixture sweep admission
+
+The retained GRA, phonology and comment fixture sweeps each require all 200
+entries to produce nonempty content; a printed partial count is not success.
+An omitted-entry mutation passed all three old sweeps at 199/200 and is rejected
+by all three repaired assertions. This checks fixture execution/nonempty-result
+admission, not validity, full content preservation or backend equivalence.
 
 ## Recovery policy
 

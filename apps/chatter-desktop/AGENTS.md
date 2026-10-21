@@ -13,6 +13,11 @@ Native desktop validation app for CHAT files, built with Tauri v2 (Rust backend,
 
 **Current parity status: partial.** See the feature parity tables below for details.
 
+The tables describe implementation intent and source ownership, not acceptance
+of a particular native build. Use the candidate evidence matrix in
+[Desktop App Testing](../../book/src/contributing/desktop-testing.md) for
+headless checks and required native observations.
+
 ### Error Display Parity (mandatory)
 
 The TUI source is at `crates/chatter/src/ui/validation_tui/`. Every rendering behavior listed below must be matched:
@@ -24,10 +29,13 @@ CLI (`chatter/src/output.rs`) and this desktop bridge
 (`enhance_errors_with_source`) and renders the plain text (the "Copy" form) and,
 under `RenderMode::Ansi`, the colored form. The desktop converts that ANSI to
 HTML via the `ansi-to-html` crate and ships both forms in the `diagnostics` field
-of each `Errors` event; the frontend displays the HTML in a `<pre>` block. Going
-through one function means the GUI cannot diverge from the CLI on enhancement or
-on which source line the caret lands at. The cross-surface guard is
-`crates/talkbank-transform/tests/render_parity.rs`.
+of each `Errors` event; the frontend displays the HTML in a `<pre>` block.
+Shared rendering avoids a second coordinate-projection implementation; it does
+not prove identical source inputs, transport, HTML display or native behavior.
+The bridge preserves the producer diagnostic and separately reports checked
+source context as available or unavailable. The shared rendering controls are
+in `crates/talkbank-transform/tests/integration/render_parity.rs`; desktop
+bridge and native interaction evidence remain separate.
 
 > History: before this consolidation the desktop maintained its own inline
 > `clone -> enhance -> render` block and rendered carets at the **wrong source
@@ -38,7 +46,7 @@ on which source line the caret lands at. The cross-surface guard is
 
 | Feature | Status |
 |---------|--------|
-| **Miette-style error rendering** | **Implemented**: server-side rendering via `render_error_with_miette_with_source()` + `ansi-to-html` |
+| **Miette-style error rendering** | **Implemented**: shared `render_diagnostics()` + `ansi-to-html` |
 | **Multi-line context, tab expansion, bullets, underlines, labels, suggestions** | **Implemented**: all handled by miette |
 | **Colored output** | **Implemented**: ANSI colors converted to HTML `<span style="color:...">` |
 
@@ -111,12 +119,14 @@ apps/chatter-desktop/
 ### Key design decisions
 
 - **Direct Rust linking**: both `validate_directory_streaming()` and `validate_files_streaming()` from `talkbank-transform` are called directly (the latter for single-file targets, mirroring the CLI's own dispatch), not shelling out to the CLI. Streaming events over crossbeam channels → Tauri emit.
-- **Lock-free concurrency**: `ArcSwapOption` for the cancel sender, no mutex. See the [mutex policy](../../../book/src/chatter/user-guide/desktop-app.md).
+- **Cancellation sender ownership**: use `ArcSwapOption`, not a mutex, for this
+  shared slot. See the [desktop architecture](../../book/src/chatter/user-guide/desktop-app.md).
 - **Centralized protocol contracts**: Tauri command/event names and transport payload types live in `src-tauri/src/protocol.rs` and `src/protocol/desktopProtocol.ts`.
 - **serde camelCase bridge**: Rust structs use snake_case with `#[serde(rename_all = "camelCase")]` so JSON matches TypeScript types. The Rust integration tests verify the serialized JSON shape. **Every enum variant with fields needs its own `#[serde(rename_all = "camelCase")]`**, not just the enum-level one (the enum-level attribute only renames the `type` tag, not field names): a missing per-variant attribute on `FrontendFileStatus::Valid` silently shipped `cache_hit` instead of `cacheHit` until caught by the 2026-07-06 cache regression test.
 - **Run phase is a DISCRIMINATED UNION (`RunPhase`), not a tag beside nullable
-  fields.** Each phase carries exactly its own data: `running` its file count,
-  `finished` its stats, `aborted` its reason. The flat shape let `finished`
+  fields.** Each phase carries its own data. Keep cancellation, no files and
+  failures distinct from successful completion; the maintained testing guide
+  describes these outcomes and their source owners. The flat shape let `finished`
   exist with no stats and `idle` keep the previous run's results, and it forced
   `phase === "finished" && stats &&` guards that re-checked what the type
   already knew. `totalFiles` is DERIVED via `totalFilesOf`, never stored, since
@@ -138,24 +148,18 @@ apps/chatter-desktop/
   "simplify" that wrapper away; it is the reason a crash is now visible.
 
 - **Anything a command touches must be safe to call from a runtime thread.**
-  Tauri runs `async fn` commands ON its async runtime. `UnifiedCache` bridges
-  sync to async by owning a runtime and blocking on it, and nesting runtimes
-  panics. That combination made the desktop app unable to validate ANYTHING from
-  2026-07-07 (`5cea49bd`, which gave the desktop a real cache) until 2026-08-03,
-  across v0.6.0 and v0.7.0, while every test stayed green: the CLI and all these
-  tests run on plain threads, so none of them ever entered an async context. The
-  cache is now safe from any thread (`talkbank_cache::blocking`), and
+  Tauri runs `async fn` commands ON its async runtime. A plain-thread test
+  does not exercise nested-runtime hazards. The cache's runtime bridge is
+  owned by `talkbank_cache::blocking`, and
   `validation_bridge.rs` carries
   `a_run_starts_when_the_caller_is_driving_an_async_runtime` to keep that
   boundary covered. **Any new test of a command path must enter the runtime**;
-  calling the underlying function directly is what hid this.
+  calling the underlying function directly does not cover that boundary.
 
 - **Tests must never open the real user cache.** Use
   `initialize_cache_at(<temp dir>)` or `ValidationState::new_at`, never
-  `initialize_cache()`. The helper in `validation_bridge.rs` used to call the
-  latter under a comment claiming it was "isolated per-process by `cargo test`";
-  it was not, and running the suite pruned a developer's live 243 MB cache to
-  1.3 MB mid-session.
+  `initialize_cache()`. A separate test process does not isolate a shared
+  filesystem cache or prevent pruning; supply the owned temporary location.
 
 - **Commands return typed domain errors** from `src/errors.rs`, never
   `Result<_, String>`. They serialize as their display text, so the wire
@@ -169,7 +173,7 @@ apps/chatter-desktop/
 
 ```bash
 cd apps/chatter-desktop
-npm install
+npm ci
 cargo tauri dev           # Launch with hot reload (frontend + backend)
 cargo tauri build         # Distributable app bundle (DMG/MSI/AppImage)
 cargo tauri build --debug # Debug build for E2E testing
@@ -177,13 +181,15 @@ cargo tauri build --debug # Debug build for E2E testing
 
 ## Testing
 
-Three tiers, see [Desktop App Testing](../book/src/contributing/desktop-testing.md) for full details.
+Three tiers, see [Desktop App Testing](../../book/src/contributing/desktop-testing.md)
+for scope and candidate requirements. Select affected checks deliberately;
+these are not automatic per-edit or per-commit gates.
 
 ```bash
 # Tier 1: focused frontend/runtime seam tests
 cd apps/chatter-desktop && npm run test:unit
 
-# Tier 2: Rust integration tests (fast, run always)
+# Tier 2: Rust integration tests (shared engine and bridge, no GUI)
 cargo test -p chatter-desktop --test validation_bridge
 
 # Tier 3: E2E smoke tests (slow, Linux/Windows only)
@@ -199,9 +205,9 @@ produces the `chatter` binary), but the user-visible name everywhere must be
 "Chatter":
 
 - `tauri.conf.json` → `productName: "Chatter"` (controls `.app` bundle name)
-- Window title: "Chatter, CHAT Validation"
-- macOS About dialog: "About Chatter" (requires running as `.app` bundle, not raw binary)
-- `cargo tauri dev` runs the raw binary, so About shows "chatter-desktop"; this is expected in dev mode only
+- Initial configured window title: "Chatter"; runtime summaries may update it.
+- "About Chatter" uses the custom React modal described below, not the native
+  macOS About panel. Do not use an old raw-binary panel label as its contract.
 
 ## CLI Bundling
 
@@ -217,7 +223,9 @@ the `code` command).
    to `/usr/local/bin/chatter` (macOS/Linux) or adds to PATH (Windows)
 4. On macOS: `Chatter.app/Contents/Resources/chatter` → `/usr/local/bin/chatter`
 
-This is a Phase 3 item, requires the build pipeline to produce both binaries.
+This is a proposed bundling workflow, not a shipped installation command.
+It requires the build pipeline to produce both binaries and separate review
+of installation permissions and platform behavior.
 
 ## Release Hardening
 
@@ -248,14 +256,16 @@ capability):
 
 1. **On launch** (`checkOnLaunch`), once on mount.
 2. **Periodically in the background** every 6 hours (`SIX_HOURS_MS`), silent,
-   reusing `checkOnLaunch`. This closes the gap where a launch-only check let a
-   rarely-relaunched or long-running install fall weeks behind (a real
-   incident: an install sat on an old version because its user never
-   relaunched).
+   reusing `checkOnLaunch`, so a long-running app does not depend on relaunch
+   for its next check.
 3. **On demand** from the native app menu item **"Check for Updates..."**
    (`checkNow`). Unlike the launch flow, a manual check gives visible feedback:
    if the app is already current it shows an "up to date" dialog, and a failed
-   check shows a failure dialog (via the transport's `showMessage`).
+   check attempts a failure dialog (via the transport's `showMessage`).
+
+Overlapping triggers join the capability's single in-flight operation. A manual
+join promotes feedback; completion or failure permits a later retry. Transport
+double tests do not establish real update signatures, installation or relaunch.
 
 The menu wiring: the Rust menu (`src-tauri/src/lib.rs`, `build_app_menu`)
 defines the "Check for Updates..." item with id `check-for-updates`; its
@@ -305,15 +315,17 @@ Wiring (do not bypass the runtime seam):
   Apple Developer ID certificate. `tauri.conf.json` carries the PUBLIC key
   (`plugins.updater.pubkey`); the PRIVATE key is supplied at build time via
   `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`). **`bundle.createUpdaterArtifacts`
-  is `true`, so any `tauri build` (local or CI) requires those env vars; a
-  keyless bundle build fails.** Never commit the private key.
+  is `true` in the committed configuration; producing signed updater artifacts
+  requires the signing key.** A development build with a scoped configuration
+  override disabling updater artifacts is not release qualification. Never
+  commit the private key.
 - **Manifest:** `release-desktop.yml` builds + signs the per-platform updater
   bundles, then the `updater-manifest` job assembles `latest.json` via
   `scripts/generate-latest-json.mjs` (structure unit-tested in
   `tests/unit/latestJson.test.mjs`) and uploads it to the release.
 
-Full design, key management, and succession: `../../docs/strategy/distribution-and-signing.md`
-("Auto-update").
+Full design, key management, and succession:
+[Distribution and signing](../../docs/strategy/distribution-and-signing.md).
 
 ## Coding Standards
 

@@ -93,6 +93,6 @@ impl crate::validation::Validate for Header {
         context: &crate::validation::ValidationContext,
         errors: &impl crate::ErrorSink,
     ) {
-        crate::validation::header::check_header(self, crate::Span::DUMMY, context, errors);
+        crate::validation::header::check_header(self, crate::Location::Unlocated, context, errors);
     }
 }

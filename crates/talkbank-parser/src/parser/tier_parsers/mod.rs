@@ -12,11 +12,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Comment_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Coding_Tier>
 
-use crate::error::Span;
-use crate::generated_traversal::{AsRawNode, NodeSlot, SlotView, TierSepNode, extract_tier_sep};
+use crate::generated_traversal::{AsRawNode, NodeSlot, SlotView, TierSepNode};
 use crate::model::{DependentTier, DependentTierEntry, TierSeparator};
+use crate::parser::node_span::span_of;
 
 pub mod act;
+pub mod admission;
 pub mod cod;
 pub mod gra;
 pub mod mor;
@@ -53,29 +54,26 @@ impl<T> ParsedDependentTier<T> {
 /// or an absent capture is a clean separator; E758 validates real captured
 /// space later, never at this parse boundary. Only its Present state is read;
 /// the producer retains ownership of the recovery payload.
-pub(crate) fn dependent_tier_separator<M>(
-    slot: &crate::parser::typed_cst::AnyKindSlot<'_, TierSepNode<'_>, M>,
-) -> TierSeparator {
+pub(crate) fn dependent_tier_separator<M, E, A>(
+    slot: &crate::parser::typed_cst::AnyKindSlot<TierSepNode<'_>, M, E, A>,
+) -> Result<TierSeparator, crate::CstFailure> {
     let NodeSlot::Present(tier_sep) = slot else {
-        return TierSeparator::CLEAN;
+        return Ok(TierSeparator::CLEAN);
     };
-    let tier_sep_children = extract_tier_sep(*tier_sep);
+    let tier_sep_children = crate::parser::typed_cst::extract_tier_separator(*tier_sep)?;
     let trailing = tier_sep_children.child_2.slot();
-    match trailing.as_ref().map(NodeSlot::view) {
+    Ok(match trailing.as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(sep_node))
             if matches!(tier_sep_children.child_1.slot(), NodeSlot::Present(tab)
                 if tab.raw_node().end_byte() == sep_node.raw_node().start_byte()) =>
         {
             let node = sep_node.raw_node();
-            TierSeparator::with_trailing_space(Span::new(
-                node.start_byte() as u32,
-                node.end_byte() as u32,
-            ))
+            TierSeparator::with_trailing_space(span_of(node))
         }
         Some(SlotView::Present(_) | SlotView::Missing(_) | SlotView::Error(_)) | None => {
             TierSeparator::CLEAN
         }
-    }
+    })
 }
 
 // Re-export public parsing functions for convenience within parser module

@@ -6,7 +6,7 @@
 //!
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 
-use crate::Span;
+use crate::Location;
 
 /// Tracks the current source span during semantic-diff traversal.
 ///
@@ -16,7 +16,7 @@ use crate::Span;
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 #[derive(Debug, Clone)]
 pub struct SemanticDiffContext {
-    current_span: Option<Span>,
+    current: Location,
 }
 
 impl Default for SemanticDiffContext {
@@ -34,48 +34,34 @@ impl SemanticDiffContext {
     ///
     /// Callers usually allocate one context per semantic diff traversal.
     pub fn new() -> Self {
-        Self { current_span: None }
+        Self {
+            current: Location::Unlocated,
+        }
     }
 
-    /// Returns the current source span, if any.
+    /// The location of the nearest enclosing located node, or unlocated.
     ///
     /// This is read by report helpers to attach location metadata to diffs.
-    pub fn current_span(&self) -> Option<Span> {
-        self.current_span
+    pub fn current_location(&self) -> Location {
+        self.current
     }
 
-    /// Set a new current span and return the previous one for restoration.
-    ///
-    /// The push/pop pattern allows nested model nodes to temporarily override
-    /// span context without losing outer-node location information.
-    pub fn push_span(&mut self, span: Option<Span>) -> Option<Span> {
-        let prev = self.current_span;
-        if span.is_some() {
-            self.current_span = span;
+    /// Enter a node: a located node becomes the current location, an unlocated
+    /// one leaves the enclosing location in force. Returns the previous value
+    /// for restoration.
+    pub fn push_location(&mut self, location: Location) -> Location {
+        let prev = self.current;
+        if let Location::Located(_) = location {
+            self.current = location;
         }
         prev
     }
 
-    /// Restore a previous span returned by [`push_span`](Self::push_span).
+    /// Restore a previous location returned by [`push_location`](Self::push_location).
     ///
     /// Callers should always restore in reverse traversal order to preserve
     /// context correctness.
-    pub fn pop_span(&mut self, prev: Option<Span>) {
-        self.current_span = prev;
+    pub fn pop_location(&mut self, prev: Location) {
+        self.current = prev;
     }
-}
-
-/// Converts a [`Span`] to `None` if it is a dummy span, or wraps it in `Some`.
-///
-/// This keeps diagnostic output free from meaningless placeholder offsets.
-pub fn normalize_span(span: Span) -> Option<Span> {
-    if span.is_dummy() { None } else { Some(span) }
-}
-
-/// Filters out dummy spans from an `Option<Span>`.
-///
-/// Use this helper when working with optional span fields that may carry
-/// placeholder values from partially constructed AST nodes.
-pub fn normalize_span_option(span: Option<Span>) -> Option<Span> {
-    span.filter(|s| !s.is_dummy())
 }

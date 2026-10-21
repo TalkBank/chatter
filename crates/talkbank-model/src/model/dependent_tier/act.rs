@@ -35,7 +35,6 @@
 //! ```
 
 use super::{BulletContent, WriteChat};
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -69,9 +68,10 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Examples
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{ActTier, BulletContent};
 ///
-/// let act = ActTier::new(BulletContent::from_text("<1w-2w> reaches toward shelf"));
+/// let act = ActTier::new(Location::Unlocated, BulletContent::from_text("<1w-2w> reaches toward shelf"));
 /// assert_eq!(act.to_chat(), "%act:\t<1w-2w> reaches toward shelf");
 /// ```
 ///
@@ -86,33 +86,30 @@ pub struct ActTier {
     pub content: BulletContent,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl ActTier {
     /// Constructs an `%act` tier from parsed bullet-aware content.
-    pub fn new(content: BulletContent) -> Self {
+    pub fn new(location: impl Into<crate::Location>, content: BulletContent) -> Self {
         Self {
             content,
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata used in diagnostics.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Convenience constructor for plain action text.
     ///
     /// Use [`Self::new`] when callers already have parsed [`BulletContent`].
-    pub fn from_text(text: impl Into<smol_str::SmolStr>) -> Self {
+    pub fn from_text(
+        location: impl Into<crate::Location>,
+        text: impl Into<smol_str::SmolStr>,
+    ) -> Self {
         Self {
             content: BulletContent::from_text(text),
-            span: Span::DUMMY,
+            location: location.into(),
         }
     }
 
@@ -144,7 +141,7 @@ mod tests {
     /// Ensures plain action text round-trips to `%act` form.
     #[test]
     fn test_act_tier_simple() {
-        let tier = ActTier::from_text("picks up toy");
+        let tier = ActTier::from_text(crate::Location::Unlocated, "picks up toy");
         assert_eq!(tier.to_chat(), "%act:\tpicks up toy");
         assert!(!tier.is_empty());
     }
@@ -152,7 +149,10 @@ mod tests {
     /// Ensures word-index timing markers are preserved.
     #[test]
     fn test_act_tier_with_timing() {
-        let tier = ActTier::from_text("<1w-2w> holds object out to Amy");
+        let tier = ActTier::from_text(
+            crate::Location::Unlocated,
+            "<1w-2w> holds object out to Amy",
+        );
         assert_eq!(tier.to_chat(), "%act:\t<1w-2w> holds object out to Amy");
         assert!(!tier.is_empty());
     }
@@ -160,7 +160,7 @@ mod tests {
     /// Empty text produces an empty payload according to `is_empty`.
     #[test]
     fn test_act_tier_empty() {
-        let tier = ActTier::from_text("");
+        let tier = ActTier::from_text(crate::Location::Unlocated, "");
         assert!(tier.is_empty());
     }
 }

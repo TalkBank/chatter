@@ -87,8 +87,11 @@ fn preserve_neighbors(
 ) {
     require(file.utterances().count() == 3, "turn count", failures);
     for (index, expected) in candidate.control().file().utterances().enumerate() {
-        let span = candidate.translated(expected.main.span);
-        let Some(actual) = file.utterances().find(|turn| turn.main.span == span) else {
+        let span = candidate.translated(expected.main.location);
+        let Some(actual) = file
+            .utterances()
+            .find(|turn| turn.main.location == talkbank_model::Location::Located(span))
+        else {
             failures.push(format!("lost healthy main {index}: {span:?}"));
             continue;
         };
@@ -116,10 +119,10 @@ fn preserve_neighbors(
             {
                 continue;
             }
-            let span = candidate.translated(expected_entry.span());
+            let span = candidate.translated(expected_entry.location());
             require(
                 actual.dependent_tiers.iter().any(|actual| {
-                    actual.span() == span
+                    actual.location() == talkbank_model::Location::Located(span)
                         && actual.semantic_eq(expected_entry)
                         && actual.separator == expected_entry.separator
                 }),
@@ -220,8 +223,9 @@ fn mor_gra_combinations_preserve_order_counts_and_public_fragments() {
         let parser = TreeSitterParser::new().expect("parser");
         for tier in [Tier::Mor, Tier::Gra] {
             let expected = entry(middle, tier).expect("tier");
-            let span = expected.span();
-            let input = &control.source()[span.start as usize..span.end as usize];
+            let span = expected.location();
+            let input = &control.source()
+                [span.span().expect("located").start()..span.span().expect("located").end()];
             let path = std::path::Path::new("corpus/reference/tiers/mor-gra-combinations.cha");
             super::assert_fragment_rebases(path, input, |offset, errors| {
                 ChatParser::parse_dependent_tier(&parser, input, offset, errors)
@@ -235,7 +239,11 @@ fn mor_gra_combinations_preserve_order_counts_and_public_fragments() {
                     errors,
                 )
             });
-            for offset in [0, span.start as usize, span.start as usize + 25] {
+            for offset in [
+                0,
+                span.span().expect("located").start(),
+                span.span().expect("located").start() + 25,
+            ] {
                 let errors = ErrorCollector::new();
                 let actual = ChatParser::parse_dependent_tier(&parser, input, offset, &errors);
                 require(
@@ -399,7 +407,11 @@ fn mor_gra_combinations_feature_faults_remain_local_through_wire() {
                 .filter(|error| error.code == ErrorCode::MorEmptyContent)
                 .collect();
             require(
-                errors.len() == count && errors.iter().all(|error| error.location.span == mor.span),
+                errors.len() == count
+                    && errors.iter().all(|error| {
+                        error.location.span().expect("located diagnostic")
+                            == mor.location.span().expect("located")
+                    }),
                 format!("E711/{index} independent diagnostics: {findings:?}"),
                 &mut failures,
             );
@@ -461,8 +473,8 @@ fn mor_gra_combinations_recovery_retains_independent_turns_and_refuses_fragments
                 .descendants()
                 .map(|node| node.expect("associated descendant"))
                 .find(|node| {
-                    node.raw_node().start_byte() == candidate.span().start as usize
-                        && node.raw_node().end_byte() == candidate.span().end as usize
+                    node.raw_node().start_byte() == candidate.span().start()
+                        && node.raw_node().end_byte() == candidate.span().end()
                 });
             require(
                 selected.is_some_and(|node| {
@@ -506,11 +518,7 @@ fn mor_gra_combinations_recovery_retains_independent_turns_and_refuses_fragments
                 "MOR fault withdrew GRA own completeness",
                 &mut failures,
             );
-            for offset in [
-                0,
-                candidate.span().start as usize,
-                candidate.span().start as usize + 25,
-            ] {
+            for offset in [0, candidate.span().start(), candidate.span().start() + 25] {
                 let errors = ErrorCollector::new();
                 let actual =
                     ChatParser::parse_dependent_tier(&parser, candidate.input(), offset, &errors);
@@ -524,7 +532,10 @@ fn mor_gra_combinations_recovery_retains_independent_turns_and_refuses_fragments
                 require(
                     candidate
                         .source()
-                        .get(error.location.span.start as usize..error.location.span.end as usize)
+                        .get(
+                            error.location.span().expect("located diagnostic").start()
+                                ..error.location.span().expect("located diagnostic").end(),
+                        )
                         .is_some(),
                     format!("unreadable diagnostic: {error:?}"),
                     &mut failures,

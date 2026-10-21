@@ -18,7 +18,7 @@
 //! error 86 do for theirs.
 
 use crate::ErrorSink;
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
 /// One forbidden character, located by byte offset in the input.
 ///
@@ -78,8 +78,8 @@ impl ControlCharacter<'_> {
         ParseError::new(
             ErrorCode::InvalidControlCharacter,
             Severity::Error,
-            SourceLocation::from_offsets(self.offset, end),
-            ErrorContext::new(self.source, self.offset..end, ""),
+            DiagnosticLocation::from_offsets(self.offset, end),
+            ErrorContext::new(self.source, crate::Span::new(self.offset, end), ""),
             format!(
                 "Control character U+{:04X} is not a permitted CHAT delimiter or underline marker",
                 self.ch as u32

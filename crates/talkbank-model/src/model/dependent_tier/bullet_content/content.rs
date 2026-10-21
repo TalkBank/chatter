@@ -127,7 +127,7 @@ impl BulletContent {
     /// recovery is not validity, and a parser that cannot express what the file
     /// says is a parser that will invent something instead. E756 states the rule
     /// this exists to let the validator apply; see
-    /// `DependentTier::empty_content_span`.
+    /// `DependentTier::empty_content_location`.
     #[must_use]
     pub fn empty() -> Self {
         Self {

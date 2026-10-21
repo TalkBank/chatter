@@ -54,6 +54,59 @@ struct WithSkipped {
 #[derive(Debug, Clone, PartialEq)]
 struct Frozen(Span);
 
+#[derive(SpanShift)]
+struct GenericSkipped<T, U> {
+    spans: Vec<T>,
+    #[span_shift(skip)]
+    frozen: U,
+}
+
+#[derive(SpanShift)]
+enum GenericPositioned<T, U> {
+    Tuple(Option<T>, #[span_shift(skip)] U),
+    Named {
+        span: T,
+        #[span_shift(skip)]
+        frozen: U,
+    },
+}
+
+#[test]
+fn skipped_generic_payloads_require_no_shift_implementation() {
+    let frozen = Frozen(Span::new(30, 40));
+    let mut node = GenericSkipped {
+        spans: vec![Span::new(10, 20)],
+        frozen: frozen.clone(),
+    };
+    node.shift_spans_after(10, 5);
+    assert_eq!(node.spans, vec![Span::new(15, 25)]);
+    assert_eq!(node.frozen, frozen);
+
+    let mut cases = [
+        GenericPositioned::Tuple(Some(Span::new(10, 20)), frozen.clone()),
+        GenericPositioned::Named {
+            span: Span::new(10, 20),
+            frozen: frozen.clone(),
+        },
+    ];
+    for node in &mut cases {
+        node.shift_spans_after(10, 5);
+        match node {
+            GenericPositioned::Tuple(span, payload) => {
+                assert_eq!(*span, Some(Span::new(15, 25)));
+                assert_eq!(*payload, frozen);
+            }
+            GenericPositioned::Named {
+                span,
+                frozen: payload,
+            } => {
+                assert_eq!(*span, Span::new(15, 25));
+                assert_eq!(*payload, frozen);
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, SpanShift)]
 enum Positioned {
     Empty,
@@ -105,8 +158,8 @@ fn span_at_offset_gets_shifted() {
         value: "x".into(),
     };
     loc.shift_spans_after(10, 5);
-    assert_eq!(loc.span.start, 15);
-    assert_eq!(loc.span.end, 25);
+    assert_eq!(loc.span.start(), 15);
+    assert_eq!(loc.span.end(), 25);
 }
 
 #[test]
@@ -116,8 +169,8 @@ fn span_before_offset_untouched() {
         value: "x".into(),
     };
     loc.shift_spans_after(15, 5);
-    assert_eq!(loc.span.start, 5);
-    assert_eq!(loc.span.end, 10);
+    assert_eq!(loc.span.start(), 5);
+    assert_eq!(loc.span.end(), 10);
 }
 
 #[test]
@@ -128,8 +181,8 @@ fn positive_delta_insertion() {
         value: "x".into(),
     };
     loc.shift_spans_after(0, 100);
-    assert_eq!(loc.span.start, 150);
-    assert_eq!(loc.span.end, 180);
+    assert_eq!(loc.span.start(), 150);
+    assert_eq!(loc.span.end(), 180);
 }
 
 #[test]
@@ -140,8 +193,8 @@ fn negative_delta_deletion() {
         value: "x".into(),
     };
     loc.shift_spans_after(10, -5);
-    assert_eq!(loc.span.start, 15);
-    assert_eq!(loc.span.end, 25);
+    assert_eq!(loc.span.start(), 15);
+    assert_eq!(loc.span.end(), 25);
 }
 
 #[test]
@@ -151,7 +204,7 @@ fn option_some_shifts() {
     };
     m.shift_spans_after(5, 3);
     assert_eq!(
-        m.span.as_ref().map(|span| (span.start, span.end)),
+        m.span.as_ref().map(|span| (span.start(), span.end())),
         Some((13, 23))
     );
 }
@@ -183,13 +236,13 @@ fn vec_recursion_all_elements_shifted() {
     };
     c.shift_spans_after(10, 7);
     // Items at or after offset 10 get shifted.
-    assert_eq!(c.items[0].span.start, 17);
-    assert_eq!(c.items[0].span.end, 27);
-    assert_eq!(c.items[1].span.start, 37);
-    assert_eq!(c.items[1].span.end, 47);
+    assert_eq!(c.items[0].span.start(), 17);
+    assert_eq!(c.items[0].span.end(), 27);
+    assert_eq!(c.items[1].span.start(), 37);
+    assert_eq!(c.items[1].span.end(), 47);
     // Item before offset 10 is untouched.
-    assert_eq!(c.items[2].span.start, 5);
-    assert_eq!(c.items[2].span.end, 8);
+    assert_eq!(c.items[2].span.start(), 5);
+    assert_eq!(c.items[2].span.end(), 8);
 }
 
 #[test]
@@ -200,9 +253,9 @@ fn skip_field_not_shifted() {
     };
     w.shift_spans_after(0, 5);
     // Non-skipped span shifted.
-    assert_eq!(w.span.start, 15);
-    assert_eq!(w.span.end, 25);
+    assert_eq!(w.span.start(), 15);
+    assert_eq!(w.span.end(), 25);
     // Skipped span unchanged.
-    assert_eq!(w.frozen_span.start, 10);
-    assert_eq!(w.frozen_span.end, 20);
+    assert_eq!(w.frozen_span.start(), 10);
+    assert_eq!(w.frozen_span.end(), 20);
 }

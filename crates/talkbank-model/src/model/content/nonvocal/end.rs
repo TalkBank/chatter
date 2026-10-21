@@ -6,7 +6,6 @@
 //!
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#LongNonverbalEvent>
 
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -50,9 +49,9 @@ pub struct NonvocalEnd {
     pub label: NonvocalLabel,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl PartialEq for NonvocalEnd {
@@ -69,19 +68,11 @@ impl NonvocalEnd {
     ///
     /// Parser code should attach concrete spans via [`Self::with_span`] so
     /// unmatched-end diagnostics can identify the original token precisely.
-    pub fn new(label: impl Into<NonvocalLabel>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, label: impl Into<NonvocalLabel>) -> Self {
         Self {
             label: label.into(),
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata used for diagnostics.
-    ///
-    /// Span values are intentionally excluded from semantic equality.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 }
 

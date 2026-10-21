@@ -77,7 +77,7 @@ fn verify(parser: &impl ChatParser, backend: &str) -> Vec<String> {
                         failures.push(format!("{label}: unknown {} body", entry.kind()));
                         continue;
                     };
-                    let Some(body) = source.get(span.start as usize..span.end as usize) else {
+                    let Some(body) = source.get(span.start()..span.end()) else {
                         failures.push(format!("{label}: out-of-source {} body", entry.kind()));
                         continue;
                     };
@@ -157,9 +157,9 @@ fn verify_eof() {
         for entry in native.utterances().flat_map(|turn| &turn.dependent_tiers) {
             if let Some(span) = entry.content_span() {
                 let body = source
-                    .get(span.start as usize..span.end as usize)
+                    .get(span.start()..span.end())
                     .expect("emitted caller geometry");
-                if span.end as usize == source.len() {
+                if span.end() == source.len() {
                     assert_eq!(body, "after résumé", "a retained EOF body loses no byte");
                 }
             }
@@ -172,11 +172,8 @@ fn verify_eof() {
             .find(|entry| entry.kind() == "com")
             .expect("lexer-owned EOF tier");
         let span = entry.content_span().expect("known EOF range");
-        assert_eq!(span.end as usize, source.len());
-        assert_eq!(
-            &source[span.start as usize..span.end as usize],
-            "after résumé"
-        );
+        assert_eq!(span.end(), source.len());
+        assert_eq!(&source[span.start()..span.end()], "after résumé");
     }
 }
 
@@ -230,12 +227,14 @@ fn dependent_content_ranges_do_not_cross_construction_or_wire_boundaries() {
 
 /// Surviving constructor boundary: caller-supplied geometry is checked, and
 /// known empty does not collapse to unknown or to the old DUMMY sentinel.
+/// The body bounds come from two different tokens, so an inverted pair is
+/// refused here rather than panicking in a `Span` constructor.
 #[test]
 fn dependent_content_ranges_admit_only_ordered_contained_geometry() {
     let tier = Span::new(10, 30);
-    assert!(DependentTierContentSpan::try_new(tier, Span::new(15, 15)).is_ok());
-    for body in [Span::new(9, 20), Span::new(20, 31), Span::new(25, 15)] {
-        assert!(DependentTierContentSpan::try_new(tier, body).is_err());
+    assert!(DependentTierContentSpan::try_new(tier, 15, 15).is_ok());
+    for (start, end) in [(9, 20), (20, 31), (25, 15)] {
+        assert!(DependentTierContentSpan::try_new(tier, start, end).is_err());
     }
 }
 

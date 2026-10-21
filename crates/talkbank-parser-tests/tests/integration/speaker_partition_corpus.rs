@@ -25,7 +25,11 @@ fn with_generated_test_timing(source: &Utterance) -> Utterance {
         .enumerate()
     {
         let start = 100 * (1 + u64::try_from(slot).expect("finite reference word position"));
-        word.inline_bullet = Some(Bullet::new(start, start + 100));
+        word.inline_bullet = Some(Bullet::new(
+            talkbank_model::Location::Unlocated,
+            start,
+            start + 100,
+        ));
     }
     source.clone().add_dependent_tier(DependentTier::Wor(wor))
 }

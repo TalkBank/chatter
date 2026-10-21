@@ -35,6 +35,22 @@ impl SemanticDiff for Span {
     }
 }
 
+impl SemanticDiff for crate::Location {
+    /// Treats source locations as semantically equal.
+    ///
+    /// `Location` carries positional metadata, not linguistic content, so location-only
+    /// differences should not fail semantic-equivalence checks.
+    fn semantic_diff_into(
+        &self,
+        _other: &Self,
+        _path: &mut SemanticPath,
+        _report: &mut SemanticDiffReport,
+        _ctx: &mut SemanticDiffContext,
+    ) {
+        // Spans are always semantically equal - they're metadata, not content
+    }
+}
+
 // =============================================================================
 // String implementations
 // =============================================================================

@@ -104,7 +104,7 @@ fn item_repr(item: &PhoItem) -> PhoItemRepr {
 struct PhoParse {
     items: Vec<PhoItemRepr>,
     saw_pho_tier: bool,
-    diags: Vec<(String, u32, u32, String)>,
+    diags: Vec<(String, usize, usize, String)>,
 }
 
 /// Parse `input` at the streaming boundary, collecting phonology-tier items and
@@ -137,8 +137,8 @@ fn parse_pho(input: &str) -> PhoParse {
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })

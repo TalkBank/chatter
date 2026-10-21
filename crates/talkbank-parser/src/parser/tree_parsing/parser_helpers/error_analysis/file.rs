@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, SourceSlice};
 
 /// Report top-level recovery without inventing header or utterance structure
@@ -31,8 +31,8 @@ pub(crate) fn analyze_error_node(bound: SourceSlice<'_, '_>, errors: &impl Error
         ParseError::new(
             ErrorCode::UnparsableContent,
             Severity::Error,
-            SourceLocation::from_offsets(start, end),
-            ErrorContext::new(source, start..end, error_text),
+            DiagnosticLocation::from_offsets(start, end),
+            ErrorContext::new(source, talkbank_model::Span::new(start, end), error_text),
             format!(
                 "Unparsable content at file level: '{}'",
                 match error_text.lines().next() {

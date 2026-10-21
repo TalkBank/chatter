@@ -48,7 +48,7 @@ impl ErrorSink for AsyncChannelErrorSink {
 mod tests {
     //! Async sink tests.
 
-    use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+    use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 
     use super::AsyncChannelErrorSink;
 
@@ -61,8 +61,8 @@ mod tests {
         sink.report(ParseError::new(
             ErrorCode::IllegalUntranscribed,
             Severity::Error,
-            SourceLocation::at_offset(0),
-            ErrorContext::new("test", 0..4, "test"),
+            DiagnosticLocation::at_offset(0),
+            ErrorContext::new("test", crate::Span::new(0, 4), "test"),
             "Test error",
         ));
 

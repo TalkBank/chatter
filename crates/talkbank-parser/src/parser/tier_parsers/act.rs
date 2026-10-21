@@ -48,9 +48,9 @@ pub(crate) fn parse_act_tier_with_separator<'tree>(
 ) -> Result<crate::parser::tier_parsers::ParsedDependentTier<ActTier>, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let children = crate::parser::typed_cst::extract_envelope(typed)?;
     let separator =
-        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot());
+        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot())?;
     crate::parser::tree_parsing::parser_helpers::surface_displaced(
         &children.children().unexpected,
         node.kind(),
@@ -60,7 +60,7 @@ pub(crate) fn parse_act_tier_with_separator<'tree>(
     let children = children.admit_ranges()?;
     let content = parse_optional_text_tier_content(&children, errors)?;
     Ok(crate::parser::tier_parsers::ParsedDependentTier::new(
-        ActTier::new(content).with_span(span),
+        ActTier::new(span, content),
         separator,
     ))
 }
@@ -73,7 +73,7 @@ mod tests {
     /// Tests act tier construction.
     #[test]
     fn test_act_tier_construction() {
-        let tier = ActTier::from_text("picks up toy");
+        let tier = ActTier::from_text(talkbank_model::Location::Unlocated, "picks up toy");
         assert!(!tier.content.is_empty());
         assert_eq!(tier.to_chat_string(), "%act:\tpicks up toy");
     }
@@ -81,7 +81,10 @@ mod tests {
     /// Tests act tier with timing.
     #[test]
     fn test_act_tier_with_timing() {
-        let tier = ActTier::from_text("<1w-2w> holds object out to Amy");
+        let tier = ActTier::from_text(
+            talkbank_model::Location::Unlocated,
+            "<1w-2w> holds object out to Amy",
+        );
         assert!(!tier.content.is_empty());
         assert_eq!(
             tier.to_chat_string(),
@@ -92,7 +95,7 @@ mod tests {
     /// Tests act tier empty.
     #[test]
     fn test_act_tier_empty() {
-        let tier = ActTier::from_text("");
+        let tier = ActTier::from_text(talkbank_model::Location::Unlocated, "");
         assert!(tier.is_empty());
         assert_eq!(tier.to_chat_string(), "%act:\t");
     }
@@ -100,7 +103,10 @@ mod tests {
     /// Tests act tier complex.
     #[test]
     fn test_act_tier_complex() {
-        let tier = ActTier::from_text("<aft> manipulates chicken in hands");
+        let tier = ActTier::from_text(
+            talkbank_model::Location::Unlocated,
+            "<aft> manipulates chicken in hands",
+        );
         assert!(!tier.content.is_empty());
         assert_eq!(
             tier.to_chat_string(),

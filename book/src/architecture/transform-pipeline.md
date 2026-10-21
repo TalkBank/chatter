@@ -5,6 +5,12 @@
 
 The `talkbank-transform` crate provides high-level pipelines that compose parsing, validation, and serialization into reusable workflows.
 
+Start with the [runnable library recipes](../chatter/integrating/library-usage.md)
+for parsing, validation and serialization. This chapter explains the admission
+boundaries and the more specialized transformation and batch-runner contracts.
+Returning a model, validating it, preserving original bytes and admitting a
+rewrite are distinct operations.
+
 ## Core Pipelines
 
 ### Transcript construction
@@ -19,18 +25,37 @@ cannot be hidden by normalization. The resulting local stem is admitted again.
 
 ### Parse + Validate
 
-The most common pipeline: parse a CHAT file and validate it.
+`parse_and_validate(source, options)` creates a parser and returns
+`Result<ChatFile, PipelineError>`. Validation depends on `ParseValidateOptions`:
+`with_validation()` requests structural checks; `with_alignment()` additionally
+requests tier alignment. The default is parse-only. The returned model is
+mutable, so even successful validation does not leave a retained capability
+after subsequent edits.
 
-```rust,ignore
-use talkbank_transform::parse_and_validate;
+| Need | Entry point and boundary |
+|---|---|
+| Reuse a parser | `parse_and_validate_with_parser(&parser, source, options)` |
+| Receive diagnostics as they are produced | `parse_and_validate_streaming(source, options, &sink)`; this still takes the whole source string, not chunks of input |
+| Preserve the input filename for filename-dependent rules | `parse_file_and_validate(path, options)` or a named variant taking `TranscriptName` |
+| Retain immutable validation evidence | `parse_validated_with_parser` returns `ValidChatFile` under an explicit validation policy |
 
-let result = parse_and_validate(source, &parser, &error_collector);
-```
+The non-streaming parse-only path rejects parser errors. Streaming parse-only
+can return recovered content alongside error diagnostics, so `Ok(ChatFile)`
+alone is not a valid-input verdict. Required validation uses the shared checked
+producer; internal failures remain separate from CHAT findings. See the
+[tested parsing recipes](../chatter/integrating/library-usage.md#parsing-and-validating-a-chat-file)
+and [diagnostic contract](../chatter/integrating/diagnostic-contract.md).
 
-This:
-1. Parses the source text into a `ChatFile` AST
-2. Runs validation (alignment checks, header consistency, etc.)
-3. Collects all errors and warnings into the `ErrorSink`
+`PipelineError::from(ValidatedParseError)` owns the compatibility conversion.
+Parse rejection keeps its diagnostics but discards the parse product; ordinary
+validation rejection keeps its complete diagnostic list. Incomplete validation
+retains the rejected document, policy and transcript name as well as diagnostics.
+Internal failure takes precedence, even when its diagnostic has warning severity
+or the model also has unknown provenance. The publicly constructible parse-error
+tag cannot override an internal diagnostic in its product. These are distinct failure states,
+not interchangeable ways to report invalid CHAT. Boundary tests exercise the
+conversion with real model admission and explicitly injected tool faults;
+they do not prove that each failure is reachable from authored CHAT source.
 
 ### Source-bound preservation versus replacement
 
@@ -64,7 +89,7 @@ validates the reduced document again; errors located in no word tier remove
 every remaining word tier. It requires complete retained admission before
 returning a word-timing replacement receipt, never clears recovered-model taint
 and never filters diagnostic codes. Internal producer failures cannot select
-regeneration. `book/src/architecture/wor-timing.md` describes the loop.
+regeneration. The [word-timing chapter](wor-timing.md) describes the loop.
 
 Components parse and lower once. Word-tier entries move into the document
 rather than being copied, and a rejected attempt returns the document with its
@@ -225,31 +250,42 @@ matched as one pair, so every combination has exactly one serializer.
 
 ### JSON → CHAT
 
-The JSON produced by `chat_to_json` is schema-conformant and
-round-trips. Deserialize it back into a `ChatFile` with `serde_json`
-(the model derives `Deserialize`), then serialize through `WriteChat`
-to reproduce CHAT text:
+`chat_to_json` checks its emitted JSON against the schema. That is distinct
+from the CHAT checks selected by its options. JSON can be deserialized into
+`ChatFile` and serialized with `WriteChat`, but this does not recreate the
+original parser evidence, formatting or byte sequence. Deserialization enforces
+the model's serde boundaries, not every CHAT validity rule.
 
-```rust,ignore
-let chat_file: talkbank_model::ChatFile = serde_json::from_str(json_str)?;
-let chat_text = chat_file.to_chat_string();
-```
-
-The `chatter from-json` command wraps this path
-(`crates/chatter/src/commands/json.rs`, `json_to_chat`).
+`chatter from-json` performs this deserialize/serialize path without a separate
+JSON Schema or CHAT-validation pass. Validate the resulting CHAT before treating
+it as accepted input. The [JSON Schema guide](../chatter/integrating/json-schema.md#roundtrip-expectations)
+states the roundtrip limits; the
+[library recipes](../chatter/integrating/library-usage.md) provide the maintained
+serialization examples.
 
 ### CHAT → CHAT (Normalize)
 
-Parse and reserialize to normalize formatting:
+Parse and reserialize to normalize formatting, selecting validation explicitly:
 
 ```rust,ignore
+use talkbank_model::ParseValidateOptions;
 use talkbank_transform::normalize_chat;
 
-let normalized = normalize_chat(source, &parser)?;
+let rewrite = normalize_chat(source, ParseValidateOptions::default().with_alignment())?;
+let normalized_text = rewrite.text();
 ```
 
 `normalize_chat` lives in
-`crates/talkbank-transform/src/pipeline/convert.rs`.
+`crates/talkbank-transform/src/pipeline/convert.rs` and returns `Rewrite`, not a
+bare string. It does not write a destination. Its loss guard rejects a source
+line whose non-whitespace content has no remaining ordered match in a serialized
+line; identical bytes take the fast path. Each match consumes its output bytes,
+so a surviving duplicate cannot stand in for a deleted occurrence. Continuation
+lines can consume successive parts of one joined output line. This guard ignores
+whitespace and is not a source-bound edit or semantic-equivalence proof.
+Do not infer arbitrary-transform preservation or whole-file validity from
+`Rewrite` alone. Keep the input and review output before replacement; source-bound
+preservation and checked transformation APIs above serve different contracts.
 
 ### Selective name pseudonymization: planning API under development
 
@@ -287,10 +323,13 @@ structural ones; dependent-tier indices count all tier kinds. Independently
 reported morphology uses `LemmaLocation`: utterance, morphology-item index and
 `LemmaPart::Main` or a specific post-clitic. It never invents a main-tier match
 for an unmatched lemma. Exact source ranges remain available alongside this
-context. All indices are zero-based. Persistent CLI receipts are being integrated.
+context. All indices are zero-based. The receipt prototype described below is
+test-only, not an available CLI persistence workflow.
 
-The CLI publication boundary is being implemented separately from the transform.
-It stages only admitted `PseudonymizedDocument` bytes beside an explicit output
+The CLI repository contains a publication/receipt prototype separately from the
+transform. Its module is compiled only under `#[cfg(test)]`; command routing and
+end-to-end acceptance remain unfinished. Within that prototype, the publisher
+stages only admitted `PseudonymizedDocument` bytes beside an explicit output
 destination and uses no-clobber publication. Existing files, directories and
 symlinks are not replaced; a collision after staging also refuses publication.
 Abandoning preparation removes its temporary file, not the input or destination.
@@ -298,15 +337,17 @@ Unix staging files are owner-only; other systems require a protected destination
 directory's inherited ACL. This does not establish a cross-file transaction or
 crash-durable directory update.
 
-The receipt owner encloses the low-level publisher. Its `PreparedPublication`
-owns both the staged file and a committed private SQLite receipt; callers cannot
+The prototype's receipt owner encloses the low-level publisher. Its
+`PreparedPublication` owns both the staged file and a committed private SQLite receipt; callers cannot
 separate that evidence from its output or call the enclosed publisher directly.
 The receipt records source/output BLAKE3 identities, the exact applied edits,
 typed locations and report-only findings in queryable tables, not JSON blobs.
 It starts as `prepared`, becomes `written` only after publication and file sync,
 or records `publication_failed` on a no-clobber failure. An interruption or failed
 completion update can leave `prepared`; that state means uncertain publication,
-not success or proof of absence. Existing receipt files are never overwritten.
+not success or proof of absence. Failed receipt initialization can leave an
+incomplete database; its existence alone is not a prepared receipt. Existing
+receipt files are never overwritten.
 SQL dependencies live in the CLI, not the transform core. The user command
 remains unavailable pending command routing and end-to-end acceptance. Refused
 plans have separate `output_refused` receipts: proposals are labeled `proposed`,
@@ -443,52 +484,57 @@ race safety; report mode and explicit application retain their existing policy.
 
 ## Validation + Roundtrip Cache Lifecycle
 
-The following diagram shows the full validation and roundtrip pipeline, including the cache layer:
+The runner decides whether cached evidence covers the requested work before
+processing a file. A cache hit is not automatically a successful file result:
+for example, a cached failed roundtrip remains a failure.
 
 ```mermaid
 flowchart TD
-    file["CHAT file"]
-    cache{"Cache\nhit?"}
-    parse["Parse\n(tree-sitter → AST)"]
-    validate["Validate\n(per-file → per-utterance →\nmain tier → dependent tiers)"]
-    rt{"Roundtrip\nflag?"}
-    ser1["Serialize → CHAT text"]
-    reparse["Reparse CHAT text"]
-    ser2["Serialize again"]
-    cmp{"Two\nserializations\nmatch?"}
-    store["Store in cache\n(SQLite)"]
-    pass["Pass"]
-    fail["Fail"]
-    cached["Return cached result"]
-
-    file --> cache
-    cache -->|miss| parse --> validate --> rt
-    cache -->|hit| cached
-    rt -->|yes| ser1 --> reparse --> ser2 --> cmp
-    rt -->|no| store --> pass
-    cmp -->|yes| store
-    cmp -->|no| fail
+    file["Bytes read + transcript identity"] --> cache{"Reusable clean validation verdict\nand every requested cached check?"}
+    cache -->|yes| cached["Restore cached file status"]
+    cache -->|no| process["Parse and validate with selected backend/policy"]
+    process --> finish["Report findings or tool failure;\nrun requested roundtrip when eligible"]
+    cached --> event["FileComplete(status)"]
+    finish --> event
 ```
+
+The roundtrip check serializes the parsed model, reparses that serialization
+with the selected backend, serializes again and compares those two strings.
+It tests serialization idempotence, not equality with the original input bytes.
+The reparse is parse-only; internal failures remain separate from mismatches.
+See [cache reuse policy](parser-and-grammar/validation-cache.md) for why a cached
+invalid verdict still requires diagnostic-producing work and why internal
+failures do not become cached CHAT verdicts.
 
 ## Streaming Parse
 
-For large files or interactive use, the transform crate supports streaming parse where utterances are processed incrementally rather than loading the entire AST into memory.
+Here, streaming means diagnostics or per-file results arrive as work proceeds.
+`parse_and_validate_streaming` receives a complete source string and constructs
+a `ChatFile`; it does not offer bounded-memory, chunk-by-chunk transcript input.
+The batch runner streams file-completion events from its workers. Tree-sitter's
+incremental reparse API is a separate operation that can reuse an earlier tree.
 
-## The shared validation runner (every frontend, one engine)
+## The shared batch-validation runner
 
-All bulk validation, whatever the frontend, flows through the
-`validation_runner` module's two streaming entry points in
+CLI/TUI and desktop batch validation use the shared `validation_runner` in
 `crates/talkbank-transform/src/validation_runner/`:
 
 - `validate_directory_streaming` walks a directory and feeds every CHAT
   transcript to a worker pool;
 - `validate_files_streaming` runs an explicit file list through the same
-  worker pool.
+  worker pool;
+- `validate_arguments_streaming` consumes expanded command-line arguments,
+  including their discovery failures.
+
+These are batch-validation entry points, not the sole parsing or validation
+path for every operation. Conversion pipelines and editor document validation
+have their own callers and input lifecycles.
 
 ### The one worker pool and the one walk
 
-The pool is `talkbank_transform::worker_pool::fan_out`, and it is the only
-pool: `chatter to-json` fans its directory conversions out through it too.
+The shared pool helper is `talkbank_transform::worker_pool::fan_out`;
+`chatter to-json` uses it for directory conversions too. Each invocation owns
+its worker pool, not a process-wide singleton.
 
 ```mermaid
 flowchart LR
@@ -500,8 +546,9 @@ flowchart LR
     join --> run["PoolRun { results, outcome }"]
 ```
 
-- Width is `--jobs`, else the machine's parallelism, never zero; serial work
-  is a pool of width one, not a second code path.
+- Requested width is `--jobs`, else the machine's available parallelism (one
+  if that query fails). Actual width is capped by the iterator's upper bound
+  when known, with a minimum of one. Serial work uses the same pool helper.
 - Every worker runs on a `CHAT_THREAD_STACK_BYTES` (16 MiB) stack, the size of the
   CLI's program thread, because parsing and validation recurse with the data.
 - Each worker RETURNS its result (the validation runner's per-worker tally,
@@ -569,13 +616,14 @@ JSON consumer as a record. Commands that are not streaming runs (`fix`,
 `to-json`, the `debug` commands) refuse an incomplete input before
 processing anything.
 
-Both share one worker loop, so every consumer gets identical rule
-coverage (including the file-stem-dependent checks such as the `@Media`
-filename match), identical stats accounting, and the same on-disk cache.
-The `chatter` CLI, the TUI, and the desktop app all call these
-entry points. The invariant to preserve: no frontend grows its own
-validation orchestration; a file must validate identically whether
-selected alone or reached by a directory walk.
+The entry points share one worker loop and accounting model, including
+file-stem-dependent checks such as the `@Media` filename match. Actual rule,
+alignment, backend and roundtrip selection come from `ValidationConfig`.
+`ValidationRun` binds that configuration to a compatible cache identity or an
+explicit uncached run; shared code does not require every frontend to use the
+same cache or settings. For the same bytes, stored filename and validation
+policy, selecting a file directly or by a directory walk must not change its
+validation result. This is the contract, not proof of every frontend workflow.
 
 ### What a run checks: typed, end to end
 
@@ -607,10 +655,11 @@ flowchart TD
     end --> exit["ValidationOutcome::failed(): !RunEnding::passed()"]
 ```
 
-The runtime holds no output channel of its own: every fact a run has to say
-(a stop, a loss, an abort, an input with nothing in it) is a `RunEnding` the
-renderer's `finish` matches, so JSON mode can keep stderr empty by
-construction rather than by remembering to. The TUI shows the same ending
+Ordinary run outcomes (a stop, a loss, an abort, an input with nothing in it)
+travel through `RunEnding` and the renderer rather than a separate ad hoc
+stderr message. This keeps those outcomes in JSON mode's structured channel;
+it does not guarantee empty stderr under tracing, panic hooks or startup
+failures. The TUI shows the same ending
 and returns it with the session (`InteractiveEnd::Closed(RunPhase)`), so
 the exit status is the run's on every surface: only `RunEnding::passed`
 exits 0, and a session closed before its run ended fails. The TUI lists
@@ -640,8 +689,10 @@ requires `--validate`), each yielding one `CheckLevel`.
 
 ### How a run ends, and who decides
 
-While its receiver remains connected, every stream ends with exactly one
-`ValidationEvent::Finished(RunEnding)`, and the runner decides which:
+On normal completion and supported unwind paths, a connected receiver gets
+one `ValidationEvent::Finished(RunEnding)`. The guard does not cover process
+termination, aborts or failure to start the orchestrating thread. Consumers
+must still handle channel closure without an ending. The runner decides which:
 
 - `Complete(stats)`: at least one file was discovered and every one was
   accounted for. The only basis for a claim about the whole input, though
@@ -693,8 +744,9 @@ flowchart TD
     stop -->|None| unexplained["Incomplete { cause: Unexplained }"]
 ```
 
-A worker fault outranks a stop: files a worker took and never finished are
-lost, and a worker that could not create its parser took none, whatever else
+When coverage has a shortfall, a worker fault outranks a stop: files a worker
+took and never finished are lost, and a worker that could not create its parser
+took none, whatever else
 happened. Each worker returns its tally or a `WorkerSetupFailure`, so a
 worker that could not start is a value the runner sees rather than an empty
 tally indistinguishable from an idle worker. `WorkerFaults::observe`, the
@@ -716,9 +768,11 @@ The error limit is the runner's, not a consumer's. Each worker spends
 `FileStatus::errors_found()` from a shared `ErrorBudget` before taking its
 next file: the file's `Severity::Error` diagnostics after suppression, or 1
 for a failed roundtrip. Warnings never count. The addition that reaches the
-limit latches `CancelReason::ErrorLimit`, so the worker that crossed it stops
-at once and the others at their next file. With one worker the stop is
-exact: a limit of 1 stops before the second file starts.
+limit latches `CancelReason::ErrorLimit`, so the worker that crossed it takes
+no next file; other workers observe the latch at their next loop check.
+Already-started work can finish. With one worker, if the first file spends the
+limit, the second file does not start. Read failures and internal tool failures
+fail the run but do not spend this diagnostic error budget.
 
 The count lives in the runner, not in a consumer reading rendered events,
 so warnings cannot spend the limit, a run that covered every file is never
@@ -764,13 +818,22 @@ Two design points worth keeping:
 
 ## Caching
 
-The transform layer integrates with a file-system cache. Validation results are keyed by content hash, so unchanged files skip re-validation. Cache location is platform-specific: `~/Library/Caches/talkbank-chat/` (macOS), `~/.cache/talkbank-chat/` (Linux), `%LocalAppData%\talkbank-chat\` (Windows).
+The batch runner integrates with the SQLite validation cache; the standalone
+conversion functions do not all pass through that runner. Reuse depends on the
+path/parser namespace, rules identity, selected validation mode and the hash of
+the bytes actually read, not content hash alone. Invalid cached outcomes still
+need diagnostic-producing work; requested roundtrip checks require their own
+verdict.
 
-Use `--force` to bypass the cache for specific paths.
+`--force` clears cache entries for the selected paths before the run; it does
+not disable cache writes or permanently bypass caching. See the
+[cache chapter](parser-and-grammar/validation-cache.md) for locations,
+`TALKBANK_CHAT_CACHE_DIR`, maintenance and reuse policy.
 
 ## Error Collection
 
 Pipelines use the `ErrorSink` trait for error reporting. Callers can provide:
+
 - A collecting sink (gathers all diagnostics for batch output)
 - A printing sink (writes diagnostics to stderr in real-time)
 - A custom sink (for LSP diagnostics, JSON output, etc.)

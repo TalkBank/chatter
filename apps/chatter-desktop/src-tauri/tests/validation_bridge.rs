@@ -122,7 +122,7 @@ fn unavailable_source_context_preserves_original_evidence_and_wire_status() {
             "absolute original evidence is unchanged"
         );
         let json = serde_json::to_value(diagnostic).expect("wire diagnostic");
-        if span.start == 0 {
+        if span.start() == 0 {
             assert_eq!(json["sourceContext"]["kind"], "available");
             assert_eq!(json["sourceContext"]["location"]["line"], 1);
             assert_eq!(json["sourceContext"]["location"]["column"], 1);
@@ -1187,7 +1187,8 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
         file: fixture.to_string_lossy().into_owned(),
         line: location["line"].as_i64().expect("admitted line") as i32,
         col: location["column"].as_i64().expect("admitted column") as i32,
-        byte_offset: location["start"].as_u64().expect("admitted offset") as u32,
+        byte_offset: usize::try_from(location["start"].as_u64().expect("admitted offset"))
+            .expect("offset fits usize"),
         msg: error.error.message.clone(),
     };
 

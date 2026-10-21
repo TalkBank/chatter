@@ -1,27 +1,35 @@
 # CHAT Tokenization Rules
 
 **Status:** Current
-**Last updated:** 2026-03-24 07:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/grammar/docs/tokenization-rules.md)
 
 This document explains how CHAT text is split into tokens (words, markers,
-annotations). These rules are the most confusing aspect of CHAT and the
-most common source of parser bugs.
+annotations), focusing on cases where adjacency and grammatical position
+change the structure. The examples illustrate selected shapes, not complete
+valid-transcript fixtures or a second grammar specification.
 
 ## The Fundamental Rule
 
-**Whitespace delimits content items.** Contiguous non-whitespace characters
-form a single token. This applies everywhere: main tiers, dependent tiers,
-headers.
+Whitespace is explicit in the grammar and separates many content items.
+It is not a universal tokenizer for CHAT: adjacent characters may form several
+structured tokens, and headers, annotations and tiers have distinct rules.
+See the book's [Word Internals](../../book/src/chat-format/word-internals.md)
+for the current grammar/model boundary and lexical projection.
 
 ## The Word Purity Invariant
 
-**`word_segment` contains ONLY pure spoken text.** Within a word, structural
-markers (overlap, CA, underline, stress, lengthening) are separate typed
-children in `word_body`, never consumed by `word_segment`. This means:
+The grammar excludes its declared structural markers from `word_segment`.
+Within a word, overlap, CA, underline, stress and lengthening markers have
+separate typed children in `word_body`. This separation means:
 
-- `cleaned_text()` never needs to scan for and strip markers
-- Validation can find ALL overlap/CA markers by walking `WordContent` variants
-- Editors get typed CST nodes for every structural element
+- Lexical projection can consume typed leaves rather than reparsing marker text.
+- Word-level validators can inspect the retained marker variants; standalone
+  content markers still require their own traversal.
+- Editors can distinguish those grammar nodes from lexical segments.
+
+This is not proof that every recognized character is valid CHAT or represents
+spoken material. Recovery, imported model values and language-specific lexical
+validation retain separate contracts.
 
 The exclusions are built from the symbol registry (`src/generated_symbol_sets.js`)
 a single source of truth shared by the grammar and Rust code.
@@ -46,19 +54,16 @@ appear either **inside** or **outside** words, depending on whitespace:
                ^^^^    ← overlap_point: ⌈2
                    ^^^ ← word: "hey"
 
-*CHI:   Yeah ⌋⌈2 hey .
-        ^^^^           ← word: "Yeah"
-             ^^^^^     ← ONE word: "⌋⌈2" (contiguous = one token)
-                  ^^^  ← word: "hey"
 ```
 
-**Key insight:** The grammar uses `prec(5)` for both `overlap_point` and
-`word_segment`. When adjacent to text, maximal munch makes the longer
-`word_segment` match win. Overlap markers are ONLY recognized as
-`overlap_point` when space-separated on both sides.
+**Key insight:** an adjacent marker can belong to `word_body`, but remains a
+separate `overlap_point` child. It is never swallowed by `word_segment`.
+Word ownership is not token identity. A marker-only sequence does not satisfy
+the marker-initial word branch merely because its characters are contiguous.
 
-**`cleaned_text()` does NOT strip overlap markers.** They are part of
-the raw word content. Stripping for NLP is a downstream concern.
+The lexical projection excludes structural overlap leaves from `cleaned_text()`;
+the typed model and serialized transcription retain them. Downstream consumers
+should not implement a second character-stripping parser.
 
 ### Exception 2: Zero/Omission Prefix (0)
 
@@ -80,10 +85,10 @@ The `0` character as a word prefix means "omitted word." But standalone
 - When tree-sitter sees `zero • word_body`, prec(6) beats prec(1) → one word
 - `extras: []` (no implicit whitespace) prevents `0 die` from merging
 - `zero` is inlined directly into `standalone_word` (not through `word_prefix`)
-  because tree-sitter's precedence doesn't propagate through intermediate rules
+  to keep the competing zero alternatives at the intended grammar boundary
 
-**See also:** [Precedence Decisions](precedence-decisions.md) for the full
-proof and minimal grammar experiment.
+**See also:** [Precedence Decisions](precedence-decisions.md) for the scoped
+design rationale and the limits of the historical experiments.
 
 ### Exception 3: CA Mode Parenthetical = Non-CA Omission
 
@@ -125,16 +130,16 @@ Colon (`:`) has two meanings in CHAT:
               ^        ← separator(comma), space-delimited
 
 *CHI:   hello : world .
-              ^        ← SHOULD be separator(colon)
-                         ACTUALLY parsed as standalone_word(lengthening)
+              ^        ← separator(colon)
 ```
 
-**How it works:** `word_body` requires starting with `word_segment`,
-`shortening`, or `stress_marker`. `lengthening` and `+` cannot be the
-first element. So standalone `:` cannot form a valid `word_body`, and
-falls through to `separator(colon)`. But `no::` works because
-`word_segment("no")` starts the word body, then `lengthening("::")`
-follows.
+**How it works:** the ordinary `word_body` branch starts with `word_segment`,
+`shortening` or `stress_marker`. A separate marker-initial branch permits
+selected leading structural markers before one of those required elements.
+Neither branch starts with bare lengthening or `+`. The separator and word
+positions therefore have different admissible shapes; do not infer a universal
+lexer winner from the colon character alone. In `no::`, the lexical segment
+precedes the lengthening child.
 
 **Why colon is excluded from `word_segment`:** If colon were part of
 `word_segment`, `no::` would be one opaque word_segment and the grammar
@@ -143,8 +148,8 @@ colon makes `lengthening` a separate CST node.
 
 ## Why These Exceptions Exist
 
-Both exceptions exist because CHAT was designed for human readability, not
-machine parsing:
+These cases reflect the distinction between visible notation and grammar
+structure:
 
 1. **Overlap markers** were originally meant to be visually aligned across
    speaker turns. Transcribers place them adjacent to text to show exactly
@@ -174,20 +179,18 @@ The `+` character has three meanings:
 ^^             ^^^     ← linker: lazy_overlap, terminator: interruption
 ```
 
-**How it works:** All terminator and linker tokens use `prec(10)`, which
-beats `word_segment` at `prec(5)`. So `+...` is always a terminator, never
-part of a word. The compound `+` inside `ice+cream` works because it's
-part of the longer `word_segment` match (maximal munch at prec 5).
-
-**No valid CHAT word ends with `+`.** The `standalone_word` grammar enforces
-this, the word body's last character cannot be `+`. This ensures `to+...`
-is tokenized as word `to` + terminator `+...`, not word `to+` + `...`.
+**How it works:** the grammar distinguishes terminator and linker alternatives
+from the compound marker inside `word_body`. The `+` in `ice+cream` is its own
+child, not part of a longer `word_segment` token. Recognition alone does not
+prove valid compound placement; typed-model validation remains relevant.
 
 ### Exception 6: Bracket Annotations vs Plain Brackets
 
-Bracket annotations (`[= text]`, `[=! text]`, `[% text]`, etc.) use
-`prec(8)` prefix tokens to beat generic bracket handling. Without this,
-`[= explanation]` would be parsed as `[` + content + `]`.
+Structured bracket annotations such as `[= text]` and `[=! text]` use
+distinct prefix tokens, content and closing delimiters. Their prefix
+precedence does not by itself establish correct attachment, recovery or
+valid annotation content; those contracts belong to the enclosing rules and
+typed-model checks.
 
 The `[*]` error marker is the trickiest; it has optional content:
 `[*]` (bare) vs `[* s:r]` (with code). This remains an opaque token.

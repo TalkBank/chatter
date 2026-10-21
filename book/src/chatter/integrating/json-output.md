@@ -5,6 +5,9 @@
 
 This document describes the structure of JSON produced by `chatter to-json`.
 For the formal JSON Schema, see [JSON Schema](json-schema.md).
+Examples below are selected fields, not complete transcript fixtures. Ellipses
+are schematic placeholders, not JSON syntax; omitted fields and source spans
+must not be inferred from these illustrations.
 
 ## Quick Start
 
@@ -33,13 +36,18 @@ or `--skip-alignment` to opt out.
 }
 ```
 
-A `ChatFile` is a flat list of `lines`. Each line has a `line_type` discriminator:
+A `ChatFile` preserves file order in `lines`. It also serializes the
+`participants`, `languages`, and `options` metadata projections and, when
+present, `media`. Each line has a `line_type` discriminator:
 
 | `line_type` | Description |
 |-------------|-------------|
 | `"header"` | File header (`@Begin`, `@Languages`, `@Participants`, etc.) |
 | `"utterance"` | Main tier + dependent tiers + alignment |
-| `"comment"` | `@Comment:` lines |
+
+`@Comment:` is a `"header"` line whose `header.type` is `"comment"`, not
+a third line variant. Its payload is structured `content` (`BulletContent`),
+not a plain `text` field.
 
 ## Word Fields
 
@@ -78,7 +86,7 @@ they must not index derived spelling with offsets into that source.
 
 Rust callers use `Word::new(WordText)` for a nonempty plain-text model, then
 explicit typed builders for markers. Nonempty construction alone is not full
-CHAT admission. For external CHAT/ASR tokens, use `ChatParser::parse_word_fragment`
+CHAT admission. For external CHAT/ASR tokens, use `ChatParser::parse_word`
 and handle rejection explicitly instead of falling back to unchecked construction.
 There are no independent raw/cleaned constructor arguments and no `set_raw_text`.
 `raw_text()` returns an owned string; use `WriteChat::write_chat` or
@@ -151,7 +159,7 @@ ice+cream
   "cleaned_text": "icecream",
   "content": [
     { "type": "text", "content": "ice" },
-    { "type": "compound_marker", "content": { "span": { "start": 0, "end": 1 } } },
+    { "type": "compound_marker", "content": {} },
     { "type": "text", "content": "cream" }
   ]
 }
@@ -220,12 +228,14 @@ maison@s:fra
 The `lang` field has variants: `{"type": "shortcut"}` (bare `@s`),
 `{"type": "explicit", "code": "fra"}` (`@s:fra`), and
 `{"type": "multiple", "code": ["eng", "zho"]}` (`@s:eng+zho`).
+The distinct `"ambiguous"` variant uses the same array shape for
+`@s:eng&zho`; it does not mean the languages were mixed.
 
 A multi-word switch is an ANNOTATION on the group, not a field on each word:
 `<how to do it> [@s]` serializes as an annotation
 `{"type": "code_switch", "kind": "shortcut"}`, and `[@s:hin]` as
 `{"type": "code_switch", "kind": "explicit", "code": "hin"}`. The words inside
-keep `lang: null` unless they carry a suffix of their own, so a consumer
+omit `lang` unless they carry a suffix of their own, so a consumer
 reading only `lang` will under-report language switches. Read
 `language_metadata` instead, which is where the resolved answer lives for
 every word regardless of which mark produced it.
@@ -331,7 +341,7 @@ When present, `dependent_tiers` is an **array** of tagged objects:
           "main": { "pos": "verb", "lemma": "want", "features": ["Fin", "Ind", "Pres"] }
         }
       ],
-      "terminator": "."
+      "terminator": { "type": "period" }
     }
   },
   {
@@ -352,7 +362,7 @@ When present, `dependent_tiers` is an **array** of tagged objects:
 | `"Mor"` | `%mor` | Morphological analysis (POS tags, lemmas, features, clitics) |
 | `"Gra"` | `%gra` | Grammatical relations (dependency arcs) |
 | `"Pho"` | `%pho` | Phonological transcription |
-| `"Sin"` | `%sin` | Syntax tier |
+| `"Sin"` | `%sin` | Gesture and sign annotation |
 | `"Wor"` | `%wor` | Word-level timing (items with `inline_bullet`) |
 | Other | `%xxx` | User-defined dependent tiers |
 
@@ -378,8 +388,9 @@ The `Wor` tier contains word items with timing:
 }
 ```
 
-Note that %wor items use `"kind"` instead of `"type"` for their discriminator,
-since `"type"` is used by the tier envelope.
+`WorItem` uses `"kind"` instead of the main-tier content discriminator
+`"type"`. A `%wor` tier can also contain untimed separators, for example
+`{"kind": "separator", "text": ","}`; not every item is a timed word.
 
 ## Alignment Data
 
@@ -407,8 +418,12 @@ When validation runs (the default), the `alignments` object contains:
 }
 ```
 
-Alignment links each main-tier word (`source_index`) to its corresponding
-dependent-tier item (`target_index`) by position. `errors` contains any
+For `%mor`, each pair links positions in the main-tier alignable sequence
+(`source_index`) and the MOR item sequence (`target_index`). These are not
+raw content-array or language-metadata indices. Other tier pairs have their
+own domains: `%gra` aligns MOR chunks to grammatical relations; `%wor`
+uses `wor_timings`, a timing sidecar, rather than a structural alignment pair.
+Placeholder pairs can have a null index on one side. `errors` contains any
 alignment-level diagnostics (count mismatches, etc.) and is `[]` when
 alignment validated cleanly.
 
@@ -418,14 +433,14 @@ Headers use the `header` object with a `type` discriminator:
 
 | Type | Header | Key Fields |
 |------|--------|------------|
-| `"utf8"` | `@UTF8` |, |
-| `"begin"` | `@Begin` |, |
-| `"end"` | `@End` |, |
+| `"utf8"` | `@UTF8` | none |
+| `"begin"` | `@Begin` | none |
+| `"end"` | `@End` | none |
 | `"languages"` | `@Languages` | `codes` |
 | `"participants"` | `@Participants` | `entries` (speaker_code, name, role) |
 | `"id"` | `@ID` | `language`, `corpus`, `speaker`, `role`, `age`, `sex`, ... |
 | `"media"` | `@Media` | `filename`, `media_type`, `status` |
-| `"comment"` | `@Comment` | `text` |
+| `"comment"` | `@Comment` | `content` (`BulletContent`) |
 | `"date"` | `@Date` | `date` |
 | `"options"` | `@Options` | `options` (array of strings) |
 

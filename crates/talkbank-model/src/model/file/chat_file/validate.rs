@@ -10,6 +10,7 @@ use std::collections::HashSet;
 
 use super::ChatFile;
 use super::transcript_name::TranscriptName;
+use crate::alignment::unknown_alignment_warning;
 use crate::validation::{RuleSelection, Validate};
 use crate::{ErrorSink, ParseError};
 use crate::{Header, Line};
@@ -37,7 +38,7 @@ trait MediaTimingPhase {
     /// Settle the E544 observation: `untimed` is the declaration's span when
     /// linked media has no timing evidence. `errors` is the sequence's own
     /// sink, so a finding cannot go anywhere else.
-    fn settle(self, untimed: Option<crate::Span>, errors: &impl ErrorSink) -> Self::Outcome;
+    fn settle(self, untimed: Option<crate::Location>, errors: &impl ErrorSink) -> Self::Outcome;
 }
 
 /// Complete admission: an untimed linked-media declaration is E544.
@@ -45,9 +46,9 @@ struct CompleteMediaTiming;
 
 impl MediaTimingPhase for CompleteMediaTiming {
     type Outcome = ();
-    fn settle(self, untimed: Option<crate::Span>, errors: &impl ErrorSink) {
-        if let Some(span) = untimed {
-            report_missing_media_timing(span, errors);
+    fn settle(self, untimed: Option<crate::Location>, errors: &impl ErrorSink) {
+        if let Some(location) = untimed {
+            report_missing_media_timing(location, errors);
         }
     }
 }
@@ -56,54 +57,15 @@ impl MediaTimingPhase for CompleteMediaTiming {
 struct RegeneratingMediaTiming;
 
 impl MediaTimingPhase for RegeneratingMediaTiming {
-    type Outcome = Option<crate::Span>;
+    type Outcome = Option<crate::Location>;
     /// Reports nothing: the declaration is handed back, not judged.
-    fn settle(self, untimed: Option<crate::Span>, _errors: &impl ErrorSink) -> Option<crate::Span> {
+    fn settle(
+        self,
+        untimed: Option<crate::Location>,
+        _errors: &impl ErrorSink,
+    ) -> Option<crate::Location> {
         untimed
     }
-}
-
-fn unknown_alignment_warning(
-    alignment_name: &str,
-    left_label: &str,
-    left_span: crate::Span,
-    right_label: &str,
-    right_span: crate::Span,
-) -> ParseError {
-    let location = if !left_span.is_dummy() {
-        left_span
-    } else if !right_span.is_dummy() {
-        right_span
-    } else {
-        crate::Span::DUMMY
-    };
-
-    let mut error = ParseError::new(
-        crate::ErrorCode::TierValidationError,
-        crate::Severity::Warning,
-        crate::SourceLocation::new(location),
-        crate::ErrorContext::new("", location.to_range(), ""),
-        format!(
-            "Tier validation warning: skipped {} alignment because parse provenance is unknown for {} and {}",
-            alignment_name, left_label, right_label
-        ),
-    )
-    .with_suggestion(
-        "Run parser-backed validation to establish parse provenance before alignment checks",
-    );
-
-    if !left_span.is_dummy() {
-        error
-            .labels
-            .push(crate::ErrorLabel::new(left_span, left_label));
-    }
-    if !right_span.is_dummy() {
-        error
-            .labels
-            .push(crate::ErrorLabel::new(right_span, right_label));
-    }
-
-    error
 }
 
 /// Build file-level validation context from headers and participant IDs.
@@ -154,13 +116,14 @@ fn run_validation_checks<P: MediaTimingPhase>(
 ) -> P::Outcome {
     use crate::validation::cross_utterance;
 
-    let headers_with_spans: Vec<(&Header, crate::Span)> = file.headers_with_spans().collect();
+    let headers_with_locations: Vec<(&Header, crate::Location)> =
+        file.headers_with_locations().collect();
 
     // The header half, shared with `validate_headers_only`.
-    run_header_checks(file, &headers_with_spans, context, errors, name);
+    run_header_checks(file, &headers_with_locations, context, errors, name);
 
     // Cross-header validation: @ID language vs @Languages, role mismatch.
-    check_cross_header_consistency(file, &headers_with_spans, errors);
+    check_cross_header_consistency(file, &headers_with_locations, errors);
 
     // Validate utterances.
     for utt in file.utterances() {
@@ -193,16 +156,19 @@ fn run_validation_checks<P: MediaTimingPhase>(
     // final bullets alone.
     let timing_bullets = main_tier_timing_bullets(file);
     // E544: @Media declares linkage but transcript has no timing evidence.
-    let untimed_media =
-        check_media_linkage_has_timing(&headers_with_spans, file, timing_bullets.first().copied());
+    let untimed_media = check_media_linkage_has_timing(
+        &headers_with_locations,
+        file,
+        timing_bullets.first().copied(),
+    );
     let outcome = timing.settle(untimed_media, errors);
 
     // E552: the inverse, @Media declares `unlinked` but the transcript has
     // timing bullets, so the media is in fact linked (CLAN CHECK 124).
-    check_media_unlinked_has_no_timing(&headers_with_spans, file, &timing_bullets, errors);
+    check_media_unlinked_has_no_timing(&headers_with_locations, file, &timing_bullets, errors);
 
     // E752: timing evidence with NO @Media header at all (CLAN CHECK 112).
-    check_timing_has_media(&headers_with_spans, file, &timing_bullets, errors);
+    check_timing_has_media(&headers_with_locations, file, &timing_bullets, errors);
 
     // E755: a [- CODE] utterance language must be declared in @Languages
     // (CLAN CHECK 152); word-level @s:CODE deliberately exempt.
@@ -234,7 +200,7 @@ fn run_validation_checks<P: MediaTimingPhase>(
 /// validation.
 fn run_header_checks(
     file: &ChatFile,
-    headers_with_spans: &[(&Header, crate::Span)],
+    headers_with_locations: &[(&Header, crate::Location)],
     context: &crate::validation::ValidationContext,
     errors: &impl crate::ErrorSink,
     name: TranscriptName<'_>,
@@ -242,23 +208,26 @@ fn run_header_checks(
     use crate::validation::header;
 
     // Validate header collection (duplicates, required headers). The end of
-    // the file is the end of its last line; a file with no lines ends at 0.
-    let source_len = match file.lines.last() {
-        Some(last) => last.span().end as usize,
-        None => 0,
-    };
-    header::structure::check_headers(headers_with_spans, errors, source_len);
+    // the file is the end of its last located line; a file with no located
+    // lines (programmatic or read back from JSON) ends at 0.
+    let source_len = file
+        .lines
+        .iter()
+        .rev()
+        .find_map(|line| line.location().span())
+        .map_or(0, |span| span.end());
+    header::structure::check_headers(headers_with_locations, errors, source_len);
 
     // Validate individual headers.
-    for (header, span) in headers_with_spans {
-        header::check_header(header, *span, context, errors);
+    for (header, location) in headers_with_locations {
+        header::check_header(header, *location, context, errors);
     }
 
     // E531: the `@Media` filename must match the transcript's own name. Runs
     // only when the caller says the transcript HAS a name; `Anonymous` is a
     // deliberate answer, not a missing one (see `transcript_name`).
     if let Some(stem) = name.stem() {
-        check_media_filename_match(headers_with_spans, stem.as_str(), errors);
+        check_media_filename_match(headers_with_locations, stem.as_str(), errors);
     }
 }
 
@@ -276,8 +245,9 @@ impl ChatFile {
         errors: &impl ErrorSink,
         name: TranscriptName<'_>,
     ) -> crate::validation::ValidationContext {
-        let headers_with_spans: Vec<(&Header, crate::Span)> = self.headers_with_spans().collect();
-        let headers: Vec<&Header> = headers_with_spans.iter().map(|(h, _)| *h).collect();
+        let headers_with_locations: Vec<(&Header, crate::Location)> =
+            self.headers_with_locations().collect();
+        let headers: Vec<&Header> = headers_with_locations.iter().map(|(h, _)| *h).collect();
 
         // Extract participant IDs from parsed participant map.
         let participant_ids: HashSet<crate::model::SpeakerCode> =
@@ -290,7 +260,7 @@ impl ChatFile {
             RuleSelection::new(),
         );
 
-        run_header_checks(self, &headers_with_spans, &context, errors, name);
+        run_header_checks(self, &headers_with_locations, &context, errors, name);
 
         context
     }
@@ -326,9 +296,9 @@ impl ChatFile {
                 errors.push(unknown_alignment_warning(
                     "main↔%mor",
                     "main tier",
-                    utt.main.span,
+                    utt.main.location,
                     "%mor tier",
-                    mor.span,
+                    Some(mor.location),
                 ));
             }
 
@@ -344,9 +314,9 @@ impl ChatFile {
                 errors.push(unknown_alignment_warning(
                     "%mor↔%gra",
                     "%mor tier",
-                    mor.span,
+                    mor.location,
                     "%gra tier",
-                    gra.span,
+                    Some(gra.location),
                 ));
             }
 
@@ -370,9 +340,9 @@ impl ChatFile {
                 errors.push(unknown_alignment_warning(
                     "main↔%pho",
                     "main tier",
-                    utt.main.span,
+                    utt.main.location,
                     "%pho tier",
-                    pho.span,
+                    Some(pho.location),
                 ));
             }
 
@@ -388,9 +358,9 @@ impl ChatFile {
                 errors.push(unknown_alignment_warning(
                     "main↔%sin",
                     "main tier",
-                    utt.main.span,
+                    utt.main.location,
                     "%sin tier",
-                    sin.span,
+                    Some(sin.location),
                 ));
             }
         }
@@ -627,7 +597,7 @@ impl ChatFile {
         &mut self,
         errors: &impl crate::ErrorSink,
         name: TranscriptName<'_>,
-    ) -> Option<crate::Span> {
+    ) -> Option<crate::Location> {
         self.precompute_alignments();
         let headers: Vec<&Header> = self.headers().collect();
         let participant_ids = self.participants.keys().cloned().collect();
@@ -707,10 +677,11 @@ impl ChatFile {
     /// expecting a recording, with no status, in a document with no timing
     /// evidence. Shared by complete validation and by
     /// [`PendingTimingChatFile::discharge`](crate::validation::PendingTimingChatFile::discharge).
-    pub(crate) fn untimed_media_declaration(&self) -> Option<crate::Span> {
-        let headers_with_spans: Vec<(&Header, crate::Span)> = self.headers_with_spans().collect();
+    pub(crate) fn untimed_media_declaration(&self) -> Option<crate::Location> {
+        let headers_with_locations: Vec<(&Header, crate::Location)> =
+            self.headers_with_locations().collect();
         check_media_linkage_has_timing(
-            &headers_with_spans,
+            &headers_with_locations,
             self,
             first_main_tier_timing_bullet(self),
         )

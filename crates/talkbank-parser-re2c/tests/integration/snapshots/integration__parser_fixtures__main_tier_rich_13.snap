@@ -1,5 +1,6 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
+assertion_line: 92
 expression: result.unwrap()
 ---
 speaker:
@@ -21,7 +22,7 @@ tier_body:
         category: ~
         body:
           - Text: piro
-          - SyllablePause
+          - SyllablePause: ^
           - Text: ctano
         form_marker: c
         lang: ~

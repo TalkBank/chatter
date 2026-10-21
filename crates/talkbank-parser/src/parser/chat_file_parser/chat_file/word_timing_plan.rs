@@ -157,11 +157,11 @@ impl LoweredUtterance<DeferredWordTier> {
 /// Start offset of a word tier's source span. Distinct tiers never overlap,
 /// so it identifies a tier and orders tiers in source order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct SourceStart(u32);
+struct SourceStart(usize);
 
 impl SourceStart {
     fn of(source: &SourceTier) -> Self {
-        Self(source.span().start)
+        Self(source.span().start())
     }
 }
 
@@ -331,7 +331,12 @@ impl WordTimingCandidate {
         let mut located: BTreeMap<SourceStart, Vec<ParseError>> = BTreeMap::new();
         let mut unlocated = Vec::new();
         for diagnostic in diagnostics {
-            match self.locate(diagnostic.location.span) {
+            // An unlocated diagnostic lies in no tier.
+            match diagnostic
+                .location
+                .span()
+                .and_then(|span| self.locate(span))
+            {
                 Some(start) => located.entry(start).or_default().push(diagnostic),
                 None => unlocated.push(diagnostic),
             }
@@ -362,15 +367,12 @@ impl WordTimingCandidate {
         Ok(Attribution::Located(faulty))
     }
 
-    /// The retained word tier whose source span contains `span`, if any. A
-    /// span with no source location is in no tier.
+    /// The retained word tier whose source span contains `span`, if any.
+    /// Callers pass only located spans; an unlocated diagnostic is in no tier.
     fn locate(&self, span: Span) -> Option<SourceStart> {
-        if span.is_dummy() {
-            return None;
-        }
         let (start, tier) = self
             .inserted
-            .range(..=SourceStart(span.start))
+            .range(..=SourceStart(span.start()))
             .next_back()?;
         tier.source.span().contains_span(span).then_some(*start)
     }
@@ -389,7 +391,7 @@ impl WordTimingCandidate {
         let index = utterance
             .dependent_tiers
             .iter()
-            .position(|entry| matches!(&entry.tier, DependentTier::Wor(wor) if wor.span == span))
+            .position(|entry| matches!(&entry.tier, DependentTier::Wor(wor) if wor.location == talkbank_model::Location::Located(span)))
             .ok_or_else(|| disagreement("a retained word tier's entry", span))?;
         // The entry itself is dropped: the receipt keeps its source span and
         // its timing was read before it moved into the document.

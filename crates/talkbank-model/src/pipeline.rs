@@ -68,20 +68,22 @@ use crate::ParseError;
 use crate::ChatFile;
 use crate::validation::{AlignmentValidation, ValidationPolicy};
 
-/// Minimum structural validity required before a higher-level pipeline should
-/// spend additional work on a parsed CHAT file.
+/// Selected cumulative checks used by legacy workflow helpers.
 ///
-/// These levels are cumulative and intentionally coarser than the full
-/// validator's error taxonomy. They exist so orchestration layers can decide
-/// whether a file is safe enough for downstream processing without hard-coding
-/// command-specific checks.
+/// These names are historical, not complete validity capabilities. The
+/// `talkbank-transform` legacy helper checks an already-supplied model and
+/// diagnostic slice; it does not parse input or prove that the slice belongs
+/// to that model. Complete admission requires the checked parsing/construction
+/// boundary under a [`ValidationPolicy`], not a level label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValidityLevel {
-    /// L0: The file parsed without syntax-level parse errors.
+    /// L0: The supplied diagnostic slice is empty; the helper does not parse.
     Parseable = 0,
-    /// L1: The file is structurally complete enough for text-oriented passes.
+    /// L1: L0 plus a declared speaker roster and languages, declared utterance
+    /// speakers, and terminators unless the CA option waives them.
     StructurallyComplete = 1,
-    /// L2: The main tier content is well-formed enough for word-sensitive work.
+    /// L2: L1 plus rejection of a main tier lacking content, linkers and a
+    /// language precode. This does not validate individual words or timing.
     MainTierValid = 2,
 }
 

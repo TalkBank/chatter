@@ -11,7 +11,7 @@
 use super::UtterancePosition;
 use super::helpers::has_quoted_linker;
 use crate::model::Terminator;
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ParseError, Severity};
 
 /// Validates the `+"` linker against surrounding same-speaker quotation context.
 ///
@@ -64,15 +64,10 @@ pub(super) fn check_quoted_linker(position: &UtterancePosition<'_, '_>) -> Vec<P
     // If in Pattern B, verify it eventually ends with +".
     if !pattern_a_valid && !pattern_b_valid {
         errors.push(
-            ParseError::new(
+            ParseError::at_location(
                 ErrorCode::UnmatchedContentAnnotationEnd,
                 Severity::Error,
-                SourceLocation::new(utterance.main.span),
-                ErrorContext::new(
-                    format!("*{}: +\" ...", speaker),
-                    utterance.main.span,
-                    "quoted utterance linker",
-                ),
+                utterance.main.location,
                 format!(
                     "Quotation precedes pattern missing required terminator (+\". ) from speaker {}",
                     speaker

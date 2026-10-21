@@ -14,7 +14,9 @@ Set enforceable, language-specific standards that reduce ambiguity and improve l
 5. Require tests for every bugfix and behavior change.
 
 ## Rust Standards
-- Enforce formatter and clippy in CI.
+- Follow [Developer Verification Checks](dev-checks.md) and
+  [Quality Gates](quality-gates.md): formatting and release-time Clippy have
+  different execution scopes; do not add per-edit or commit gates.
 - Minimize `#[allow(clippy::...)]`; each allowance needs rationale.
 - Prefer small focused modules with clear ownership.
 - Public APIs require doc comments with examples and error behavior.
@@ -26,7 +28,10 @@ Set enforceable, language-specific standards that reduce ambiguity and improve l
   generate enum locals independently of user field names.
 - In parser code, disallow `ErrorSink` + `Option<T>` signatures for fallible parse operations.
   - Use explicit outcome enums or `Result` with structured diagnostics.
-  - Guardrail script: `scripts/check-errorsink-option-signatures.sh`.
+  - Preserve streamed diagnostic ownership; explicit production is not
+    validation. See [Parser, Model, and API Contracts](../architecture/parser-model-contracts.md).
+  - Constructor, wire, policy and public-boundary tests remain necessary
+    after typestate changes; see [Testing](testing.md#adding-tests-and-when-not-to).
 - For model enums that encode validation state, require `ValidationTagged` derive.
   - Explicit annotation: `#[validation_tag(error|warning|clean)]`.
   - Flags are variant-only and strictly parsed before emission; generic payloads
@@ -82,7 +87,8 @@ Adopt short ADR format in the book's architecture section:
 - rollback path.
 
 ## Acceptance Criteria
-- Coding standards are documented once and enforced automatically.
+- Name the actual owner and verification mechanism for each enforceable rule;
+  a documented standard is not proof of automatic enforcement.
 - Magic values are systematically reduced and tracked.
 - Every behavior change includes tests and doc impact assessment.
 - Architecture decisions are recorded and discoverable.

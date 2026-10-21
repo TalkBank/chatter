@@ -3,107 +3,66 @@
 **Status:** Current
 **Last modified:** {{git-dates:page}}
 
-Why `main()` in `crates/chatter/src/main.rs` does not run the program
-directly, and what every contributor adding CLI surface should know about
-stack budgets.
+The CLI runs argument construction, parsing and command execution on an
+explicitly sized thread. This keeps that work off the operating system's
+main-thread stack, whose available budget depends on the target and executable.
+The historical failure recorded in the startup regression was command-tree
+construction overflowing on Windows before argument parsing began.
 
-## The hazard this page addresses
+## Startup ownership
 
-The clap-derived command-tree construction (`Cli::augment_args` via
-`CommandFactory::command()`) runs before argument parsing and is shared
-by every subcommand. Its stack need grows with the number of declared
-flags. On Windows in debug builds, where the main thread has 1 MiB, a
-command tree large enough to cross that line makes every `chatter`
-invocation fail with `STATUS_STACK_OVERFLOW` (exit code `0xC00000FD`)
-before argument parsing begins. Each added flag or subcommand moves the
-tree closer to that line.
+`crates/chatter/src/main.rs` owns the transition:
 
-## Why stack usage is not portable
+1. `main()` requests a thread named `chatter-program` with
+   `PROGRAM_STACK_BYTES`.
+2. That thread runs `program_main()`: collect arguments, construct the clap
+   command tree, parse arguments and call `cli::run`.
+3. The main thread joins it. If the program thread unwinds, `resume_unwind`
+   propagates its panic payload. If thread creation fails, startup prints an
+   error and exits with status 1.
 
-Two multipliers vary independently, and the crash happens where they
-collide:
+The join describes normal return and unwinding, not every termination path:
+argument handling or commands can exit the process directly. An abort is not
+a recoverable worker result.
 
-1. **Platform main-thread allowance.** There is no single default:
+`PROGRAM_STACK_BYTES` aliases
+`talkbank_transform::worker_pool::CHAT_THREAD_STACK_BYTES`, currently 16 MiB.
+There are not two independent budgets to keep synchronized. This is an
+explicit requested stack size, not a proof that arbitrary nesting fits or a
+promise about physical-memory use or startup latency. Build profile, generated
+code and platform affect stack needs; evaluate a budget change deliberately.
 
-   | Context | Main/default stack |
-   |---------|--------------------|
-   | Windows main thread | 1 MiB (set in the PE header at link time) |
-   | macOS main thread | 8 MiB |
-   | Linux main thread | typically 8 MiB (`ulimit -s`) |
-   | Rust spawned threads | 2 MiB unless `stack_size` is given |
+## Regression evidence and its limits
 
-   Shipping cross-platform means your real budget is the smallest of
-   these: Windows' 1 MiB.
+The test lives at
+`crates/chatter/tests/integration/stack_limit_tests.rs` and is included by
+the CLI's integration test target. Its
+`help_runs_within_windows_sized_main_stack` test runs the actual test-built
+binary as `chatter --help`, through a shell that first sets `ulimit -s 1024`.
+The shell failure also fails the test because execution is chained with `&&`.
 
-2. **Build profile.** At opt-level 0, rustc gives every temporary in a
-   function body its own stack slot and does not coalesce them, so a
-   function's frame is roughly the SUM of all its temporaries, not the
-   maximum simultaneously alive. clap's derive expands to one enormous
-   builder function per args struct (one multi-call chain per flag, each
-   `Arg`/`Command` temporary a few hundred bytes by value), which is
-   exactly the shape this penalizes. Release builds coalesce slots and
-   inline, shrinking the same frames by one to two orders of magnitude.
+This Unix-only control checks startup and clap construction under that shell
+limit. It does not run every command, measure recursive parser depth, reproduce
+all Windows stack behavior, or qualify a released executable. The configured
+Windows job in `.github/workflows/cross-platform.yml` runs `just test-workspace`
+on Windows; an actual successful job is separate evidence, not implied by the
+configuration or a local Unix result.
 
-Consequence: identical code can be fine in release on macOS (8 MiB
-budget, small frames) and fatal in debug on Windows (1 MiB budget, fat
-frames). Debug test binaries cross the line first, which is why CI
-subprocess tests are where a too-large command tree shows up, well
-before release binaries do.
+## Worker threads and contributor guidance
 
-## The design: an explicitly sized program thread
+Keep command-tree construction and application work in `program_main()`, not
+before the spawn. For bounded file-processing fan-out, use
+`talkbank_transform::worker_pool::fan_out`; its scoped workers request the
+same `CHAT_THREAD_STACK_BYTES` budget.
 
-`main()` spawns the entire program onto a thread with an explicit,
-documented stack size (`PROGRAM_STACK_BYTES`, 16 MiB) and only joins and
-re-raises panics, so exit semantics are unchanged. This removes the
-dependency on platform main-stack defaults altogether instead of
-holding the budget under an invisible, platform-dependent line that the
-CLAN parity roadmap (roughly sixty commands' worth of flags still to
-come) would cross again. rustc itself uses the
-same pattern for the same reasons.
+Worker failure semantics differ from startup. `fan_out` joins its workers and
+returns `PoolRun`, whose `PoolOutcome` distinguishes normal returns, unwinding
+workers and inability to start a worker. Callers must consume that outcome;
+the presence of some worker results does not prove all work succeeded. If
+worker creation fails, no input is fed to the workers already started.
 
-```mermaid
-flowchart TD
-    main["main()\n(crates/chatter/src/main.rs)"]
-    spawn["thread::Builder::stack_size(PROGRAM_STACK_BYTES)\n.spawn(program_main)"]
-    prog["program_main()\nclap tree build + parse + cli::run"]
-    join{"join() result?"}
-    ok["process exits normally"]
-    panic["resume_unwind(payload)\n(same exit behavior as a panic in main)"]
-    fail["spawn failed (OS resource):\neprintln + exit(1)"]
-
-    main --> spawn
-    spawn -->|"Ok(handle)"| prog
-    prog --> join
-    join -->|"Ok(())"| ok
-    join -->|"Err(payload)"| panic
-    spawn -.->|"Err(e)"| fail
-```
-
-The reservation is virtual address space; physical pages are committed
-only as they are touched, so the 16 MiB costs nothing measurable. The
-extra thread spawn at startup is microseconds.
-
-## Regression gates
-
-- `crates/chatter/tests/stack_limit_tests.rs` runs the real binary
-  under a Windows-sized 1 MiB stack (`sh -c 'ulimit -s 1024'`) on Unix,
-  so macOS and Linux CI enforce the Windows constraint on every run.
-  Without this, the constraint would be tested only by the windows-latest
-  job.
-- The windows-latest cross-platform job is the native test of the real
-  1 MiB main stack (which does not constrain the program thread, but
-  guards the `main()` shim itself).
-
-## Guidance for contributors
-
-- Do not move program logic back onto the bare OS main thread; anything
-  before the `spawn` runs under the platform's smallest default.
-- Adding flags and subcommands is normal and expected; the budget is
-  the explicit `PROGRAM_STACK_BYTES` constant. If deep recursion or
-  generated code ever approaches it, raise the constant deliberately in
-  a reviewed change rather than discovering the limit in CI.
-- The same two multipliers apply to any worker threads you spawn:
-  Rust's 2 MiB spawned-thread default is also finite. Do not spawn your
-  own: fan work out through `talkbank_transform::worker_pool::fan_out`,
-  whose workers run on `CHAT_THREAD_STACK_BYTES` (16 MiB). The program
-  thread's `PROGRAM_STACK_BYTES` is that same constant, not a copy of it.
+The pool's `workers_run_on_the_large_stack` regression exercises recursive
+work. Neither that finite control nor the startup test establishes an unlimited
+recursion guarantee. New thread-owning components must account for their own
+stack and failure contract rather than assuming the CLI's program-thread
+setting applies to them.

@@ -16,6 +16,7 @@ use talkbank_model::ParseOutcome;
 
 use super::group::{contents_of, parse_group_contents};
 use super::report_tree_shape;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
 
 /// Parse a bare `quotation` node.
@@ -38,8 +39,7 @@ fn parse_quotation_content<'tree>(
     let node = typed.raw_node();
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
+        crate::parser::typed_cst::extract_inner(typed),
         typed.raw_node(),
         source,
         errors,
@@ -59,14 +59,7 @@ fn parse_quotation_content<'tree>(
             errors,
         );
     });
-    let group_items = match contents_of(associated.field_child_1().slot(), errors, |bad| {
-        report_tree_shape(
-            bad,
-            format!("Expected 'contents' in quotation, found '{}'", bad.kind()),
-            source,
-            errors,
-        );
-    }) {
+    let group_items = match contents_of(associated.field_child_1().slot(), errors) {
         Some(contents) => parse_group_contents(&contents, errors),
         None => Vec::new(),
     };
@@ -88,8 +81,8 @@ fn parse_quotation_content<'tree>(
     }
 
     let bracketed = crate::model::BracketedContent::new(group_items);
-    let span = crate::error::Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let quotation = crate::model::Quotation::with_span(bracketed, span);
+    let span = span_of(node);
+    let quotation = crate::model::Quotation::new(span, bracketed);
     ParseOutcome::parsed(UtteranceContent::Quotation(quotation))
 }
 
@@ -138,8 +131,7 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
     let node = typed.raw_node();
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
+        crate::parser::typed_cst::extract_inner(typed),
         typed.raw_node(),
         source,
         errors,
@@ -156,11 +148,8 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
         errors,
     );
 
-    // This projection lowers only a present composite quotation.
-    // Error or absence must still refuse to produce a quotation value.
-    let SourceSlotView::Present(quotation) = associated.field_quotation().slot().view() else {
-        return ParseOutcome::rejected();
-    };
+    // The required wrapper is present; nested payload validity stays separate.
+    let SourceSlotView::Present(quotation) = associated.field_quotation().slot().view();
     let Some(quotation) = crate::parser::typed_cst::read_source_field(quotation, errors) else {
         return ParseOutcome::rejected();
     };
@@ -185,15 +174,6 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
             }
             // Present-but-unusable (ERROR): the quotation still stands, and
             // recovery remains explicit despite source admission.
-            SourceSlotView::Missing(missing) => {
-                crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                    missing.raw_node(),
-                    source,
-                    errors,
-                    "quotation_with_annotations",
-                );
-                Vec::new()
-            }
             SourceSlotView::Error(_) => Vec::new(),
             SourceSlotView::Absent(never) => match never {},
         },
@@ -201,7 +181,7 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
         None => Vec::new(),
     };
 
-    let span = crate::error::Span::new(node.start_byte() as u32, node.end_byte() as u32);
+    let span = span_of(node);
     ParseOutcome::parsed(super::marker_chain::fold_marker_chain(
         content, markers, span,
     ))

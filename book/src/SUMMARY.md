@@ -17,6 +17,7 @@
 - [CLI Reference](chatter/user-guide/cli-reference.md)
 - [Validation Errors](chatter/user-guide/validation-errors.md)
 - [Chatter Desktop](chatter/user-guide/desktop-app.md)
+- [Editor Integration](chatter/user-guide/editor-integration.md)
 - [CLAN Line Numbering](chatter/user-guide/clan-line-numbering.md)
 - [Batch Workflows](chatter/user-guide/batch-workflows.md)
 - [CI Integration](chatter/user-guide/ci-integration.md)
@@ -31,6 +32,7 @@
 
 - [Overview](chat-format/overview.md)
 - [Headers](chat-format/headers.md)
+- [The CA Option](chat-format/options.md)
   - [File Names and @Media](chat-format/file-names.md)
 - [Utterances](chat-format/utterances.md)
 - [Retraces and Repetitions](chat-format/retraces.md)
@@ -101,6 +103,7 @@
 - [Branch Protection](contributing/branch-protection.md)
 - [Reference Corpus](contributing/reference-corpus.md)
 - [Desktop App Testing](contributing/desktop-testing.md)
+- [LSP Testing and Diagnosis](contributing/lsp-testing.md)
 
 # chatter, Integrating
 

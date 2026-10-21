@@ -5,14 +5,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Eg_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#G_Header>
 
-use crate::error::{ErrorSink, Span};
-use crate::generated_traversal::{Absence, Never};
+use crate::error::ErrorSink;
+use crate::generated_traversal::{Absence, Never, SourceRecovery};
 
 use crate::generated_traversal::{
     AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, FromNodeKind, HeaderSepNode,
     L1OfHeaderNode, NodeSlot, SlotView, SourceBound, SourceBoundKind, SourceField, SourceSlotView,
-    extract_birth_of_header, extract_birthplace_of_header, extract_header_sep,
-    extract_l1_of_header,
+    extract_birth_of_header, extract_birthplace_of_header, extract_l1_of_header,
 };
 use crate::generated_traversal::{
     FreeTextChild0Choice, FreeTextChild0ChoiceBoundView, FreeTextChild1Choice,
@@ -20,6 +19,7 @@ use crate::generated_traversal::{
 };
 use crate::model;
 use crate::model::TierSeparator;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
@@ -89,10 +89,15 @@ pub(crate) fn parse_optional_gem_label<'tree>(
 /// The piece a `free_text` position holds, if it holds one: an ERROR
 /// standing in the position is reported in the gem-label
 /// context; a MISSING piece and an absent position yield nothing.
-fn piece<'a, 'tree: 'a, 'source: 'a, T: SourceBoundKind<'tree> + 'a, A: Absence>(
-    slot: SourceField<'a, 'tree, 'source, NodeSlot<'tree, T, tree_sitter::Node<'tree>, Never, A>>,
+fn piece<'a, 'tree: 'a, 'source: 'a, T, M, A>(
+    slot: SourceField<'a, 'tree, 'source, NodeSlot<T, M, tree_sitter::Node<'tree>, Never, A>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<Option<SourceBound<'tree, 'source, T>>> {
+) -> ParseOutcome<Option<SourceBound<'tree, 'source, T>>>
+where
+    T: SourceBoundKind<'tree> + 'a,
+    M: SourceRecovery<'a, 'tree, 'source>,
+    A: Absence,
+{
     match slot.view() {
         SourceSlotView::Present(value) => {
             match crate::parser::typed_cst::read_source_field(value, errors) {
@@ -153,44 +158,59 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, FreeTextChild1Choice<'tree
 ///
 /// The trailing space must remain adjacent to the same separator's actual
 /// tab. Recovery can otherwise put a content space in this optional slot.
-pub(crate) fn header_separator(header_node: Node) -> TierSeparator {
+pub(crate) fn header_separator(header_node: Node) -> Result<TierSeparator, crate::CstFailure> {
     let qualified = if let Some(header) = BirthOfHeaderNode::from_node(header_node) {
-        Some(extract_birth_of_header(header).child_3.slot().clone())
+        Some(present_header_separator(
+            extract_birth_of_header(header).child_3.slot(),
+        ))
     } else if let Some(header) = BirthplaceOfHeaderNode::from_node(header_node) {
-        Some(extract_birthplace_of_header(header).child_3.slot().clone())
+        Some(present_header_separator(
+            extract_birthplace_of_header(header).child_3.slot(),
+        ))
     } else {
         L1OfHeaderNode::from_node(header_node)
-            .map(|header| extract_l1_of_header(header).child_3.slot().clone())
+            .map(|header| present_header_separator(extract_l1_of_header(header).child_3.slot()))
     };
     let sep = match qualified {
-        Some(NodeSlot::Present(sep)) => sep,
-        Some(_) => return TierSeparator::CLEAN,
+        Some(Some(sep)) => sep,
+        Some(None) => return Ok(TierSeparator::CLEAN),
         None => {
             let Some(sep) = header_node
                 .named_child(1)
                 .and_then(HeaderSepNode::from_node)
             else {
-                return TierSeparator::CLEAN;
+                return Ok(TierSeparator::CLEAN);
             };
             sep
         }
     };
-    let sep_children = extract_header_sep(sep);
+    let sep_children = crate::parser::typed_cst::extract_header_separator(sep)?;
     let trailing = sep_children.child_2.slot();
-    match trailing.as_ref().map(NodeSlot::view) {
+    Ok(match trailing.as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(sep))
             if matches!(sep_children.child_1.slot(), NodeSlot::Present(tab)
                 if tab.raw_node().end_byte() == sep.raw_node().start_byte()) =>
         {
             let raw = sep.raw_node();
-            TierSeparator::with_trailing_space(Span::new(
-                raw.start_byte() as u32,
-                raw.end_byte() as u32,
-            ))
+            TierSeparator::with_trailing_space(span_of(raw))
         }
         Some(SlotView::Present(_) | SlotView::Missing(_) | SlotView::Error(_)) | None => {
             TierSeparator::CLEAN
         }
+    })
+}
+
+/// Only a present separator establishes whitespace geometry, regardless of
+/// which proof axes its enclosing header exposes.
+fn present_header_separator<'tree, M, E, U, A>(
+    slot: &NodeSlot<HeaderSepNode<'tree>, M, E, U, A>,
+) -> Option<HeaderSepNode<'tree>> {
+    match slot {
+        NodeSlot::Present(separator) => Some(*separator),
+        NodeSlot::Missing(_)
+        | NodeSlot::Error(_)
+        | NodeSlot::Unexpected(_)
+        | NodeSlot::Absent(_) => None,
     }
 }
 

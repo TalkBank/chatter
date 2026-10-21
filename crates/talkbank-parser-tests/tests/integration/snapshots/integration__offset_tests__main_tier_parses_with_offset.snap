@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
+assertion_line: 384
 expression: main
 ---
 Some(
@@ -16,10 +17,12 @@ Some(
                 [
                     Word(
                         Word {
-                            span: Span {
-                                start: 206,
-                                end: 211,
-                            },
+                            location: Located(
+                                Span {
+                                    start: 206,
+                                    end: 211,
+                                },
+                            ),
                             word_id: None,
                             content: WordContents(
                                 [
@@ -46,10 +49,12 @@ Some(
                     ),
                     Word(
                         Word {
-                            span: Span {
-                                start: 212,
-                                end: 217,
-                            },
+                            location: Located(
+                                Span {
+                                    start: 212,
+                                    end: 217,
+                                },
+                            ),
                             word_id: None,
                             content: WordContents(
                                 [
@@ -78,32 +83,37 @@ Some(
             ),
             terminator: Some(
                 Period {
-                    span: Span {
-                        start: 218,
-                        end: 219,
-                    },
+                    location: Located(
+                        Span {
+                            start: 218,
+                            end: 219,
+                        },
+                    ),
                 },
             ),
             postcodes: TierPostcodes(
                 [],
             ),
             bullet: None,
-            content_span: Some(
+            location: Located(
                 Span {
                     start: 205,
                     end: 219,
                 },
             ),
-            language_code_span: None,
         },
-        span: Span {
-            start: 200,
-            end: 219,
-        },
-        speaker_span: Span {
-            start: 201,
-            end: 204,
-        },
+        location: Located(
+            Span {
+                start: 200,
+                end: 219,
+            },
+        ),
+        speaker_location: Located(
+            Span {
+                start: 201,
+                end: 204,
+            },
+        ),
         separator: TierSeparator {
             trailing_space: None,
         },

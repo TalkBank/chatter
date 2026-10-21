@@ -27,8 +27,8 @@ fn receipt_inventory(removed: &[RemovedTier]) -> String {
             format!(
                 "{:?} {}..{} recovery={} {cause} {codes:?}",
                 tier.tier(),
-                tier.span().start,
-                tier.span().end,
+                tier.span().start(),
+                tier.span().end(),
                 tier.had_syntax_recovery(),
             )
         })
@@ -127,7 +127,14 @@ fn word_only_regeneration_carries_linkage_until_complete_validation() {
             .document()
             .media
     );
-    assert!(!pending.pending_file().obligation().header_span().is_dummy());
+    assert!(
+        !pending
+            .pending_file()
+            .obligation()
+            .header_location()
+            .span()
+            .is_none()
+    );
     // The obligation is discharged only by the check that issued it, and only
     // against the document it travels with: the untimed working document hands
     // the payload back; once timing is written into that document, it
@@ -217,7 +224,10 @@ fn word_only_regeneration_carries_linkage_until_complete_validation() {
     };
     assert_eq!(warning.code.as_str(), "W110");
     assert_eq!(warning.severity, talkbank_model::Severity::Warning);
-    assert!(!warning.location.span.is_dummy());
+    assert!(matches!(
+        warning.location,
+        talkbank_model::DiagnosticLocation::Known { .. }
+    ));
     let warning = warning.clone();
     let before = named.document().to_chat_string();
     let refused = named
@@ -342,13 +352,11 @@ fn a_nonpositive_word_interval_removes_only_its_own_tier() {
             input[removed.span().to_range()].starts_with(&format!("%wor:\thello \u{15}{interval}"))
         );
         assert_eq!(located_codes(removed), [ErrorCode::TimestampBackwards]);
-        assert!(
+        assert!(removed.cause().diagnostics().iter().all(|d| {
             removed
-                .cause()
-                .diagnostics()
-                .iter()
-                .all(|d| removed.span().contains_span(d.location.span))
-        );
+                .span()
+                .contains_span(d.location.span().expect("located diagnostic"))
+        }));
         assert_eq!(
             admitted
                 .document()
@@ -419,7 +427,7 @@ fn a_duplicate_word_tier_removes_only_the_duplicate() {
         panic!("only the duplicate is removed");
     };
     let second = input.find(tier).map(|first| first + tier.len());
-    assert_eq!(Some(removed.span().start as usize), second);
+    assert_eq!(Some(removed.span().start()), second);
     assert_eq!(located_codes(removed), [ErrorCode::DuplicateDependentTier]);
     assert_eq!(admitted.document().to_chat_string(), reference);
 }

@@ -11,24 +11,37 @@ use talkbank_model::Span;
 ///
 /// Uses `saturating_add` to avoid overflow when computing `end`.
 fn arb_span() -> impl Strategy<Value = Span> {
-    (0u32..10_000, 0u32..1_000).prop_map(|(start, len)| Span::new(start, start.saturating_add(len)))
+    (0usize..10_000, 0usize..1_000)
+        .prop_map(|(start, len)| Span::new(start, start.saturating_add(len)))
 }
 
 /// Strategy for generating a non-empty `Span` (start < end).
 fn arb_nonempty_span() -> impl Strategy<Value = Span> {
-    (0u32..10_000, 1u32..1_000).prop_map(|(start, len)| Span::new(start, start.saturating_add(len)))
+    (0usize..10_000, 1usize..1_000)
+        .prop_map(|(start, len)| Span::new(start, start.saturating_add(len)))
 }
 
 proptest! {
-    /// `Span::len()` never panics, regardless of start and end values.
+    /// Checked admission refuses exactly the inverted ranges, and every
+    /// admitted span measures `end - start`.
     ///
-    /// Uses `saturating_sub` internally, so even spans where start > end
-    /// (which are structurally odd but not prevented by the constructor)
-    /// should return 0 rather than panicking.
+    /// An inverted span cannot be constructed through the checked path, so
+    /// `len()` never meets one.
     #[test]
-    fn span_len_never_panics(start in 0u32..=u32::MAX, end in 0u32..=u32::MAX) {
-        // Should not panic, that is the entire assertion.
-        let _ = Span::new(start, end).len();
+    fn span_admission_refuses_inversion_and_measures_length(
+        start in 0usize..=u32::MAX as usize,
+        end in 0usize..=u32::MAX as usize,
+    ) {
+        match Span::try_new(start, end) {
+            Ok(span) => {
+                prop_assert!(start <= end);
+                prop_assert_eq!(span.len(), end - start);
+            }
+            Err(refused) => {
+                prop_assert!(start > end);
+                prop_assert_eq!(refused, talkbank_model::InvertedSpan { start, end });
+            }
+        }
     }
 
     /// A non-empty span contains its own start offset.
@@ -38,9 +51,9 @@ proptest! {
     #[test]
     fn span_contains_offset_boundary(span in arb_nonempty_span()) {
         prop_assert!(
-            span.contains_offset(span.start),
+            span.contains_offset(span.start()),
             "Span({}, {}) should contain its start offset {}",
-            span.start, span.end, span.start
+            span.start(), span.end(), span.start()
         );
     }
 
@@ -51,9 +64,9 @@ proptest! {
     #[test]
     fn span_contains_offset_exclusive_end(span in arb_span()) {
         prop_assert!(
-            !span.contains_offset(span.end),
+            !span.contains_offset(span.end()),
             "Span({}, {}) should NOT contain its end offset {}",
-            span.start, span.end, span.end
+            span.start(), span.end(), span.end()
         );
     }
 
@@ -91,12 +104,12 @@ proptest! {
     ///
     /// A point span has `start == end`, so `is_empty()` must be true.
     #[test]
-    fn span_at_is_empty(x in 0u32..=u32::MAX) {
+    fn span_at_is_empty(x in 0usize..=u32::MAX as usize) {
         let span = Span::at(x);
         prop_assert!(
             span.is_empty(),
             "Span::at({}) should be empty, got start={} end={}",
-            x, span.start, span.end
+            x, span.start(), span.end()
         );
     }
 
@@ -106,7 +119,7 @@ proptest! {
     #[test]
     fn span_to_range_matches(span in arb_span()) {
         let range = span.to_range();
-        let expected = (span.start as usize)..(span.end as usize);
+        let expected = (span.start())..(span.end());
         prop_assert_eq!(range, expected);
     }
 
@@ -118,7 +131,7 @@ proptest! {
     fn span_contains_transitivity(
         a in arb_nonempty_span(),
         b in arb_nonempty_span(),
-        c_offset in 0u32..10_000
+        c_offset in 0usize..10_000
     ) {
         if a.contains_span(b) && b.contains_offset(c_offset) {
             prop_assert!(

@@ -29,7 +29,6 @@
 //!
 //! - [CHAT Manual: Word Tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)
 
-use crate::Span;
 use crate::model::content::word::Word;
 use crate::model::{Bullet, LanguageCode, Terminator};
 use schemars::JsonSchema;
@@ -87,9 +86,9 @@ pub enum WorItem {
         text: String,
 
         /// Source span for error reporting.
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
-        span: Span,
+        location: crate::Location,
     },
 }
 
@@ -166,9 +165,9 @@ pub struct WorTier {
     pub terminator: Option<Terminator>,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 /// Presence of an actual timing bullet on a typed `%wor` tier.
@@ -197,32 +196,17 @@ impl<'tier> RecordedWorTiming<'tier> {
     }
 }
 
-impl Default for WorTier {
-    /// Returns an empty `%wor` tier with unset language and terminator fields.
-    ///
-    /// `Default` is primarily for builder-style assembly and test fixtures.
-    /// Parser output should still attach real spans and parsed content explicitly.
-    fn default() -> Self {
-        Self {
-            language_code: None,
-            items: Vec::new(),
-            terminator: None,
-            span: Span::DUMMY,
-        }
-    }
-}
-
 impl WorTier {
     /// Create a new word timing tier from a list of items.
     ///
     /// This constructor keeps item ordering unchanged, because timing alignment
     /// and serialization both depend on original sequence.
-    pub fn new(items: Vec<WorItem>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, items: Vec<WorItem>) -> Self {
         Self {
             language_code: None,
             items,
             terminator: None,
-            span: Span::DUMMY,
+            location: location.into(),
         }
     }
 
@@ -230,8 +214,9 @@ impl WorTier {
     ///
     /// This is a convenience for generated tiers where every slot is a word.
     /// Separator-bearing tiers should use [`Self::new`] with explicit `WorItem`s.
-    pub fn from_words(words: Vec<Word>) -> Self {
+    pub fn from_words(location: impl Into<crate::Location>, words: Vec<Word>) -> Self {
         Self::new(
+            location,
             words
                 .into_iter()
                 .map(|w| WorItem::Word(Box::new(w)))
@@ -296,15 +281,6 @@ impl WorTier {
     /// per-word inline bullets.
     pub fn with_language_code(mut self, language_code: Option<LanguageCode>) -> Self {
         self.language_code = language_code;
-        self
-    }
-
-    /// Set the source span (builder pattern).
-    ///
-    /// Parser paths should set concrete spans so `%wor` mismatch diagnostics can
-    /// point to source locations in the original transcript.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
         self
     }
 }

@@ -21,7 +21,7 @@ The authoritative symbol definitions live in `spec/symbols/symbol_registry.json`
 After any change to the symbol registry, run:
 
 ```bash
-just symbols-gen
+just regen
 ```
 
 ## Symbol Categories
@@ -40,15 +40,20 @@ Punctuation that ends an utterance:
 | `+/.` | Interruption | Speaker interrupted by another |
 | `+//.` | Self-interruption | Speaker interrupts self |
 | `+/?` | Interrupted question | Question interrupted |
-| `+!?` | Broken question | Exclamation-question |
+| `+!?` | Broken question | Broken-off question |
 | `+"/.` | Quoted new line | Quotation continues on next line |
+| `+".` | Quoted period | Quoted utterance with period |
+| `+//?` | Self-interrupted question | Speaker interrupts their own question |
+| `+.` | Break for coding | Coding break |
 
 ### CA and Disfluency Symbols
 
 The tables below are GENERATED from `spec/symbols/symbol_registry.json`, which
 is the single owner of what each symbol means. The Rust types
 `CAElementType` and `CADelimiterType`, the grammar's character constants and
-these tables all come from the same record, so they cannot disagree.
+these tables come from the same record. Regeneration and currency checks keep
+the checked-in consumers synchronized; a shared generator does not by itself
+prove that generated files are current.
 
 **The category names describe a PARSING ROLE, not a provenance.** A
 `ca_element_symbol` attaches to a word token; a `ca_delimiter_symbol` brackets
@@ -76,13 +81,15 @@ above have already made, and it is outstanding work rather than a decision.
 | `↘` | U+2198 | Falling to mid |
 | `⇗` | U+21D7 | Rising to high |
 | `⇘` | U+21D8 | Falling to low |
-| `↖` `↙` `←` | U+2196, U+2199, U+2190 | Registered as separators; named in neither the CHAT manual's symbol table nor CLAN's symbol enum. |
 
 ### Word Segment Characters
 
 Characters that are forbidden at the start of words, forbidden in the rest of words, or forbidden throughout. These define the lexical boundaries of what constitutes a "word" in CHAT.
 
-The grammar uses these sets to construct the word-matching regex patterns. Characters like `[`, `]`, `<`, `>`, `(`, `)` are structural delimiters and cannot appear inside words.
+The grammar uses these sets for ordinary word segments, not for every component
+of a structured word. For example, parentheses delimit a shortening inside a
+word: `walkin(g)`. See [word syntax](word-syntax.md); a segment exclusion must
+not be treated as a ban on that character anywhere in the complete word.
 
 ### Event Segment Characters
 
@@ -106,24 +113,19 @@ Common codes: `eng` (English), `fra` (French), `deu` (German), `spa` (Spanish), 
 The form-marker set has ONE owner:
 `spec/form_markers/form_marker_registry.json`. The `FormType` enum, both
 directions of its marker mapping, the re2c lexer's code set and the table below
-are all generated from it, so a marker cannot exist in one and not another.
+are generated from it. Regenerate and check the derived files together when
+changing the registry.
 
 {{#include generated/form-markers.md}}
 
-Every meaning above is taken from the "Special Form Markers" table in the CHAT
-manual, and each links to that marker's own anchor there. The meanings are the
-manual's, not expansions of the letters: `@k` is "kana" (multiple letters), `@p`
-a phonologically consistent form, `@sl` signed language, `@sas` sign and
-speech, `@g` the general special form, and `@ls` the letter plural (the letter
-sequence is `@k`). If you find another that disagrees with the manual, the
-manual wins.
-
-`@a` is not a form marker. The corpus authority eliminated it from every file
-together with `@e` and `@lp`; it has no main-tier occurrences in any corpus,
-and appears in neither `depfile.cut` nor the manual's table.
+The registry records its authorities: the CHAT manual supplies meanings,
+while the sanctioned set follows `depfile.cut`, with disagreements recorded
+on the relevant row. Consult those records rather than inferring a meaning
+from the marker's letters. `@a`, `@e` and `@lp` are not members of this
+registry; that local inventory makes no claim about their frequency in corpora.
 
 The second-language qualifier `@s:LANG` is a separate construct (see
-the L2 morphotag section of the Batchalign book); it is not part of
+[word syntax](word-syntax.md)); it is not part of
 `FormType`.
 
 ### & Markers (Events and Fillers)

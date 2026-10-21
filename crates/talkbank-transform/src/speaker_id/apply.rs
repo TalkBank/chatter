@@ -51,12 +51,12 @@ pub fn apply_mapping_chat(chat: &ChatFile, mapping: &MappingSpec) -> String {
             },
             Line::Header {
                 header,
-                span,
+                location: span,
                 separator,
             } => match rewrite_header(header.as_ref(), mapping) {
                 HeaderRewrite::Keep(h) => new_lines.push(Line::Header {
                     header: Box::new(h),
-                    span: *span,
+                    location: *span,
                     separator: *separator,
                 }),
                 HeaderRewrite::Drop => { /* skip */ }

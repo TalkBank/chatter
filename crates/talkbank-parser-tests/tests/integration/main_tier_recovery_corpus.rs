@@ -64,10 +64,10 @@ mod admitted {
                         WordItem::ReplacedWord(word) => &word.word,
                         WordItem::Separator(_) => return,
                     };
-                    if self
-                        .source
-                        .get(word.span.start as usize..word.span.end as usize)
-                        == Some(spelling)
+                    if self.source.get(
+                        word.location.span().expect("located").start()
+                            ..word.location.span().expect("located").end(),
+                    ) == Some(spelling)
                     {
                         matches.push(word);
                     }
@@ -89,13 +89,13 @@ mod admitted {
                 .nth(1)
                 .expect("prefix target")
                 .main
-                .span;
+                .location;
             for node in root.descendants() {
                 let node = node.expect("readable native range");
                 let Some(main) = node.typed::<MainTierNode>() else {
                     continue;
                 };
-                if main.raw_node().start_byte() != expected.start as usize {
+                if main.raw_node().start_byte() != expected.span().expect("located").start() {
                     continue;
                 }
                 let associated = main.extract();
@@ -130,7 +130,10 @@ mod admitted {
 
         pub(super) fn word_edit(&self, spelling: &str) -> OwnedEdit<'_> {
             let word = self.word(spelling);
-            self.own_edit(word.span.start as usize..word.span.end as usize)
+            self.own_edit(
+                word.location.span().expect("located").start()
+                    ..word.location.span().expect("located").end(),
+            )
         }
 
         pub(super) fn prelude_edit(&self, word: &str, field: PreludeField) -> OwnedEdit<'_> {
@@ -139,36 +142,40 @@ mod admitted {
                 .file
                 .utterances()
                 .find(|utterance| {
-                    let span = utterance.main.span;
-                    span.start <= word.span.start && word.span.end <= span.end
+                    let span = utterance.main.location;
+                    span.span().expect("located").start()
+                        <= word.location.span().expect("located").start()
+                        && word.location.span().expect("located").end()
+                            <= span.span().expect("located").end()
                 })
                 .expect("word's admitted prelude")
                 .main;
             let (span, spelling) = match field {
                 PreludeField::Linker(index) => {
                     let token = main.content.linkers.get(index).expect("admitted linker");
-                    (token.span, token.to_string())
+                    (
+                        token.location.span().expect("admitted linker span"),
+                        token.to_string(),
+                    )
                 }
-                PreludeField::LanguageCode => (
-                    main.content
-                        .language_code_span
-                        .expect("admitted precode span"),
-                    format!(
-                        "[- {}]",
-                        main.content
-                            .language_code
-                            .as_ref()
-                            .expect("admitted language code")
-                            .as_str()
-                    ),
-                ),
+                PreludeField::LanguageCode => {
+                    let precode = main
+                        .content
+                        .language_code
+                        .as_ref()
+                        .expect("admitted language code");
+                    (
+                        precode.location.span().expect("admitted precode span"),
+                        format!("[- {}]", precode.code.as_str()),
+                    )
+                }
             };
             assert_eq!(
-                self.source.get(span.start as usize..span.end as usize),
+                self.source.get(span.start()..span.end()),
                 Some(spelling.as_str()),
                 "complete modeled prelude token"
             );
-            self.own_edit(span.start as usize..span.end as usize)
+            self.own_edit(span.start()..span.end())
         }
 
         pub(super) fn ending_edit(&self, word: &str, field: EndingField) -> OwnedEdit<'_> {
@@ -177,8 +184,11 @@ mod admitted {
                 .file
                 .utterances()
                 .find(|utterance| {
-                    let span = utterance.main.span;
-                    span.start <= word.span.start && word.span.end <= span.end
+                    let span = utterance.main.location;
+                    span.span().expect("located").start()
+                        <= word.location.span().expect("located").start()
+                        && word.location.span().expect("located").end()
+                            <= span.span().expect("located").end()
                 })
                 .expect("word's admitted main tier")
                 .main;
@@ -189,11 +199,11 @@ mod admitted {
                         .terminator
                         .as_ref()
                         .expect("admitted terminator");
-                    (token.span(), token.to_chat_string())
+                    (token.location(), token.to_chat_string())
                 }
                 EndingField::FirstPostcode => {
                     let token = main.content.postcodes.first().expect("admitted postcode");
-                    (token.span, token.to_chat_string())
+                    (token.location, token.to_chat_string())
                 }
                 EndingField::Bullet => {
                     let token = main
@@ -201,15 +211,19 @@ mod admitted {
                         .bullet
                         .as_ref()
                         .expect("admitted terminal bullet");
-                    (token.span, token.to_chat_string())
+                    (token.location, token.to_chat_string())
                 }
             };
             assert_eq!(
-                self.source.get(span.start as usize..span.end as usize),
+                self.source.get(
+                    span.span().expect("located").start()..span.span().expect("located").end()
+                ),
                 Some(spelling.as_str()),
                 "complete modeled ending token"
             );
-            self.own_edit(span.start as usize..span.end as usize)
+            self.own_edit(
+                span.span().expect("located").start()..span.span().expect("located").end(),
+            )
         }
 
         fn own_edit(&self, range: Range<usize>) -> OwnedEdit<'_> {
@@ -218,14 +232,16 @@ mod admitted {
                 .file
                 .utterances()
                 .find(|utterance| {
-                    let span = utterance.main.span;
-                    span.start as usize <= range.start && range.end <= span.end as usize
+                    let span = utterance.main.location;
+                    span.span().expect("located").start() <= range.start
+                        && range.end <= span.span().expect("located").end()
                 })
                 .expect("edit is inside one admitted main tier");
             OwnedEdit {
                 control: self,
                 range,
-                tier: main.main.span.start as usize..main.main.span.end as usize,
+                tier: main.main.location.span().expect("located").start()
+                    ..main.main.location.span().expect("located").end(),
             }
         }
     }
@@ -319,7 +335,7 @@ impl<'control> Candidate<'control> {
     }
 
     fn translated(&self, span: talkbank_model::Span) -> Range<usize> {
-        let range = span.start as usize..span.end as usize;
+        let range = span.start()..span.end();
         if range.start >= self.edit.end {
             let delta = self.replacement_len as isize - self.edit.len() as isize;
             range
@@ -415,44 +431,35 @@ fn observe(
         .iter()
         .chain(&validation_diagnostics)
         .any(|error| {
-            let span = error.location.span;
-            error.code.as_str() == code
-                && span.start as usize <= focus.end
-                && focus.start <= span.end as usize
+            let span = error.location.span().expect("located diagnostic");
+            error.code.as_str() == code && span.start() <= focus.end && focus.start <= span.end()
         })
     {
         failures.push(format!("{code}: no diagnostic names the owned mutation"));
     }
     for error in diagnostics.iter().chain(&validation_diagnostics) {
-        let span = error.location.span;
-        if candidate
-            .source
-            .get(span.start as usize..span.end as usize)
-            .is_none()
-        {
+        let span = error.location.span().expect("located diagnostic");
+        if candidate.source.get(span.start()..span.end()).is_none() {
             failures.push(format!(
                 "{code}: diagnostic escapes UTF-8 source: {error:?}"
             ));
         }
         for label in &error.labels {
             let span = label.span;
-            if candidate
-                .source
-                .get(span.start as usize..span.end as usize)
-                .is_none()
-            {
+            if candidate.source.get(span.start()..span.end()).is_none() {
                 failures.push(format!("{code}: label escapes UTF-8 source: {label:?}"));
             }
         }
     }
     let mut absorbed = 0;
     for expected in candidate.control.file().utterances() {
-        if expected.main.span.start as usize == candidate.tier.start {
+        if expected.main.location.span().expect("located").start() == candidate.tier.start {
             continue;
         }
-        let range = candidate.translated(expected.main.span);
+        let range = candidate.translated(expected.main.location.span().expect("located"));
         if matches!(neighbors, NativeNeighbors::AbsorbsNext)
-            && expected.main.span.start as usize == candidate.original_tier.end
+            && expected.main.location.span().expect("located").start()
+                == candidate.original_tier.end
         {
             absorbed += 1;
             let body_end = range.start
@@ -466,9 +473,9 @@ fn observe(
                 || !recovery
                     .iter()
                     .any(|error| error.start <= candidate.tier.start && body_end <= error.end)
-                || file
-                    .utterances()
-                    .any(|utterance| utterance.main.span.start as usize == range.start)
+                || file.utterances().any(|utterance| {
+                    utterance.main.location.span().expect("located").start() == range.start
+                })
             {
                 failures.push(format!(
                     "{code}: expected next-turn absorption changed: {range:?}"
@@ -485,8 +492,8 @@ fn observe(
         let retained: Vec<_> = file
             .utterances()
             .filter(|utterance| {
-                utterance.main.span.start as usize == range.start
-                    && utterance.main.span.end as usize == range.end
+                utterance.main.location.span().expect("located").start() == range.start
+                    && utterance.main.location.span().expect("located").end() == range.end
             })
             .collect();
         if retained.len() != 1 || !expected.semantic_eq(retained[0]) {
@@ -600,7 +607,9 @@ fn marker_only_words_are_rejected_without_erasing_their_native_tier() {
         );
         let retained = file
             .utterances()
-            .find(|utterance| utterance.main.span.start as usize == candidate.tier.start)
+            .find(|utterance| {
+                utterance.main.location.span().expect("located").start() == candidate.tier.start
+            })
             .expect("marker rejection retains its terminated tier");
         let mut words = Vec::new();
         walk_words(
@@ -752,9 +761,9 @@ fn admitted_recovery_controls_preserve_file_and_fragment_main_tiers() {
         let control = AdmittedControl::parse(source);
         let path = workspace_root().join("corpus/reference").join(path);
         for utterance in control.file().utterances() {
-            let span = utterance.main.span;
+            let span = utterance.main.location;
             let input = source
-                .get(span.start as usize..span.end as usize)
+                .get(span.span().expect("located").start()..span.span().expect("located").end())
                 .expect("owned main tier");
             for input in [input, input.trim_end_matches('\n')] {
                 let errors = ErrorCollector::new();

@@ -7,10 +7,7 @@
 use super::TreeSitterParser;
 use super::helpers::{MINIMAL_CHAT_PREFIX, MINIMAL_CHAT_SUFFIX};
 use crate::api::fragment::WrappedFragment;
-use crate::error::{
-    ErrorCode, ErrorCollector, ErrorContext, ParseError, ParseErrors, ParseResult, Severity,
-    SourceLocation,
-};
+use crate::error::{ErrorCode, ErrorCollector, ParseErrors, ParseResult, Severity};
 use crate::generated_traversal::{
     FromNodeKind, NodeSlot, SourceFileChoice, SourceFileNode, extract_source_file,
 };
@@ -32,7 +29,7 @@ impl<'input> UtteranceInput<'input> {
         let newline = if input.ends_with('\n') { "" } else { "\n" };
         // Admission checks the complete probe capacity before allocation. A
         // failed parse propagates; it must not be mistaken for fragment shape.
-        let probe = WrappedFragment::new(&[], input, newline, 0)?;
+        let probe = WrappedFragment::local(&[], input, newline)?;
         let complete = {
             let parsed = probe.parse(parser)?;
             match SourceFileNode::from_node(parsed.parsed_source().root_node()) {
@@ -56,11 +53,10 @@ impl<'input> UtteranceInput<'input> {
     fn into_wrapped(self) -> ParseResult<WrappedFragment<'input>> {
         match self {
             Self::Complete(probe) => Ok(probe),
-            Self::NeedsWrapper { input, newline } => WrappedFragment::new(
+            Self::NeedsWrapper { input, newline } => WrappedFragment::local(
                 &[MINIMAL_CHAT_PREFIX],
                 input,
                 &format!("{newline}{MINIMAL_CHAT_SUFFIX}"),
-                0,
             ),
         }
     }
@@ -74,30 +70,27 @@ impl<'input> UtteranceInput<'input> {
 pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseResult<Utterance> {
     let fragment = UtteranceInput::admit(parser, input)?.into_wrapped()?;
     let errors_sink = ErrorCollector::new();
-    let file =
-        parser.parse_chat_file_streaming(fragment.source(), &fragment.error_sink(&errors_sink));
+    let file = fragment.parse_file(parser, &errors_sink);
     let parse_errors = errors_sink.into_vec();
     if !parse_errors.is_empty() {
         return Err(ParseErrors::from(parse_errors));
     }
 
     let utterance = file
-        .lines
-        .into_iter()
-        .find_map(|line| match line {
-            Line::Utterance(utterance) => Some(*utterance),
-            _ => None,
+        .map(|file| {
+            file.lines.into_iter().find_map(|line| match line {
+                Line::Utterance(utterance) => Some(*utterance),
+                _ => None,
+            })
         })
+        .transpose()
         .ok_or_else(|| {
-            let mut errors = ParseErrors::new();
-            errors.push(ParseError::new(
+            ParseErrors::from(vec![fragment.whole_input_error(
                 ErrorCode::MissingMainTier,
                 Severity::Error,
-                SourceLocation::from_offsets(0, input.len()),
-                ErrorContext::new(input, 0..input.len(), input),
+                input,
                 "No utterance found in parsed output",
-            ));
-            errors
+            )])
         })?;
 
     Ok(fragment.rebase(utterance))
@@ -118,15 +111,15 @@ mod tests {
             let admitted = UtteranceInput::admit(&parser, input).expect("admitted document");
             assert!(matches!(admitted, UtteranceInput::Complete(_)));
             let wrapped = admitted.into_wrapped().expect("complete envelope");
-            assert_eq!(wrapped.source(), source);
+            assert_eq!(wrapped.synthetic_source(), source);
             let errors = parse_utterance(&parser, input)
                 .expect_err("no utterance")
                 .into_error_vec();
             assert_eq!(errors.len(), 1);
             assert_eq!(errors[0].code, ErrorCode::MissingMainTier);
             assert_eq!(
-                errors[0].location.span,
-                crate::error::Span::from_usize(0, input.len())
+                errors[0].location.span().expect("located diagnostic"),
+                crate::error::Span::new(0, input.len())
             );
         }
     }

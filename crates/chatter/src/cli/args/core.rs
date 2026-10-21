@@ -1,6 +1,7 @@
 use clap::Subcommand;
 use std::path::PathBuf;
 
+use talkbank_transform::sanity_scan::SanityScanThreshold;
 use talkbank_transform::speaker_id::ConfidenceThreshold;
 
 use super::cache_commands::CacheCommands;
@@ -22,15 +23,14 @@ pub enum Commands {
         #[arg(required_unless_present = "list_checks")]
         path: Vec<PathBuf>,
 
-        /// Print every validation check and its Active/Planned status, then exit.
+        /// Print every validation check and its Active/Opt-in/Planned status, then exit.
         ///
         /// Does not read any files. The list is derived from the
-        /// `ErrorCode` enum and a hard-coded Planned list that mirrors
-        /// `spec/errors/*.md` statuses.
+        /// generated `ErrorCode` registry, which owns each code's enforcement status.
         #[arg(
             long,
             conflicts_with = "path",
-            help = "List all validation checks with Active/Planned status, then exit"
+            help = "List all validation checks with Active/Opt-in/Planned status, then exit"
         )]
         list_checks: bool,
 
@@ -144,7 +144,7 @@ pub enum Commands {
 
         /// Explicit-mapping specification, comma-separated
         /// assignments of the form `OLD=drop` or `OLD=CODE:ROLE`.
-        /// Every speaker in the input must be named in the mapping.
+        /// Unmapped speakers currently pass through unchanged.
         /// Mutually exclusive with `--reference`.
         #[arg(long, conflicts_with = "reference")]
         mapping: Option<String>,
@@ -284,7 +284,7 @@ pub enum Commands {
         /// pending entry). Decisions: `accept` (take the suggestion),
         /// `choose SPK:CODE:TAG ...` (pick a mapping), or `override
         /// SPK:CODE:TAG ... SPK=action ...` (mapping plus per-speaker
-        /// actions), each with an optional trailing note.
+        /// actions). Choose/override accept a trailing note; accept does not.
         #[arg(long)]
         interactive: bool,
 
@@ -319,10 +319,10 @@ pub enum Commands {
         anchor: String,
 
         /// Ratio threshold for the mean-word-count heuristic
-        /// (default 1.5×). A session is flagged when
+        /// (finite and positive; default 1.5×). A session is flagged when
         /// `anchor_mean >= inserted_mean * threshold`.
-        #[arg(long, default_value_t = 1.5)]
-        threshold: f64,
+        #[arg(long, default_value_t = SanityScanThreshold::DEFAULT)]
+        threshold: SanityScanThreshold,
 
         /// Pending-adjudications file to append flagged sessions
         /// to. Created if absent. Required, flagged sessions

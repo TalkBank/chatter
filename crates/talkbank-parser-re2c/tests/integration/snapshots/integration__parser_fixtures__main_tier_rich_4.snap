@@ -1,5 +1,5 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: result.unwrap()
 ---
 speaker:
@@ -22,7 +22,6 @@ tier_body:
     Period: "."
   postcodes: []
   media_bullet:
-    MediaBullet:
-      raw_text: "\u00158180_8669\u0015"
-      start_time: "8180"
-      end_time: "8669"
+    raw_text: "\u00158180_8669\u0015"
+    start_time: "8180"
+    end_time: "8669"

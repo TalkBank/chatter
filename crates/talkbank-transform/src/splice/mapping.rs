@@ -31,52 +31,40 @@ impl MappedEdit {
     }
 }
 
-#[derive(Clone, Copy)]
-enum ExtentRole {
-    Source,
-    Replacement,
-}
-
-fn admit_extent(bytes: usize, role: ExtentRole) -> Result<u32, SpliceError> {
-    u32::try_from(bytes).map_err(|_| match role {
-        ExtentRole::Source => SpliceError::SourceTooLarge { bytes },
-        ExtentRole::Replacement => SpliceError::ReplacementTooLarge { bytes },
-    })
+/// `base + added`, refused rather than wrapped.
+fn advance(base: usize, added: usize) -> Result<usize, SpliceError> {
+    base.checked_add(added)
+        .ok_or(SpliceError::OffsetOverflow { base, added })
 }
 
 #[derive(Debug)]
 struct BoundedSource<'source> {
     text: &'source str,
-    len: u32,
+    len: usize,
 }
 
 impl<'source> BoundedSource<'source> {
-    fn admit(text: &'source str) -> Result<Self, SpliceError> {
-        Ok(Self {
+    fn admit(text: &'source str) -> Self {
+        Self {
             text,
-            len: admit_extent(text.len(), ExtentRole::Source)?,
-        })
+            len: text.len(),
+        }
     }
 
     fn validate(&self, edit: &SpliceEdit) -> Result<(), SpliceError> {
         match *edit.target() {
             EditTarget::Replace(span) => {
-                if span.is_dummy() {
-                    return Err(SpliceError::DummySpan {
-                        provenance: edit.provenance().clone(),
-                    });
-                }
-                if span.end > self.len || span.start > span.end {
+                if span.end() > self.len {
                     return Err(SpliceError::OutOfBounds {
                         span,
                         len: self.len,
                     });
                 }
-                if span.start == span.end {
+                if span.start() == span.end() {
                     return Err(SpliceError::EmptyReplaceRange { span });
                 }
-                for offset in [span.start, span.end] {
-                    if !self.text.is_char_boundary(offset as usize) {
+                for offset in [span.start(), span.end()] {
+                    if !self.text.is_char_boundary(offset) {
                         return Err(SpliceError::NotCharBoundary { offset });
                     }
                 }
@@ -88,17 +76,13 @@ impl<'source> BoundedSource<'source> {
                         len: self.len,
                     });
                 }
-                if !self.text.is_char_boundary(offset as usize) {
+                if !self.text.is_char_boundary(offset) {
                     return Err(SpliceError::NotCharBoundary { offset });
                 }
             }
         }
         Ok(())
     }
-}
-
-fn checked_u32_offset(offset: i64) -> Result<u32, SpliceError> {
-    u32::try_from(offset).map_err(|_| SpliceError::OffsetOverflow { offset })
 }
 
 /// A mapping issued against its exact retained source, including output extent.
@@ -115,7 +99,7 @@ fn checked_u32_offset(offset: i64) -> Result<u32, SpliceError> {
 pub struct MappedPlan<'source> {
     source: BoundedSource<'source>,
     mapped: Vec<MappedEdit>,
-    output_len: u32,
+    output_len: usize,
 }
 
 impl<'source> MappedPlan<'source> {
@@ -130,12 +114,12 @@ impl<'source> MappedPlan<'source> {
 
     /// Assemble from this mapping once; byte verification remains a next phase.
     pub(super) fn assemble(self) -> AssembledSplice<'source> {
-        let mut text = String::with_capacity(self.output_len as usize);
+        let mut text = String::with_capacity(self.output_len);
         let mut cursor = 0;
         for edit in &self.mapped {
-            text.push_str(&self.source.text[cursor..edit.original.start as usize]);
+            text.push_str(&self.source.text[cursor..edit.original.start()]);
             text.push_str(edit.replacement.as_str());
-            cursor = edit.original.end as usize;
+            cursor = edit.original.end();
         }
         text.push_str(&self.source.text[cursor..]);
         AssembledSplice { plan: self, text }
@@ -164,13 +148,12 @@ impl AssembledSplice<'_> {
 /// Validate, order and map candidates, retaining their actual source.
 ///
 /// Same-start edits and intersecting extents refuse; adjacent replacements do
-/// not. Replacement and final output extents are checked in the existing `u32`
-/// coordinate space. No CHAT-size, validity, health or semantic policy is added.
+/// not. Output offsets use checked `usize` arithmetic. No CHAT-size, validity, health or semantic policy is added.
 pub fn mapped_edit_sites<'source>(
     source: &'source str,
     edits: &[SpliceEdit],
 ) -> Result<MappedPlan<'source>, SpliceError> {
-    let source = BoundedSource::admit(source)?;
+    let source = BoundedSource::admit(source);
     for edit in edits {
         source.validate(edit)?;
     }
@@ -178,7 +161,10 @@ pub fn mapped_edit_sites<'source>(
     sorted.sort_unstable_by_key(|edit| edit.target().start_offset());
     let mut mapped = Vec::with_capacity(sorted.len());
     let mut cursor = 0;
-    let mut delta: i64 = 0;
+    // Bytes removed and inserted so far. Tracked separately so offsets stay
+    // unsigned: every removed byte lies before the current edit's start.
+    let mut removed = 0usize;
+    let mut added = 0usize;
     let mut previous: Option<&SpliceEdit> = None;
     for edit in sorted {
         let start = edit.target().start_offset();
@@ -191,22 +177,21 @@ pub fn mapped_edit_sites<'source>(
                 later: edit.provenance().clone(),
             });
         }
-        let replacement_len =
-            admit_extent(edit.replacement().as_str().len(), ExtentRole::Replacement)?;
-        let spliced_start = checked_u32_offset(i64::from(start) + delta)?;
-        let spliced_end =
-            checked_u32_offset(i64::from(spliced_start) + i64::from(replacement_len))?;
+        let replacement_len = edit.replacement().as_str().len();
+        let spliced_start = advance(start - removed, added)?;
+        let spliced_end = advance(spliced_start, replacement_len)?;
         mapped.push(MappedEdit {
             original: Span::new(start, end),
             spliced: Span::new(spliced_start, spliced_end),
             provenance: edit.provenance().clone(),
             replacement: edit.replacement().clone(),
         });
-        delta += i64::from(replacement_len) - i64::from(end - start);
+        removed += end - start;
+        added = advance(added, replacement_len)?;
         cursor = end;
         previous = Some(edit);
     }
-    let output_len = checked_u32_offset(i64::from(source.len) + delta)?;
+    let output_len = advance(source.len - removed, added)?;
     Ok(MappedPlan {
         source,
         mapped,
@@ -219,31 +204,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extents_admit_zero_and_the_coordinate_maximum_without_text_allocation() {
-        assert_eq!(admit_extent(0, ExtentRole::Source).unwrap(), 0);
-        assert_eq!(
-            admit_extent(u32::MAX as usize, ExtentRole::Replacement).unwrap(),
-            u32::MAX
-        );
-    }
-
-    #[test]
-    #[cfg(target_pointer_width = "64")]
-    fn out_of_coordinate_extents_keep_source_and_replacement_faults_distinct() {
-        let bytes = u32::MAX as usize + 1;
-        assert!(
-            matches!(admit_extent(bytes, ExtentRole::Source), Err(SpliceError::SourceTooLarge { bytes: actual }) if actual == bytes)
-        );
-        assert!(
-            matches!(admit_extent(bytes, ExtentRole::Replacement), Err(SpliceError::ReplacementTooLarge { bytes: actual }) if actual == bytes)
-        );
+    fn spliced_offsets_refuse_overflow_instead_of_wrapping() {
+        assert_eq!(advance(3, 4).unwrap(), 7);
         assert!(matches!(
-            checked_u32_offset(-1),
-            Err(SpliceError::OffsetOverflow { offset: -1 })
-        ));
-        assert!(matches!(
-            checked_u32_offset(i64::from(u32::MAX) + 1),
-            Err(SpliceError::OffsetOverflow { .. })
+            advance(usize::MAX, 1),
+            Err(SpliceError::OffsetOverflow {
+                base: usize::MAX,
+                added: 1
+            })
         ));
     }
 }

@@ -11,7 +11,6 @@
 //! - [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)
 
 use super::{BulletContent, WriteChat};
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -25,9 +24,9 @@ macro_rules! define_text_tier {
             pub content: BulletContent,
 
             /// Source span for error reporting (not serialized to JSON)
-            #[serde(skip, default = "crate::Span::dummy")]
+            #[serde(skip, default = "crate::Location::unlocated")]
             #[schemars(skip)]
-            pub span: Span,
+            pub location: crate::Location,
         }
 
         impl $name {
@@ -35,10 +34,10 @@ macro_rules! define_text_tier {
             ///
             /// This is the canonical constructor for parser output because it preserves
             /// inline bullet boundaries and media references exactly as parsed.
-            pub fn new(content: BulletContent) -> Self {
+            pub fn new(location: impl Into<crate::Location>, content: BulletContent) -> Self {
                 Self {
                     content,
-                    span: Span::DUMMY,
+                    location: location.into(),
                 }
             }
 
@@ -46,10 +45,10 @@ macro_rules! define_text_tier {
             ///
             /// Use [`Self::new`] when callers already have parsed [`BulletContent`].
             /// This helper is mainly for tests and hand-built model values.
-            pub fn from_text(text: impl Into<smol_str::SmolStr>) -> Self {
+            pub fn from_text(location: impl Into<crate::Location>, text: impl Into<smol_str::SmolStr>) -> Self {
                 Self {
                     content: BulletContent::from_text(text),
-                    span: Span::DUMMY,
+                    location: location.into(),
                 }
             }
 
@@ -59,15 +58,6 @@ macro_rules! define_text_tier {
             /// segment is treated the same as a missing payload.
             pub fn is_empty(&self) -> bool {
                 self.content.is_empty()
-            }
-
-            /// Sets source span metadata used in diagnostics.
-            ///
-            /// Builders and tests can leave this as `Span::DUMMY`, but parser paths
-            /// should attach real offsets for accurate user-facing errors.
-            pub fn with_span(mut self, span: Span) -> Self {
-                self.span = span;
-                self
             }
 
             /// Allocating helper that writes `%tag:\t...` into a `String`.
@@ -233,7 +223,7 @@ mod tests {
     /// This guards the macro-generated prefix and payload serializer wiring.
     #[test]
     fn test_com_tier() {
-        let tier = ComTier::from_text("This is a comment");
+        let tier = ComTier::from_text(crate::Location::Unlocated, "This is a comment");
         assert_eq!(tier.to_chat(), "%com:\tThis is a comment");
         assert!(!tier.is_empty());
     }
@@ -243,7 +233,7 @@ mod tests {
     /// This ensures explanations are emitted verbatim with the `%exp` prefix.
     #[test]
     fn test_exp_tier() {
-        let tier = ExpTier::from_text("Explanation text");
+        let tier = ExpTier::from_text(crate::Location::Unlocated, "Explanation text");
         assert_eq!(tier.to_chat(), "%exp:\tExplanation text");
         assert!(!tier.is_empty());
     }
@@ -253,7 +243,7 @@ mod tests {
     /// The test protects the shared macro path for addressee-tier formatting.
     #[test]
     fn test_add_tier() {
-        let tier = AddTier::from_text("MOT");
+        let tier = AddTier::from_text(crate::Location::Unlocated, "MOT");
         assert_eq!(tier.to_chat(), "%add:\tMOT");
         assert!(!tier.is_empty());
     }
@@ -263,7 +253,7 @@ mod tests {
     /// This confirms speech-act codes are preserved as plain text content.
     #[test]
     fn test_spa_tier() {
-        let tier = SpaTier::from_text("DECL");
+        let tier = SpaTier::from_text(crate::Location::Unlocated, "DECL");
         assert_eq!(tier.to_chat(), "%spa:\tDECL");
         assert!(!tier.is_empty());
     }
@@ -273,7 +263,7 @@ mod tests {
     /// It verifies that contextual descriptions serialize without transformation.
     #[test]
     fn test_sit_tier() {
-        let tier = SitTier::from_text("at the table");
+        let tier = SitTier::from_text(crate::Location::Unlocated, "at the table");
         assert_eq!(tier.to_chat(), "%sit:\tat the table");
         assert!(!tier.is_empty());
     }
@@ -283,13 +273,13 @@ mod tests {
     /// All macro-generated text tiers share this behavior via `BulletContent`.
     #[test]
     fn test_empty_tiers() {
-        assert!(ComTier::from_text("").is_empty());
-        assert!(ExpTier::from_text("").is_empty());
-        assert!(AddTier::from_text("").is_empty());
-        assert!(SpaTier::from_text("").is_empty());
-        assert!(SitTier::from_text("").is_empty());
-        assert!(GpxTier::from_text("").is_empty());
-        assert!(IntTier::from_text("").is_empty());
+        assert!(ComTier::from_text(crate::Location::Unlocated, "").is_empty());
+        assert!(ExpTier::from_text(crate::Location::Unlocated, "").is_empty());
+        assert!(AddTier::from_text(crate::Location::Unlocated, "").is_empty());
+        assert!(SpaTier::from_text(crate::Location::Unlocated, "").is_empty());
+        assert!(SitTier::from_text(crate::Location::Unlocated, "").is_empty());
+        assert!(GpxTier::from_text(crate::Location::Unlocated, "").is_empty());
+        assert!(IntTier::from_text(crate::Location::Unlocated, "").is_empty());
     }
 
     /// `%gpx` tier round-trips plain text payloads.
@@ -297,7 +287,7 @@ mod tests {
     /// This keeps gesture-description tier formatting aligned with other macro-generated tiers.
     #[test]
     fn test_gpx_tier() {
-        let tier = GpxTier::from_text("looks at chicken");
+        let tier = GpxTier::from_text(crate::Location::Unlocated, "looks at chicken");
         assert_eq!(tier.to_chat(), "%gpx:\tlooks at chicken");
         assert!(!tier.is_empty());
     }
@@ -307,7 +297,7 @@ mod tests {
     /// The test ensures prosodic notes are emitted verbatim with the `%int` prefix.
     #[test]
     fn test_int_tier() {
-        let tier = IntTier::from_text("draws out the letter h");
+        let tier = IntTier::from_text(crate::Location::Unlocated, "draws out the letter h");
         assert_eq!(tier.to_chat(), "%int:\tdraws out the letter h");
         assert!(!tier.is_empty());
     }

@@ -6,27 +6,19 @@
 # existed there any more, so the configuration described a tree it no longer
 # applied to while this repo's own book pointed at a file that did not exist.
 #
-# SIZING `--jobs`. Each job runs a full workspace build, peaking around 8 GB.
-# The failure mode is an out-of-memory kill during overlapping LINKER phases,
-# not steady-state usage, so the safe number is lower than dividing total RAM
-# by 8 suggests. Measure peak resident memory at a small `--jobs` before
-# raising it. The previous fixed advice of `--jobs 1` was written for a 64 GB
-# machine and is not a property of the tool.
+# SIZING. Choose build scope and concurrency for a deliberate experiment.
+# Retain measured resource use with its tool/source/configuration identity;
+# historical workspace memory estimates are not universal per-job limits.
 #
-# SCOPE. Prefer running against hand-written policy code, where a surviving
-# mutant means a rule can be silently disabled:
-#
-#     cargo mutants -p talkbank-model --file 'src/validation/**' --timeout 180
-#
-# Running `-p talkbank-parser` unscoped spends most of its budget on generated
-# code (`src/generated_traversal.rs` is over half that crate), where a mutant
-# indicts the generator rather than this repository.
+# SCOPE. A survivor needs behavioral and test-selection review before it can
+# establish a missing assertion. Exclusions below bound the experiment; they
+# are not proof that the excluded code is correct. See the testing chapter.
 
-# Generated code. A surviving mutant here is a statement about the generator.
+# Generated code: investigate its producer and consumer contracts separately.
 exclude_globs = ["crates/talkbank-parser/src/generated_traversal.rs"]
 
-# Needs a whole file with `@Options: CA` in scope, so it cannot be reached from
-# a unit test and every mutant survives for a reason that is not a test gap.
+# Context-dependent CA behavior needs whole-file controls with @Options: CA.
+# These exclusions do not establish that such controls cover every mutation.
 [[exclude_re]]
 function = "find_context_dependent_ca_omission_span"
 

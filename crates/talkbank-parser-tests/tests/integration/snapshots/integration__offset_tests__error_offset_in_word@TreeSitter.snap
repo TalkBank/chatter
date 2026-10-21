@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
+assertion_line: 201
 expression: "(word, error_vec)"
 ---
 (
@@ -8,13 +9,12 @@ expression: "(word, error_vec)"
         ParseError {
             code: InvalidFormType,
             severity: Error,
-            location: SourceLocation {
+            location: Known {
                 span: Span {
                     start: 105,
                     end: 107,
                 },
-                line: None,
-                column: None,
+                position: None,
             },
             context: Some(
                 ErrorContext {

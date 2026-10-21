@@ -33,12 +33,34 @@
 //! type-distinct value with its own arm, and nothing here reads
 //! `node.kind()`.
 //!
-//! Compiled-language admission retains Missing for nonterminal and lexical
-//! slots. Error and fixed-slot Absent
-//! remain; their Unexpected payload is uninhabited. Whole sequence-repeat items also
+//! Compiled-language admission excludes Missing for eligible composite kinds;
+//! lexical and alias-target slots retain it. The ordinary header additionally
+//! uses a per-rule required-position proof, so its contents slot is Present.
+//! Nested contents and entries retain Error and fixed-slot Absent; their
+//! Unexpected payload is uninhabited. Whole sequence-repeat items also
 //! have an uninhabited Missing payload. Other recovery states remain even
 //! when finite fixtures have not witnessed them. The retained corpus does
 //! witness a MISSING speaker and a doubled-comma ERROR repeat item.
+//!
+//! **Reachability of the recovery arms (measured, not reasoned).** The
+//! slot-state census (`cargo run -p talkbank-parser-tests --example
+//! slot_state_census`) over every CHAT file in the repository (2026-09-09)
+//! and over 7,206 generated files (7,158 single-edit mutations of three
+//! `@Participants` lines plus 48 hand-written variants, 2026-10-19, coverage
+//! drive batch 1) put exactly two positions here into a recovery state:
+//! `participant.code` is `Missing` (`@Participants:\t`, E342) and an element
+//! of `participants_contents.child_1` is `Error` (a doubled comma,
+//! `E506.md#3`). Every other arm below (an ERROR or MISSING comma or
+//! whitespace inside a recognised group, an ERROR entry, an ERROR code, an
+//! ERROR or MISSING name word, displaced nodes inside a group or an entry)
+//! was reached by no authored malformed file. Those arms stay because their
+//! position's type admits the state, and each reports the recovery node it
+//! was given, under the code of the construct it broke, rather than
+//! inventing a value; none re-derives a model rule from parsed content. An
+//! `Absent` required position is different in kind: the grammar has no
+//! fail-closed partials, so the walk cannot leave one empty, and the two
+//! arms for it report [`CstFailure::AbsentRequiredPosition`] instead of a
+//! CHAT code.
 //!
 //! Until 2026-09-08 this file hand-walked both repeats with an index
 //! (`child.kind() == COMMA`, `idx += 1`) with duplicated structural diagnostics.
@@ -51,15 +73,19 @@
 
 use crate::generated_traversal::{Absence, KindMissing, Never, NodeSlot};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, ParticipantNode, ParticipantsHeaderNode, ReadableSlot, SourceBound,
-    SourceField, SourceSlice, SourceSlotView,
+    AsRawNode, ParticipantNode, ParticipantsHeaderNode, ReadableSlot, SourceBound, SourceField,
+    SourceSlice, SourceSlotView,
 };
 use crate::node_types::{PARTICIPANT, PARTICIPANTS_CONTENTS, PARTICIPANTS_HEADER};
+use crate::parser::typed_cst::ExtractCanonical;
 use tree_sitter::Node;
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
-use crate::parser::typed_cst::read_source_field;
+use crate::parser::typed_cst::{
+    CstFailure, GeneratedPosition, read_source_field, report_cst_failure,
+};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{
     Header, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
@@ -84,47 +110,9 @@ pub fn parse_participants_header<'tree>(
     // so it is never silently swallowed.
     super::report_header_structural_errors(node, PARTICIPANTS_HEADER, source, errors);
 
-    let grammar = crate::parser::typed_cst::canonical_grammar()?;
-    let header_children = typed.extract_admitted(grammar)?;
-    let contents_node = match header_children.field_child_2().slot().view() {
-        SourceSlotView::Present(node) => Some(node),
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                source,
-                errors,
-                "participants_header",
-            );
-            None
-        }
-        SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
-    };
-    let Some(contents_node) = contents_node else {
-        errors.report(ParseError::new(
-            ErrorCode::EmptyParticipantsHeader,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(
-                source,
-                node.start_byte()..node.end_byte(),
-                PARTICIPANTS_HEADER,
-            ),
-            "Missing participants_contents in @Participants header",
-        ));
-        surface_displaced(
-            &header_children.children().unexpected,
-            PARTICIPANTS_HEADER,
-            source,
-            errors,
-        );
-        return super::unknown_header(
-            node,
-            source,
-            "@Participants",
-            "Expected @Participants:\tCODE [NAME] ROLE[, ...]",
-            "Missing participants_contents in @Participants header",
-        );
-    };
+    let rule = crate::parser::typed_cst::participants_rule()?;
+    let header_children = typed.extract_required(rule)?;
+    let SourceSlotView::Present(contents_node) = header_children.field_child_2().slot().view();
     surface_displaced(
         &header_children.children().unexpected,
         PARTICIPANTS_HEADER,
@@ -134,14 +122,17 @@ pub fn parse_participants_header<'tree>(
 
     // Structural presence and readable source admission are distinct states.
     // A producer failure must not become an empty-header CHAT diagnostic.
-    let contents = contents_node.read()?.extract_admitted(grammar)?;
+    let contents = contents_node.read()?;
+    let contents_raw = contents.raw_node();
+    let contents = contents.extract_canonical()?;
     let rest = contents.field_child_1().slot().iter();
     let mut entries = Vec::with_capacity(rest.len() + 1);
 
     entries.extend(
         parse_participant_slot(
             contents.field_child_0().slot(),
-            ParticipantPosition::First(typed.node()),
+            ParticipantPosition::First,
+            contents_raw,
             errors,
         )
         .into_option(),
@@ -155,6 +146,10 @@ pub fn parse_participants_header<'tree>(
     for item in rest {
         match item.slot().view() {
             SourceSlotView::Present(group) => {
+                // The comma and whitespace arms inside a recognised group
+                // are unreached by any authored malformed file (module doc):
+                // tree-sitter has only ever parked a list fault as a whole
+                // ERROR element, the arm below.
                 expect_source_structure(
                     group.field_child_0().slot(),
                     PARTICIPANTS_CONTENTS,
@@ -175,6 +170,7 @@ pub fn parse_participants_header<'tree>(
                     parse_participant_slot(
                         group.field_child_2().slot(),
                         ParticipantPosition::Subsequent,
+                        contents_raw,
                         errors,
                     )
                     .into_option(),
@@ -205,7 +201,7 @@ pub fn parse_participants_header<'tree>(
 /// Structural positions need no text read, but retain their recovery policy
 /// and derive diagnostic source identity from the generated field itself.
 fn expect_source_structure<'tree, T: AsRawNode<'tree> + Copy, A: Absence>(
-    slot: SourceField<'_, 'tree, '_, NodeSlot<'tree, T, KindMissing<T>, Never, A>>,
+    slot: SourceField<'_, 'tree, '_, NodeSlot<T, KindMissing<T>, Node<'tree>, Never, A>>,
     context: &str,
     errors: &impl ErrorSink,
     on_bad: impl FnOnce(Node<'tree>),
@@ -235,8 +231,8 @@ fn surface_source_displaced<'tree>(
 }
 
 /// Structural recovery after range admission; readability does not imply syntax validity.
-fn expect_readable_structure<'tree, T, M: AsRawNode<'tree>, A>(
-    slot: &ReadableSlot<'tree, '_, T, M, Never, A>,
+fn expect_readable_structure<'tree, T, M: AsRawNode<'tree>, E: AsRawNode<'tree>, A>(
+    slot: &ReadableSlot<T, M, E, Never, A>,
     source: &str,
     errors: &impl ErrorSink,
     on_bad: impl FnOnce(Node<'tree>),
@@ -269,7 +265,7 @@ enum ParticipantFault<'tree> {
     Whitespace(Node<'tree>),
     Entry {
         node: Node<'tree>,
-        position: ParticipantPosition<'tree>,
+        position: ParticipantPosition,
     },
     EntryShape(Node<'tree>),
 }
@@ -282,7 +278,7 @@ impl ParticipantFault<'_> {
             Self::Entry { node, position } => (
                 node,
                 Some(match position {
-                    ParticipantPosition::First(_) => "a participant entry",
+                    ParticipantPosition::First => "a participant entry",
                     ParticipantPosition::Subsequent => "a participant entry after ','",
                 }),
             ),
@@ -303,25 +299,51 @@ impl ParticipantFault<'_> {
         errors.report(ParseError::new(
             code,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.byte_range(), context),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), context),
             message,
         ));
     }
 }
 
-/// Only the first position needs the enclosing header for an absence report.
-/// The repeated position cannot accidentally report that the header is empty.
-enum ParticipantPosition<'tree> {
-    First(ParticipantsHeaderNode<'tree>),
+/// Where an entry sits in the list, which words its fault report. It no
+/// longer carries the header node: until 2026-10-19 the first position used
+/// it to report E506 for an `Absent` first entry, a state the walk cannot
+/// produce (module doc), so that report invented a CHAT diagnostic for
+/// content never read. Both positions now report the producer fault.
+#[derive(Clone, Copy)]
+enum ParticipantPosition {
+    First,
     Subsequent,
+}
+
+impl ParticipantPosition {
+    /// The generated carrier and field of the participant slot, for the
+    /// fault. The repeat group is an inline sequence with no node of its
+    /// own, so its element index is not part of the name.
+    fn generated_position(self) -> GeneratedPosition {
+        match self {
+            Self::First => GeneratedPosition::new("ParticipantsContentsChildren.child_0"),
+            Self::Subsequent => {
+                GeneratedPosition::new("ParticipantsContentsChild1Children.child_2")
+            }
+        }
+    }
 }
 
 /// Shared admission for required and repeated participant slots. Recovery
 /// stays outside entry conversion, and positional policy remains explicit.
+/// `contents` is the `participants_contents` node, where a producer fault
+/// with no node of its own is located.
 fn parse_participant_slot<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, ParticipantNode<'tree>>>,
-    position: ParticipantPosition<'_>,
+    slot: SourceField<
+        '_,
+        'tree,
+        '_,
+        crate::generated_traversal::NonMissingKindSlot<'tree, ParticipantNode<'tree>>,
+    >,
+    position: ParticipantPosition,
+    contents: Node<'tree>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<ParticipantEntry> {
     let source = slot.source();
@@ -330,15 +352,9 @@ fn parse_participant_slot<'tree>(
             Some(participant) => parse_participant_entry(participant, errors),
             None => ParseOutcome::rejected(),
         },
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                source,
-                errors,
-                "participant",
-            );
-            ParseOutcome::rejected()
-        }
+        // An ERROR node standing for a whole entry: unreached by any authored
+        // malformed file (module doc); a list fault arrives as an ERROR
+        // repeat element instead.
         SourceSlotView::Error(bad) => {
             ParticipantFault::Entry {
                 node: bad.raw_node(),
@@ -347,17 +363,19 @@ fn parse_participant_slot<'tree>(
             .report(source, errors);
             ParseOutcome::rejected()
         }
+        // A required position the walk left empty is a generator or grammar
+        // fault (module doc), never an empty header: the model reports E506
+        // from the entry list it is given.
         SourceSlotView::Absent(_) => {
-            if let ParticipantPosition::First(header) = position {
-                let node = header.raw_node();
-                errors.report(ParseError::new(
-                    ErrorCode::EmptyParticipantsHeader,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.byte_range(), PARTICIPANTS_CONTENTS),
-                    "@Participants header declares no participant",
-                ));
-            }
+            report_cst_failure(
+                contents,
+                source,
+                CstFailure::AbsentRequiredPosition {
+                    rule: PARTICIPANTS_CONTENTS,
+                    position: position.generated_position(),
+                },
+                errors,
+            );
             ParseOutcome::rejected()
         }
     }
@@ -400,13 +418,16 @@ fn parse_participant_entry<'tree>(
             surface_readable_displaced(unexpected, errors);
             return ParseOutcome::rejected();
         }
+        // An ERROR node at the code position: unreached by any authored
+        // malformed file (module doc); garbage before a code has only ever
+        // become an ERROR element of the list or a MISSING speaker.
         ReadableSlot::Error(bad) => {
             let bad = bad.raw_node();
             errors.report(ParseError::new(
                 ErrorCode::EmptyParticipantCode,
                 Severity::Error,
-                SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-                ErrorContext::new(source, bad.start_byte()..bad.end_byte(), PARTICIPANT),
+                DiagnosticLocation::new(span_of(bad)),
+                ErrorContext::new(source, span_of(bad), PARTICIPANT),
                 format!(
                     "Expected a speaker code to start the participant entry, got: {}",
                     bad.kind()
@@ -416,14 +437,19 @@ fn parse_participant_entry<'tree>(
             return ParseOutcome::rejected();
         }
         ReadableSlot::Unexpected(never) => match *never {},
+        // The code is a required position; the walk cannot leave it empty
+        // (module doc). Until 2026-10-19 this arm reported E512 for a code
+        // nobody read; it reports the producer fault instead.
         ReadableSlot::Absent(_) => {
-            errors.report(ParseError::new(
-                ErrorCode::EmptyParticipantCode,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), PARTICIPANT),
-                "Participant entry missing speaker code",
-            ));
+            report_cst_failure(
+                node,
+                source,
+                CstFailure::AbsentRequiredPosition {
+                    rule: PARTICIPANT,
+                    position: GeneratedPosition::new("ParticipantChildren.code"),
+                },
+                errors,
+            );
             surface_readable_displaced(unexpected, errors);
             return ParseOutcome::rejected();
         }
@@ -431,6 +457,10 @@ fn parse_participant_entry<'tree>(
 
     // Name words and the role, each preceded by whitespace the grammar
     // requires; the whitespace is structure and needs nothing when Present.
+    // Every recovery arm in this loop and the trailing-whitespace check
+    // after it is unreached by any authored malformed file (module doc):
+    // a stray token between words has only ever split the entry or become
+    // an ERROR element of the list.
     let mut words: Vec<String> = Vec::with_capacity(children.child_1.slot.len());
     for item in &children.child_1.slot {
         match &item.slot {
@@ -475,8 +505,8 @@ fn parse_participant_entry<'tree>(
         errors.report(ParseError::new(
             ErrorCode::EmptyParticipantRole,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), PARTICIPANT),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), PARTICIPANT),
             "Participant role cannot be empty",
         ));
         return ParseOutcome::rejected();

@@ -101,11 +101,10 @@ fn header_separator_trailing_space_is_captured() {
     // space byte) and must point at the source text that is actually a
     // space, not the tab or the following content.
     assert!(
-        span.start < span.end,
+        span.start() < span.end(),
         "trailing-space span must be non-empty, got {span:?}"
     );
-    let illegal_bytes =
-        &COMMENT_HEADER_TRAILING_SPACE.as_bytes()[span.start as usize..span.end as usize];
+    let illegal_bytes = &COMMENT_HEADER_TRAILING_SPACE.as_bytes()[span.start()..span.end()];
     assert_eq!(
         illegal_bytes, b" ",
         "trailing-space span must cover exactly the illegal space byte(s)"

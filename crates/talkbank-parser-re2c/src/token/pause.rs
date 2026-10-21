@@ -16,7 +16,7 @@ impl<'source> PauseLexeme<'source> {
     pub(crate) fn from_lexed(text: &'source str, start: usize, end: usize) -> Self {
         Self {
             text,
-            span: Span::from_usize(start, end),
+            span: Span::new(start, end),
         }
     }
 

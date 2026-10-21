@@ -109,7 +109,7 @@ fn item_repr(source: &str, item: &WorItem) -> WorItemRepr {
                 (
                     bullet.timing.start_ms,
                     bullet.timing.end_ms,
-                    source[bullet.span.to_range()].to_string(),
+                    source[bullet.location.span().expect("located").to_range()].to_string(),
                 )
             }),
         },
@@ -150,7 +150,7 @@ struct WorParse {
     /// Whether at least one `%wor` tier was attached.
     saw_wor_tier: bool,
     /// Every collected diagnostic as `(code, start, end, message)`.
-    diags: Vec<(String, u32, u32, String)>,
+    diags: Vec<(String, usize, usize, String)>,
 }
 
 /// Parse `input` at the streaming boundary, collecting `%wor`-tier fields and
@@ -183,8 +183,8 @@ fn parse_wor(input: &str) -> WorParse {
         .map(|d| {
             (
                 d.code.as_str().to_string(),
-                d.location.span.start,
-                d.location.span.end,
+                d.location.span().expect("located diagnostic").start(),
+                d.location.span().expect("located diagnostic").end(),
                 d.message,
             )
         })

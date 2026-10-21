@@ -5,7 +5,9 @@
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
-`chatter validate` is the binding judgment on whether a byte sequence is valid CHAT. When it reports an **error**, the file is invalid CHAT: clean the data rather than working around the check.
+`chatter validate` with the default tree-sitter backend is the production
+validation surface. Its result is scoped to the selected checks and policies;
+suppressed or disabled checks cannot be inferred to have passed.
 
 **But that is a conclusion, not a reflex, and it cuts both ways.** chatter is
 under active development and its current behaviour is not sacred. If a
@@ -14,8 +16,13 @@ would rather hear about it than have you edit a transcript to silence it. Tells
 that a diagnostic is a chatter bug: the message names a construct your line does
 not contain, the code is a generic "unparsable content" rather than a specific
 rule, or no documented rule justifies it. Report it with the smallest file that
-reproduces it. Editing data to quiet a wrong check destroys the evidence and
-leaves the bug in place for the next person. A **warning** flags a questionable but parseable construct you should review. Where `chatter` and an older tool such as CLAN's `check` disagree on whether a file is valid, `chatter validate` is authoritative (see [CHECK Parity Audit](../../architecture/errors-and-validation/check-parity-audit.md) for how the two are reconciled).
+reproduces it, using synthetic content safe to share publicly. Editing data to quiet a wrong check destroys the evidence and
+leaves the bug in place for the next person. A **warning** flags a questionable
+but parseable construct you should review. Disagreements with CLAN's `check`
+must be adjudicated against the documented CHAT rules, not by blindly copying
+either tool's behavior. The [CHECK Parity Audit](../../architecture/errors-and-validation/check-parity-audit.md)
+records those decisions; the [backend policy](../../architecture/parser-backends.md)
+defines the limits of re2c comparisons.
 
 ## Reading Error Output
 
@@ -34,8 +41,8 @@ source-pointed snippet, and a suggested fix:
 Each diagnostic contains:
 - **File path** and **location** (line:column)
 - **Severity**: `error` or `warning`
-- **Error code**: `E` prefix for errors, `W` prefix for warnings, with
-  a URL pointing at the per-code documentation page
+- **Error code**: stable identifier with a URL pointing at its documentation;
+  use the reported severity rather than inferring it solely from the prefix
 - **Message**: human-readable description
 - **Suggestion**: actionable fix guidance where available
 
@@ -408,7 +415,7 @@ error 48.
 
 ## Generated Error Documentation
 
-The source of truth for error-code details is `spec/errors/`. Maintainers can
+The source of truth for error-code details is `spec/errors/`.
 The browsable error catalog under `docs/errors/` is generated from those specs
 and committed, so it is regenerated with every other artifact:
 

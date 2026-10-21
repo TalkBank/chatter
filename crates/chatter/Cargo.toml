@@ -32,6 +32,7 @@ dirs = { workspace = true }
 indicatif = { workspace = true }
 notify = { workspace = true }
 ratatui = { workspace = true }
+same-file = { workspace = true }
 send2clan = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

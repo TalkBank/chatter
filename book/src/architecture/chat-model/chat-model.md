@@ -3,11 +3,10 @@
 **Status:** Current
 **Last updated:** {{git-dates:page}}
 
-The `talkbank-model` crate defines the typed AST for CHAT files. Every
-other crate, parser, transform, CLAN, CLI, LSP, and the entire batchalign
-runtime, depends on it. This page describes the model itself, the
-three-level content hierarchy, the content-walker primitives, and the
-extract → infer → inject pattern that all NLP tasks follow.
+The `talkbank-model` crate defines the shared typed AST, validation and
+alignment primitives used by Chatter's parsers and consumers. This page
+explains model admission, the three content layers and shared traversal
+owners. Downstream task orchestration is separate from these core contracts.
 
 ## Date admission
 
@@ -37,9 +36,13 @@ pub struct ChatFile {
 }
 ```
 
-`validate_into` consumes the mutable model and returns either an immutable
-`ValidChatFile` with policy/name/diagnostics or a `ValidationFailure` retaining
-the rejected model. `into_unchecked` consumes a proof before editing.
+`validate_into` consumes the mutable model using default rules and structural
+alignment checks. It returns either an immutable `ValidChatFile` with
+policy/name/diagnostics or a `ValidationFailure` retaining the rejected model.
+Use `validate_with_policy` to select a different validation policy. The owned
+diagnostic collector determines admission even if the caller's sink discards
+errors; unknown or recovered parse provenance also refuses complete admission.
+`into_unchecked` consumes a proof before editing.
 
 ### Constructing rather than parsing
 
@@ -67,8 +70,7 @@ Parser-backed mutable models still expose content fields: callers editing those
 fields must withdraw stale provenance with `forget_parse_provenance()`.
 The private health field is not a claim that all mutable-model edits are sealed.
 
-Each `Line` is either a `Header` or an `Utterance`. The full ownership
-tree:
+Each `Line` is either a `Header` or an `Utterance`. The main ownership relationships (not an exhaustive field inventory):
 
 ```mermaid
 flowchart TD
@@ -78,7 +80,7 @@ flowchart TD
     chatfile --> participants["participants:\nIndexMap&lt;SpeakerCode, Participant&gt;"]
     chatfile --> languages["languages: LanguageCodes"]
     chatfile --> options["options: ChatOptionFlags"]
-    chatfile --> media["media: Option&lt;MediaHeader&gt;"]
+    chatfile --> media["media: Option&lt;Box&lt;MediaHeader&gt;&gt;"]
     chatfile --> line_map["line_map: Option&lt;LineMap&gt;\n(not serialized)"]
 
     lines --> header_line["Line::Header (Header)"]
@@ -86,54 +88,54 @@ flowchart TD
 
     utt_line --> preceding["preceding_headers:\nSmallVec&lt;Header&gt;"]
     utt_line --> main["main: MainTier"]
-    utt_line --> deptiers["dependent_tiers:\nVec&lt;DependentTier&gt;"]
+    utt_line --> deptiers["dependent_tiers:\nSmallVec&lt;DependentTierEntry&gt;"]
     utt_line --> health["parse_health: ParseHealthState"]
 
     main --> speaker["speaker: SpeakerCode"]
     main --> tiercontent["content: TierContent"]
-    tiercontent --> linkers["linkers: Vec&lt;Linker&gt;"]
-    tiercontent --> uttcontent["utterance_content:\nVec&lt;UtteranceContent&gt;\n(28 variants)"]
+    tiercontent --> linkers["linkers: TierLinkers"]
+    tiercontent --> uttcontent["content: TierContentItems"]
     tiercontent --> terminator["terminator: Option&lt;Terminator&gt;"]
     tiercontent --> bullet["bullet: Option&lt;Bullet&gt;"]
 ```
 
-The `DependentTier` enum has 32 variants: structured linguistic
-(`Mor`/`Gra`/`Pho`/`Mod`/`Sin`/`Act`/`Cod`/`Wor`), with-inline-bullets
-(`Add`/`Com`/`Exp`/`Gpx`/`Int`/`Sit`/`Spa`), text-only
-(`Alt`/`Coh`/`Def`/`Eng`/`Err`/`Fac`/`Flo`/`Gls`/`Ort`/`Par`/`Tim`),
-Phon-project (`Modsyl`/`Phosyl`/`Phoaln`/`Xphoint`), and `UserDefined` /
-`Unsupported`.
+Dependent tiers are ordered `DependentTierEntry` values: each combines its
+typed tier with source-separator metadata. Use tier accessors or match
+`entry.tier`; do not assume a unique fixed slot for each kind. See
+[Dependent Tiers](../../chat-format/dependent-tiers.md) for their representations.
 
 ## Three-Level Content Hierarchy
 
-CHAT main-tier content is a tree with three nesting levels. Every
-content traversal must understand all three.
+CHAT main-tier content has three type layers. Groups can nest recursively;
+three layers does not impose a maximum tree depth. The following is a
+conceptual layout, not a copy-pasteable Rust declaration.
 
-```rust,ignore
+```text
 ChatFile
 └── Line::Utterance
     └── MainTier
         └── TierContent
-            ├── content: Vec<UtteranceContent>     ← Level 1
+            ├── content: TierContentItems         ← Level 1
             │   ├── Word(Box<Word>)
-            │   │   └── content: Vec<WordContent>  ← Level 3
+            │   │   └── word.content()            ← Level 3
             │   ├── OverlapPoint(OverlapPoint)
             │   ├── Group(Group)
             │   │   └── BracketedContent
-            │   │       └── Vec<BracketedItem>     ← Level 2
+            │   │       └── BracketedItems        ← Level 2
             │   ├── PhoGroup, SinGroup, Quotation
             │   │   └── (same BracketedContent)
             │   ├── Retrace(Box<Retrace>)
             │   ├── Pause, Event, Separator, ...
             │   └── AnnotatedWord, AnnotatedGroup, ...
             ├── bullet: Option<Bullet>
-            ├── linkers: Linkers
-            └── terminator: Terminator
+            ├── linkers: TierLinkers
+            └── terminator: Option<Terminator>
 ```
 
-### Level 1, `UtteranceContent` (28 variants)
+### Level 1, `UtteranceContent`
 
-What you iterate when walking `utterance.main.content.content.0`:
+Read items through `utterance.main.content.content.as_slice()`. The main
+categories are:
 
 | Category | Variants |
 |---|---|
@@ -148,22 +150,21 @@ What you iterate when walking `utterance.main.content.content.0`:
 | Other | `Freecode`, `Pause` |
 
 **Critical rule:** every `match` on `UtteranceContent` must explicitly
-list all 28 variants. No `_ =>` catch-alls. Project policy: silent data
+list every variant. No `_ =>` catch-alls. Project policy: silent data
 loss when new variants are added is unacceptable.
 
-### Level 2, `BracketedItem` (22 variants)
+### Level 2, `BracketedItem`
 
-Content inside groups (`<...>`, `‹...›`, `〔...〕`, `"..."`). Accessed via
-`group.content.content.0` (the double `.content.content.0` is not a
-typo, `Group.content` is `BracketedContent`, which has `.content:
-BracketedItems`, which has `.0: Vec<BracketedItem>`).
+Content inside groups (`<...>`, `‹...›`, `〔...〕`, `"..."`) is held in
+`BracketedContent`. Read `group.content.content.as_slice()` rather than
+reaching into the collection wrapper's private storage.
 
 `BracketedItem` mirrors `UtteranceContent` closely. Retrace content
 (`<word word> [/]`, `word [//]`) is a dedicated `Retrace` variant at
 both levels, not hidden inside `AnnotatedGroup`. Groups can nest
 arbitrarily deep.
 
-### Level 3, `WordContent` (13 variants)
+### Level 3, `WordContent`
 
 Content inside a single word token, read through `word.content()`:
 
@@ -192,8 +193,8 @@ looking for overlap markers must check all three levels.
 
 ### `Annotated<T>`
 
-Adds scoped annotations (`[/]`, `[* m]`, `[= explanation]`, etc.) to any
-annotatable inner type:
+Adds scoped content annotations (such as `[* m]` and `[= explanation]`) to
+an annotatable inner type. Retraces have their own structure:
 
 ```rust,ignore
 pub struct Annotated<T> {
@@ -226,7 +227,7 @@ pub struct ReplacedWord {
     pub replacement: Replacement,
 }
 pub struct Replacement {
-    pub words: Vec<Word>,
+    pub words: ReplacementWords, // nonempty checked collection
 }
 ```
 
@@ -240,24 +241,44 @@ Different NLP tasks need different views of the same content. The
 `TierDomain` enum controls which words count for each tier and how
 groups are traversed:
 
-| Domain | Used by | Skips | Counts separators? |
+| Domain | Used by | Traversal / membership distinction | Counts separators? |
 |---|---|---|---|
-| `Mor` | `%mor` / `%gra` generation | Retrace groups | Yes, `,` `„` `‡` carry mor items (`cm\|cm`, `end\|end`, `beg\|beg`) |
-| `Wor` | `%wor` generation, FA | Nothing | No |
-| `Pho` | `%pho` alignment | `PhoGroup` | No |
-| `Sin` | `%sin` alignment | `SinGroup` | No |
+| `Mor` | `%mor` / `%gra` alignment | Retraces and alignment-excluded annotations are omitted | Yes, `,` `„` `‡` carry mor items (`cm\|cm`, `end\|end`, `beg\|beg`) |
+| `Wor` | `%wor` generation and timing binding | Excludes omissions, fragments, nonwords and untranscribed tokens; retains eligible retraced/surface words | No |
+| `Pho` | `%pho` alignment | A `PhoGroup` is one positional unit; leaf walkers do not enter it | No |
+| `Sin` | `%sin` alignment | A `SinGroup` is one positional unit; leaf walkers do not enter it | No |
 
 The content walker takes `Option<TierDomain>`: `Some(domain)` for
-domain-aware gating, `None` to recurse everything unconditionally.
+domain-aware descent and annotation gating, `None` to traverse without that
+domain filter. A walker is not itself the complete count or timing-admission
+policy. Use the alignment owner for positional units and
+[`WorMainTierProjection`](../wor-timing.md#current-membership-policy) for word
+timing membership and binding.
+
+In particular, an atomic group is not excluded from alignment merely because
+`walk_words` emits no words for it. Positional collectors consume the shared
+descent decision's atomic payload; leaf walkers consume only its entered
+content. Word eligibility and non-word positional units belong to those
+domain-specific consumers, not to the number of walker callbacks.
 
 ## Content Walkers
 
 `talkbank-model` exports closure-based walkers. Two layers:
 
-- `walk_content`: generic, visits all content items (custom
-  traversals).
+- `walk_content`: visits supported content leaves through recursive
+  containers; it does not emit container wrappers or each intra-word item.
 - `walk_words` / `walk_words_mut`, filtered to words / replaced words
-  / separators, with domain-aware gating. The primary primitive.
+  / separators, with domain-aware gating. They do not replace alignment counts.
+
+Choose the owner for the question:
+
+| Task | API |
+|---|---|
+| Inspect content-level leaves | `walk_content` |
+| Inspect or edit word-bearing leaves | `walk_words` / `walk_words_mut` |
+| Inspect words with their governing code-switch scope | `walk_words_scoped` |
+| Collect or count structural alignment positions | `collect_tier_items` / `count_tier_positions`, with `PositionalDomain` |
+| Determine `%wor` membership and timing bindings | `WorMainTierProjection` |
 
 ```rust,ignore
 use talkbank_model::alignment::helpers::{
@@ -278,21 +299,22 @@ walk_words(content, Some(TierDomain::Mor), &mut |leaf| {
 ```mermaid
 flowchart TD
     input["&[UtteranceContent]\n+ domain: Option&lt;TierDomain&gt;"]
-    dispatch["Match variant\n(24 UtteranceContent variants)"]
+    dispatch["Match content variant"]
     word["Word → emit WordItem::Word"]
     rw["ReplacedWord → emit WordItem::ReplacedWord"]
     sep["Separator → emit WordItem::Separator"]
-    group["Group / AnnotatedGroup /\nPhoGroup / SinGroup / Quotation"]
-    gate{"Domain\ngating"}
-    skip["Skip\n(atomic unit)"]
+    group["Groups / quotations / retraces\n(including annotated forms)"]
+    gate{"Shared descent\ndecision"}
+    excluded["Excluded\n(no leaf callbacks)"]
+    atomic["Atomic positional group\n(no leaf callbacks)"]
     recurse["Recurse into\ngroup.content"]
 
     input --> dispatch
     dispatch --> word & rw & sep & group
     group --> gate
-    gate -->|"Mor: skip retraces"| skip
-    gate -->|"Pho/Sin: skip groups"| skip
-    gate -->|"None: recurse all"| recurse
+    gate -->|"Excluded"| excluded
+    gate -->|"Atomic"| atomic
+    gate -->|"Into"| recurse
     recurse -->|back| dispatch
 ```
 
@@ -300,15 +322,19 @@ flowchart TD
 
 Only words and separators. Not `OverlapPoint` (any level), not
 `CAElement` within words, not events / pauses / actions, not internal
-bullets. For these, walk with `walk_content`, which yields every item
-kind; `extract_overlap_info` below is the worked example.
+bullets. Use `walk_content` for content-level leaves and inspect `Word::content()`
+when the operation needs intra-word markers. It does not automatically emit
+each `WordContent` item; `extract_overlap_info` below is the worked example.
 
 ### `extract_overlap_info`, overlap regions
 
-Walks the content with `walk_content` at the `%wor` domain, so its word
-positions are on the `%wor` projection's scale, and pairs every
-`OverlapPoint` at all three content levels (⌈ with ⌉ by index) into
-`OverlapRegion` structs. Used by the alignment pipeline (onset estimation)
+Walks content with `walk_content` at the `%wor` domain and applies
+`counts_for_tier(..., TierDomain::Wor)` when advancing word positions. That
+eligibility check, not the walker alone, keeps positions on the `%wor`
+projection's scale. It inspects content-level markers and markers inside
+surface words, not editorial replacement words, and pairs boundaries by kind
+and index (⌈ with ⌉, ⌊ with ⌋) into `OverlapRegion` structs.
+Used by the alignment pipeline (onset estimation)
 and the validator (pairing checks). For whole-file analysis,
 `analyze_file_overlaps()` matches top regions (⌈) with bottom regions
 (⌊) across utterances with 1:N support (used by E347 and
@@ -330,18 +356,19 @@ main-tier model:
 ```mermaid
 flowchart TD
     main["MainTier content"]
-    walker["walk_words()\ncount alignable words"]
+    positions["Domain-specific positional traversal\nwords, atomic groups and eligible non-word units"]
 
     subgraph "Structural Alignment and Timing State"
         mor["%mor\ncustom logic\n(clitic handling)"]
-        pho["%pho\npositional_align()\n(skip PhoGroup)"]
-        sin["%sin\npositional_align()\n(skip SinGroup)"]
+        pho["%pho\npositional alignment\n(PhoGroup is one unit)"]
+        sin["%sin\npositional alignment\n(SinGroup is one unit)"]
         wor["%wor timing sidecar\nMissing | Drifted | CountMatched\nmain lexical + %wor bullets"]
         gra["%gra\nalign to %mor chunks\n(not main tier)"]
     end
 
-    main --> walker
-    walker --> mor & pho & sin & wor
+    main --> positions
+    positions --> mor & pho & sin
+    main --> projection["WorMainTierProjection\nFilteredLexicalV1"] --> wor
     mor --> gra
 ```
 
@@ -350,14 +377,13 @@ For the alignment algorithms themselves, see
 
 ## Common Pitfalls
 
-1. **"Consecutive" means in-order traversal, not adjacent array
-   indices.** When CHAT tools speak of "consecutive" or "sequential"
-   items on the main tier, this **always** means document order via
-   recursive traversal, accounting for groups (`<...>`), retrace groups
-   (`<...> [/]`), quotations (`"..."`), and all other bracketed
-   structures. Never check adjacency in the flat
-   `Vec<UtteranceContent>`, use `walk_words` or equivalent in-order
-   traversal.
+1. **Choose the required notion of adjacency.** Consecutive lexical words,
+   structural alignment positions, neighboring syntax items and adjacent source
+   bytes are different relationships. Recursive word traversal accounts for
+   nested content, but can skip intervening non-word leaves or excluded groups;
+   its consecutive callbacks do not prove source adjacency. Use the relevant
+   domain projection for alignment and source-bound syntax/spacing evidence
+   for lexical adjacency. Flat array indices alone do not establish either.
 2. **Missing intra-word content.** Overlap markers, CA elements, and
    other markers can appear inside `Word` content. Checking only
    `UtteranceContent::OverlapPoint` misses `WordContent::OverlapPoint`
@@ -366,8 +392,8 @@ For the alignment algorithms themselves, see
    `UtteranceContent::AnnotatedWord` and `AnnotatedGroup` wrap inner
    types in `Annotated<T>` and are easy to forget.
 4. **`BracketedContent` access.** `Group.content` →
-   `BracketedContent`, with `.content: BracketedItems`, with
-   `.0: Vec<BracketedItem>`.
+   `BracketedContent` → `BracketedItems`; use slice/iterator APIs rather
+   than private tuple storage.
 5. **Separator counter sync (Mor domain).** Tag-marker separators
    (`,` `„` `‡`) count as NLP words because they have %mor items. Any
    code counting words in the Mor domain must count these separators
@@ -375,20 +401,21 @@ For the alignment algorithms themselves, see
 
 ## Serialization
 
-- **CHAT**: `WriteChat` trait writes any model type back to CHAT format.
-- **JSON**: all model types implement `Serialize`/`Deserialize`. Format
-  per the [JSON Schema](../../chatter/integrating/json-schema.md).
+- **CHAT**: `WriteChat` serializes supported model values. Writing is not
+  validation and need not reproduce original source bytes.
+- **JSON**: the transcript model has a serde representation; runtime trust,
+  source indexes and accepted-document evidence are not reconstructed by
+  deserialization. `ValidChatFile` has no deserialization path. See the
+  [JSON Schema](../../chatter/integrating/json-schema.md) for wire shape,
+  which is distinct from CHAT semantic validity.
 - **JSON Schema**: derived via `JsonSchema`. Run
   `just schema-gen` to regenerate
   `schema/chat-file.schema.json`.
 
 ## Memory and Interning
 
-String-heavy types (`PosCategory`, `MorStem`, `MorFeature`) use
-`Arc<str>` with a global interner, significant memory savings on large
-corpora where the same POS tags and lemmas appear thousands of times.
-
-Collections that are typically small use `SmallVec` for inline storage:
-
-- `SmallVec<[MorFeature; 4]>`: features per word (usually 0-4).
-- `SmallVec<[MorWord; 2]>`: post-clitics (usually 0-1).
+Storage details belong to the owning Rust types. For example, utterances use
+`SmallVec` for preceding headers and dependent-tier entries, while shared
+string representations avoid duplication in selected types. These choices
+are not a memory bound or a performance guarantee for every transcript;
+measure the operation and input population before changing them.

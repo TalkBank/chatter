@@ -23,28 +23,30 @@
 
 use crate::alignment::helpers::{ContentItem, walk_content};
 use crate::model::{BracketedContent, BracketedItem, Utterance, UtteranceContent, Word};
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
-/// A non-sentinel closing-code position admitted from a model span.
-/// This preserves the existing refusal to diagnose unlocated constructed nodes.
+/// The byte offset where a located closing code ends. Only a located item
+/// produces one, so an unlocated constructed node is never diagnosed for
+/// adjacency; `Location` carries that distinction, and nothing about the
+/// offset's value (zero included) has to stand in for it.
 #[derive(Clone, Copy)]
-struct CodeEnd(std::num::NonZeroU32);
+struct CodeEnd(usize);
 
 impl CodeEnd {
-    fn from_span(span: crate::Span) -> Option<Self> {
-        std::num::NonZeroU32::new(span.end).map(Self)
+    /// The end of a located item; an unlocated item cannot be glued to.
+    fn from_location(location: crate::Location) -> Option<Self> {
+        location.span().map(|span| Self(span.end()))
     }
 
     fn check_following(self, word: &Word, errors: &impl ErrorSink) {
-        let end = self.0.get();
-        if word.span.start == end {
+        let end = self.0;
+        if word.location.span().is_some_and(|span| span.start() == end) {
             let location = crate::Span::new(end, end);
             errors.report(
-                ParseError::new(
+                ParseError::at_span(
                     ErrorCode::CodeGluedToFollowingContent,
                     Severity::Error,
-                    SourceLocation::new(location),
-                    ErrorContext::new("]", location, "]"),
+                    location,
                     "Bracketed code must be separated from the following word by a space",
                 )
                 .with_suggestion("Add a space after the closing bracket"),
@@ -74,21 +76,31 @@ macro_rules! impl_code_spacing {
             fn code_spacing(&self) -> CodeSpacing<'_> {
                 let (word, end) = match self {
                     Self::Word(word) => (Some(word.as_ref()), None),
-                    Self::AnnotatedWord(annotated) => {
-                        (Some(&annotated.inner), CodeEnd::from_span(annotated.span))
-                    }
+                    Self::AnnotatedWord(annotated) => (
+                        Some(&annotated.inner),
+                        CodeEnd::from_location(annotated.location),
+                    ),
                     // The source wrapper includes the replacement and any
                     // trailing scoped annotations, not just the spoken word.
-                    Self::ReplacedWord(replaced) => {
-                        (Some(&replaced.word), CodeEnd::from_span(replaced.span))
+                    Self::ReplacedWord(replaced) => (
+                        Some(&replaced.word),
+                        CodeEnd::from_location(replaced.location),
+                    ),
+                    Self::Retrace(retrace) => (None, CodeEnd::from_location(retrace.location)),
+                    Self::AnnotatedRetrace(annotated) => {
+                        (None, CodeEnd::from_location(annotated.location))
                     }
-                    Self::Retrace(retrace) => (None, CodeEnd::from_span(retrace.span)),
-                    Self::AnnotatedRetrace(annotated) => (None, CodeEnd::from_span(annotated.span)),
-                    Self::AnnotatedGroup(annotated) => (None, CodeEnd::from_span(annotated.span)),
-                    Self::AnnotatedEvent(annotated) => (None, CodeEnd::from_span(annotated.span)),
-                    Self::AnnotatedAction(annotated) => (None, CodeEnd::from_span(annotated.span)),
+                    Self::AnnotatedGroup(annotated) => {
+                        (None, CodeEnd::from_location(annotated.location))
+                    }
+                    Self::AnnotatedEvent(annotated) => {
+                        (None, CodeEnd::from_location(annotated.location))
+                    }
+                    Self::AnnotatedAction(annotated) => {
+                        (None, CodeEnd::from_location(annotated.location))
+                    }
                     Self::AnnotatedQuotation(annotated) => {
-                        (None, CodeEnd::from_span(annotated.span))
+                        (None, CodeEnd::from_location(annotated.location))
                     }
                     Self::Action(_)
                     | Self::Event(_)
@@ -190,30 +202,29 @@ pub(crate) fn check_prefixed_form_glued_to_preceding_word(
     utterance: &Utterance,
     errors: &impl ErrorSink,
 ) {
-    let mut prev_word_end: Option<u32> = None;
+    let mut prev_word_end: Option<usize> = None;
 
     walk_content(
         utterance.main.content.content.as_slice(),
         None,
         &mut |item| {
             if let ContentItem::Word(word) = &item
-                && word.span != crate::Span::DUMMY
+                && let Some(word_span) = word.location.span()
                 && is_ampersand_prefixed(word)
                 && let Some(end) = prev_word_end
-                && word.span.start == end
+                && word_span.start() == end
             {
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_span(
                         ErrorCode::PrefixedFormGluedToPrecedingWord,
                         Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new("&", word.span, "&"),
+                        word_span,
                         "Prefixed form must be separated from the preceding word by a space",
                     )
                     .with_suggestion("Add a space between the word and the prefixed form"),
                 );
             }
-            prev_word_end = item.word_span().map(|span| span.end);
+            prev_word_end = item.word_span().map(|span| span.end());
         },
     );
 }
@@ -253,13 +264,25 @@ enum SpacingBoundary {
 
 impl SpacingBoundary {
     fn from_item(item: &ContentItem<'_>) -> Self {
-        let boundary = match item {
-            ContentItem::Word(word) => Self::Word(word.span),
-            ContentItem::ReplacedWord(replaced) => Self::Word(replaced.word.span),
-            ContentItem::Pause(pause) => Self::FreeStanding(pause.span),
+        match item {
+            // An unlocated item cannot be tested for adjacency; it breaks the
+            // chain like any other excluded item rather than being guessed at.
+            ContentItem::Word(word) => word.location.span().map_or(Self::Excluded, Self::Word),
+            ContentItem::ReplacedWord(replaced) => replaced
+                .word
+                .location
+                .span()
+                .map_or(Self::Excluded, Self::Word),
+            ContentItem::Pause(pause) => pause
+                .location
+                .span()
+                .map_or(Self::Excluded, Self::FreeStanding),
             ContentItem::Separator(separator) => {
                 if separator_forbids_trailing_glue(separator) {
-                    Self::FreeStanding(separator.span())
+                    separator
+                        .location()
+                        .span()
+                        .map_or(Self::Excluded, Self::FreeStanding)
                 } else {
                     Self::Excluded
                 }
@@ -277,29 +300,19 @@ impl SpacingBoundary {
             | ContentItem::NonvocalBegin(_)
             | ContentItem::NonvocalEnd(_)
             | ContentItem::NonvocalSimple(_) => Self::Excluded,
-        };
-        match boundary {
-            Self::FreeStanding(span) | Self::Word(span) => {
-                if span.is_dummy() {
-                    Self::Excluded
-                } else {
-                    boundary
-                }
-            }
-            Self::Excluded => Self::Excluded,
         }
     }
 
-    fn start(&self) -> Option<u32> {
+    fn start(&self) -> Option<usize> {
         match self {
-            Self::FreeStanding(span) | Self::Word(span) => Some(span.start),
+            Self::FreeStanding(span) | Self::Word(span) => Some(span.start()),
             Self::Excluded => None,
         }
     }
 
-    fn free_standing_end(&self) -> Option<u32> {
+    fn free_standing_end(&self) -> Option<usize> {
         match self {
-            Self::FreeStanding(span) => Some(span.end),
+            Self::FreeStanding(span) => Some(span.end()),
             Self::Word(_) | Self::Excluded => None,
         }
     }
@@ -329,11 +342,10 @@ pub(crate) fn check_separator_glued_to_following_content(
             {
                 let span = crate::Span::new(start, start);
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_span(
                         ErrorCode::SeparatorGluedToFollowingContent,
                         Severity::Error,
-                        SourceLocation::new(span),
-                        ErrorContext::new(" ", span, " "),
+                        span,
                         "Separator must be separated from the following content by a space",
                     )
                     .with_suggestion("Add a space after the separator"),
@@ -348,29 +360,28 @@ pub(crate) fn check_separator_glued_to_following_content(
 /// (`hello(.)`; CLAN CHECK 57). Fires when a pause's span starts at the
 /// byte where the previous in-order word's span ends.
 pub(crate) fn check_pause_glued_to_word(utterance: &Utterance, errors: &impl ErrorSink) {
-    let mut prev_word_end: Option<u32> = None;
+    let mut prev_word_end: Option<usize> = None;
 
     walk_content(
         utterance.main.content.content.as_slice(),
         None,
         &mut |item| {
             if let ContentItem::Pause(pause) = item
-                && pause.span != crate::Span::DUMMY
+                && let Some(pause_span) = pause.location.span()
                 && let Some(end) = prev_word_end
-                && pause.span.start == end
+                && pause_span.start() == end
             {
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::PauseGluedToWord,
                         Severity::Error,
-                        SourceLocation::new(pause.span),
-                        ErrorContext::new("(", pause.span, "("),
+                        pause.location,
                         "Pause must be separated from the preceding word by a space",
                     )
                     .with_suggestion("Add a space between the word and the pause"),
                 );
             }
-            prev_word_end = item.word_span().map(|span| span.end);
+            prev_word_end = item.word_span().map(|span| span.end());
         },
     );
 }

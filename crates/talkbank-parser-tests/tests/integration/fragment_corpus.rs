@@ -79,28 +79,37 @@ fn reference_terminator_tokens_roundtrip_without_claiming_source_provenance() {
         for utterance in file.utterances() {
             if let Some(expected) = utterance.main.content.terminator.as_ref() {
                 let spelling = expected.to_chat_string();
-                let actual = Terminator::try_from_chat_str(&spelling)
-                    .expect("parsed terminator's canonical spelling is recognized");
+                let actual =
+                    Terminator::try_from_chat_str(talkbank_model::Location::Unlocated, &spelling)
+                        .expect("parsed terminator's canonical spelling is recognized");
                 assert!(
                     actual.semantic_eq(expected),
                     "{} {spelling:?}",
                     fixture.path().display()
                 );
-                assert!(
-                    actual.span().is_dummy(),
+                assert_eq!(
+                    actual.location(),
+                    talkbank_model::Location::Unlocated,
                     "a free string cannot certify a source span"
                 );
                 assert_eq!(actual.to_chat_string(), spelling);
-                // A caller can explicitly attach the original parser-owned span;
-                // lexical recognition alone above still carries no provenance.
-                assert_eq!(actual.with_span(expected.span()), *expected);
+                // A caller that owns the parser's location passes it in; lexical
+                // recognition alone above still carries no provenance.
+                assert_eq!(
+                    Terminator::try_from_chat_str(expected.location(), &spelling).as_ref(),
+                    Some(expected)
+                );
                 assert!(Terminator::is_chat_terminator(&spelling));
                 if terminators.insert(spelling.clone()) {
                     // These fragments combine real parsed model values. Their
                     // coordinates belong to the derived input, not the original
                     // fixtures; lexical recognition cannot transfer provenance.
                     for items in [Vec::new(), vec![mor_item.clone()]] {
-                        let expected_tier = MorTier::new_mor(items, expected.clone());
+                        let expected_tier = MorTier::new_mor(
+                            talkbank_model::Location::Unlocated,
+                            items,
+                            expected.clone(),
+                        );
                         let input = expected_tier.to_content();
                         let errors = ErrorCollector::new();
                         let ParseOutcome::Parsed(actual_tier) =
@@ -112,11 +121,11 @@ fn reference_terminator_tokens_roundtrip_without_claiming_source_provenance() {
                         assert!(actual_tier.semantic_eq(&expected_tier), "{input:?}");
                         assert_eq!(actual_tier.to_content(), input);
                         assert_eq!(
-                            actual_tier.terminator.span(),
-                            talkbank_model::Span::from_usize(
+                            actual_tier.terminator.location(),
+                            talkbank_model::Location::Located(talkbank_model::Span::new(
                                 input.len() - spelling.len(),
                                 input.len(),
-                            ),
+                            )),
                             "terminator belongs to the derived fragment: {input:?}",
                         );
                     }
@@ -126,7 +135,11 @@ fn reference_terminator_tokens_roundtrip_without_claiming_source_provenance() {
                 if let ContentItem::Separator(separator) = item {
                     let spelling = separator.to_chat_string();
                     assert!(
-                        Terminator::try_from_chat_str(&spelling).is_none(),
+                        Terminator::try_from_chat_str(
+                            talkbank_model::Location::Unlocated,
+                            &spelling
+                        )
+                        .is_none(),
                         "content separators are not terminators: {spelling:?}"
                     );
                     assert!(!Terminator::is_chat_terminator(&spelling));
@@ -159,10 +172,10 @@ fn spec_main_tier_fragments_preserve_recovery_under_rebasing() {
         let file_errors = ErrorCollector::new();
         let file = parser.parse_chat_file_streaming(fixture.source(), &file_errors);
         for utterance in file.utterances() {
-            let span = utterance.main.span;
+            let span = utterance.main.location;
             let input = fixture
                 .source()
-                .get(span.start as usize..span.end as usize)
+                .get(span.span().expect("located").start()..span.span().expect("located").end())
                 .expect("retained main tier belongs to its spec source");
             // The fragment adapter may append a synthetic terminator. Exercise
             // both byte forms from the same canonical source, including recovery
@@ -191,15 +204,19 @@ fn reference_fragment_boundaries_refuse_extra_headers_and_wrong_tier_kinds() {
         .expect("reference parses cleanly");
         for pair in file.lines.windows(2) {
             let [
-                Line::Header { span: first, .. },
-                Line::Header { span: second, .. },
+                Line::Header {
+                    location: first, ..
+                },
+                Line::Header {
+                    location: second, ..
+                },
             ] = pair
             else {
                 continue;
             };
             let input = fixture
                 .source()
-                .get(first.start as usize..second.end as usize)
+                .get(first.span().expect("located").start()..second.span().expect("located").end())
                 .expect("adjacent headers belong to the same parsed source");
             assert!(
                 !parser
@@ -220,10 +237,17 @@ fn reference_fragment_boundaries_refuse_extra_headers_and_wrong_tier_kinds() {
         }
         for line in &file.lines {
             match line {
-                Line::Header { header, span, .. } => {
+                Line::Header {
+                    header,
+                    location: span,
+                    ..
+                } => {
                     let header_input = fixture
                         .source()
-                        .get(span.start as usize..span.end as usize)
+                        .get(
+                            span.span().expect("located").start()
+                                ..span.span().expect("located").end(),
+                        )
                         .expect("reference header source");
                     assert!(
                         !parser
@@ -242,7 +266,10 @@ fn reference_fragment_boundaries_refuse_extra_headers_and_wrong_tier_kinds() {
                     }
                     let input = fixture
                         .source()
-                        .get(span.start as usize..span.end as usize)
+                        .get(
+                            span.span().expect("located").start()
+                                ..span.span().expect("located").end(),
+                        )
                         .expect("header belongs to parsed source");
                     // The ID adapter selects a typed value, not CHAT validity:
                     // a valid non-ID header has no ID and no syntax diagnostic.
@@ -264,10 +291,13 @@ fn reference_fragment_boundaries_refuse_extra_headers_and_wrong_tier_kinds() {
                     witnesses[1] += 1;
                 }
                 Line::Utterance(utterance) => {
-                    let span = utterance.main.span;
+                    let span = utterance.main.location;
                     let input = fixture
                         .source()
-                        .get(span.start as usize..span.end as usize)
+                        .get(
+                            span.span().expect("located").start()
+                                ..span.span().expect("located").end(),
+                        )
                         .expect("main tier belongs to parsed source");
                     assert!(
                         !parser
@@ -308,10 +338,13 @@ fn spec_header_and_dependent_fragments_preserve_recovery_under_rebasing() {
         let file = parser.parse_chat_file_streaming(fixture.source(), &file_errors);
         for line in &file.lines {
             match line {
-                Line::Header { span, .. } => {
+                Line::Header { location: span, .. } => {
                     let input = fixture
                         .source()
-                        .get(span.start as usize..span.end as usize)
+                        .get(
+                            span.span().expect("located").start()
+                                ..span.span().expect("located").end(),
+                        )
                         .expect("retained header belongs to its spec source");
                     recovered[0] += usize::from(assert_fragment_rebases(
                         fixture.path(),
@@ -321,10 +354,13 @@ fn spec_header_and_dependent_fragments_preserve_recovery_under_rebasing() {
                 }
                 Line::Utterance(utterance) => {
                     for entry in &utterance.dependent_tiers {
-                        let span = entry.span();
+                        let span = entry.location();
                         let input = fixture
                             .source()
-                            .get(span.start as usize..span.end as usize)
+                            .get(
+                                span.span().expect("located").start()
+                                    ..span.span().expect("located").end(),
+                            )
                             .expect("retained dependent tier belongs to its spec source");
                         recovered[1] += usize::from(assert_fragment_rebases(
                             fixture.path(),
@@ -518,11 +554,18 @@ fn reference_words_preserve_spelling_and_coordinates_through_fragment_api() {
                 };
                 let input = fixture
                     .source()
-                    .get(word.span.start as usize..word.span.end as usize)
+                    .get(
+                        word.location.span().expect("located").start() as usize
+                            ..word.location.span().expect("located").end() as usize,
+                    )
                     .expect("parsed word belongs to reference source");
                 let errors = ErrorCollector::new();
-                let parsed =
-                    ChatParser::parse_word(&parser, input, word.span.start as usize, &errors);
+                let parsed = ChatParser::parse_word(
+                    &parser,
+                    input,
+                    word.location.span().expect("located").start() as usize,
+                    &errors,
+                );
                 assert!(
                     errors.is_empty(),
                     "{} {input:?}: {:?}",
@@ -533,8 +576,8 @@ fn reference_words_preserve_spelling_and_coordinates_through_fragment_api() {
                     panic!("word rejected: {} {input:?}", fixture.path().display());
                 };
                 assert_eq!(
-                    actual.span,
-                    word.span,
+                    actual.location,
+                    word.location,
                     "coordinates: {}",
                     fixture.path().display()
                 );
@@ -572,7 +615,7 @@ fn reference_words_preserve_spelling_and_coordinates_through_fragment_api() {
                 let ParseOutcome::Parsed(contextual) = ChatParser::parse_word_with_context(
                     &parser,
                     input,
-                    word.span.start as usize,
+                    word.location.span().expect("located").start() as usize,
                     &context,
                     &contextual_errors,
                 ) else {
@@ -586,7 +629,7 @@ fn reference_words_preserve_spelling_and_coordinates_through_fragment_api() {
                     "{:?}",
                     contextual_errors.to_vec()
                 );
-                assert_eq!(contextual.span, word.span);
+                assert_eq!(contextual.location, word.location);
                 assert_eq!(contextual.raw_text(), word.raw_text());
                 assert!(
                     contextual.semantic_eq(word),
@@ -612,7 +655,10 @@ fn reference_words_preserve_spelling_and_coordinates_through_fragment_api() {
                             .collect();
                         assert_eq!(invalid_format.len(), usize::from(!enabled), "{findings:?}");
                         if let Some(finding) = invalid_format.first() {
-                            assert_eq!(finding.location.span, word.span);
+                            assert_eq!(
+                                finding.location.span().expect("located diagnostic"),
+                                word.location.span().expect("located")
+                            );
                             assert_eq!(
                                 finding.message,
                                 "CA omission '(word)' used outside CA mode"
@@ -652,11 +698,18 @@ fn contextual_word_options_do_not_turn_a_reference_tier_into_a_word() {
         .next()
         .expect("reference speech")
         .main
-        .span;
+        .location;
     let input = source
-        .get(span.start as usize..span.end as usize)
+        .get(
+            span.span().expect("located").start() as usize
+                ..span.span().expect("located").end() as usize,
+        )
         .expect("main-tier source");
-    for offset in [0, span.start as usize, span.start as usize + 17] {
+    for offset in [
+        0,
+        span.span().expect("located").start() as usize,
+        span.span().expect("located").start() as usize + 17,
+    ] {
         let errors = ErrorCollector::new();
         let baseline = ChatParser::parse_word(&parser, input, offset, &errors);
         assert!(matches!(baseline, ParseOutcome::Rejected));
@@ -694,10 +747,10 @@ fn reference_dependent_tiers_preserve_semantics_through_standalone_api() {
                 continue;
             };
             for tier in &utterance.dependent_tiers {
-                let span = tier.span();
+                let span = tier.location();
                 let input = fixture
                     .source()
-                    .get(span.start as usize..span.end as usize)
+                    .get(span.span().expect("located").start()..span.span().expect("located").end())
                     .expect("dependent tier belongs to reference source");
                 let actual = parser
                     .parse_tiers(input)
@@ -739,7 +792,7 @@ fn file_fragments_preserve_models_and_snippet_relative_diagnostics() {
                     );
                 };
                 let mut expected = baseline.clone();
-                expected.shift_spans_after(0, offset as i32);
+                expected.shift_spans_after(0, offset as isize);
                 assert_eq!(
                     actual,
                     expected,
@@ -748,9 +801,9 @@ fn file_fragments_preserve_models_and_snippet_relative_diagnostics() {
                 );
                 let mut expected_errors = baseline_errors.to_vec();
                 for error in &mut expected_errors {
-                    error.location.span.shift_spans_after(0, offset as i32);
+                    error.location.shift_spans_after(0, offset as isize);
                     for label in &mut error.labels {
-                        label.span.shift_spans_after(0, offset as i32);
+                        label.span.shift_spans_after(0, offset as isize);
                     }
                     // Context points into its retained snippet, not the caller's
                     // enclosing document; do not shift those coordinates.
@@ -816,15 +869,18 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                 continue;
             };
             for entry in &utterance.dependent_tiers {
-                let span = entry.span();
+                let span = entry.location();
                 let input = fixture
                     .source()
-                    .get(span.start as usize..span.end as usize)
+                    .get(span.span().expect("located").start()..span.span().expect("located").end())
                     .expect("tier source span");
                 let errors = ErrorCollector::new();
-                let ParseOutcome::Parsed(actual) =
-                    ChatParser::parse_dependent_tier(&parser, input, span.start as usize, &errors)
-                else {
+                let ParseOutcome::Parsed(actual) = ChatParser::parse_dependent_tier(
+                    &parser,
+                    input,
+                    span.span().expect("located").start(),
+                    &errors,
+                ) else {
                     panic!("tier rejected: {} {input:?}", fixture.path().display());
                 };
                 assert!(
@@ -839,7 +895,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                     fixture.path().display()
                 );
                 assert_eq!(
-                    actual.span(),
+                    actual.location(),
                     span,
                     "tier coordinates: {}",
                     fixture.path().display()
@@ -848,7 +904,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                 let contextual = ChatParser::parse_dependent_tier_with_context(
                     &parser,
                     input,
-                    span.start as usize,
+                    span.span().expect("located").start(),
                     &context,
                     &contextual_errors,
                 );
@@ -860,7 +916,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                     .expect("reference tier has content span");
                 let body = fixture
                     .source()
-                    .get(body_span.start as usize..body_span.end as usize)
+                    .get(body_span.start()..body_span.end())
                     .expect("tier content belongs to reference source");
                 // Only tier variants with a public content-only entry point
                 // participate here; the generic API above covers every variant.
@@ -883,8 +939,10 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                                 .find_map(|node| {
                                     let node = node.expect("source-bound reference descendant");
                                     let tier = node.typed::<$kind>()?;
-                                    (tier.raw_node().start_byte() == span.start as usize
-                                        && tier.raw_node().end_byte() == span.end as usize)
+                                    (tier.raw_node().start_byte()
+                                        == span.span().expect("located").start() as usize
+                                        && tier.raw_node().end_byte()
+                                            == span.span().expect("located").end() as usize)
                                         .then_some(tier)
                                 })
                                 .expect("each reference tier has its ordered native CST owner");
@@ -904,7 +962,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                                 fixture.path().display()
                             );
                             assert_eq!(
-                                actual.span(),
+                                actual.location(),
                                 span,
                                 "source-bound coordinates: {}",
                                 fixture.path().display()
@@ -918,7 +976,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                             let ParseOutcome::Parsed(actual) = ChatParser::$method(
                                 &parser,
                                 body,
-                                body_span.start as usize,
+                                body_span.start() as usize,
                                 &errors,
                             ) else {
                                 panic!("content rejected: {} {body:?}", fixture.path().display());
@@ -938,7 +996,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                             let contextual = ChatParser::$contextual(
                                 &parser,
                                 body,
-                                body_span.start as usize,
+                                body_span.start() as usize,
                                 &context,
                                 &contextual_errors,
                             );
@@ -976,7 +1034,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                         let ParseOutcome::Parsed(actual) = ChatParser::parse_mor_tier(
                             &parser,
                             &variant,
-                            body_span.start as usize,
+                            body_span.start(),
                             &errors,
                         ) else {
                             panic!(
@@ -994,7 +1052,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                         let outcome = ChatParser::parse_mor_tier(
                             &parser,
                             &variant,
-                            body_span.start as usize,
+                            body_span.start(),
                             &errors,
                         );
                         assert!(matches!(outcome, ParseOutcome::Rejected), "{variant:?}");
@@ -1018,7 +1076,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                         .collect::<GraLowering>()
                         .finish();
                     assert!(!receipt.is_truncated());
-                    let actual = receipt.into_tier().with_span(expected.span);
+                    let actual = receipt.into_tier(expected.location);
                     assert!(actual.semantic_eq(expected));
                     assert_eq!(actual.completeness(), GraCompleteness::Whole);
                     let json = serde_json::to_string(&actual).expect("public gra JSON");
@@ -1174,7 +1232,7 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
         receipt.is_truncated(),
         "a later success cannot undo rejection"
     );
-    let rebuilt = receipt.into_tier().with_span(native.span);
+    let rebuilt = receipt.into_tier(native.location);
     assert!(rebuilt.semantic_eq(&native));
     assert_eq!(rebuilt.completeness(), GraCompleteness::Truncated);
     let streaming_errors = ErrorCollector::new();
@@ -1210,10 +1268,16 @@ fn reference_tier_fragments_refuse_trailing_tiers() {
             talkbank_model::model::DependentTier::Mor(_)
         ));
         let full = source
-            .get(first.span().start as usize..second.span().end as usize)
+            .get(
+                first.location().span().expect("located").start()
+                    ..second.location().span().expect("located").end(),
+            )
             .expect("adjacent tier spans");
         let body = source
-            .get(first.content_span().expect("body").start as usize..second.span().end as usize)
+            .get(
+                first.content_span().expect("body").start()
+                    ..second.location().span().expect("located").end(),
+            )
             .expect("body followed by next tier");
         assert_fragment_rebases(
             std::path::Path::new("mor-gra.cha"),
@@ -1248,12 +1312,12 @@ fn reference_tier_fragments_refuse_trailing_tiers() {
             entry.tier,
             talkbank_model::model::DependentTier::Gra(_)
         ));
-        let end = pair[1].main.span.end as usize;
+        let end = pair[1].main.location.span().expect("located").end();
         let full = source
-            .get(entry.span().start as usize..end)
+            .get(entry.location().span().expect("located").start()..end)
             .expect("tier followed by speech");
         let body = source
-            .get(entry.content_span().expect("body").start as usize..end)
+            .get(entry.content_span().expect("body").start()..end)
             .expect("body followed by speech");
         assert_fragment_rebases(
             std::path::Path::new("mor-gra.cha"),
@@ -1305,13 +1369,18 @@ fn invalid_timing_states_from_specs_rebase_to_document_coordinates() {
                 let DependentTier::Tim(expected) = &entry.tier else {
                     continue;
                 };
-                let span = entry.span();
+                let span = entry.location();
                 let input = source
-                    .get(span.start as usize..span.end as usize)
+                    .get(span.span().expect("located").start()..span.span().expect("located").end())
                     .expect("tim source span");
                 let errors = ErrorCollector::new();
                 let ParseOutcome::Parsed(DependentTier::Tim(actual)) =
-                    ChatParser::parse_dependent_tier(&parser, input, span.start as usize, &errors)
+                    ChatParser::parse_dependent_tier(
+                        &parser,
+                        input,
+                        span.span().expect("located").start(),
+                        &errors,
+                    )
                 else {
                     panic!("timing state must survive fragment parsing");
                 };
@@ -1430,11 +1499,11 @@ fn reference_dependent_items_roundtrip_through_fragment_apis() {
                     DependentTier::Pho(_) => Kind::Pho,
                     _ => continue,
                 };
-                let span = entry.span();
+                let span = entry.location();
                 let mut sources = ranges.iter().filter(|(candidate, range)| {
                     *candidate == kind
-                        && range.start >= span.start as usize
-                        && range.end <= span.end as usize
+                        && range.start >= span.span().expect("located").start()
+                        && range.end <= span.span().expect("located").end()
                 });
                 match &entry.tier {
                     DependentTier::Mor(tier) => {
@@ -1594,9 +1663,9 @@ fn duplicate_end_spec_keeps_its_diagnostic_with_or_without_final_newline() {
                 diagnostics[0].code,
                 talkbank_model::ErrorCode::UnparsableContent
             );
-            let span = diagnostics[0].location.span;
+            let span = diagnostics[0].location.span().expect("located diagnostic");
             let text = source
-                .get((span.start as usize - offset)..(span.end as usize - offset))
+                .get((span.start() - offset)..(span.end() - offset))
                 .expect("duplicate header diagnostic belongs to caller source");
             assert_eq!(text.trim_end_matches('\n'), "@End");
         }
@@ -1753,8 +1822,8 @@ fn reference_single_item_fragments_refuse_extra_input() {
             assert!(!errors.is_empty());
             for error in errors.into_vec() {
                 assert_eq!(
-                    error.location.span,
-                    talkbank_model::Span::from_usize(offset, offset)
+                    error.location.span().expect("located diagnostic"),
+                    talkbank_model::Span::new(offset, offset)
                 );
             }
         }
@@ -1786,16 +1855,23 @@ fn tier_and_header_fragments_preserve_reference_models_with_file_context() {
         let context = FragmentSemanticContext::new().with_option_flags(flags);
         for line in &file.lines {
             let utterance = match line {
-                Line::Header { header, span, .. } => {
+                Line::Header {
+                    header,
+                    location: span,
+                    ..
+                } => {
                     let input = fixture
                         .source()
-                        .get(span.start as usize..span.end as usize)
+                        .get(
+                            span.span().expect("located").start()
+                                ..span.span().expect("located").end(),
+                        )
                         .expect("parsed header span belongs to fixture");
                     let errors = ErrorCollector::new();
                     let parsed = ChatParser::parse_header_with_context(
                         &parser,
                         input,
-                        span.start as usize,
+                        span.span().expect("located").start(),
                         &context,
                         &errors,
                     );
@@ -1819,7 +1895,7 @@ fn tier_and_header_fragments_preserve_reference_models_with_file_context() {
                         let ParseOutcome::Parsed(actual) = ChatParser::parse_id_header_with_context(
                             &parser,
                             input,
-                            span.start as usize,
+                            span.span().expect("located").start(),
                             &context,
                             &errors,
                         ) else {
@@ -1844,13 +1920,16 @@ fn tier_and_header_fragments_preserve_reference_models_with_file_context() {
             let main = &utterance.main;
             let input = fixture
                 .source()
-                .get(main.span.start as usize..main.span.end as usize)
+                .get(
+                    main.location.span().expect("located").start() as usize
+                        ..main.location.span().expect("located").end() as usize,
+                )
                 .expect("parsed main-tier span belongs to fixture");
             let errors = ErrorCollector::new();
             let parsed = ChatParser::parse_main_tier_with_context(
                 &parser,
                 input,
-                main.span.start as usize,
+                main.location.span().expect("located").start() as usize,
                 &context,
                 &errors,
             );
@@ -1874,16 +1953,18 @@ fn tier_and_header_fragments_preserve_reference_models_with_file_context() {
             let end = utterance
                 .dependent_tiers
                 .last()
-                .map_or(main.span.end, |entry| entry.span().end);
+                .map_or(main.location.span().expect("located").end(), |entry| {
+                    entry.location().span().expect("located").end()
+                });
             let utterance_source = fixture
                 .source()
-                .get(main.span.start as usize..end as usize)
+                .get(main.location.span().expect("located").start() as usize..end as usize)
                 .expect("parsed utterance tiers belong to fixture");
             let errors = ErrorCollector::new();
             let parsed = ChatParser::parse_utterance_with_context(
                 &parser,
                 utterance_source,
-                main.span.start as usize,
+                main.location.span().expect("located").start() as usize,
                 &context,
                 &errors,
             );
@@ -1905,4 +1986,115 @@ fn tier_and_header_fragments_preserve_reference_models_with_file_context() {
         }
     }
     assert!(compared > 0, "reference population must contain main tiers");
+}
+
+/// Every public fragment method refuses an origin no document can hold,
+/// before parsing and through the caller's sink: one ParseFailed per call,
+/// nothing parsed. The admission is one owner (`FragmentSource::admit`), but
+/// each method carries its own refusal arm after it, and the population had
+/// reached none of them (capture 219, `crates/talkbank-parser/src/api`).
+#[test]
+fn every_fragment_method_refuses_an_unrepresentable_origin() {
+    let parser = TreeSitterParser::new().expect("parser");
+    type Call = fn(&TreeSitterParser, usize, &ErrorCollector) -> bool;
+    let calls: [(&str, Call); 24] = [
+        ("chat_file", |p, o, e| {
+            ChatParser::parse_chat_file(p, "@UTF8\n@Begin\n@End\n", o, e).is_rejected()
+        }),
+        ("header", |p, o, e| {
+            ChatParser::parse_header(p, "@Comment:\tx", o, e).is_rejected()
+        }),
+        ("id_header", |p, o, e| {
+            ChatParser::parse_id_header(p, "eng|corpus|CHI|||||Target_Child|||", o, e).is_rejected()
+        }),
+        ("participant_entry", |p, o, e| {
+            ChatParser::parse_participant_entry(p, "CHI Target_Child", o, e).is_rejected()
+        }),
+        ("utterance", |p, o, e| {
+            ChatParser::parse_utterance(p, "*CHI:\thello .\n", o, e).is_rejected()
+        }),
+        ("main_tier", |p, o, e| {
+            ChatParser::parse_main_tier(p, "*CHI:\thello .", o, e).is_rejected()
+        }),
+        ("word", |p, o, e| {
+            ChatParser::parse_word(p, "hello", o, e).is_rejected()
+        }),
+        ("mor_tier", |p, o, e| {
+            ChatParser::parse_mor_tier(p, "n|hello .", o, e).is_rejected()
+        }),
+        ("mor_word", |p, o, e| {
+            ChatParser::parse_mor_word(p, "n|hello", o, e).is_rejected()
+        }),
+        ("gra_tier", |p, o, e| {
+            ChatParser::parse_gra_tier(p, "1|0|ROOT", o, e).is_rejected()
+        }),
+        ("gra_relation", |p, o, e| {
+            ChatParser::parse_gra_relation(p, "1|0|ROOT", o, e).is_rejected()
+        }),
+        ("pho_tier", |p, o, e| {
+            ChatParser::parse_pho_tier(p, "h\u{25b}lo", o, e).is_rejected()
+        }),
+        ("pho_word", |p, o, e| {
+            ChatParser::parse_pho_word(p, "h\u{25b}lo", o, e).is_rejected()
+        }),
+        ("sin_tier", |p, o, e| {
+            ChatParser::parse_sin_tier(p, "x", o, e).is_rejected()
+        }),
+        ("act_tier", |p, o, e| {
+            ChatParser::parse_act_tier(p, "x", o, e).is_rejected()
+        }),
+        ("cod_tier", |p, o, e| {
+            ChatParser::parse_cod_tier(p, "x", o, e).is_rejected()
+        }),
+        ("com_tier", |p, o, e| {
+            ChatParser::parse_com_tier(p, "x", o, e).is_rejected()
+        }),
+        ("exp_tier", |p, o, e| {
+            ChatParser::parse_exp_tier(p, "x", o, e).is_rejected()
+        }),
+        ("add_tier", |p, o, e| {
+            ChatParser::parse_add_tier(p, "x", o, e).is_rejected()
+        }),
+        ("gpx_tier", |p, o, e| {
+            ChatParser::parse_gpx_tier(p, "x", o, e).is_rejected()
+        }),
+        ("int_tier", |p, o, e| {
+            ChatParser::parse_int_tier(p, "x", o, e).is_rejected()
+        }),
+        ("spa_tier", |p, o, e| {
+            ChatParser::parse_spa_tier(p, "x", o, e).is_rejected()
+        }),
+        ("sit_tier", |p, o, e| {
+            ChatParser::parse_sit_tier(p, "x", o, e).is_rejected()
+        }),
+        ("wor_tier", |p, o, e| {
+            ChatParser::parse_wor_tier(p, "hello .", o, e).is_rejected()
+        }),
+    ];
+    for (name, call) in calls {
+        let errors = ErrorCollector::new();
+        assert!(
+            call(&parser, usize::MAX, &errors),
+            "{name}: an origin of usize::MAX must be refused"
+        );
+        let codes: Vec<_> = errors.into_vec().into_iter().map(|e| e.code).collect();
+        assert_eq!(
+            codes,
+            vec![talkbank_model::ErrorCode::ParseFailed],
+            "{name}: exactly one ParseFailed from the admission"
+        );
+    }
+    let errors = ErrorCollector::new();
+    assert!(
+        ChatParser::parse_dependent_tier(&parser, "%com:\tx", usize::MAX, &errors).is_rejected(),
+        "dependent_tier: an origin of usize::MAX must be refused"
+    );
+    assert_eq!(
+        errors
+            .into_vec()
+            .into_iter()
+            .map(|e| e.code)
+            .collect::<Vec<_>>(),
+        vec![talkbank_model::ErrorCode::ParseFailed]
+    );
 }

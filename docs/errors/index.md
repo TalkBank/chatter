@@ -129,7 +129,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E357](E357.md) | Underline opener beside attached CA pitch | Invalidity | utterance | ✅ |
 | [E358](E358.md) | Unmatched long-feature begin | Invalidity | utterance | ✅ |
 | [E359](E359.md) | Unmatched long-feature end | Invalidity | utterance | ✅ |
-| [E360](E360.md) | Invalid media bullet | Invalidity | utterance, tier | ✅ |
+| [E360](E360.md) | Invalid media bullet | Invalidity | utterance, tier, header | ✅ |
 | [E360](E360.md) | Rejected terminal bullets retain their source owner | Invalidity | utterance | ✅ |
 | [E361](E361.md) | Invalid bullet timestamp | Invalidity | utterance | ⏳ |
 | [E362](E362.md) | Bullet times backwards | Invalidity | utterance | ✅ |

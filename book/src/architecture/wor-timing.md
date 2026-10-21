@@ -44,7 +44,10 @@ for the global E362 start-order check, per-speaker E701/E704, media linkage,
 and the distinction between overlapping words and overlapping utterances.
 
 The adaptive source-bound replacement plan (`WordTimingPlan::PreferRetained`)
-discards only the word tiers that are actually wrong, and keeps the rest:
+first removes tiers with owned lowering failures or located validation errors.
+If errors cannot be attributed to a word tier, it removes all remaining word
+tiers and records that uncertainty. Removal is not proof that each discarded
+tier was independently defective:
 
 ```mermaid
 flowchart TD
@@ -165,6 +168,13 @@ mechanically defined by the recorded extrema. An algorithm that requires
 common origin, acoustic accuracy, non-overlap, or monotonic starts must state
 and enforce that later policy over additional evidence or the relation types.
 
+These alternatives have an order: a start earlier than the previous start is
+`BackwardStart`, even if the intervals also overlap. Otherwise the current
+start is compared with the previous end to distinguish overlap, touching and
+gap. The reported overlap duration is the previous end minus the current
+start, not necessarily the intersection length when one interval contains
+the other. Consumers needing intersection geometry must check both ends.
+
 The assessment transition is infallible because its control flow makes the
 remaining construction failure unrepresentable. An empty binding returns
 `Empty`. A nonempty binding assesses the first slot before it can construct a
@@ -173,15 +183,20 @@ first complete slot is the required seed for the hull. No caller or internal
 branch can construct a nonempty complete sequence without that seed.
 
 `WorSlotIndex`, `WorMediaOffsetMs`, `WorDurationMs`, and `WorTimingHull` have
-private constructors. A caller cannot mint an index for an unrelated tier,
-present arithmetic as a recorded media coordinate, or label arbitrary offsets
-as a hull that passed chatter's sequence assessment. Recorded offsets and the
-duration derived by subtraction remain different types.
+private constructors. Callers cannot construct these wrappers from arbitrary
+integers. Recorded offsets and durations derived by subtraction remain different
+types. These copyable numeric values do not, however, carry a source identity:
+an index issued for one assessment is not type-branded to that assessment, and
+equal coordinates do not establish a common recording. Keep them associated
+with their producing result. `WorSourceContent`, described below, separately
+retains the actual main-tier borrow and root position.
 
-The complete state does not return the original `Bullet`. Returning it would
-reopen direct access to raw integer fields and let every consumer rebuild the
-same loose arithmetic. `WorRecordedInterval` is the only timing surface after
-binding.
+The complete slot's timing accessor returns `WorRecordedInterval`, not the
+original `Bullet`, so its checked timing surface does not require raw integer
+arithmetic. This is an API contract, not a restriction on inspecting the input
+model: count-matched pairs and corroborated `wor_word()` still expose borrowed
+words, and callers may retain the original tier. Reading those bullets directly
+does not establish lexical corroboration or temporal completeness.
 
 This is deliberately stricter than ordinary CHAT validation. CHAT can retain
 legacy or partially aligned data. A timing-consuming algorithm needs an
@@ -303,12 +318,13 @@ questions include:
 
 ## Release boundary
 
-Analysis projects that pin a released chatter tag must adopt the binding API
-only after that chatter release is cut. They must not switch to a live path
-dependency to test this code. Until then, they may reproduce current membership
-with the released typed generator, but the first post-release change should
-replace that local pairing with `bind_wor_timing` followed by
-`corroborate_wor_timing`. Its regression evidence must show both that a
+Consumers must pin a compatible, reviewed Chatter revision and qualify their
+own behavior against it. A release-pinned consumer needs a release containing
+the required API; a separately authorized immutable development revision is
+not a released artifact. A moving checkout is not a reproducible dependency.
+Do not reproduce membership or correspondence in a parallel downstream pairing:
+use `bind_wor_timing` followed by `corroborate_wor_timing` when those APIs are
+available in the selected revision. Regression evidence must show both that a
 same-count token edit is refused and that `%wor` text never becomes lexical
 authority.
 

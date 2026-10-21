@@ -38,7 +38,6 @@
 //! ```
 
 use super::{BulletContent, WriteChat};
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -75,13 +74,14 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Examples
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{CodTier, BulletContent};
 ///
 /// // Word-specific coding
-/// let cod = CodTier::new(BulletContent::from_text("<1> DETERMINER <2> NOUN"));
+/// let cod = CodTier::new(Location::Unlocated, BulletContent::from_text("<1> DETERMINER <2> NOUN"));
 ///
 /// // Utterance-level coding
-/// let cod2 = CodTier::from_text("QUESTION_TAG");
+/// let cod2 = CodTier::from_text(Location::Unlocated, "QUESTION_TAG");
 /// ```
 ///
 /// **CHAT format:**
@@ -98,33 +98,30 @@ pub struct CodTier {
     pub content: BulletContent,
 
     /// Source span for error reporting (not serialized to JSON)
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl CodTier {
     /// Constructs a `%cod` tier from parsed bullet-aware content.
-    pub fn new(content: BulletContent) -> Self {
+    pub fn new(location: impl Into<crate::Location>, content: BulletContent) -> Self {
         Self {
             content,
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata used in diagnostics.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Convenience constructor for simple `%cod` text payloads.
     ///
     /// Use [`Self::new`] when callers already have parsed [`BulletContent`].
-    pub fn from_text(text: impl Into<smol_str::SmolStr>) -> Self {
+    pub fn from_text(
+        location: impl Into<crate::Location>,
+        text: impl Into<smol_str::SmolStr>,
+    ) -> Self {
         Self {
             content: BulletContent::from_text(text),
-            span: Span::DUMMY,
+            location: location.into(),
         }
     }
 
@@ -156,7 +153,7 @@ mod tests {
     /// Ensures plain coding text round-trips to `%cod` format.
     #[test]
     fn test_cod_tier_simple() {
-        let tier = CodTier::from_text("general coding");
+        let tier = CodTier::from_text(crate::Location::Unlocated, "general coding");
         assert_eq!(tier.to_chat(), "%cod:\tgeneral coding");
         assert!(!tier.is_empty());
     }
@@ -164,7 +161,7 @@ mod tests {
     /// Ensures indexed coding syntax is preserved verbatim.
     #[test]
     fn test_cod_tier_with_indices() {
-        let tier = CodTier::from_text("<1> atul");
+        let tier = CodTier::from_text(crate::Location::Unlocated, "<1> atul");
         assert_eq!(tier.to_chat(), "%cod:\t<1> atul");
         assert!(!tier.is_empty());
     }
@@ -172,7 +169,7 @@ mod tests {
     /// Empty text produces an empty payload according to `is_empty`.
     #[test]
     fn test_cod_tier_empty() {
-        let tier = CodTier::from_text("");
+        let tier = CodTier::from_text(crate::Location::Unlocated, "");
         assert!(tier.is_empty());
     }
 }

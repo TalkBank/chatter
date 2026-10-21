@@ -1,7 +1,8 @@
 //! Immutable diagnostic evidence paired with checked, display-local coordinates.
 
+use super::chat_formatting::ProjectedDisplayRange;
 use super::parse_error::SourceCodeWithOffset;
-use super::{ParseError, SourceIndex, SourceLocation, Span};
+use super::{DiagnosticLocation, LineColumn, ParseError, SourceIndex, Span};
 use miette::Diagnostic;
 use std::fmt;
 use std::sync::OnceLock;
@@ -32,24 +33,10 @@ pub enum DiagnosticSourceError {
     /// No source bytes are available to show a context window.
     #[error("the source buffer is empty")]
     EmptySource,
-    /// The source does not fit the model's byte-coordinate space.
-    #[error("source length {source_len} exceeds the diagnostic coordinate space")]
-    SourceTooLarge {
-        /// Supplied source length in bytes.
-        source_len: usize,
-    },
-    /// A projected range cannot be represented in its display text.
-    #[error(
-        "display span {start}..{end} is not a representable UTF-8 range in display length {display_len}"
-    )]
-    DisplayRange {
-        /// Requested inclusive display offset.
-        start: usize,
-        /// Requested exclusive display offset.
-        end: usize,
-        /// Projected display text length in bytes.
-        display_len: usize,
-    },
+    /// The diagnostic concerns a value with no source position, so there is
+    /// no window of the source to show.
+    #[error("the diagnostic has no source location")]
+    Unlocated,
 }
 
 /// A checked projection, never an absolute-source `ParseError`.
@@ -58,8 +45,7 @@ pub enum DiagnosticSourceError {
 /// display-local coordinate space; the file location retains absolute bytes.
 pub struct DiagnosticPresentation {
     span: Span,
-    line: usize,
-    column: usize,
+    position: LineColumn,
     pub(super) context: DiagnosticContext,
     pub(super) labels: Vec<DiagnosticLabel>,
     source_cache: OnceLock<SourceCodeWithOffset>,
@@ -96,29 +82,17 @@ impl DiagnosticContext {
 pub struct DisplaySpan(Span);
 
 impl DisplaySpan {
-    pub(super) fn in_text(
-        start: usize,
-        end: usize,
-        text: &str,
-    ) -> Result<Self, DiagnosticSourceError> {
-        let invalid = || DiagnosticSourceError::DisplayRange {
-            start,
-            end,
-            display_len: text.len(),
-        };
-        if text.get(start..end).is_none() {
-            return Err(invalid());
-        }
-        let start = u32::try_from(start).map_err(|_| invalid())?;
-        let end = u32::try_from(end).map_err(|_| invalid())?;
-        Ok(Self(Span::new(start, end)))
+    /// The producer guarantees `start <= end` on UTF-8 boundaries of the
+    /// display text, so a projected range is always a valid display span.
+    pub(super) fn from_projected(range: ProjectedDisplayRange<'_>) -> Self {
+        Self(Span::new(range.start(), range.end()))
     }
     /// Inclusive display byte offset.
-    pub fn start(self) -> u32 {
+    pub fn start(self) -> usize {
         self.0.start
     }
     /// Exclusive display byte offset.
-    pub fn end(self) -> u32 {
+    pub fn end(self) -> usize {
         self.0.end
     }
     /// A range for slicing the associated display text.
@@ -162,15 +136,13 @@ impl DiagnosticLabel {
 impl DiagnosticPresentation {
     pub(super) fn new(
         span: Span,
-        line: usize,
-        column: usize,
+        position: LineColumn,
         context: DiagnosticContext,
         labels: Vec<DiagnosticLabel>,
     ) -> Self {
         Self {
             span,
-            line,
-            column,
+            position,
             context,
             labels,
             source_cache: OnceLock::new(),
@@ -178,16 +150,16 @@ impl DiagnosticPresentation {
     }
 
     /// Checked absolute file location, including one-based byte coordinates.
-    pub fn location(&self) -> SourceLocation {
-        SourceLocation::new(self.span).with_position(self.line, self.column)
+    pub fn location(&self) -> DiagnosticLocation {
+        DiagnosticLocation::known_at(self.span, self.position)
     }
-    /// One-based file line, always known in an admitted presentation.
-    pub fn line(&self) -> usize {
-        self.line
+    /// Absolute byte span in the file, always known in an admitted presentation.
+    pub fn file_span(&self) -> Span {
+        self.span
     }
-    /// One-based byte column, always known in an admitted presentation.
-    pub fn column(&self) -> usize {
-        self.column
+    /// One-based line and byte column, always known in an admitted presentation.
+    pub fn position(&self) -> LineColumn {
+        self.position
     }
 
     /// The projected source window and its display-local primary span.
@@ -205,8 +177,7 @@ impl Clone for DiagnosticPresentation {
     fn clone(&self) -> Self {
         Self::new(
             self.span,
-            self.line,
-            self.column,
+            self.position,
             self.context.clone(),
             self.labels.clone(),
         )
@@ -275,7 +246,7 @@ impl SourceDiagnostic {
     }
 
     /// Checked file location only; never falls back to stale producer coordinates.
-    pub fn location(&self) -> Result<SourceLocation, &DiagnosticSourceError> {
+    pub fn location(&self) -> Result<DiagnosticLocation, &DiagnosticSourceError> {
         self.presentation().map(|p| p.location())
     }
 
@@ -289,16 +260,15 @@ impl fmt::Display for SourceDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let raw = self.original();
         write!(f, "{}[{}]: {}", raw.severity, raw.code, raw.message)?;
-        match self.presentation() {
-            Ok(p) => write!(
+        match (self.presentation(), raw.location) {
+            (Ok(p), _) => write!(f, " ({})", p.location()),
+            (Err(_), DiagnosticLocation::Unlocated) => write!(f, " ({})", raw.location),
+            // Only the bytes: a producer's cached line and column were never
+            // checked against this source, so an unadmitted one is not shown.
+            (Err(reason), DiagnosticLocation::Known { span, .. }) => write!(
                 f,
-                " (line {}, column {}, bytes {}..{})",
-                p.line, p.column, raw.location.span.start, raw.location.span.end
-            ),
-            Err(reason) => write!(
-                f,
-                " (bytes {}..{}; source context unavailable: {reason})",
-                raw.location.span.start, raw.location.span.end
+                " ({}; source context unavailable: {reason})",
+                DiagnosticLocation::new(span)
             ),
         }
     }

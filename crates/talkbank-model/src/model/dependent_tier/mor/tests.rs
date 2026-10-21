@@ -2,7 +2,7 @@
 //!
 //! The four TIER tests that used to sit below (`count_chunks`, the chunk
 //! sequence, `chunk_at`, `item_index_of_chunk`) built a `MorTier` around a
-//! `Terminator::Period { span: Span::DUMMY }`; they are
+//! `Terminator::Period { location: crate::Location::Unlocated }`; they are
 //! `talkbank-parser-tests/tests/integration/mor_tier_from_source.rs` now,
 //! over a tier parsed from the text they named. What stays builds items, not
 //! tiers, and pins the writer's output, which no parse can pin.

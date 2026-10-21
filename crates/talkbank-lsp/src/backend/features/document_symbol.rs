@@ -50,7 +50,7 @@ pub fn document_symbol(
         line: 0,
         character: 0,
     };
-    let file_end = index.offset_to_position(doc_len as u32);
+    let file_end = index.offset_to_position(doc_len);
     let file_range = Range {
         start: file_start,
         end: file_end,
@@ -60,17 +60,20 @@ pub fn document_symbol(
     let mut utterance_children: Vec<DocumentSymbol> = Vec::new();
 
     // Track the byte offset of the first utterance to delimit the "Headers" section.
-    let mut first_utterance_offset: Option<u32> = None;
+    let mut first_utterance_offset: Option<usize> = None;
 
     for utterance in chat_file.utterances() {
-        let main_span = utterance.main.span;
+        // An utterance with no source location has no symbol range.
+        let Some(main_span) = utterance.main.location.span() else {
+            continue;
+        };
         if first_utterance_offset.is_none() {
-            first_utterance_offset = Some(main_span.start);
+            first_utterance_offset = Some(main_span.start());
         }
 
         // Compute the full utterance block extent (main + all dependent tiers).
-        let block_start = main_span.start;
-        let block_end = utterance_block_end(utterance);
+        let block_start = main_span.start();
+        let block_end = utterance_block_end(utterance, main_span);
 
         let start_pos = index.offset_to_position(block_start);
         let end_pos = index.offset_to_position(block_end);
@@ -78,7 +81,7 @@ pub fn document_symbol(
         // Label: "*SPEAKER: …" truncated at 60 chars for readability.
         let speaker = utterance.main.speaker.as_str();
         // Collect the first line of text from the main tier for the label.
-        let label_text = first_line_at_offset(document, block_start as usize, 60);
+        let label_text = first_line_at_offset(document, block_start, 60);
         let label = if label_text.is_empty() {
             format!("*{speaker}:")
         } else {
@@ -111,22 +114,25 @@ pub fn document_symbol(
     let mut open_gems: HashMap<Option<&GemLabel>, Vec<Span>> = HashMap::new();
     let mut gem_symbols: Vec<DocumentSymbol> = Vec::new();
     for line in &chat_file.lines {
-        let Line::Header { header, span, .. } = line else {
+        let Line::Header {
+            header, location, ..
+        } = line
+        else {
             continue;
         };
-        if span.is_dummy() {
+        let Some(span) = location.span() else {
             continue;
-        }
+        };
         match header.as_ref() {
             Header::BeginGem { label } => {
-                open_gems.entry(label.as_ref()).or_default().push(*span);
+                open_gems.entry(label.as_ref()).or_default().push(span);
             }
             Header::EndGem { label } => {
                 let Some(begin) = open_gems.get_mut(&label.as_ref()).and_then(Vec::pop) else {
                     continue;
                 };
-                let start = index.offset_to_position(begin.start);
-                let end = index.offset_to_position(span.end);
+                let start = index.offset_to_position(begin.start());
+                let end = index.offset_to_position(span.end());
                 #[allow(deprecated)]
                 gem_symbols.push(DocumentSymbol {
                     name: label
@@ -234,13 +240,14 @@ pub fn document_symbol(
 /// Returns the byte offset of the end of an utterance block (main tier +
 /// all dependent tiers). Falls back to the main tier end if no dependent
 /// tiers are present.
-fn utterance_block_end(utterance: &talkbank_model::model::Utterance) -> u32 {
+fn utterance_block_end(utterance: &talkbank_model::model::Utterance, main_span: Span) -> usize {
     utterance
         .dependent_tiers
         .iter()
-        .map(|t| t.tier.span().end)
+        .filter_map(|t| t.tier.location().span())
+        .map(|span| span.end())
         .max()
-        .unwrap_or(utterance.main.span.end)
+        .unwrap_or(main_span.end())
 }
 
 /// Returns the first `max_chars` characters of the line that starts at

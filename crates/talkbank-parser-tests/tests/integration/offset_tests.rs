@@ -187,11 +187,11 @@ fn test_error_offset_in_word() -> Result<(), TestError> {
     let error_vec = errors.into_vec();
     assert!(!error_vec.is_empty());
     if let Some(first) = error_vec.first()
-        && first.location.span.start < 100
+        && first.location.span().expect("located diagnostic").start() < 100
     {
         return Err(TestError::Failure(format!(
             "Error span should be offset-adjusted: got start={}, expected >=100",
-            first.location.span.start
+            first.location.span().expect("located diagnostic").start()
         )));
     }
 
@@ -216,11 +216,11 @@ fn test_error_offset_in_main_tier() -> Result<(), TestError> {
     let error_vec = errors.into_vec();
     assert!(!error_vec.is_empty());
     if let Some(first) = error_vec.first()
-        && first.location.span.start < 500
+        && first.location.span().expect("located diagnostic").start() < 500
     {
         return Err(TestError::Failure(format!(
             "Error span should be offset-adjusted: got start={}, expected >=500",
-            first.location.span.start
+            first.location.span().expect("located diagnostic").start()
         )));
     }
 

@@ -128,10 +128,7 @@ fn empty_turn_deletion_never_reassigns_dependent_tiers() {
         let EditTarget::Replace(span) = edit.target() else {
             panic!("deletion range")
         };
-        assert_eq!(
-            &source[span.start as usize..span.end as usize],
-            "*CHI:\t, .\n"
-        );
+        assert_eq!(&source[span.start()..span.end()], "*CHI:\t, .\n");
         assert!(edit.replacement().as_str().is_empty());
         let admitted = admit_edits(observed.document(), edits);
         assert!(admitted.skipped().is_empty());
@@ -173,7 +170,7 @@ fn missing_end_spec_proposals_preserve_document_boundary_with_or_without_final_n
         let [edit] = edits.as_slice() else {
             panic!("one document-end insertion");
         };
-        assert_eq!(edit.target(), &EditTarget::InsertAt(source.len() as u32));
+        assert_eq!(edit.target(), &EditTarget::InsertAt(source.len()));
         assert_eq!(edit.replacement().as_str(), replacement);
         // Catalog policy does not grant automatic document-level admission.
         // Preserve the existing utterance-boundary refusal rather than

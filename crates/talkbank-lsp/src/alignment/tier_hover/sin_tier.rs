@@ -25,7 +25,7 @@ pub fn find_sin_tier_hover_info(
     let sin_alignment = utterance.alignments.as_ref()?.sin.as_ref()?;
 
     let offset = position_to_offset(document, position);
-    let sin_idx = find_sin_item_index_at_offset(tree, sin_tier.span, offset)?;
+    let sin_idx = find_sin_item_index_at_offset(tree, sin_tier.location.span()?, offset)?;
 
     // Get the sin item
     let sin_item = sin_tier.items.get(sin_idx)?;

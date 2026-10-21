@@ -164,7 +164,7 @@ pub fn chat_to_json_unvalidated(
 ///
 /// # Returns
 ///
-/// * `Ok(String)` - Canonical CHAT string
+/// * `Ok(Rewrite)` - Canonical CHAT text admitted by the line-presence loss guard
 /// * `Err(PipelineError)` - Parse or validation error
 ///
 /// # Example

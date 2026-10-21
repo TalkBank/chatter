@@ -35,7 +35,8 @@
 //! - **Cross-platform support**: Works on macOS and Windows
 //! - **Stateless operation**: No context or configuration management needed
 //! - **Idiomatic Rust**: Uses Result types and proper error handling
-//! - **Thread-safe**: Can be called from multiple threads simultaneously
+//! - **Delivery limits**: Windows sends share an uncoordinated message file;
+//!   concurrent calls are not guaranteed to preserve individual requests.
 //! - **Zero-cost abstractions**: Thin wrapper over C API
 //!
 //! ## Quick Start
@@ -44,7 +45,7 @@
 //! use send2clan::send_to_clan;
 //!
 //! fn main() -> Result<(), send2clan::Error> {
-//!     // Send file to CLAN with 30-second timeout
+//!     // Request a platform wait; this is not a whole-operation deadline.
 //!     send_to_clan(30, "/path/to/file.cha", 42, 10, Some("Syntax error"))?;
 //!     println!("Successfully sent file to CLAN!");
 //!     Ok(())
@@ -57,7 +58,11 @@
 //! 1. Validates parameters
 //! 2. Launches CLAN if not already running
 //! 3. Sends file path and cursor position to CLAN
-//! 4. Displays optional error message
+//! 4. Requests display of the optional error message
+//!
+//! A successful transport result does not confirm GUI navigation. See
+//! [`send_to_clan`] for timeout, truncation and concurrency limits and
+//! [`is_clan_available`] for installation-query limits.
 //!
 //! Helper functions:
 //! - [`is_platform_supported`]: Check if current platform is supported

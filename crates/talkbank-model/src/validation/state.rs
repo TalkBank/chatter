@@ -128,13 +128,13 @@ impl serde::Serialize for ValidChatFile {
 /// ```
 #[derive(Debug, Clone)]
 pub struct MediaTimingObligation {
-    header_span: crate::Span,
+    header_location: crate::Location,
 }
 
 impl MediaTimingObligation {
     /// The retained declaration that still requires actual timing evidence.
-    pub fn header_span(&self) -> crate::Span {
-        self.header_span
+    pub fn header_location(&self) -> crate::Location {
+        self.header_location
     }
 }
 
@@ -397,10 +397,10 @@ impl ChatFile {
         let (document, diagnostics, pending) =
             self.validate_owned(policy, errors, name, AdmissionPhase::RegeneratingTiming)?;
         Ok(match pending {
-            Some(header_span) => TimingRegenerationAdmission::Pending(PendingTimingChatFile {
+            Some(header_location) => TimingRegenerationAdmission::Pending(PendingTimingChatFile {
                 document,
                 diagnostics,
-                obligation: MediaTimingObligation { header_span },
+                obligation: MediaTimingObligation { header_location },
             }),
             None => TimingRegenerationAdmission::Ready(ValidChatFile {
                 document,
@@ -417,7 +417,7 @@ impl ChatFile {
         errors: &impl ErrorSink,
         name: TranscriptName<'_>,
         phase: AdmissionPhase,
-    ) -> Result<(ChatFile, Vec<ParseError>, Option<crate::Span>), ValidationFailure> {
+    ) -> Result<(ChatFile, Vec<ParseError>, Option<crate::Location>), ValidationFailure> {
         let collected = ErrorCollector::new();
         let sink = RecordingSink {
             collected: &collected,

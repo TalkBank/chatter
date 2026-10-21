@@ -24,7 +24,8 @@
 //!
 //! # What this type promises, and what it does NOT
 //!
-//! [`Rewrite`] exists only where no source line vanished. That is a claim
+//! [`Rewrite`] requires ordered, disjoint witnesses for source-line content.
+//! One output occurrence cannot stand in for repeated source lines. That is a claim
 //! about LOSS, and it is deliberately not a claim about FAITHFULNESS: it
 //! cannot prove a rewrite preserved meaning, and it is not a validity check.
 //! An invalid transcript may still be rewritten, because validity and
@@ -46,7 +47,8 @@ use talkbank_model::model::ChatFile;
 /// CHAT text that may be written over the source it was derived from.
 ///
 /// The only constructor is [`Rewrite::of`]. A caller holding one of these has
-/// already been told that no line of the source vanished; a caller that wants
+/// already matched every nonblank source line in order without reusing output
+/// bytes (ignoring whitespace); a caller that wants
 /// the bytes without that assurance is asking for `ChatFile::to_chat_string`
 /// and is not rewriting a file in place.
 #[derive(Debug, Clone)]
@@ -54,14 +56,14 @@ pub struct Rewrite {
     text: String,
 }
 
-/// A source line with no counterpart in the serialization.
+/// A source line with no remaining ordered counterpart in the serialization.
 ///
 /// Carries the line so the operator can see WHAT would have been lost. A
 /// refusal that only says "content would be dropped" sends someone hunting
 /// through a file for a difference the tool already knows.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "rewriting would DROP content: line {line} of the source has no counterpart in the output: {text:?}"
+    "rewriting would DROP or reorder content: line {line} of the source has no remaining ordered counterpart in the output: {text:?}"
 )]
 pub struct DroppedContent {
     /// The 1-based line number in the source.
@@ -84,13 +86,26 @@ fn strip_whitespace_into(line: &str, out: &mut String) {
     out.extend(line.chars().filter(|c| !c.is_whitespace()));
 }
 
+/// Consume the earliest whole-line witness from the unmatched output suffix.
+/// Returning only the suffix after the match prevents reuse of its bytes.
+/// A source continuation may consume another part of the same output line.
+fn consume_witness<'a>(mut remaining: &'a str, needle: &str) -> Option<&'a str> {
+    while let Some((line, following)) = remaining.split_once('\n') {
+        if let Some(start) = line.find(needle) {
+            return Some(&remaining[start + needle.len()..]);
+        }
+        remaining = following;
+    }
+    None
+}
+
 impl Rewrite {
-    /// Serialize `model` for writing over `source`, refusing on any loss.
+    /// Serialize `model`, requiring ordered, disjoint source-line witnesses.
     ///
     /// # Errors
     ///
     /// [`DroppedContent`] naming the first source line whose content does not
-    /// appear anywhere in the serialization.
+    /// appear after the preceding witness in the serialization.
     pub fn of(model: &ChatFile, source: &str) -> Result<Self, DroppedContent> {
         let text = model.to_chat_string();
 
@@ -98,26 +113,21 @@ impl Rewrite {
         // it IS the answer: if the output is the source, every source line
         // trivially appears in it.
         //
-        // It matters because the scan below is quadratic and this is the
-        // common case. Measured 2026-08-27: 101 of the 107 reference-corpus
-        // files serialize back byte-identically, and on a real 15,715-line
-        // transcript the scan costs 3,161 ms against 0.02 ms for this
-        // comparison. Without it `chatter normalize` paid seconds per large
-        // file, including when printing to stdout and overwriting nothing.
+        // The unchanged case needs no comparison buffers. Changed output uses a
+        // monotonically consumed suffix, never restarting at an earlier line.
         if text == source {
             return Ok(Self { text });
         }
 
-        // Stripped once into ONE buffer with a range per line, rather than a
+        // Stripped once into ONE buffer with line boundaries, rather than a
         // `String` per line: the 15,715-line file allocated 31,430 `String`s
         // to answer a question about 6 files in 107.
         let mut stripped = String::with_capacity(text.len());
-        let mut lines: Vec<(usize, usize)> = Vec::new();
         for line in text.lines() {
-            let start = stripped.len();
             strip_whitespace_into(line, &mut stripped);
-            lines.push((start, stripped.len()));
+            stripped.push('\n');
         }
+        let mut remaining = stripped.as_str();
 
         // One scratch buffer, reused, so the needle costs no allocation after
         // the first line.
@@ -131,15 +141,10 @@ impl Rewrite {
             if needle.is_empty() {
                 continue;
             }
-            if !lines
-                .iter()
-                .any(|&(start, end)| stripped[start..end].contains(needle.as_str()))
-            {
-                return Err(DroppedContent {
-                    line: index + 1,
-                    text: source_line.to_string(),
-                });
-            }
+            remaining = consume_witness(remaining, &needle).ok_or_else(|| DroppedContent {
+                line: index + 1,
+                text: source_line.to_string(),
+            })?;
         }
 
         Ok(Self { text })
@@ -164,7 +169,7 @@ mod tests {
     // test site in this workspace.
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-    use super::strip_whitespace_into;
+    use super::{consume_witness, strip_whitespace_into};
 
     /// The one owner's rule, as a value, for readable assertions.
     fn without_whitespace(line: &str) -> String {
@@ -211,7 +216,11 @@ mod tests {
             ("*PAR:\tyeah sure &*INV:ah.", "*PAR:\tyeah sure &*INV:ah ."),
         ] {
             assert!(
-                without_whitespace(after).contains(&without_whitespace(before)),
+                consume_witness(
+                    &format!("{}\n", without_whitespace(after)),
+                    &without_whitespace(before)
+                )
+                .is_some(),
                 "the guard would refuse a legitimate normalization:\n  before: {before:?}\n  after:  {after:?}"
             );
         }
@@ -221,16 +230,18 @@ mod tests {
     /// rather than equality.
     #[test]
     fn a_joined_continuation_is_not_a_loss() {
-        let joined = without_whitespace("@Participants:\tCHI Child, MOT Mother, FAT Father");
+        let joined = format!(
+            "{}\n",
+            without_whitespace("@Participants:\tCHI Child, MOT Mother, FAT Father")
+        );
+        let mut remaining = joined.as_str();
         for part in [
             "@Participants:\tCHI Child,",
             "\tMOT Mother,",
             "\tFAT Father",
         ] {
-            assert!(
-                joined.contains(&without_whitespace(part)),
-                "{part:?} should survive the join"
-            );
+            remaining = consume_witness(remaining, &without_whitespace(part))
+                .unwrap_or_else(|| panic!("{part:?} should survive the join"));
         }
     }
 

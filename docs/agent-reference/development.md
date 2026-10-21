@@ -31,32 +31,42 @@ Commit hooks do not substitute for either.
    and a squash. Write slowly and correctly, and be adversarial toward your
    own tests: a test written to pass covers only the states its author
    listed.
-5. **Before push: `just gate`, once.** Static checks plus every test CI
-   runs, a few minutes. It mirrors per-push CI exactly, so CI confirms and
-   never discovers; a red CI is a process failure. Enforced by
+5. **Before push: `just gate` on final candidate content.** It runs the
+   locally owned publication checks, including strict test prerequisites.
+   A local pass does not prove another platform, hosted provisioning or release
+   automation; inspect CI results for the exact candidate. Enforced by
    `.githooks/pre-push`, which refuses a push without the stamp. The stamp is
    a hash of tree content (`scripts/tree-stamp.sh`), so gating a dirty tree
-   and then committing the same bytes is valid. Clippy and the feature-off
+   and then committing the same bytes is valid. The hook also checks each
+   pushed tree against that receipt; working-tree equality alone is insufficient.
+   Clippy and the feature-off
    build are `just release-lint`, run before a release, never per push.
 6. **No push without the maintainer's word, ever.** No hook can know this; it
    is the standing rule and has no exception.
 7. **Release: `just fmt`, `just release-lint`, `just gate`, then apply the
-   squash rule above with the CHANGELOG section as the release commit message.**
+   unpublished-history squash rule in the architecture reference, with the
+   CHANGELOG section as the release commit message.**
    The content-bound gate receipt survives a squash; reuse it when the tree is
    unchanged. Push on the maintainer's word, verify CI, then `just release-tag
    X.Y.Z`.
 
-**The spec system is the test corpus.** A construct with no spec example is
-the gap to fix. Nothing on this path needs data outside the repository, so
-every step can be run by any contributor.
+**The spec system owns authored construct/error examples.** The checked-in
+reference corpus and boundary tests have complementary obligations. A construct
+with no spec example is a gap to investigate. These finite inputs do not require
+private corpus access, but contributor execution still needs the documented
+toolchains, native dependencies and generator prerequisites. Checked-in fixtures
+alone do not establish clean-machine or public-bootstrap readiness.
 
 ## Danger rules
 
 1. **`just gate` is the pre-push gate**, and it is the only one. `just test`
    is `--tests` only and cannot see doctests; never substitute it for the
-   gate. **The justfile owns every command CI runs**;
-   `scripts/check_ci_gate_sync.py` fails if a workflow runs anything else or
-   if a recipe CI invokes is missing from the gate.
+   gate. **The justfile owns maintained verification recipes**;
+   `scripts/check_ci_gate_sync.py` checks its selected `GATED_WORKFLOWS`, with
+   explicit provisioning, raw-command baseline and exemption handling.
+   It does not prove that every hosted workflow or native platform is covered
+   locally. Keep the recipe/synchronizer owners authoritative rather than
+   mirroring their command lists here.
 2. **Never run two cargo-family commands concurrently against one workspace**
    (the root or `spec/`). The target-dir lock serializes them silently.
 3. **`grammar/src/parser.c`, `node_types.rs`, `generated_traversal.rs`, the
@@ -85,13 +95,26 @@ every step can be run by any contributor.
    spec system. Every error code tests through `spec/errors/`.
 8. **Program stack discipline:** `main()` spawns the program onto a 16 MiB
    thread; never move program logic onto the bare OS main thread. Gate:
-   `crates/chatter/tests/stack_limit_tests.rs`.
+   `crates/chatter/tests/integration/stack_limit_tests.rs` (Unix startup control;
+   native Windows acceptance is separate).
 9. **Commit review is explicit, not an automatic gate.** Review breaking-change
    notes and production-change evidence before committing. The tracked commit
    hooks only chain to optional contributor-owned local hooks. The standalone
    scripts remain available for deliberate review; retirement is not a bypass
    flag and does not change publication authorization or release checks.
-10. **`clippy` is release-time, not inner-loop and not per push.**
+10. **Ratchets only fall, and they fall in the commit that earned it.** The
+    gates in `crates/talkbank-parser-tests/src/` hold reviewed baselines:
+    `fabricated_ast` (per-crate `CEILING` on `new_unchecked` and
+    `from_checked_literal`, and `PARSER_UNLOCATED_CEILING` on production
+    `Location::Unlocated` in the parser crates), `content_catch_alls`
+    (`UNPROTECTED`) and `error_code_demonstration` (`UNDEMONSTRATED`). A
+    ceiling above reality is a failure like a ceiling below it, so a cleanup
+    is banked by editing the `const` the gate names; the gate prints the
+    replacement row. Every gate's probes must fail on a planted violation
+    (`gates::every_gate_fails_on_a_planted_violation`), and a limit a probe
+    cannot reach is declared as an unproven rule, mirrored in
+    `tests/integration/gates.rs`. See `book/src/contributing/testing.md`.
+11. **`clippy` is release-time, not inner-loop and not per push.**
     `just release-lint` runs it with `-D warnings` over both workspaces plus
     the feature-off build; `release-lint.yml` runs the same on every tag. A
     finding you intend to keep gets a scoped `#[allow]` naming the reason.
@@ -100,14 +123,16 @@ every step can be run by any contributor.
 ## Building, testing, releasing
 
 - Dev commands: the `justfile` and `book/src/contributing/dev-checks.md`.
-- **Parser and model regression gates**, all in `just test`: the parity
-  oracle `equivalence_reference_corpus` (both backends over the reference
-  corpus, compared with `SemanticEq`); `reference_corpus_parses`;
+- **Parser and model regression contracts:** the backend comparison
+  `equivalence_reference_corpus` in `talkbank-parser-re2c` (both backends over
+  the reference corpus, compared with `SemanticEq`); `reference_corpus_parses`;
   `roundtrip_reference_corpus`; the spec observation snapshot
   (`spec/observations/example-diagnostics.json`), which records for every
   spec example the codes each stage emitted and whether the parsed model
   serializes back byte-exact; and the one-way backend error comparison
-  `backends_report_every_tree_sitter_error`, including legal/deferred examples.
+  `backends_report_every_tree_sitter_error` in `talkbank-parser-re2c`, including
+  legal/deferred examples. Follow the testing guide for target selection and
+  the distinction between inner-loop prerequisites and strict gate execution.
   Snapshot changes are adjudicated in the commit, never regenerated blindly.
   A diagnostic-set baseline cannot exempt silent acceptance from the 1.0
   contract. Fragment coverage and isolated-fault controls remain separate.
@@ -120,6 +145,9 @@ every step can be run by any contributor.
 
 ## The book
 
-`book/` is the canonical documentation, built in CI with a link check
-(`just book` locally). One top-level README.md; everything else is a book
-chapter. Release notes are `CHANGELOG.md` via include, never a copy.
+`book/` owns maintained user/contributor narratives and is built in CI with a
+link check (`just book` locally). Crate READMEs, agent references, authored specs,
+generated inventories and historical design records have separate roles; route
+to their owners instead of duplicating a book chapter. See
+[documentation architecture](../../book/src/contributing/documentation-architecture.md).
+Release notes are `CHANGELOG.md` via include, never a copy.

@@ -240,7 +240,7 @@ fn a_recovery_node_in_both_the_child_list_and_the_sink_reports_once() {
         *CHI:\t[: closed] .\n@End\n";
 
     let (_utterances, diags) = crate::common::parse_utterances_and_diags(ANNOTATION_FIRST);
-    let recovery: Vec<&(String, u32, u32, String)> =
+    let recovery: Vec<&(String, usize, usize, String)> =
         diags.iter().filter(|(code, ..)| code == "E316").collect();
     assert_eq!(
         recovery.len(),

@@ -16,6 +16,8 @@ mod related_info;
 mod validation_orchestrator;
 
 // Re-export public API
-pub(crate) use validation_orchestrator::{document_diagnostics, validate_and_publish};
+pub(crate) use validation_orchestrator::{
+    CurrentRevisionDiagnostics, RevisionDiagnostics, document_diagnostics, validate_and_publish,
+};
 
 pub(crate) use analysis::DocumentAnalysis;

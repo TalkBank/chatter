@@ -9,8 +9,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::{
-    ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-    TeeErrorSink,
+    DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity,
+    Span, TeeErrorSink,
 };
 use crate::model::Line;
 use crate::parser::CstNodeId;
@@ -137,8 +137,12 @@ pub(super) fn parse_lines_with_removal<'source, P: TierRouting>(
             ParseError::new(
                 ErrorCode::UnparsableContent,
                 Severity::Error,
-                SourceLocation::from_offsets(0, input.len().max(1)),
-                ErrorContext::new(input, 0..input.len().max(1), input),
+                DiagnosticLocation::from_offsets(0, input.len().max(1)),
+                ErrorContext::new(
+                    input,
+                    talkbank_model::Span::new(0, input.len().max(1)),
+                    input,
+                ),
                 "Unparsable content: file is empty or contains no recognizable CHAT structure",
             )
             .with_suggestion("CHAT files must contain at minimum @UTF8, @Begin, and @End headers"),
@@ -192,8 +196,8 @@ pub(super) fn parse_lines_with_removal<'source, P: TierRouting>(
             ParseError::new(
                 ErrorCode::UnparsableContent,
                 Severity::Error,
-                SourceLocation::from_offsets(0, input.len().max(1)),
-                ErrorContext::new(input, 0..input.len().max(1), input),
+                DiagnosticLocation::from_offsets(0, input.len().max(1)),
+                ErrorContext::new(input, talkbank_model::Span::new(0, input.len().max(1)), input),
                 "Unparsable content: file structure is not valid CHAT and no lines could be recovered",
             )
             .with_suggestion("CHAT files must contain @UTF8, @Begin, @Participants, @Languages, and @End headers"),
@@ -221,8 +225,14 @@ pub(super) fn parse_lines_with_removal<'source, P: TierRouting>(
             // Widen a zero-width MISSING span to one byte so it can intersect a
             // reported span that merely touches its point. A candidate already
             // covered by a (richer) region diagnostic is suppressed.
-            let span = candidate.location.span;
-            let probe = Span::new(span.start, span.end.max(span.start.saturating_add(1)));
+            // Recovery candidates come from CST nodes and are located; one
+            // without a location could not be covered by a region, so it is
+            // reported rather than dropped.
+            let Some(span) = candidate.location.span() else {
+                errors.report(candidate);
+                continue;
+            };
+            let probe = Span::new(span.start(), span.end().max(span.start().saturating_add(1)));
             // A region diagnostic that is itself zero-width at the same point
             // covers the candidate only when it reports the same code: the
             // typed tier dispatch's E342 for a MISSING node covers the
@@ -232,13 +242,14 @@ pub(super) fn parse_lines_with_removal<'source, P: TierRouting>(
             // where its MISSING word segment sits, is a different fact about a
             // different node and leaves the E342 to be reported (E208.md).
             let same_point_same_code = |e: &ParseError| {
-                let r = e.location.span;
-                r.start == r.end && r.start == span.start && e.code == candidate.code
+                e.location
+                    .span()
+                    .is_some_and(|r| r.is_empty() && r.start() == span.start())
+                    && e.code == candidate.code
             };
-            if !reported
-                .iter()
-                .any(|e| e.location.span.overlaps(probe) || same_point_same_code(e))
-            {
+            if !reported.iter().any(|e| {
+                e.location.span().is_some_and(|r| r.overlaps(probe)) || same_point_same_code(e)
+            }) {
                 errors.report(candidate);
             }
         }

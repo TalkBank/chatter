@@ -18,10 +18,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use super::{ErrorSink, ParseError, SourceLocation, Span};
+use super::{ErrorSink, ParseError, Span};
 
 /// The fragment's coordinate window. Bounds are derived from the borrowed
-/// source, never supplied separately or narrowed from the origin to `u32`.
+/// source, never supplied separately.
 struct FragmentCoordinates<'a> {
     origin: usize,
     source: &'a str,
@@ -29,12 +29,8 @@ struct FragmentCoordinates<'a> {
 
 impl FragmentCoordinates<'_> {
     fn project(&self, span: Span) -> Span {
-        let project = |offset: u32| {
-            (offset as usize)
-                .saturating_sub(self.origin)
-                .min(self.source.len())
-        };
-        Span::from_usize(project(span.start), project(span.end))
+        let project = |offset: usize| offset.saturating_sub(self.origin).min(self.source.len());
+        Span::new(project(span.start), project(span.end))
     }
 }
 
@@ -89,7 +85,9 @@ impl<'a, S: ErrorSink> OffsetAdjustingErrorSink<'a, S> {
     /// Document spans share one projection. Context spans index independently
     /// owned source text and must not be shifted or replaced by a size heuristic.
     fn adjust_error(&self, mut error: ParseError) -> ParseError {
-        error.location = SourceLocation::new(self.coordinates.project(error.location.span));
+        error.location = error
+            .location
+            .rebased(|span| self.coordinates.project(span));
         for label in &mut error.labels {
             label.span = self.coordinates.project(label.span);
         }
@@ -121,7 +119,9 @@ impl<'a, S: ErrorSink> ErrorSink for OffsetAdjustingErrorSink<'a, S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ErrorCode, ErrorCollector, ErrorContext, ParseError, Severity, SourceLocation};
+    use crate::{
+        DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ParseError, Severity,
+    };
 
     /// Tests offset adjustment.
     #[test]
@@ -137,8 +137,11 @@ mod tests {
         let error = ParseError::new(
             ErrorCode::InternalError,
             Severity::Error,
-            SourceLocation::from_offsets_with_position(110, 119, 7, 2),
-            ErrorContext::new("wrapped content", 110..119, "test"),
+            DiagnosticLocation::known_at(
+                crate::Span::new(110, 119),
+                crate::LineColumn::one_based(7, 2).expect("one-based position"),
+            ),
+            ErrorContext::new("wrapped content", crate::Span::new(110, 119), "test"),
             "Test error",
         );
 
@@ -146,10 +149,16 @@ mod tests {
 
         let errors = inner.into_vec();
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].location.span.start, 9);
-        assert_eq!(errors[0].location.span.end, 18); // Clamped to input length
-        assert_eq!(errors[0].location.line, None);
-        assert_eq!(errors[0].location.column, None);
+        assert_eq!(
+            errors[0].location.span().expect("located diagnostic").start,
+            9
+        );
+        assert_eq!(
+            errors[0].location.span().expect("located diagnostic").end,
+            18
+        ); // Clamped to input length
+        assert_eq!(errors[0].location.position().map(|p| p.line.get()), None);
+        assert_eq!(errors[0].location.position().map(|p| p.column.get()), None);
     }
 
     /// Origins outside the span coordinate domain must not wrap through a cast.
@@ -163,11 +172,17 @@ mod tests {
         sink.report(ParseError::new(
             ErrorCode::InternalError,
             Severity::Error,
-            SourceLocation::from_offsets(1, 3),
-            ErrorContext::new("fragment", 1..3, "ra"),
+            DiagnosticLocation::from_offsets(1, 3),
+            ErrorContext::new("fragment", crate::Span::new(1, 3), "ra"),
             "coordinate boundary",
         ));
-        assert_eq!(inner.into_vec()[0].location.span, Span::new(0, 0));
+        assert_eq!(
+            inner.into_vec()[0]
+                .location
+                .span()
+                .expect("located diagnostic"),
+            Span::new(0, 0)
+        );
     }
 
     /// Tests offset at boundary.
@@ -183,8 +198,8 @@ mod tests {
         let error = ParseError::new(
             ErrorCode::InternalError,
             Severity::Error,
-            SourceLocation::from_offsets(101, 110),
-            ErrorContext::new("wrapped content", 101..110, "test"),
+            DiagnosticLocation::from_offsets(101, 110),
+            ErrorContext::new("wrapped content", crate::Span::new(101, 110), "test"),
             "Test error at boundary",
         );
 
@@ -192,8 +207,14 @@ mod tests {
 
         let errors = inner.into_vec();
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].location.span.start, 0);
-        assert_eq!(errors[0].location.span.end, 9);
+        assert_eq!(
+            errors[0].location.span().expect("located diagnostic").start,
+            0
+        );
+        assert_eq!(
+            errors[0].location.span().expect("located diagnostic").end,
+            9
+        );
     }
 
     /// Tests offset clamping.
@@ -209,8 +230,8 @@ mod tests {
         let error = ParseError::new(
             ErrorCode::InternalError,
             Severity::Error,
-            SourceLocation::from_offsets(110, 200),
-            ErrorContext::new("wrapped content", 110..200, "test"),
+            DiagnosticLocation::from_offsets(110, 200),
+            ErrorContext::new("wrapped content", crate::Span::new(110, 200), "test"),
             "Test error beyond bounds",
         );
 
@@ -218,7 +239,13 @@ mod tests {
 
         let errors = inner.into_vec();
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].location.span.start, 9);
-        assert_eq!(errors[0].location.span.end, original_input.len() as u32);
+        assert_eq!(
+            errors[0].location.span().expect("located diagnostic").start,
+            9
+        );
+        assert_eq!(
+            errors[0].location.span().expect("located diagnostic").end,
+            original_input.len()
+        );
     }
 }

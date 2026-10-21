@@ -8,16 +8,32 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, MorFeatureNode, MorFeatureValueNode, MorWordNode, NoChild, Ranged,
-    ReadableSlot, SourceBound, SourceBoundKind,
+    AsRawNode, MorFeatureNode, MorFeatureValueNode, MorWordNode, Never, ReadableSlot, SlotView,
+    SourceBound, SourceBoundKind,
 };
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::dependent_tier::{MorFeature, MorWord, PosCategory};
-use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use talkbank_model::{
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity,
+};
 use tree_sitter::Node;
 
+use crate::node_types::{MOR_FEATURE, MOR_WORD};
+use crate::parser::node_span::span_of;
+use crate::parser::tier_parsers::admission::recovery_inside_healthy_tier;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+
+/// A required readable lexical prefix field. Its type admits `Missing`; the
+/// tier's admission says it never is (see [`non_empty_text`]).
+type RequiredLexicalView<'value, 'tree, 'source, T> = SlotView<
+    'value,
+    SourceBound<'tree, 'source, T>,
+    SourceBound<'tree, 'source, T>,
+    Never,
+    Never,
+    Never,
+>;
 
 /// Converts a `mor_word` CST node into `MorWord`.
 ///
@@ -32,23 +48,26 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_dis
 /// ```
 ///
 /// Driven by the generated typed visitor: `extract_mor_word` yields the POS,
-/// pipe, lemma and feature-repeat positions as typed slots, and every
-/// recovery state retains its established missing/error handling. Structural
-/// separators retain their own missing/error policy. Tier admission routes
-/// parser errors to file-level analysis, but does not narrow the reconstructed
-/// slot types. Recovery remains explicit in these shared verbs; absence of a
-/// finite-corpus witness is not a proof that a slot state is impossible.
-/// Source-binding and reconstruction faults propagate separately as `CstFailure`
-/// to the owning item boundary, never as a missing POS/lemma diagnostic.
-/// Selected ranges are admitted before lexical lowering; this preserves the
-/// compiled kind proof, not nonempty token text or syntax validity.
+/// pipe, lemma and feature-repeat positions as typed slots. Compiled admission
+/// excludes MISSING feature nodes, and the compiled prefix proof excludes
+/// Error and Absent for POS, pipe and lemma. The slot types still admit
+/// lexical `Missing` and repeated-feature `Error`, but this word belongs to a
+/// tier admitted as recovery-free (see the tier module's doc), so those arms
+/// contradict the admission and report the producer fault, then reject the
+/// word. The E342 examples 4 and 5 that name these slots are reported by the
+/// dispatcher's whole-tier walk before admission. Source-binding and
+/// reconstruction faults propagate separately as `CstFailure` to the owning
+/// item boundary. Selected ranges are admitted before lexical lowering; this
+/// preserves the compiled kind proof, not nonempty token text (an empty POS
+/// or lemma text is a lexical refusal the grammar's regexes do not produce;
+/// the check stays because the slot type does not say so).
 pub fn parse_mor_word<'tree>(
     typed: SourceBound<'tree, '_, MorWordNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<ParseOutcome<MorWord>, crate::CstFailure> {
     let source = typed.source();
     let node = typed.raw_node();
-    let bound_children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let bound_children = crate::parser::typed_cst::extract_inner(typed)?;
     surface_displaced(
         &bound_children.children().unexpected,
         "mor_word",
@@ -58,25 +77,34 @@ pub fn parse_mor_word<'tree>(
     let bound_children = bound_children.admit_ranges()?;
     let children = bound_children.children();
 
-    let pos = non_empty_text(&children.child_0.slot, "MOR word has empty POS tag", errors);
+    let pos = match non_empty_text(
+        children.child_0.slot.view(),
+        "MOR word has empty POS tag",
+        errors,
+    ) {
+        LexicalRead::Text(text) => Some(text),
+        LexicalRead::Empty => None,
+        LexicalRead::Contradicted => return Ok(ParseOutcome::rejected()),
+    };
 
     // The pipe separator is purely structural.
-    match &children.child_1.slot {
-        ReadableSlot::Present(_) | ReadableSlot::Absent(_) => {}
-        ReadableSlot::Missing(missing) => {
-            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_word");
+    match children.child_1.slot.view() {
+        SlotView::Present(_) => {}
+        SlotView::Missing(missing) => {
+            recovery_inside_healthy_tier(missing.raw_node(), missing.source(), MOR_WORD, errors);
+            return Ok(ParseOutcome::rejected());
         }
-        ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_word",
-            ));
-        }
-        ReadableSlot::Unexpected(never) => match *never {},
     }
 
-    let lemma = non_empty_text(&children.child_2.slot, "MOR word has empty lemma", errors);
+    let lemma = match non_empty_text(
+        children.child_2.slot.view(),
+        "MOR word has empty lemma",
+        errors,
+    ) {
+        LexicalRead::Text(text) => Some(text),
+        LexicalRead::Empty => None,
+        LexicalRead::Contradicted => return Ok(ParseOutcome::rejected()),
+    };
 
     let mut features = Vec::new();
     for element in &children.child_3.slot {
@@ -86,14 +114,11 @@ pub fn parse_mor_word<'tree>(
                     features.push(feature);
                 }
             }
-            ReadableSlot::Error(bad) => errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_word",
-            )),
-            ReadableSlot::Missing(missing) => {
-                check_not_missing(missing.raw_node(), missing.source(), errors, "mor_word");
+            ReadableSlot::Error(bad) => {
+                recovery_inside_healthy_tier(bad.raw_node(), bad.source(), MOR_WORD, errors);
+                return Ok(ParseOutcome::rejected());
             }
+            ReadableSlot::Missing(missing) => match missing.0 {},
             ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
         }
     }
@@ -121,30 +146,31 @@ pub fn parse_mor_word<'tree>(
     ))
 }
 
-/// The text of a present POS or lemma node, or a report that it is empty.
+/// What reading a required lexical slot found. Three outcomes, because the
+/// two refusals must not be confused: an empty text is a lexical refusal the
+/// word reports as E342, while a `Missing` slot contradicts the tier's
+/// admission, has already been reported as the producer fault, and must not
+/// be followed by a CHAT diagnostic about a POS or lemma nobody read.
+enum LexicalRead<'source> {
+    Text(&'source str),
+    Empty,
+    Contradicted,
+}
+
+/// The text of a present POS or lemma node, or why there is none.
 /// An empty node is not something the grammar produces for either token; the
 /// check remains because the slot's type does not say so.
 fn non_empty_text<'tree, 'source, T: SourceBoundKind<'tree>>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, T>, Ranged<'source>>,
+    slot: RequiredLexicalView<'_, 'tree, 'source, T>,
     empty_message: &'static str,
     errors: &impl ErrorSink,
-) -> Option<&'source str> {
+) -> LexicalRead<'source> {
     let bound = match slot {
-        ReadableSlot::Present(field) => field,
-        ReadableSlot::Missing(missing) => {
-            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_word");
-            return None;
+        SlotView::Present(field) => *field,
+        SlotView::Missing(missing) => {
+            recovery_inside_healthy_tier(missing.raw_node(), missing.source(), MOR_WORD, errors);
+            return LexicalRead::Contradicted;
         }
-        ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_word",
-            ));
-            return None;
-        }
-        ReadableSlot::Unexpected(never) => match *never {},
-        ReadableSlot::Absent(NoChild) => return None,
     };
     let text = bound.text();
     if text.is_empty() {
@@ -155,9 +181,9 @@ fn non_empty_text<'tree, 'source, T: SourceBoundKind<'tree>>(
             empty_message,
             bound.source(),
         ));
-        return None;
+        return LexicalRead::Empty;
     }
-    Some(text)
+    LexicalRead::Text(text)
 }
 
 /// E342 at `node` for a `%mor` word part the word needs and does not have.
@@ -165,8 +191,8 @@ fn missing_part(node: Node, message: &'static str, source: &str) -> ParseError {
     ParseError::new(
         ErrorCode::MissingRequiredElement,
         Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
+        DiagnosticLocation::new(span_of(node)),
+        ErrorContext::new(source, span_of(node), node.kind()),
         message,
     )
 }
@@ -181,22 +207,15 @@ fn missing_part(node: Node, message: &'static str, source: &str) -> ParseError {
 /// Returns a [`MorFeature`] wrapping the feature value text (without the leading hyphen).
 ///
 /// Driven by the generated typed visitor: `extract_mor_feature` yields the
-/// hyphen and feature-value positions as typed `Positioned` slots. UNLIKE
-/// [`parse_mor_word`] above, the removed walk here called NO `check_not_missing`
-/// gate at all: it dispatched purely by `child.kind()`, and a tree-sitter
-/// MISSING placeholder still carries its expected kind, so a MISSING hyphen
-/// fell into the same no-op arm as a present one, and a MISSING
-/// `mor_feature_value` fell into the same `utf8_text` decode as a present one
-/// (reading a zero-width MISSING node's text yields an empty string, which the
-/// removed code's own "empty" arm already handled). This migration reproduces
-/// that distinction faithfully: `Present` and `Missing` share identical
-/// handling here, unlike every other position in this file.
+/// hyphen and feature-value positions as typed `Positioned` slots. A MISSING
+/// node at either position contradicts the tier's admission as recovery-free
+/// and reports the producer fault, like every other position in this file.
 fn parse_mor_feature<'tree>(
     typed: SourceBound<'tree, '_, MorFeatureNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<ParseOutcome<Option<MorFeature>>, crate::CstFailure> {
     let source = typed.source();
-    let bound_children = typed.extract();
+    let bound_children = crate::parser::typed_cst::extract_inner(typed)?;
     surface_displaced(
         &bound_children.children().unexpected,
         "mor_feature",
@@ -206,41 +225,32 @@ fn parse_mor_feature<'tree>(
     let bound_children = bound_children.admit_ranges()?;
     let children = bound_children.children();
 
-    match &children.child_0.slot {
-        ReadableSlot::Present(_) | ReadableSlot::Missing(_) | ReadableSlot::Absent(_) => {}
-        ReadableSlot::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "mor_feature",
-            ));
+    match children.child_0.slot.view() {
+        SlotView::Present(_) => {}
+        SlotView::Missing(missing) => {
+            recovery_inside_healthy_tier(missing.raw_node(), missing.source(), MOR_FEATURE, errors);
+            return Ok(ParseOutcome::rejected());
         }
-        ReadableSlot::Unexpected(never) => match *never {},
     }
 
-    match &children.child_1.slot {
-        ReadableSlot::Present(value_node) | ReadableSlot::Missing(value_node) => {
+    match children.child_1.slot.view() {
+        SlotView::Present(value_node) => {
             if let Some(feature) = decode_feature_value(*value_node, errors) {
                 return Ok(ParseOutcome::parsed(Some(feature)));
             }
         }
-        ReadableSlot::Error(raw) => {
-            errors.report(unexpected_node_error(
-                raw.raw_node(),
-                raw.source(),
-                "mor_feature",
-            ));
+        SlotView::Missing(missing) => {
+            recovery_inside_healthy_tier(missing.raw_node(), missing.source(), MOR_FEATURE, errors);
+            return Ok(ParseOutcome::rejected());
         }
-        ReadableSlot::Unexpected(never) => match *never {},
-        ReadableSlot::Absent(NoChild) => {}
     }
 
     Ok(ParseOutcome::parsed(None))
 }
 
-/// Shared decode for a `mor_feature_value` node, applied identically whether
-/// the node arrived via a `Present` or a `Missing` slot (see
-/// [`parse_mor_feature`]'s doc comment for why both must share this logic).
+/// Decode a present `mor_feature_value` node; an empty text is a lexical
+/// refusal the grammar's regex should make impossible, reported rather than
+/// manufactured into a feature.
 fn decode_feature_value<'tree>(
     typed: SourceBound<'tree, '_, MorFeatureValueNode<'tree>>,
     errors: &impl ErrorSink,

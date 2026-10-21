@@ -40,8 +40,10 @@ impl From<talkbank_parser::ParserInitError> for TestError {
 
 /// Convert a [`talkbank_parser::ParseProduct`] into the pre-`ParseProduct`
 /// strict-parse contract: a [`talkbank_parser::ParseProduct::Built`] that
-/// carries an error-severity diagnostic is treated as a failure, the same
+/// carries an internal fault or error-severity diagnostic is treated as a failure, the same
 /// as [`talkbank_parser::ParseProduct::Unbuildable`].
+/// Internal kind takes precedence over presentation severity. Rejections retain
+/// the complete diagnostic batch; this adapter does not certify CHAT validity.
 ///
 /// Spec-generated construct/error tests (see `spec/tools/src/output/rust_test.rs`)
 /// and hand-written parser-suite tests that assert a fixture parses
@@ -57,6 +59,9 @@ pub fn strict_parse(
 ) -> Result<talkbank_model::model::ChatFile, talkbank_model::ParseErrors> {
     match product {
         talkbank_parser::ParseProduct::Built { file, diagnostics } => {
+            let completed = talkbank_model::CompletedDiagnostics::admit(diagnostics)
+                .map_err(|failure| talkbank_model::ParseErrors::from(failure.into_diagnostics()))?;
+            let diagnostics = completed.into_diagnostics();
             if diagnostics
                 .iter()
                 .any(|d| matches!(d.severity, talkbank_model::Severity::Error))

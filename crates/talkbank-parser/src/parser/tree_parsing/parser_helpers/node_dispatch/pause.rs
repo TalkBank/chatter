@@ -4,11 +4,10 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Pauses>
 
-use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, PauseTokenNode};
 use crate::model::{Pause, PauseDuration, PauseTimedDuration};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
 
@@ -23,16 +22,16 @@ pub(crate) fn parse_pause_node(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Pause> {
     let node = typed.raw_node();
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
+    let span = span_of(node);
 
     let ParseOutcome::Parsed(text) = extract_utf8_text(node, source, errors, "pause_token") else {
         return ParseOutcome::rejected();
     };
 
     match text {
-        "(.)" => ParseOutcome::parsed(Pause::new(PauseDuration::Short).with_span(span)),
-        "(..)" => ParseOutcome::parsed(Pause::new(PauseDuration::Medium).with_span(span)),
-        "(...)" => ParseOutcome::parsed(Pause::new(PauseDuration::Long).with_span(span)),
+        "(.)" => ParseOutcome::parsed(Pause::new(span, PauseDuration::Short)),
+        "(..)" => ParseOutcome::parsed(Pause::new(span, PauseDuration::Medium)),
+        "(...)" => ParseOutcome::parsed(Pause::new(span, PauseDuration::Long)),
         _ => {
             // Timed pause: the duration between the parentheses the token
             // guarantees (`/\(\d+(?::\d+)?\.\d*\)/`). A token without them
@@ -43,8 +42,8 @@ pub(crate) fn parse_pause_node(
                 errors.report(ParseError::new(
                     ErrorCode::TreeParsingError,
                     Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), text),
+                    DiagnosticLocation::new(span_of(node)),
+                    ErrorContext::new(source, span_of(node), text),
                     "pause_token is not enclosed in parentheses",
                 ));
                 return ParseOutcome::rejected();
@@ -54,19 +53,17 @@ pub(crate) fn parse_pause_node(
                 errors.report(ParseError::new(
                     ErrorCode::TreeParsingError,
                     Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), duration_text),
+                    DiagnosticLocation::new(span_of(node)),
+                    ErrorContext::new(source, span_of(node), duration_text),
                     "pause_token duration is empty",
                 ));
                 return ParseOutcome::rejected();
             }
 
-            ParseOutcome::parsed(
-                Pause::new(PauseDuration::Timed(PauseTimedDuration::new(
-                    duration_text.to_string(),
-                )))
-                .with_span(span),
-            )
+            ParseOutcome::parsed(Pause::new(
+                span,
+                PauseDuration::Timed(PauseTimedDuration::new(duration_text.to_string())),
+            ))
         }
     }
 }

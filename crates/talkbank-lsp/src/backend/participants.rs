@@ -171,13 +171,14 @@ fn extract_participant_entries(chat_file: &ChatFile, text: &str) -> Vec<Particip
         .lines
         .iter()
         .filter_map(|line| match line {
-            Line::Header { header, span, .. } => match header.as_ref() {
+            Line::Header {
+                header, location, ..
+            } => match header.as_ref() {
                 Header::ID(id) => {
-                    let line_number = if span.is_dummy() {
-                        0
-                    } else {
-                        line_index.byte_to_line(span.start as usize)
-                    };
+                    // Line 0 stands for a header with no source position, as before.
+                    let line_number = location
+                        .span()
+                        .map_or(0, |span| line_index.byte_to_line(span.start()));
                     Some(ParticipantEntry {
                         line: line_number,
                         fields: id_header_to_fields(id),

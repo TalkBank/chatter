@@ -88,7 +88,7 @@ macro_rules! impl_new_terminator_choice {
             fn to_terminator(&self) -> Terminator {
                 match self {
                     $($choice_enum::$variant(node) => Terminator::$variant {
-                        span: span_of(node.raw_node()),
+                        location: span_of(node.raw_node()).into(),
                     },)+
                 }
             }

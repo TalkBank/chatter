@@ -18,16 +18,19 @@ use super::chat_file::tier_plan::{TierRoute, TierRouting};
 use super::chat_file::word_timing_plan::{LoweredUtterance, PlacedTier};
 use super::dependent_tier_dispatch::parse_and_attach_dependent_tier;
 use crate::error::{
-    ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
+    DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity,
 };
 use crate::generated_traversal::{
     AsRawNode, MainTierNode, NoChild, SourceBound, SourceField, SourceSlotView,
     UtteranceChild1Choice, UtteranceChild1ChoiceBoundView, UtteranceNode, XDependentTierNode,
 };
 use crate::model::{ParseHealth, ParseHealthTier, Utterance};
+use crate::node_types::UTTERANCE;
 use crate::parser::tree_parsing::helpers::ReadableRecovery;
 use crate::parser::tree_parsing::main_tier::structure::convert_main_tier_node;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::ExtractCanonical;
+use crate::parser::typed_cst::{CstFailure, GeneratedPosition, report_cst_failure};
 use talkbank_model::ParseOutcome;
 
 /// Builds one `Utterance` from a CST utterance subtree and attaches dependent tiers.
@@ -56,8 +59,7 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
     // variant per tier). Every slot variant is handled explicitly so a recovery
     // node can never be silently dropped.
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
+        typed.extract_canonical(),
         typed.raw_node(),
         input,
         errors,
@@ -68,8 +70,8 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
 
     // child_0: the main tier. It is processed FIRST so it is built before any
     // dependent tier is attached (the dependent-tier branch consumes the built
-    // utterance via `utterance_builder.take()`). Missing main tiers retain
-    // their own diagnostic and taint rather than becoming usable content.
+    // utterance via `utterance_builder.take()`). Compiled admission excludes
+    // a MISSING main-tier node, not ERROR or an absent required position.
     match associated.field_child_0().slot().view() {
         SourceSlotView::Present(main_tier) => {
             match crate::parser::typed_cst::read_source_field(main_tier, errors) {
@@ -80,24 +82,29 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
                 None => parse_health.taint(ParseHealthTier::Main),
             }
         }
-        SourceSlotView::Missing(missing) => {
-            crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                missing.raw_node(),
-                input,
-                errors,
-                "utterance",
-            );
-            parse_health.taint(ParseHealthTier::Main);
-        }
         SourceSlotView::Error(error_node) => {
             // An ERROR at the main-tier position routes to the same recovery
             // analysis the old hand-walk ran for any ERROR utterance child.
+            // Reached by no file in the batch 3 sweeps and probes (the
+            // utterance's ERROR children land at the dependent-tier position,
+            // below); it stays for the state the slot type admits.
             handle_utterance_error_node(error_node, errors, &mut parse_health);
         }
         SourceSlotView::Absent(NoChild) => {
-            // No main-tier child at all: nothing to build. The utterance is
-            // rejected below, matching the old loop which left
-            // `utterance_builder == None` when no `main_tier` child appeared.
+            // The main tier is the required head of `utterance`; the walk
+            // cannot leave it empty (the grammar has no fail-closed partials).
+            // Until 2026-10-19 this arm said nothing and let the utterance be
+            // rejected below with no diagnostic; it reports the producer
+            // fault, and the rejection follows.
+            report_cst_failure(
+                typed.raw_node(),
+                input,
+                CstFailure::AbsentRequiredPosition {
+                    rule: UTTERANCE,
+                    position: GeneratedPosition::new("UtteranceChildren.child_0"),
+                },
+                errors,
+            );
         }
     }
 
@@ -119,18 +126,11 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
                     &mut deferred_words,
                 );
             }
-            // Selected tiers retain Missing and ERROR recovery; neither is a
-            // usable tier, and both conservatively taint alignment.
-            SourceSlotView::Missing(missing) => {
-                crate::parser::tree_parsing::parser_helpers::check_not_missing(
-                    missing.raw_node(),
-                    input,
-                    errors,
-                    "utterance",
-                );
-                parse_health.taint(ParseHealthTier::Main);
-                parse_health.taint_all_alignment_dependents();
-            }
+            // Selected tiers exclude MISSING under compiled admission, but
+            // ERROR recovery remains and conservatively taints alignment. A
+            // stray character before a tier prefix (`%%mor:`, `@%mor:`) lands
+            // here from a whole file as its own element, the tier following
+            // as the next: E324, spec example 3.
             SourceSlotView::Error(error_node) => {
                 handle_utterance_error_node(error_node, errors, &mut parse_health);
             }
@@ -191,7 +191,7 @@ fn build_main_tier_from_node<'tree>(
     parse_health: &mut ParseHealth,
 ) -> Option<UtteranceUnderConstruction> {
     let main_tier_errors = ErrorCollector::new();
-    let main_tier = convert_main_tier_node(typed, typed.text(), &main_tier_errors);
+    let main_tier = convert_main_tier_node(typed, &main_tier_errors);
     let main_tier_error_vec = main_tier_errors.into_vec();
     if has_actual_errors(&main_tier_error_vec) {
         parse_health.taint(ParseHealthTier::Main);
@@ -343,8 +343,12 @@ fn handle_readable_utterance_error(
     errors.report(ParseError::new(
         ErrorCode::UnrecognizedUtteranceError,
         Severity::Error,
-        SourceLocation::from_offsets(error_start, error_end),
-        ErrorContext::new(input, error_start..error_end, error_text),
+        DiagnosticLocation::from_offsets(error_start, error_end),
+        ErrorContext::new(
+            input,
+            talkbank_model::Span::new(error_start, error_end),
+            error_text,
+        ),
         format!(
             "Unrecognized ERROR node in utterance: {}",
             match error_text.lines().next() {

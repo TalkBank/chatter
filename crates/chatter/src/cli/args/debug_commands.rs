@@ -103,8 +103,8 @@ pub enum DebugCommands {
         /// Path to CHAT file(s) or directory
         path: Vec<PathBuf>,
 
-        /// Write JSON lines database to this file (one JSON object per file).
-        /// Enables persistent overlap data for downstream analysis.
+        /// Write a new JSON-lines report (one object per file with overlaps).
+        /// Refuses existing paths. Failed runs may retain a partial report.
         #[arg(long, value_name = "PATH")]
         database: Option<PathBuf>,
     },
@@ -119,8 +119,9 @@ pub enum DebugCommands {
         /// Path to CHAT file(s) or directory
         path: Vec<PathBuf>,
 
-        /// Write per-anomaly JSON lines to this file. Each line is a JSON
-        /// object with file, line, anomaly type, context, and suggested fix.
+        /// Write per-anomaly JSON lines to a new file, refusing existing paths.
+        /// Records carry an utterance index, context and a suggested fix.
+        /// Failed runs may retain a partial report; suggestions require review.
         #[arg(long, value_name = "PATH")]
         anomalies: Option<PathBuf>,
     },

@@ -5,7 +5,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 use crate::model::{GraTier, MorChunk, MorTier};
-use crate::{ErrorCode, ErrorLabel, ParseError, Severity};
+use crate::{ErrorCode, ParseError, Severity};
 
 use super::super::format::format_positional_mismatch;
 use super::super::helpers::{TierPosition, to_chat_display_string as to_string};
@@ -56,14 +56,14 @@ pub fn align_mor_to_gra(mor: &MorTier, gra: &GraTier) -> GraAlignment {
         let detailed_message =
             format_positional_mismatch("%mor chunks", "%gra relations", &mor_items, &gra_items);
 
-        let error = ParseError::at_span(
+        let error = ParseError::at_location(
             ErrorCode::MorGraCountMismatch,
             Severity::Error,
-            mor.span,
+            mor.location,
             detailed_message,
         )
-        .with_label(ErrorLabel::new(mor.span, "%mor tier"))
-        .with_label(ErrorLabel::new(gra.span, "%gra tier"))
+        .with_label_at(mor.location, "%mor tier")
+        .with_label_at(gra.location, "%gra tier")
         .with_suggestion("Each %mor chunk (including pre/post-clitics) needs a %gra relation");
 
         alignment = alignment.with_error(error);
@@ -79,14 +79,14 @@ pub fn align_mor_to_gra(mor: &MorTier, gra: &GraTier) -> GraAlignment {
         let detailed_message =
             format_positional_mismatch("%mor chunks", "%gra relations", &mor_items, &gra_items);
 
-        let error = ParseError::at_span(
+        let error = ParseError::at_location(
             ErrorCode::MorGraCountMismatch,
             Severity::Error,
-            mor.span,
+            mor.location,
             detailed_message,
         )
-        .with_label(ErrorLabel::new(mor.span, "%mor tier"))
-        .with_label(ErrorLabel::new(gra.span, "%gra tier"))
+        .with_label_at(mor.location, "%mor tier")
+        .with_label_at(gra.location, "%gra tier")
         .with_suggestion("Remove extra %gra relations or add corresponding %mor chunks");
 
         alignment = alignment.with_error(error);
@@ -104,10 +104,10 @@ pub fn align_mor_to_gra(mor: &MorTier, gra: &GraTier) -> GraAlignment {
         for relation in gra.relations.iter() {
             if relation.index == 0 || relation.index > max_index {
                 alignment = alignment.with_error(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::GraInvalidWordIndex,
                         Severity::Error,
-                        gra.span,
+                        gra.location,
                         format!(
                             "%gra relation word index {} is out of bounds for %mor chunk count {}",
                             relation.index, mor_chunk_count
@@ -122,10 +122,10 @@ pub fn align_mor_to_gra(mor: &MorTier, gra: &GraTier) -> GraAlignment {
 
             if relation.head > max_index {
                 alignment = alignment.with_error(
-                    ParseError::at_span(
+                    ParseError::at_location(
                         ErrorCode::GraInvalidHeadIndex,
                         Severity::Error,
-                        gra.span,
+                        gra.location,
                         format!(
                             "%gra relation head index {} is out of bounds for %mor chunk count {}",
                             relation.head, mor_chunk_count

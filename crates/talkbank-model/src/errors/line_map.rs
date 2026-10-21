@@ -1,6 +1,6 @@
 //! Byte-oriented line index used by parser and validator diagnostics.
 //!
-//! `LineMap` is the shared bridge between byte spans (`Span`, `SourceLocation`)
+//! `LineMap` is the shared bridge between byte spans (`Span`, `DiagnosticLocation`)
 //! and human-facing line/column coordinates.
 //!
 //! ## Coordinate model
@@ -29,7 +29,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineMap {
     /// Byte offset of the start of each line. `line_starts[0] == 0` always.
-    line_starts: Vec<u32>,
+    line_starts: Vec<usize>,
 }
 
 /// Line boundaries bound to the immutable source from which they were derived.
@@ -75,7 +75,7 @@ impl<'source> SourceIndex<'source> {
     }
 
     /// Zero-indexed line and byte column, with the same semantics as `LineMap`.
-    pub fn line_col_of(&self, byte_offset: u32) -> (usize, usize) {
+    pub fn line_col_of(&self, byte_offset: usize) -> (usize, usize) {
         self.lines.line_col_of(byte_offset)
     }
 
@@ -87,10 +87,10 @@ impl<'source> SourceIndex<'source> {
 impl LineMap {
     /// Build a `LineMap` from source text. Single O(n) pass.
     pub fn new(source: &str) -> Self {
-        let mut line_starts = vec![0u32];
+        let mut line_starts = vec![0usize];
         for (i, byte) in source.bytes().enumerate() {
             if byte == b'\n' {
-                line_starts.push((i + 1) as u32);
+                line_starts.push(i + 1);
             }
         }
         Self { line_starts }
@@ -102,7 +102,7 @@ impl LineMap {
     ///
     /// Offsets beyond the source length are clamped to the last line.
     #[inline]
-    pub fn line_of(&self, byte_offset: u32) -> usize {
+    pub fn line_of(&self, byte_offset: usize) -> usize {
         // partition_point returns the first index where line_starts[i] > byte_offset,
         // so subtracting 1 gives us the line whose start is <= byte_offset.
         self.line_starts
@@ -116,9 +116,9 @@ impl LineMap {
     /// of the resolved line, so multi-byte Unicode scalars advance by more
     /// than one column.
     #[inline]
-    pub fn line_col_of(&self, byte_offset: u32) -> (usize, usize) {
+    pub fn line_col_of(&self, byte_offset: usize) -> (usize, usize) {
         let line = self.line_of(byte_offset);
-        let col = (byte_offset - self.line_starts[line]) as usize;
+        let col = byte_offset - self.line_starts[line];
         (line, col)
     }
 
@@ -126,7 +126,7 @@ impl LineMap {
     ///
     /// Panics if `line >= self.line_count()`.
     #[inline]
-    pub fn line_start(&self, line: usize) -> u32 {
+    pub fn line_start(&self, line: usize) -> usize {
         self.line_starts[line]
     }
 
@@ -135,7 +135,7 @@ impl LineMap {
     /// For lines that end with `\n`, the returned offset is the byte *after* the `\n`.
     /// For the last line (or a line beyond the file), returns `source_len`.
     #[inline]
-    pub fn line_end(&self, line: usize, source_len: u32) -> u32 {
+    pub fn line_end(&self, line: usize, source_len: usize) -> usize {
         match line
             .checked_add(1)
             .and_then(|next| self.line_starts.get(next))

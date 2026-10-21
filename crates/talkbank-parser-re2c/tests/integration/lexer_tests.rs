@@ -380,7 +380,9 @@ fn lex_filler_prefix() {
 fn lex_event() {
     let tokens = lex("*X:\t&=laughs .\n");
     assert!(
-        tokens.iter().any(|t| matches!(t, Token::Event("laughs"))),
+        tokens
+            .iter()
+            .any(|t| matches!(t, Token::Event(x) if x.text() == "laughs")),
         "expected Event(\"laughs\"), got {tokens:?}"
     );
 }
@@ -391,7 +393,7 @@ fn lex_event_compound() {
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(t, Token::Event("clears:throat"))),
+            .any(|t| matches!(t, Token::Event(x) if x.text() == "clears:throat")),
         "expected Event(\"clears:throat\"), got {tokens:?}"
     );
 }
@@ -401,7 +403,9 @@ fn lex_event_in_group() {
     // The `>` must NOT be part of the event text
     let tokens = lex("*X:\t<&=laughs> [<] .\n");
     assert!(
-        tokens.iter().any(|t| matches!(t, Token::Event("laughs"))),
+        tokens
+            .iter()
+            .any(|t| matches!(t, Token::Event(x) if x.text() == "laughs")),
         "expected Event(\"laughs\") without trailing >, got {tokens:?}"
     );
 }
@@ -1552,7 +1556,7 @@ fn nonvocal_simple_vs_begin() {
     // &{n=BANG} is nonvocal_simple, token carries just the label "BANG"
     let tokens = lex_with("&{n=BANG} what\n", COND_MAIN_CONTENT);
     assert!(
-        matches!(tokens[0], Token::NonvocalSimple("BANG")),
+        matches!(tokens[0], Token::NonvocalSimple(x) if x.text() == "BANG"),
         "expected NonvocalSimple(\"BANG\"), got: {:?}",
         tokens[0]
     );
@@ -1560,14 +1564,14 @@ fn nonvocal_simple_vs_begin() {
     // &{n=THUMP without } is nonvocal_begin, carries just "THUMP"
     let tokens2 = lex_with("&{n=THUMP word &}n=THUMP\n", COND_MAIN_CONTENT);
     assert!(
-        matches!(tokens2[0], Token::NonvocalBegin("THUMP")),
+        matches!(tokens2[0], Token::NonvocalBegin(x) if x.text() == "THUMP"),
         "expected NonvocalBegin(\"THUMP\"), got: {:?}",
         tokens2[0]
     );
     assert!(
         tokens2
             .iter()
-            .any(|t| matches!(t, Token::NonvocalEnd("THUMP"))),
+            .any(|t| matches!(t, Token::NonvocalEnd(x) if x.text() == "THUMP")),
         "expected NonvocalEnd(\"THUMP\"), got: {tokens2:?}"
     );
 }
@@ -1577,14 +1581,14 @@ fn long_feature_tags() {
     // &{l=X carries just "X", &}l=PAR carries just "PAR"
     let tokens = lex_with("&{l=X deal &}l=X\n", COND_MAIN_CONTENT);
     assert!(
-        matches!(tokens[0], Token::LongFeatureBegin("X")),
+        matches!(tokens[0], Token::LongFeatureBegin(x) if x.text() == "X"),
         "expected LongFeatureBegin(\"X\"), got: {:?}",
         tokens[0]
     );
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(t, Token::LongFeatureEnd("X"))),
+            .any(|t| matches!(t, Token::LongFeatureEnd(x) if x.text() == "X")),
         "expected LongFeatureEnd(\"X\"), got: {tokens:?}"
     );
 }
@@ -1635,10 +1639,12 @@ fn lex_event_ampersand_forbidden() {
     let tokens = lex("*X:\t&=&=squeals .\n");
     let event = tokens.iter().find(|t| matches!(t, Token::Event(_)));
     assert!(event.is_some(), "expected an Event token, got {tokens:?}");
-    if let Some(Token::Event(text)) = event {
+    if let Some(Token::Event(event)) = event {
         assert_eq!(
-            *text, "squeals",
-            "event text should be 'squeals' (& forbidden in labels), got '{text}'"
+            event.text(),
+            "squeals",
+            "event text should be 'squeals' (& forbidden in labels), got '{}'",
+            event.text()
         );
     }
 }
@@ -1795,9 +1801,9 @@ fn parse_file_filler_with_bullet() {
         .find(|l| matches!(l, talkbank_parser_re2c::ast::Line::Utterance(_)));
     assert!(utterance.is_some(), "should have one utterance");
     if let Some(talkbank_parser_re2c::ast::Line::Utterance(u)) = utterance {
-        let content_len = u.main_tier.tier_body.contents.len();
+        let content_len = u.main_tier.tier().tier_body.contents.len();
         eprintln!("File-level content items: {content_len}");
-        for (i, item) in u.main_tier.tier_body.contents.iter().enumerate() {
+        for (i, item) in u.main_tier.tier().tier_body.contents.iter().enumerate() {
             eprintln!("  [{i}] {:?}", std::mem::discriminant(item));
         }
         assert!(

@@ -29,7 +29,7 @@ crates.io). As a 0.x release, APIs and flags may change before 1.0.
 
 - **`chatter` CLI**: validate, convert, normalize, and analyze CHAT files from the command line, with an interactive TUI for corpus-scale workflows
 - **Language Server (LSP)**: works with any LSP-compatible editor (Neovim, Emacs, Helix, Zed, etc.) to provide live validation and cross-tier alignment
-- **JSON data model**: every CHAT structure as typed JSON with lossless roundtrip fidelity, backed by a published JSON Schema
+- **JSON data model**: typed CHAT structures backed by a published JSON Schema; conversion preserves the model, not necessarily original formatting or bytes
 - **Rust API**: parse, validate, inspect, and transform CHAT files programmatically via library crates
 
 ## Who This Book Is For
@@ -37,6 +37,8 @@ crates.io). As a 0.x release, APIs and flags may change before 1.0.
 | Audience | Start Here | Then Go To |
 |---|---|---|
 | **CLI users** validating, normalizing, or converting CHAT | [Install](install/index.md) | [chatter Quick Start](chatter/user-guide/quick-start.md), [CLI Reference](chatter/user-guide/cli-reference.md) |
+| **Desktop users** checking saved transcripts | [Install](install/index.md) | [First desktop session](chatter/user-guide/desktop-app.md#a-first-validation-session) |
+| **Editors** wanting live diagnostics | [Install the language server](install/index.md#talkbank-lsp-language-server-editor-integration) | [Editor Integration](chatter/user-guide/editor-integration.md) |
 | **Rust library consumers** parsing or transforming CHAT | [Library Usage](chatter/integrating/library-usage.md) | crate-root rustdoc for `talkbank-model`, `talkbank-parser`, and `talkbank-transform` |
 | **Grammar / format consumers** embedding CHAT parsing in other tools | [CHAT Format Overview](chat-format/overview.md) | `tree-sitter-talkbank` docs and the grammar/reference chapters |
 | **Contributors / maintainers** working in this repo | [Contributing setup](contributing/setup.md) | [CI and release](contributing/ci-and-release.md) |
@@ -51,7 +53,7 @@ apps/           Tauri v2 desktop app (`chatter-desktop`)
 corpus/         Reference corpus (must stay 100% valid under the regression gate)
 schema/         JSON Schema for the CHAT AST
 tests/          Integration tests and fixtures
-docs/           Strategy docs, proposals, and investigations for this repo
+docs/           Operator contracts and generated error reference
 book/           This documentation (mdBook)
 ```
 

@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
-use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 use crate::parser::tree_parsing::helpers::ReadableRecovery;
 use tree_sitter::Node;
 
@@ -62,8 +62,8 @@ pub(crate) fn analyze_readable_dependent_error(
         return ParseError::new(
             ErrorCode::InvalidMorphologyFormat,
             Severity::Error,
-            SourceLocation::from_offsets(start, end),
-            ErrorContext::new(source, start..end, error_text),
+            DiagnosticLocation::from_offsets(start, end),
+            ErrorContext::new(source, talkbank_model::Span::new(start, end), error_text),
             "Unparsable content in a %mor item",
         )
         .with_suggestion("MOR items are pos|stem (e.g., v|hello, n|world), with optional prefix, suffix and translation");
@@ -76,8 +76,8 @@ pub(crate) fn analyze_readable_dependent_error(
     ParseError::new(
         ErrorCode::UnparsableContent,
         Severity::Error,
-        SourceLocation::from_offsets(start, end),
-        ErrorContext::new(source, start..end, error_text),
+        DiagnosticLocation::from_offsets(start, end),
+        ErrorContext::new(source, talkbank_model::Span::new(start, end), error_text),
         format!(
             "Unparsable content on dependent tier: '{}'",
             match error_text.lines().next() {

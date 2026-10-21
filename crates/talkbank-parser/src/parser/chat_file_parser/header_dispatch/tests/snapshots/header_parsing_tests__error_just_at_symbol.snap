@@ -1,6 +1,6 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/header_dispatch/tests.rs
-assertion_line: 240
+assertion_line: 244
 expression: result
 ---
 Err(
@@ -9,13 +9,12 @@ Err(
             ParseError {
                 code: TierValidationError,
                 severity: Error,
-                location: SourceLocation {
+                location: Known {
                     span: Span {
                         start: 0,
                         end: 1,
                     },
-                    line: None,
-                    column: None,
+                    position: None,
                 },
                 context: Some(
                     ErrorContext {

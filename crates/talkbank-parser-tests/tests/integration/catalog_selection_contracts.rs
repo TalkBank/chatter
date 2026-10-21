@@ -161,7 +161,7 @@ fn accumulated_mechanical_selection_retains_source_and_deletion_sites() {
                 .plan()
                 .sites()
                 .iter()
-                .all(|site| site.spliced().start == site.spliced().end)
+                .all(|site| site.spliced().start() == site.spliced().end())
         );
     }
 }

@@ -326,10 +326,12 @@ fn run_debug(command: crate::cli::DebugCommands) {
             super::debug::run_join_retrace(&path, commit, transform_scope);
         }
         DebugCommands::OverlapAudit { path, database } => {
-            super::debug::run_overlap_audit(&path, database.as_deref());
+            super::debug::run_overlap_audit(&path, database.as_deref())
+                .unwrap_or_else(|error| super::debug::die(&error.to_string()));
         }
         DebugCommands::LinkerAudit { path, anomalies } => {
-            super::debug::run_linker_audit(&path, anomalies.as_deref());
+            super::debug::run_linker_audit(&path, anomalies.as_deref())
+                .unwrap_or_else(|error| super::debug::die(&error.to_string()));
         }
         DebugCommands::Sanitize { input, output } => {
             super::debug::run_sanitize(&input, output.as_deref());

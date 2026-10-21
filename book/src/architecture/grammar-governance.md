@@ -1,7 +1,7 @@
 # Grammar System and Token Governance
 
 **Status:** Current
-**Last modified:** 2026-09-28 13:01 EDT
+**Last modified:** {{git-dates:page}}
 
 ## Current Reality
 `grammar/grammar.js` encodes substantial implicit language knowledge directly in regex exclusions,
@@ -20,15 +20,17 @@ This is currently powerful but fragile.
 4. Lenient parsing choices become undocumented policy.
 
 ## Current Design
-The generated symbol registry is the single source of token constraints.
-The pipeline has shipped, `just symbols-gen` rebuilds it.
+The authored symbol registry owns its declared symbols and character classes;
+it does not describe every CHAT token constraint. Generated consumers carry
+those shared definitions into the grammar, model and spec tooling.
+`just symbols-gen` rebuilds those outputs; a source change uses the consolidated
+`just regen` workflow and affected verification.
 
 ### Registry Artifacts
 - `spec/symbols/symbol_registry.json` (human-authored intent):
-  - symbol string
-  - category (delimiter, continuation, overlap, punctuation, etc.)
-  - contexts where reserved/allowed
-  - parse role and precedence notes
+  - symbol identity, codepoint, gloss and runnable example
+  - parse role, independently of notation family
+  - named character-class arrays
 - Generated outputs:
   - `grammar/src/generated_symbol_sets.js`
   - `crates/talkbank-model/src/generated/symbol_sets.rs`
@@ -50,12 +52,13 @@ The pipeline has shipped, `just symbols-gen` rebuilds it.
   - CI fails if generated files differ from committed state.
 
 ## Leniency Policy
-Explicitly classify every lenient parse behavior:
-- Parse-lenient + validate-strict.
-- Parse-lenient + validate-warning.
-- Parse-strict (hard fail).
+Distinguish valid syntax, recovered syntax and the semantic rules applied to
+either. The leniency chapter's A/B/C labels mean error, warning or intentional
+acceptance for an individual policy; they do not classify recovery as valid.
 
-Document this matrix in the [Leniency Policy](leniency-policy.md).
+Record specific rulings in the [Leniency Policy](leniency-policy.md) and their
+source-owned specs. Do not create a parallel acceptance matrix from approximate
+grammar line numbers.
 
 ### Recognized but unsupported headers
 

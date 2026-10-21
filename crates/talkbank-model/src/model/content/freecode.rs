@@ -8,7 +8,6 @@
 //! - [Complex Local Events](https://talkbank.org/0info/manuals/CHAT.html#ComplexLocalEvents)
 
 use super::WriteChat;
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -33,10 +32,10 @@ pub struct Freecode {
     pub text: smol_str::SmolStr,
 
     /// Source location metadata for diagnostics.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl Freecode {
@@ -44,21 +43,10 @@ impl Freecode {
     ///
     /// Use this when constructing values in tests or transformations where
     /// source offsets are unavailable.
-    pub fn new(text: impl Into<smol_str::SmolStr>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, text: impl Into<smol_str::SmolStr>) -> Self {
         Self {
             text: text.into(),
-            span: Span::DUMMY,
-        }
-    }
-
-    /// Build a freecode with explicit source span metadata.
-    ///
-    /// This constructor keeps creation atomic when callers already know both
-    /// payload text and source location.
-    pub fn with_span(text: impl Into<smol_str::SmolStr>, span: Span) -> Self {
-        Self {
-            text: text.into(),
-            span,
+            location: location.into(),
         }
     }
 }
@@ -86,7 +74,7 @@ mod tests {
     /// Round-trips a single-token freecode through `Display`.
     #[test]
     fn freecode_simple_roundtrip() {
-        let freecode = Freecode::new("comment");
+        let freecode = Freecode::new(crate::Location::Unlocated, "comment");
         let output = freecode.to_string();
         assert_eq!(output, "[^ comment]", "Freecode roundtrip failed");
     }
@@ -94,7 +82,7 @@ mod tests {
     /// Round-trips a multi-token freecode with internal whitespace.
     #[test]
     fn freecode_with_spaces_roundtrip() {
-        let freecode = Freecode::new("this is a longer comment");
+        let freecode = Freecode::new(crate::Location::Unlocated, "this is a longer comment");
         let output = freecode.to_string();
         assert_eq!(
             output, "[^ this is a longer comment]",

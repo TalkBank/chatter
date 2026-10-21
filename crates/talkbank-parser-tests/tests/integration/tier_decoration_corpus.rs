@@ -18,25 +18,31 @@ fn reference_decoration_edits_shift_locations_without_changing_content() {
             let original = &utterance.main.content;
             let mut edited = original.clone();
             for linker in &mut edited.linkers {
-                let before = linker.span;
+                let before = linker.location;
                 assert_ne!(
                     before,
-                    Span::DUMMY,
+                    talkbank_model::Location::Unlocated,
                     "reference linker must have source coordinates"
                 );
                 linker.shift_spans_after(0, 1);
-                assert_eq!(linker.span, Span::new(before.start + 1, before.end + 1));
+                assert_eq!(
+                    linker.location,
+                    before.map(|span| Span::new(span.start() + 1, span.end() + 1))
+                );
                 witnessed[0] += 1;
             }
             for postcode in &mut edited.postcodes {
-                let before = postcode.span;
+                let before = postcode.location;
                 assert_ne!(
                     before,
-                    Span::DUMMY,
+                    talkbank_model::Location::Unlocated,
                     "reference postcode must have source coordinates"
                 );
                 postcode.shift_spans_after(0, 1);
-                assert_eq!(postcode.span, Span::new(before.start + 1, before.end + 1));
+                assert_eq!(
+                    postcode.location,
+                    before.map(|span| Span::new(span.start() + 1, span.end() + 1))
+                );
                 witnessed[1] += 1;
             }
             assert!(edited.semantic_eq(original));

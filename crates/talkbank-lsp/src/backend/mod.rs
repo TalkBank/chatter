@@ -41,8 +41,11 @@ pub use state::Backend;
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     /// Advertise server capabilities during LSP initialization.
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
-        Ok(capabilities::build_initialize_result())
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        let edits = self
+            .versioned_edits
+            .get_or_init(|| capabilities::VersionedEdits::negotiate(&params.capabilities));
+        Ok(capabilities::build_initialize_result(edits.as_ref()))
     }
 
     /// Handle post-initialize client notification.
@@ -219,7 +222,7 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         let report = diagnostics::document_diagnostics(self, &uri)?;
         let (result_id, items) = match report {
-            Some(report) => (Some(report.version.to_string()), report.items),
+            Some(report) => (Some(report.version().to_string()), report.into_items()),
             None => (None, Vec::new()),
         };
 
@@ -248,10 +251,10 @@ impl LanguageServer for Backend {
                 items.push(WorkspaceDocumentDiagnosticReport::Full(
                     WorkspaceFullDocumentDiagnosticReport {
                         uri,
-                        version: Some(i64::from(report.version)),
+                        version: Some(i64::from(report.version())),
                         full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                            result_id: Some(report.version.to_string()),
-                            items: report.items,
+                            result_id: Some(report.version().to_string()),
+                            items: report.into_items(),
                         },
                     },
                 ));

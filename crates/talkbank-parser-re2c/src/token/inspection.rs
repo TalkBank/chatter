@@ -63,10 +63,35 @@ impl<'a> Token<'a> {
         }
     }
 
-    /// The text slice this token carries.
+    /// The token's content: the whole lexeme for a plain token, the payload
+    /// (not the lexeme) for an `Extracted` one, the whole suffix for a word's
+    /// `@s` suffix, the delimited raw text for a
+    /// media bullet, the SPEAKER for an other-spoken event, and the leading
+    /// field for the rich header and `%mor`/`%gra` tokens. Placement never
+    /// goes through this; it reads the lexeme the token carries.
     pub fn text(&self) -> &'a str {
         match self {
             Token::Postcode(postcode) => postcode.text(),
+            Token::CodeSwitchExplicit(x)
+            | Token::Freecode(x)
+            | Token::ErrorMarkerAnnotation(x)
+            | Token::OverlapPrecedes(x)
+            | Token::OverlapFollows(x)
+            | Token::ExplanationAnnotation(x)
+            | Token::ParaAnnotation(x)
+            | Token::AltAnnotation(x)
+            | Token::PercentAnnotation(x)
+            | Token::Langcode(x)
+            | Token::Event(x)
+            | Token::FormMarker(x)
+            | Token::PosTag(x)
+            | Token::LongFeatureBegin(x)
+            | Token::LongFeatureEnd(x)
+            | Token::NonvocalBegin(x)
+            | Token::NonvocalEnd(x)
+            | Token::NonvocalSimple(x)
+            | Token::UnknownAnnotation(x)
+            | Token::InlinePic(x) => x.text(),
             Token::PauseLong(pause)
             | Token::PauseMedium(pause)
             | Token::PauseShort(pause)
@@ -116,22 +141,7 @@ impl<'a> Token<'a> {
             | Token::ScopedUncertain(s)
             | Token::ExcludeMarker(s)
             | Token::CodeSwitchShortcut(s)
-            | Token::CodeSwitchExplicit(s)
-            | Token::Freecode(s)
             | Token::CaContinuationMarker(s)
-            | Token::LongFeatureBegin(s)
-            | Token::LongFeatureEnd(s)
-            | Token::NonvocalBegin(s)
-            | Token::NonvocalEnd(s)
-            | Token::NonvocalSimple(s)
-            | Token::ErrorMarkerAnnotation(s)
-            | Token::OverlapPrecedes(s)
-            | Token::OverlapFollows(s)
-            | Token::ExplanationAnnotation(s)
-            | Token::ParaAnnotation(s)
-            | Token::AltAnnotation(s)
-            | Token::PercentAnnotation(s)
-            | Token::Langcode(s)
             | Token::ReplacementBegin(s)
             | Token::WordSegment(s)
             | Token::Shortening(s)
@@ -150,11 +160,7 @@ impl<'a> Token<'a> {
             | Token::PrefixFiller(s)
             | Token::PrefixNonword(s)
             | Token::PrefixFragment(s)
-            | Token::Event(s)
             | Token::Zero(s)
-            | Token::FormMarker(s)
-            | Token::PosTag(s)
-            | Token::UnknownAnnotation(s)
             | Token::Comma(s)
             | Token::Semicolon(s)
             | Token::Colon(s)
@@ -213,7 +219,6 @@ impl<'a> Token<'a> {
             | Token::MediaFilename(s)
             | Token::MediaWord(s)
             | Token::TextSegment(s)
-            | Token::InlinePic(s)
             | Token::ErrorUnrecognized(s)
             | Token::ErrorLine(s)
             | Token::ErrorHeaderAfterName(s)
@@ -234,9 +239,9 @@ impl<'a> Token<'a> {
             | Token::ErrorInParticipantsContent(s)
             | Token::ErrorInMediaContent(s) => s,
             Token::Word { raw_text, .. } => raw_text,
-            Token::WordLangSuffix(opt) => opt.unwrap_or("@s"),
+            Token::WordLangSuffix(suffix) => suffix.lexeme(),
             Token::OtherSpokenEvent { speaker, .. } => speaker,
-            Token::MediaBullet { raw_text, .. } => raw_text,
+            Token::MediaBullet { bullet } => bullet.text(),
             Token::HeaderPrefix(s)
             | Token::HeaderSep(s)
             | Token::HeaderBirthOf(s)

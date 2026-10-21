@@ -175,14 +175,17 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::*;
-    use talkbank_model::{ErrorCode, SourceLocation};
+    use talkbank_model::{DiagnosticLocation, ErrorCode};
 
     /// Build a diagnostic of the given severity for headline-predicate tests.
     fn diagnostic(severity: Severity) -> ParseError {
         ParseError::new(
             ErrorCode::TestError,
             severity,
-            SourceLocation::from_offsets_with_position(0, 1, 1, 1),
+            DiagnosticLocation::known_at(
+                talkbank_model::Span::new(0, 1),
+                talkbank_model::LineColumn::one_based(1, 1).expect("one-based position"),
+            ),
             Option::<talkbank_model::ErrorContext>::None,
             "synthetic diagnostic for headline tests",
         )

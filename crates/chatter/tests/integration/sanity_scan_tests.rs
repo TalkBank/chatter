@@ -26,6 +26,34 @@ use tempfile::tempdir;
 
 use crate::common::CliHarness;
 
+/// Invalid heuristic parameters must fail before any input or output I/O.
+#[test]
+fn sanity_scan_rejects_invalid_threshold_before_io() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let pending = dir.path().join("pending.toml");
+    let original = "# preserve review evidence\nschema_version = 2\nentries = []\n";
+    fs::write(&pending, original)?;
+    for threshold in ["NaN", "inf", "-inf", "0", "-0", "-1"] {
+        harness
+            .chatter_cmd()
+            .arg("sanity-scan")
+            .arg(dir.path().join("missing-inputs"))
+            .arg("--override-file")
+            .arg(dir.path().join("missing-overrides.toml"))
+            .arg("--anchor")
+            .arg("CHI")
+            .arg(format!("--threshold={threshold}"))
+            .arg("--write-pending")
+            .arg(&pending)
+            .assert()
+            .code(2)
+            .stderr(predicates::str::contains("threshold"));
+        assert_eq!(fs::read_to_string(&pending)?, original);
+    }
+    Ok(())
+}
+
 /// A merged CHAT file with inverted MLU asymmetry: CHI has long
 /// utterances (>5 words each) and INV has short ones (1-2 words).
 /// Mean ratio CHI:INV ≈ 4×, well above the default 1.5× threshold.

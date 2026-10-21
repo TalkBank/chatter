@@ -1,89 +1,66 @@
 //! Parsing for background other-speaker events.
 //! Generated child types own kind and position; recovery remains explicit.
 
-use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
+use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, NamedKind, OtherSpokenEventNode, RecoveryNode, extract_other_spoken_event,
+    AsRawNode, OtherSpokenEventNode, SourceBound, SourceBoundKind, SourceSlotView,
 };
 use crate::model::{OtherSpokenEvent, UtteranceContent};
-use crate::parser::tree_parsing::parser_helpers::{
-    SlotState, expect_present, extract_utf8_text, surface_displaced,
-};
-use crate::parser::typed_cst::AnyKindSlot;
+use crate::parser::node_span::span_of;
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
+use crate::parser::typed_cst::RequiredLexicalField;
 use talkbank_model::ParseOutcome;
 
-/// A required event child, with kind supplied by the generated wrapper type.
-/// Generic over the slot's `Missing` payload: the event's children include
-/// kinds the compiled grammar narrows and kinds it does not.
-fn required<'a, 'tree, T: NamedKind + AsRawNode<'tree> + Copy, M: RecoveryNode<'tree>>(
-    slot: &'a AnyKindSlot<'tree, T, M>,
-    event: OtherSpokenEventNode<'tree>,
-    source: &str,
+/// Read a required lexical child from its own source; Missing remains recovery.
+fn required<'value, 'tree: 'value, 'source, T: SourceBoundKind<'tree>>(
+    slot: RequiredLexicalField<'value, 'tree, 'source, T>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<&'a T> {
-    match expect_present(slot, "other_spoken_event", source, errors) {
-        SlotState::Present(node) => ParseOutcome::parsed(node),
-        SlotState::Recovered => ParseOutcome::rejected(),
-        SlotState::Absent => {
-            let node = event.raw_node();
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.byte_range(), node.kind()),
-                format!(
-                    "Missing required '{}' in other_spoken_event",
-                    T::KIND.name()
-                ),
-            ));
-            ParseOutcome::rejected()
+) -> Option<SourceBound<'tree, 'source, T>> {
+    match slot.view() {
+        SourceSlotView::Present(node) => crate::parser::typed_cst::read_source_field(node, errors),
+        SourceSlotView::Missing(node) => {
+            check_not_missing(node.raw_node(), node.source(), errors, "other_spoken_event");
+            None
         }
     }
 }
 
 /// Lower the generated event shape, never a raw node plus guessed positions.
-pub(crate) fn parse_other_spoken_event(
-    event: OtherSpokenEventNode<'_>,
-    source: &str,
+pub(crate) fn parse_other_spoken_event<'tree>(
+    event: SourceBound<'tree, '_, OtherSpokenEventNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let children = extract_other_spoken_event(event);
+    let source = event.source();
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_inner(event),
+        event.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::rejected();
+    };
+    let children = associated.children();
     surface_displaced(&children.unexpected, "other_spoken_event", source, errors);
     if !children.unexpected.is_empty() {
         return ParseOutcome::rejected();
     }
-    if required(children.child_0.slot(), event, source, errors).is_none()
-        || required(children.child_1.slot(), event, source, errors).is_none()
-        || required(children.child_3.slot(), event, source, errors).is_none()
+    if required(associated.field_child_0().slot(), errors).is_none()
+        || required(associated.field_child_1().slot(), errors).is_none()
+        || required(associated.field_child_3().slot(), errors).is_none()
     {
         return ParseOutcome::rejected();
     }
-    let ParseOutcome::Parsed(speaker) = required(children.child_2.slot(), event, source, errors)
-    else {
+    let Some(speaker) = required(associated.field_child_2().slot(), errors) else {
         return ParseOutcome::rejected();
     };
-    let ParseOutcome::Parsed(text) = required(children.child_4.slot(), event, source, errors)
-    else {
+    let SourceSlotView::Present(text) = associated.field_child_4().slot().view();
+    let Some(text) = crate::parser::typed_cst::read_source_field(text, errors) else {
         return ParseOutcome::rejected();
     };
     let node = event.raw_node();
-    let ParseOutcome::Parsed(speaker) =
-        extract_utf8_text(speaker.raw_node(), source, errors, "speaker")
-    else {
-        return ParseOutcome::rejected();
-    };
-    let ParseOutcome::Parsed(text) =
-        extract_utf8_text(text.raw_node(), source, errors, "other_spoken_text")
-    else {
-        return ParseOutcome::rejected();
-    };
-    ParseOutcome::parsed(UtteranceContent::OtherSpokenEvent(
-        OtherSpokenEvent::with_span(
-            speaker,
-            text,
-            Span::new(node.start_byte() as u32, node.end_byte() as u32),
-        ),
-    ))
+    ParseOutcome::parsed(UtteranceContent::OtherSpokenEvent(OtherSpokenEvent::new(
+        span_of(node),
+        speaker.text(),
+        text.text(),
+    )))
 }

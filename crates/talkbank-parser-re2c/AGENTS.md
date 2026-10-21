@@ -2,7 +2,8 @@
 
 **Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-parser-re2c/AGENTS.md)
 
-This file provides guidance to coding agents working in this crate.
+Read the [root guidance](../../AGENTS.md) first. This file adds re2c-specific
+ownership and compatibility requirements, not a separate verification policy.
 
 **Mandatory first read for parity, recovery or diagnostic work:**
 [Backend compatibility mandate](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate).
@@ -22,13 +23,16 @@ A CHAT transcript parser using **re2rust** (re2c's Rust backend) for lexing and 
 
 ```
 re2c DFA Lexer  -->  Chumsky Combinators  -->  AST  -->  talkbank-model
-  (lexer.re)          (parser/*.rs)       (ast.rs)     (convert.rs)
+  (lexer.re)          (parser/*.rs)       (ast.rs)     (convert/*.rs)
 ```
 
-**Two-stage pipeline:**
+**Pipeline stages:**
 1. **Lexer** (`lexer.re`), re2c DFA produces rich tokens with tagged field extraction.
 2. **Parser** (`parser/`), chumsky combinators consume `&[Token]` and produce AST types.
-3. **Conversion** (`convert.rs`), `From` impls map AST to talkbank-model. Source-aware conversions use `SourceText` to place original input slices.
+3. **Conversion** (`convert/`), conversion functions map AST to talkbank-model
+   values, each built through its model constructor with its `Location` as the
+   first argument. Source-aware conversions use `SourceText` to place original
+   input slices; see "Locations" below for what is and is not located.
 
 ### Parser Module Structure
 
@@ -48,13 +52,85 @@ src/parser/
 
 **Chumsky** (pinned in `Cargo.toml`). Token-stream input via `&[Token<'a>]`. The `select!` macro matches token variants by value. `recursive()` handles nested groups/quotations.
 
-**Borrowed source, temporary tokens.** Parser signatures separate `'tokens` from `'source`. The lexer borrows the caller's input and treats end-of-buffer as NUL without padding or unchecked reads. Local token and recovery vectors are dropped after parsing. `WordWithAnnotations::raw_text` is `Cow<str>`: borrowed for rich tokens, owned for reconstructed subtoken words. Never leak allocations to extend a lifetime.
+**Borrowed source, temporary tokens.** Parser signatures separate `'tokens` from `'source`. The lexer borrows the caller's input and treats end-of-buffer as NUL without padding or unchecked reads. Local token and recovery vectors are dropped after parsing. `WordWithAnnotations::raw_text` is a slice of the source on both word paths (the rich token's, or the covering slice an assembled word borrows). Never leak allocations to extend a lifetime.
 
 **Imperative file parser.** The file-level parser (`file.rs`) uses an imperative loop for line ownership and recovery. Exact lexer rules emit `DependentPrefixToken` with a `DependentBodyKind`; the dependent-tier parser exhaustively dispatches that admitted kind. Never reclassify labels with prefix-string tests: `%modsyl` and `%mod` select different body grammars.
 
-**CA terminator promotion.** CA intonation arrows (⇗ ↗ → ↘ ⇘) serve dual roles: mid-content separators and utterance-final terminators. Chumsky always parses them as separators. `convert.rs` promotes trailing arrows to terminators at the AST-to-model boundary (same strategy as TreeSitterParser's `resolve_ca_terminator`).
+**CA marker categories.** CA arrows and TCU markers remain separators, including
+at the end of an utterance; linker forms remain linkers. No conversion pass
+promotes them to terminators. See
+[CA Terminator Resolution](../../book/src/architecture/parser-and-grammar/ca-terminator-resolution.md).
 
-**Subtoken word assembly.** When the lexer produces sub-tokens instead of a single rich `Token::Word` (edge cases where the `w_body` regex doesn't match), `subtoken_word()` in `main_tier.rs` assembles them. The `display_text()` helper reconstructs raw_text with structural delimiters (e.g., `Shortening("x")` -> `"(x)"`).
+**Subtoken word assembly.** When the lexer produces sub-tokens instead of a single rich `Token::Word` (edge cases where the `w_body` regex doesn't match), `subtoken_word()` in `main_tier.rs` assembles them and takes the word's `raw_text` as the source slice from the first token's lexeme through the last's, through the `SourceText` the word parsers receive from `LexedSource::source_text()`. That slice is the source as written: a curly quote the file parser stripped and reported (E256) between two sub-tokens stays in `raw_text` and is absent from `body`.
+
+## Locations
+
+Every model constructor takes its `Location` first, and this backend must say
+honestly which it has:
+
+- **Located:** tiers, headers and main-tier words (`SourceText::span_of` on a
+  borrowed `raw_text`). A word the lexer split into subtokens and reassembled
+  (`Cow::Owned`) is still located when the assembly can place it; check the
+  converter rather than assuming. Also located: every item whose token keeps
+  its WHOLE lexeme (`emit!` rules: terminators, linkers, overlap and
+  underline markers, the action marker, `%wor` separators), through
+  `convert::locate(source, slice)`, and every tier value, whose extent the
+  line machine owns (`LexedSource::extent`, `LexedSource::main_tier_locations`;
+  `LocatedMainTier`, `DependentTierEntryParsed::extent`). A line includes its
+  ending and main-tier content starts after the separator's colon, the same
+  convention as the tree-sitter grammar; it is written on
+  `MainTierLocations` and nowhere else. Word-body markers (`WordBodyItem`)
+  carry their lexeme from both producers, the character scanner and the
+  subtoken word builder, and the lengthening run is a `LengtheningRun` that
+  owns the nonempty proof once. To locate a new item kind, make its token
+  carry the whole lexeme, then `locate` it in the converter; never recompute
+  an offset from payload lengths or from a neighbouring token.
+- **Located through `Extracted`:** a tag-extracting rule (`emit_t1!`,
+  `emit_t1t2!`) emits `token::Extracted { payload, lexeme }`. `text()` is
+  the payload (`eng` of `[- eng]`, `laughs` of `&=laughs`) and is what
+  consumers read; `lexeme()` is the item as written and is the ONLY slice to
+  pass to `locate`. A payload slice locates the payload, not the item. Events,
+  freecodes, long features, nonvocals, the precode, the other-spoken event
+  (its own `lexeme` field), bullets (`MediaBulletToken::text()`) and the
+  whitespace token directly before the `@Media` comma are placed this way.
+- **Located as hulls:** groups and quotations from their `Enclosure`
+  (opening through closing delimiter), a retrace from its content (the
+  enclosure it took, or the one item it wraps) through its `marker`, a
+  replaced word from the word through its last annotation, and every
+  `Annotated` wrapper from its construct through its last annotation
+  (`ParsedAnnotation::span_in`). The helpers live in `convert/items.rs`
+  (`retrace_span`, `content_item_span`, `annotations_hull`); a hull with any
+  part it cannot place is `Unlocated`, never a span that stops short. The
+  model's E757 rule depends on these wrappers being placed; do not reintroduce
+  a parser-side mirror of it.
+- **Unlocated:** nothing this backend builds from source, by design. Every
+  word's `raw_text` is a slice of the source (the rich token's, or the
+  covering slice an assembled word borrows through the `SourceText` the word
+  parsers take), so the only `Unlocated` arms left are the fallbacks of
+  `located` and the separator slice, reached only when a slice is not from
+  the source being converted (a programming error). Never write a
+  placeholder span (`0..0` was the old sentinel and is gone from the
+  language); write `talkbank_model::Location::Unlocated`.
+- Changing `lexer.re` means regenerating `src/generated/lexer.rs` with the
+  invocation in `build.rs` under the pinned re2rust (`re2c-version.toml`) in
+  the same commit; `just verify-vendored-lexer` byte-compares them.
+- A fragment parsed from empty input is located at the caller's offset with
+  zero width.
+
+The fabricated-AST gate in `talkbank-parser-tests` holds this crate's
+production `Location::Unlocated` count at a measured ceiling
+(`PARSER_UNLOCATED_CEILING`). It only falls: when the lexer learns an offset
+for an item kind, lower the ceiling in the same commit. The count is textual
+over production text (the file up to its first `#[cfg(test)]`), so a
+consumer's `Location::Unlocated =>` match arm counts too; spell a
+located-or-not read as `location.span().map(..)` in production code. A
+diagnostic with nothing to point at is `DiagnosticLocation::Unlocated`, which
+the gate does not count.
+
+Validation rules fire on a construct's presence, never on its having a span
+(E752 and E767 once went silent under this backend for exactly that reason),
+so an unlocated item still triggers every rule; only the diagnostic's
+position differs.
 
 ## Architecture: Rich Word Token
 
@@ -138,9 +214,9 @@ Conversion functions in `convert/` use typed AST data and, where spans are recov
 
 ## Performance
 
-Benchmarked with divan on reference corpus files. All content pre-loaded; zero I/O.
-Most of the per-parse cost is in the chumsky combinators; re2c lexing is the smaller fraction.
-TreeSitter constructor cost is negligible.
+Use the existing divan benchmark for the operation and reference inputs being
+investigated. Retain the build, input set and constructor/parse boundary with
+results. Historical speed ratios or profiles are not current guarantees.
 
 Run benchmarks: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 
@@ -148,13 +224,9 @@ Run benchmarks: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 
 From the chatter repo root:
 
-```sh
-cargo check -p talkbank-parser-re2c
-cargo test -p talkbank-parser-re2c
-cargo test -p talkbank-parser-re2c -j 1   # fallback
-```
-
-Requires `re2rust` (part of re2c) on PATH: `brew install re2c`.
+Select focused feedback under the root workflow. Ordinary builds consume the
+vendored lexer and do not invoke `re2rust`. Regeneration and the vendored-lexer
+currency check require the exact version pinned in `re2c-version.toml` on PATH.
 
 The build script (`build.rs`) copies the vendored `src/generated/lexer.rs` into `OUT_DIR`. Edit `lexer.re`, regenerate with the exact `re2rust --no-unsafe` command documented in `build.rs`, and run `just verify-vendored-lexer`. Never edit generated output. Use `\x00` (not `\0`) for NUL, re2c treats `\0` as octal prefix.
 
@@ -206,7 +278,7 @@ and reproduction commands; it cannot impose a stricter recovery-equality goal.
 
 ## Rust Coding Standards
 
-- Rust **2024 edition**, `cargo fmt` before committing.
+- Rust **2024 edition**; use the root workflow's formatting and lint boundary.
 - `thiserror` for domain errors, `miette` for rich diagnostics.
 - No panics for recoverable conditions. No silent swallowing.
 - `tracing` for library logging, never `println!`.

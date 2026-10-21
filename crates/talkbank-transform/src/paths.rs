@@ -312,11 +312,35 @@ pub enum Links {
     /// Walk a link as what it points to, to a file or a directory: a corpus
     /// may be assembled from links, and reading through one is harmless.
     Follow,
-    /// Leave links alone: neither walked into nor offered to `keep`. For a
-    /// walk whose results are DELETED (`to-json --prune`): a link is not a
+    /// Leave links alone, including the named root: neither walked into nor
+    /// offered to `keep`. For a walk whose results are DELETED (`to-json --prune`): a link is not a
     /// file the tool wrote, and following one reaches outside the tree the
     /// caller owns.
     Skip,
+}
+
+/// Root metadata is usable only after applying the walk's link policy.
+enum RootTraversal {
+    Selected(std::fs::Metadata),
+    SkippedLink,
+}
+
+impl RootTraversal {
+    fn admit(root: &Path, links: Links) -> std::io::Result<Self> {
+        let metadata = match links {
+            Links::Follow => std::fs::metadata(root)?,
+            Links::Skip => {
+                // Remove trailing separators and `.` without resolving links or
+                // `..`: OS lookup would otherwise follow a final directory link.
+                let named_root: std::path::PathBuf = root.components().collect();
+                std::fs::symlink_metadata(named_root)?
+            }
+        };
+        match metadata.file_type().is_symlink() {
+            true => Ok(Self::SkippedLink),
+            false => Ok(Self::Selected(metadata)),
+        }
+    }
 }
 
 /// Walk `root` and keep the files `keep` accepts.
@@ -325,8 +349,9 @@ pub enum Links {
 /// rejects never has its path built (the name itself is still read from the
 /// listing). With [`Links::Follow`], a directory reached a second time (a
 /// link cycle, or two links to one directory) is not walked again, so every
-/// file is found once, and a link whose target cannot be read is a failure,
-/// whatever its name, since it may have been a directory. Every read
+/// directory is visited once (file aliases can remain distinct). A link whose
+/// target cannot be read is a failure whatever its name, since it may have been
+/// a directory. Every read
 /// failure, of the root itself included, is a [`WalkFailure`] in the result: a directory the walk
 /// cannot list (an operating system's own folder at a volume root, for
 /// example) is reported, never skipped, because nothing can say whether it
@@ -334,6 +359,8 @@ pub enum Links {
 ///
 /// The type of each entry comes from its directory listing; only a followed
 /// link, and each directory (for its identity), costs a `stat`.
+/// Link policy applies to the named root and visited entries, not the root's
+/// ancestors. This path-based walk is not protection against concurrent replacement.
 pub fn walk_files(root: &Path, links: Links, keep: impl Fn(&Path) -> bool) -> Walk {
     let mut walk = Walk {
         found: Vec::new(),
@@ -341,8 +368,9 @@ pub fn walk_files(root: &Path, links: Links, keep: impl Fn(&Path) -> bool) -> Wa
     };
     let mut visited = std::collections::HashSet::new();
     let policy = WalkPolicy { links, keep: &keep };
-    match std::fs::metadata(root) {
-        Ok(metadata) => walk_directory(
+    match RootTraversal::admit(root, links) {
+        Ok(RootTraversal::SkippedLink) => {}
+        Ok(RootTraversal::Selected(metadata)) => walk_directory(
             root,
             Path::new(""),
             &metadata,

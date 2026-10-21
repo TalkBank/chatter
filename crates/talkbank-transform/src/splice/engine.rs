@@ -61,7 +61,7 @@ pub enum EditTarget {
     /// Replace this byte range. Must be non-dummy and non-empty.
     Replace(Span),
     /// Insert at this byte offset, replacing nothing. Offset 0 is legal.
-    InsertAt(u32),
+    InsertAt(usize),
 }
 
 impl EditTarget {
@@ -72,9 +72,9 @@ impl EditTarget {
     /// about where an edit falls (the admission gate's utterance lookup,
     /// `chatter fix`'s diagnostic-to-fix-site mapping) needs exactly this
     /// value; it used to be reimplemented privately in each of those places.
-    pub fn start_offset(&self) -> u32 {
+    pub fn start_offset(&self) -> usize {
         match self {
-            EditTarget::Replace(span) => span.start,
+            EditTarget::Replace(span) => span.start(),
             EditTarget::InsertAt(offset) => *offset,
         }
     }
@@ -82,9 +82,9 @@ impl EditTarget {
     /// The byte offset this target ends at, i.e. where the cursor resumes.
     ///
     /// Public for the same reason as [`start_offset`](Self::start_offset).
-    pub fn end_offset(&self) -> u32 {
+    pub fn end_offset(&self) -> usize {
         match self {
-            EditTarget::Replace(span) => span.end,
+            EditTarget::Replace(span) => span.end(),
             EditTarget::InsertAt(offset) => *offset,
         }
     }
@@ -185,27 +185,7 @@ impl SpliceEdit {
 /// Why a set of edits could not be applied.
 #[derive(Debug, thiserror::Error)]
 pub enum SpliceError {
-    /// Source length cannot be represented by this API's byte coordinates.
-    #[error("source length {bytes} does not fit in u32 byte coordinates")]
-    SourceTooLarge {
-        /// Actual source length, without narrowing.
-        bytes: usize,
-    },
-    /// Replacement length cannot be represented by this API's coordinates.
-    #[error("replacement length {bytes} does not fit in u32 byte coordinates")]
-    ReplacementTooLarge {
-        /// Actual replacement length, without narrowing.
-        bytes: usize,
-    },
-    /// `Span::DUMMY` is `{0, 0}`, which is indistinguishable from a real
-    /// zero-length position at the head of the file, so a `Replace` carrying
-    /// it would silently splice there.
-    #[error("edit from {provenance:?} carries the dummy span, which is not a source location")]
-    DummySpan {
-        /// The edit's origin.
-        provenance: EditProvenance,
-    },
-    /// A `Replace` span had zero width without being the dummy span. Use
+    /// A `Replace` span had zero width. Use
     /// `EditTarget::InsertAt` to insert instead, so there is exactly one way
     /// to express an insertion.
     #[error("span {span:?} is empty; use EditTarget::InsertAt to insert")]
@@ -218,7 +198,7 @@ pub enum SpliceError {
     #[error("byte offset {offset} is not a character boundary")]
     NotCharBoundary {
         /// The offending offset.
-        offset: u32,
+        offset: usize,
     },
     /// A span or insertion offset reached past the end of the source.
     #[error("span {span:?} is out of bounds for source of {len} bytes")]
@@ -227,7 +207,7 @@ pub enum SpliceError {
         /// the offending offset.
         span: Span,
         /// Length of the source text in bytes.
-        len: u32,
+        len: usize,
     },
     /// Two edits claimed the same or overlapping bytes.
     ///
@@ -242,15 +222,15 @@ pub enum SpliceError {
         /// The edit that starts inside it, or ties with it.
         later: EditProvenance,
     },
-    /// A cumulative offset computed while mapping edits onto the spliced
-    /// text did not fit in `u32`. Every real edit set operates over
-    /// file-sized text, so this should never trigger in practice; it is
-    /// checked rather than assumed so a pathological cumulative shift is a
-    /// typed error instead of an unchecked truncation.
-    #[error("offset {offset} computed while mapping edits onto spliced text does not fit in u32")]
+    /// An offset in the spliced text would exceed `usize`. Replacements are
+    /// in memory, so this cannot arise from real edits; it is checked rather
+    /// than assumed so arithmetic never wraps.
+    #[error("offset {base} + {added} in the spliced text overflows")]
     OffsetOverflow {
-        /// The out-of-range signed offset.
-        offset: i64,
+        /// The offset being advanced.
+        base: usize,
+        /// The bytes being added to it.
+        added: usize,
     },
 }
 
@@ -285,7 +265,7 @@ mod tests {
     /// lands INSIDE a character. Used for the char-boundary rejections.
     const ACCENTED_SOURCE: &str = "*CHI:\té .\n";
 
-    fn edit(start: u32, end: u32, text: &str) -> SpliceEdit {
+    fn edit(start: usize, end: usize, text: &str) -> SpliceEdit {
         SpliceEdit::new(
             EditTarget::Replace(Span::new(start, end)),
             Replacement::new(text),
@@ -293,7 +273,7 @@ mod tests {
         )
     }
 
-    fn insert(offset: u32, text: &str) -> SpliceEdit {
+    fn insert(offset: usize, text: &str) -> SpliceEdit {
         SpliceEdit::new(
             EditTarget::InsertAt(offset),
             Replacement::new(text),
@@ -325,17 +305,6 @@ mod tests {
         let result = apply_edits(source, &[edit(6, 8, "xxx"), edit(7, 9, "yyy")]);
         assert!(
             matches!(result, Err(SpliceError::Overlap { .. })),
-            "got {result:?}"
-        );
-    }
-
-    /// Span::DUMMY is {0,0}, the same bytes as a real position at the head of
-    /// the file, so it must never be read as "splice at the start of the file".
-    #[test]
-    fn dummy_span_is_rejected() {
-        let result = apply_edits(SOURCE, &[edit(0, 0, "xxx")]);
-        assert!(
-            matches!(result, Err(SpliceError::DummySpan { .. })),
             "got {result:?}"
         );
     }

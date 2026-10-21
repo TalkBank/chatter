@@ -278,8 +278,8 @@ fn e306_refuses_a_recovered_empty_main_tier() -> Result<(), String> {
         .ok_or("source unavailable")?
         .root_node()
         .descendant_for_byte_range(
-            finding.location.span.start as usize,
-            finding.location.span.end as usize,
+            finding.location.span().expect("located diagnostic").start(),
+            finding.location.span().expect("located diagnostic").end(),
         )
         .ok_or("missing diagnostic node")?;
     assert!(node.has_error(), "the refusal witness must retain recovery");

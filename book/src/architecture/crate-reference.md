@@ -1,82 +1,74 @@
 # Crate Reference
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** {{git-dates:page}}
 
-Summary of the main crates and packages in `TalkBank/chatter`.
+This is a navigation guide to the main packages in Chatter. Package names are
+not always directory or executable names. The manifests own exact dependencies,
+features and publication metadata; this page does not certify registry
+availability or stable pre-1.0 APIs.
 
-## Foundational crates
+## Shared libraries and grammar
 
-### tree-sitter-talkbank
+| Package | Location | Responsibility |
+| --- | --- | --- |
+| `tree-sitter-talkbank` | `grammar/` | Generated grammar bindings, node metadata and queries |
+| `talkbank-model` | `crates/talkbank-model/` | CHAT types, parser traits, validation, alignment, diagnostics, traversal and serialization |
+| `talkbank-derive` | `crates/talkbank-derive/` | Procedural macros including semantic equality/diff, span shifting and validation metadata |
+| `talkbank-parser` | `crates/talkbank-parser/` | Default tree-sitter frontend and source-bound CST-to-model lowering |
+| `talkbank-parser-re2c` | `crates/talkbank-parser-re2c/` | Independent native frontend sharing the model API |
+| `talkbank-transform` | `crates/talkbank-transform/` | Conversion, transformation, repair and validation-runner workflows |
+| `talkbank-cache` | `crates/talkbank-cache/` | SQLite validation and roundtrip result storage |
+| `talkbank-llm` | `crates/talkbank-llm/` | HTTP implementation of the transform judgment-provider interface |
+| `send2clan` | `crates/send2clan/` | Platform bridge to the CLAN application |
 
-Rust binding crate for the generated TalkBank CHAT tree-sitter grammar. Exposes
-`LANGUAGE`, `NODE_TYPES`, and the generated query constants used by editor and
-parser integrations.
+The re2c parser is not an oracle for tree-sitter. It is selectable for supported
+validation workflows, while tree-sitter remains the default and the LSP
+backend. See [Parser Backends](parser-backends.md) for the 1.0 compatibility
+contract and its limits.
 
-### talkbank-model
+The transform crate's default `validation-runner` feature enables its cache
+and channel dependencies. Disabling that feature is an integration choice,
+not a promise that every optional feature or target has been independently
+qualified. Model-assisted HTTP work is explicit; review data-sharing authority
+before supplying content to a configured endpoint.
 
-The typed data model for CHAT files. Defines `ChatFile`, `Utterance`, `DependentTier`, `MorTier`, `GraTier`, and all other AST types. Includes validation logic, the `WriteChat` trait for CHAT serialization, serde support for JSON, and `JsonSchema` derivations. Also owns error types (`ParseError`, `ErrorSink` trait, `Span`, `SourceLocation`), diagnostic infrastructure, and `ParseValidateOptions`. Provides a closure-based content walker (`walk_words` / `walk_words_mut`) that centralizes recursive traversal of `UtteranceContent` and `BracketedItem` with domain-aware group gating.
+## Applications
 
-### talkbank-derive
+| Package | Location | Executable or surface |
+| --- | --- | --- |
+| `talkbank-chatter` | `crates/chatter/` | `chatter` CLI |
+| `talkbank-lsp` | `crates/talkbank-lsp/` | `talkbank-lsp` server for LSP clients |
+| `chatter-desktop` | `apps/chatter-desktop/src-tauri/` | Tauri application with the adjacent frontend |
 
-Procedural macros for the model crate (`SemanticEq`, `SemanticDiff`, `SpanShift`, `ValidationTagged`, and the `error_code_enum` macro).
+The CLI exposes validation, conversion, normalization and other documented
+CHAT workflows. It is not a corpus custody or publication authority.
+The LSP uses primary-parser/model/grammar services directly, with source-bound
+incremental analysis. Desktop and CLI share transform workflows, but their
+presentation, installation and update acceptance are separate.
+See the user guides for supported commands rather than deriving a command
+inventory from a crate summary.
 
-### talkbank-cache
+## Build, test and spec support
 
-SQLite-backed validation and roundtrip cache used by higher-level validation and
-corpus workflows.
+| Package | Location | Role |
+| --- | --- | --- |
+| `talkbank-build` | `crates/talkbank-build/` | Build-time deterministic source fingerprints; not cryptographic or whole-environment attestation |
+| `talkbank-parser-tests` | `crates/talkbank-parser-tests/` | Shared test support, spec/reference contracts and maintenance tools |
+| `xtask` | `xtask/` | Repository maintenance commands |
+| `generators` | `spec/tools/` | Core spec generators |
+| `spec-runtime-tools` | `spec/runtime-tools/` | Real-parser spec generation, validation and bootstrap tools |
+| `talkbank-spec-vocabulary` | `spec/vocabulary/` | Shared vocabulary for spec tooling and test consumers |
 
-### talkbank-parser
+Tests also live beside their owning libraries and applications; the parser-test
+package is not the exclusive owner of every native equivalence, property or
+roundtrip test. The spec packages form a separate Cargo workspace with deliberate
+dependencies on root libraries. See
+[Repository Architecture and Boundaries](repo-architecture.md) and
+[Spec Workflow](../contributing/spec-workflow.md).
 
-The canonical parser. Wraps the tree-sitter C parser and converts the concrete
-syntax tree (CST) into `ChatFile` model types. Provides error recovery via
-tree-sitter's GLR algorithm and is the parser used by the CLI, LSP, transform
-pipelines, and editor tooling.
-
-### talkbank-parser-re2c
-
-Independent alternate parser used as an equivalence oracle against the
-tree-sitter parser. Primarily a testing and spec-hardening tool rather than a
-first-wave end-user surface.
-
-### talkbank-transform
-
-High-level pipelines: parse+validate, CHAT-to-JSON, JSON-to-CHAT, normalization. Integrates the validation cache, JSON schema validation, and parallel directory validation.
-
-## Application and integration surfaces
-
-### chatter
-
-The `chatter` CLI binary: validate, normalize, to-json, and corpus management.
-
-### talkbank-lsp
-
-Language Server Protocol server with tree-sitter incremental parsing, real-time diagnostics, and semantic highlighting.
-
-### send2clan
-
-Rust bindings for sending files to the CLAN application (macOS Apple Events,
-Windows WM_APP). The crate exposes the safe `send2clan` API directly while
-keeping the raw FFI in private modules.
-
-### chatter-desktop
-
-Desktop validation app (Tauri v2, React). Mandates TUI parity with the CLI.
-
-## Test and spec-support crates
-
-### talkbank-parser-tests
-
-Parser tests. Runs the parser over the reference corpus and validates the
-results. Also owns spec-generated tests, roundtrip tests, equivalence tests,
-and property tests.
-
-### spec/tools
-
-Generator binaries for tree-sitter corpus tests, generated Rust tests, shared
-spec artifacts, and error documentation.
-
-### spec/runtime-tools
-
-Runtime-aware spec tooling for validation, bootstrap, and corpus-mining tasks
-that should not live in the root Rust workspace.
+Typed CST generation uses the separately pinned generator described in
+[Grammar Workflow](../contributing/grammar-workflow.md), not an additional
+package silently vendored into this workspace. Ordinary builds consume the
+committed output; regeneration and public distribution have their own
+prerequisites.

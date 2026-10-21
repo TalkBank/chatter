@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assert that CI and the local gate cannot disagree about what must pass.
+"""Check selected CI workflows against the locally owned gate recipes.
 
 # The problem this exists to end
 
@@ -16,27 +16,27 @@ a check that fails when anything else claims to be it.
 
 # The invariant
 
-**Every check CI runs is a `just` recipe, and `just gate` runs all of them.**
+The target invariant is recipe ownership for the selected `GATED_WORKFLOWS`.
+Raw-command baseline entries, provisioning and named exemptions have explicit
+handling below. Other workflows are outside this synchronizer's scope.
 
 The justfile owns the commands. The workflows own triggers, matrix, caching and
-provisioning, which is what YAML is actually for. That makes "the gate is what
-CI runs" true by construction rather than by someone having compared two lists
-correctly today.
+provisioning. Matching declared commands does not establish equivalent machines,
+successful provisioning, runtime coverage or actual hosted results.
 
 Two directions are checked, because a one-directional check is how the last
 four lists drifted:
 
-- a `run:` step in a workflow that is neither provisioning nor `just <recipe>`
-  FAILS: CI would be running a command nothing local owns;
+- a checked `run:` step that is neither provisioning nor `just <recipe>` must
+  be accounted for by the raw-command baseline;
 - a recipe CI invokes that `gate` does not run FAILS, unless it is exempt for
   a stated reason (below).
 
 # Exemptions are named, not implied
 
-`EXEMPT_FROM_GATE` holds the checks that genuinely cannot run on one developer
-machine, each with the reason. That list is deliberately short and each entry
-has to justify itself; "it is slow" is not a reason, because the gate's whole
-purpose is to be slower than a mistake.
+`EXEMPT_FROM_GATE` is the named exception owner; it is currently empty. The
+raw-command baseline and the workflow selection remain separate scope limits.
+This check is not a local certificate for all CI or release automation.
 
 Exit codes: 0 in sync, 1 drifted.
 """

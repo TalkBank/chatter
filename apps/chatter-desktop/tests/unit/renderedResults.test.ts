@@ -125,7 +125,7 @@ test("rendered file tree certifies only a completed passing run", () => {
 test("rendered file tree retains warnings and excludes clean valid files", () => {
   const diagnostic: RenderedDiagnostic = {
     error: {
-      code: "W109", severity: "Warning", location: { start: 0, end: 1 },
+      code: "W109", severity: "Warning", location: { kind: "known", start: 0, end: 1 },
       labels: [], message: "normalize media name",
     },
     sourceContext: { kind: "unavailable", reason: "transport control" },

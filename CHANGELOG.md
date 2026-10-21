@@ -9,8 +9,522 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-10-20
+
+This interim release gives every model value and diagnostic an honest source
+position: a value is `Located` or `Unlocated`, never a fabricated `0..0`, and
+diagnostics carry a `DiagnosticLocation`. The re2c backend now locates the
+items inside tiers and words, and both backends place groups, retraces and
+annotated constructs by one convention. The typed tree-sitter traversal
+types its recovery states more tightly, so states tree-sitter cannot produce
+are uninhabited types rather than code. LSP quick fixes, completion and
+several file-writing debug commands are hardened.
+
+Rust callers must migrate the breaking APIs listed below, chiefly `Location`
+in place of `span` fields, `Span`'s new representation, `DiagnosticLocation`
+and the re2c crate's AST and token types. Two wire formats change: AST JSON
+no longer carries locations, and a diagnostic's JSON location is the tagged
+`DiagnosticLocation` form; the re2c crate's debugging AST JSON and YAML also
+change as listed. CHAT validity is unchanged apart from the listed diagnostic
+changes.
+
+### Changed
+
+- tree-sitter choice positions: the regenerated traversal (generator pinned
+  at a newer `tsgu-revision`) types a choice's MISSING head by kind, so every
+  consumer that re-read a raw MISSING node through typed constructors now
+  matches the placeholder exhaustively. Separators keep their policy (a
+  MISSING head is read as the separator its kind names) without the
+  impossible "unclassified placeholder" refusal. Bullet text reads a MISSING
+  text segment or continuation directly. A MISSING linker or curly quote in
+  content position no longer reports E766, E233 or E256 for text nobody
+  wrote; it is reported as the missing element it is (E342), as is a MISSING
+  `whitespaces` in content, which used to be reported as an unexpected node.
+  The generator also routes MISSING nodes differently at every choice
+  position: a MISSING first token of a multi-node alternative now selects
+  that alternative (so a word whose first segment is MISSING keeps its later
+  pieces instead of reporting them as unexpected nodes), and a MISSING node
+  of a kind a choice does not name leaves the position `Absent` and reaches
+  the displaced-node sink, which `non_colon_separator` now surfaces. No
+  authored or swept input reached any of these; every spec, reference and
+  validation corpus output is unchanged.
+
+- tree-sitter contents: the generator now narrows a choice's MISSING heads
+  of nonterminal kind by proof, and `contents` (the tier body's and every
+  bracketed construct's), `content_item`, `separator`, `long_feature` and
+  `nonvocal` are extracted under the compiled grammar's admitted proof, so
+  their MISSING heads of rule kind are uninhabited types instead of code
+  that read a placeholder tree-sitter never produces. A tree that
+  contradicts the proof (from another build of the grammar) is reported
+  once as a producer fault and its tier rejected. No output changes.
+
+- tree-sitter headers: a required position the typed walk left empty now
+  reports the producer fault (`CstFailure::AbsentRequiredPosition`) in the
+  `@Languages` code slots (it was a silent rejection), the `@ID` language
+  component and list head (they reported E510 for content never read), the
+  three `@Types` fields (they reported E330 "Missing <field>") and the `@ID`
+  speaker and role fields. The `@ID` speaker and role arms also no longer
+  report E511 or E515 for a MISSING or ERROR node, a mirror of the model's
+  rule with its own wording; the model reports an empty present field
+  itself, and the whole-tree backstop reports the recovery node. No
+  authored or swept input reaches any of these arms. The `unknown_header`
+  wrapper lost a label argument it received and discarded.
+
+- tree-sitter: an utterance whose required main-tier position the typed
+  walk left empty was rejected silently; it now reports the producer fault
+  (`CstFailure::AbsentRequiredPosition`) first. The unsupported tier's
+  absent prefix position reports the same fault instead of an E330 "Missing
+  tier prefix" for content never read. No authored or swept input reaches
+  either arm. E324 gains a whole-file example (a stray character before a
+  tier prefix, `%%mor:`), which corrects the spec's claim that only the
+  fragment route reaches it.
+
+- tree-sitter dependent tiers: admission is a type. `TierAdmission::admit`
+  (exported from `api::tiers`) decides once whether a source-bound tier
+  carries a recovery node (`TierRecovery`, reported by the whole-tier walk)
+  or none (`HealthyTier`). `parse_mor_tier` and `parse_mor_tier_inner` now
+  take the `HealthyTier` proof instead of the bare node, so a library caller
+  can no longer run the typed `%mor` walk on a recovery carrier (a
+  `Recovery` value has no public reporter yet: the recovery diagnostics for
+  such a tier come from the document and fragment routes, which is where
+  they came from before); inside the parser, a `Missing` or
+  `Error` slot contradicts the admission and reports the producer fault
+  `CstFailure::RecoveryInsideHealthyTier` (E001) instead of E342 or E331,
+  and the empty body position reports `AbsentRequiredPosition` instead of
+  E305. No file or fragment reaches any of those arms (the dispatcher
+  gated them before; the proof says so now). The legacy branches that
+  treated a MISSING hyphen as a no-op and decoded a MISSING feature value
+  as empty text go with them. The E342 spec's two MOR examples say which
+  layer reports them. The other tier parsers still take the node the proof
+  wraps; converting them is planned.
+
+- tree-sitter `@Participants`: the two arms for a required position the
+  typed walk left empty (the first entry, an entry's code) reported E506
+  "declares no participant" and E512 "missing speaker code" for content
+  that was never read. Both now report an internal producer fault
+  (`CstFailure::AbsentRequiredPosition`, E001), since the grammar has no
+  fail-closed partials and no input reaches either arm; the model keeps
+  the real E506 from the entry list. No fixture or observation changes.
+  The module records which of its recovery arms any authored malformed
+  file reaches (two) and that the rest are measured unreached, from a
+  census over 7,158 single-edit mutations and 48 hand-written variants.
+
+- Both backends place containers by one convention, now held by the
+  cross-backend deck: a group is its brackets, a retrace its content through
+  its marker, and an `Annotated` wrapper its construct through its own last
+  annotation (an inner wrapper in a chain ends at its own annotation, the
+  outermost at the chain's final `]`). The tree-sitter lowering used to give a
+  group and a retrace the whole chain including trailing annotations, and
+  every wrapper in a chain the chain's full extent; a group's location is no
+  longer stretched over its annotations, and a replaced word ends at the
+  replacement's `]` until a scoped annotation follows it. Visible where the
+  tree-sitter backend reports or targets those locations: the retrace rules
+  (E370 family) and the LSP's hover and go-to target for a group now end at
+  the construct, as re2c's already did. The book's parser-backends chapter
+  states the convention and the two rulings behind it.
+- re2c: a retrace marker after a standalone `0` (an action) wraps the action
+  in a retrace, as it does after every other construct and as the
+  tree-sitter backend already did. The action kept its whole marker run as
+  annotations and the lowering, which reads only scoped ones, dropped the
+  marker silently; the cross-backend location contract found it.
+- Fragment API: a tier fragment method whose wrapper lowered a dependent tier
+  of a different kind than its label selects reports an internal error at the
+  caller's input once, in the lowering helper, instead of rejecting silently
+  from each method's own catch-all arm; the wrapper's inverted-range check on
+  a `Span` (which cannot be inverted) is gone.
+- re2c: the items inside a tier learn their offsets. Terminators, linkers,
+  overlap and underline markers, the action marker and `%wor` separators are
+  located from the token's own source slice; main-tier, dependent-tier and
+  text-tier values carry the extent of the line the lexer saw, and the main
+  tier's speaker and content regions come from the line machine's spans.
+  Line extents follow one convention in both backends, now written on
+  `MainTierLocations`: a line includes its ending, and main-tier content
+  starts after the separator's colon. The production unlocated count in the
+  backend falls from 107 to 55, held by the fabricated-AST gate; what stays
+  unlocated is named in the ceiling's comment (payload-only rich tokens such
+  as the `[- eng]` precode, whose token keeps only `eng`; hull extents; the
+  media comma's leading whitespace).
+- re2c: the markers inside a word are located. Every `ast::WordBodyItem`
+  marker (compound, stress, syllable pause, clitic boundary, overlap point,
+  CA element and delimiter, word-internal underline) carries its lexeme, and
+  the lengthening run is an `ast::LengtheningRun` whose constructor owns the
+  nonempty-run proof for both producers (the character scanner and the
+  subtoken word builder). The converter places each marker at its lexeme;
+  the unlocated count falls 55 to 44. A word the lexer split into subtokens
+  keeps an unlocated `raw_text` (a fresh allocation) while its markers, which
+  borrow from the source, are placed. The re2c AST serialization of a
+  marker is now its lexeme (`Lengthening: ":"`, `SyllablePause: ^`).
+- re2c: every tag-extracting lexer rule keeps its whole lexeme. The twenty
+  token kinds the lexer built from a tag capture alone (events, freecodes,
+  the `[- eng]` precode, long features, nonvocals, the bracketed annotations,
+  form markers, POS tags, unknown annotations, inline pictures) carry a
+  `token::Extracted { payload, lexeme }`; `text()` is the payload every
+  consumer read before, `lexeme()` is the item as written. The converter
+  places events, annotated events (hull from the event), freecodes, long
+  features, nonvocals, the other-spoken event, the precode on main and
+  `%wor` tiers, bullets (utterance-final, inline and `%wor`, at the bullet's
+  own bytes) and the whitespace directly before the `@Media` comma (one
+  token, as the tree-sitter grammar's child). The unlocated count falls 44
+  to 21. Vendored `src/generated/lexer.rs` regenerated with the pinned
+  re2c 4.6.
+- re2c: the container constructs are placed. Groups and quotations keep their
+  opening and closing delimiters (`ast::Enclosure`), a retrace keeps its
+  marker and, when it took a bare group's brackets, those brackets (the
+  `is_group` flag is derived from them), a replacement keeps its `[:`, and
+  every annotation keeps its lexeme (`ScopedAnnotationParsed`,
+  `ParsedAnnotation::Retrace`, the precode and postcode tokens). Retraces,
+  groups, quotations, replaced words, their `Annotated` wrappers at both
+  content levels and orphan-annotation freecodes are located as hulls, with
+  one convention for both backends: a wrapper runs from its construct through
+  its last annotation, a retrace from its content through its marker. The
+  model's E757 rule (a code glued to the following word) now fires on these
+  wrappers, so the re2c parser's pre-parse mirror of it is removed; it had
+  fired beside the rule. The unlocated count falls 21 to 3: the one honest
+  fallback arm every placement routes through, the separator slice fallback,
+  and a hull with nothing placeable.
+- **Breaking (re2c crate API):** `ast::Retrace` carries `body: RetraceBody`
+  (`Enclosed(Enclosure, items)` for a retrace that took a bare group's
+  brackets, `Single(item)` otherwise; `items()`, `into_items()`), its
+  `marker`, and `is_group()` as a method; the `content` field and the
+  `is_group` flag are gone;
+  `Group` and `Quotation` carry `enclosure`; `ScopedAnnotationParsed` bare
+  variants carry their lexeme and payload variants carry `Extracted`;
+  `ParsedAnnotation::Retrace` is `(kind, lexeme)`, `Langcode` carries
+  `Extracted`, `Postcode` the `PostcodeToken`; `ParsedAnnotation::span_in`,
+  `source_text` and `chat_text` replace `content_slice`, `retrace_kind` and
+  `ScopedAnnotationParsed::chat_text`/`content_slice`; `ReplacementParsed::new`
+  takes the opening `[:`; `PostcodeToken::from_lexed` takes the lexeme and
+  `to_model` the `SourceText`; `SourceText::text_at` reads the bytes at a
+  span. An orphan annotation's freecode text is its exact source bytes when
+  placeable. The re2c AST YAML shows these new fields.
+- re2c: a word the lexer's rich word rule rejected, which the parser
+  assembles from subtokens, borrows its covering source slice (first token
+  through last) instead of rebuilding its text from the tokens' display
+  forms, so every word is placed and the retrace or replaced word around one
+  has its hull (E757 reaches it; the gap the removed parser mirror left is
+  closed). `ast::WordWithAnnotations::raw_text` is a `&str` on both paths;
+  the `@s` suffix token carries its lexeme (`token::LangSuffix`); the word
+  parsers (`main_tier_parser`, `tier_body_parser`, `contents_parser`,
+  `rich_word`, `subtoken_word`, `event`, the annotation parsers and
+  `wor_tier_parser`) take the `SourceText` they slice from. The annotated
+  hull refuses like the retrace hulls instead of skipping an unplaceable
+  annotation. The unlocated count falls 3 to 2: the fallback arm of
+  `located` and the separator slice fallback, both reached only for a slice
+  that is not from the source being converted.
+- **Breaking (re2c crate API):** the twenty `Token` variants above carry
+  `Extracted<'a>`; `Token::OtherSpokenEvent` has a `lexeme`;
+  `ast::ContentItem::{Event, Freecode, LongFeature*, Nonvocal*}` and
+  `AnnotatedEvent.event` carry `Extracted`; `TierBody::langcode` and
+  `WorTierParsed::langcode` are `Option<Extracted>`; `WorItemParsed::Word`
+  carries the boxed word and the whole `MediaBulletToken`;
+  `convert::header_to_model` and `header_parsed_to_model` take the
+  `SourceText`; `convert::bullet_from_token(token, source) -> Option<Bullet>`
+  replaces `bullet_from_times`; `MediaBulletToken::admission` and the
+  `BulletAdmission` export are removed. The re2c AST JSON changes in three
+  places no fixture exercises: a tier's `langcode` is the bare code, an
+  other-spoken event carries `lexeme`, and a `%wor` word's `bullet` is the
+  whole token.
+- **Breaking (re2c crate API):** `ast::Utterance::main_tier` is a
+  `LocatedMainTier` (the tier plus the `MainTierLocations` the line machine
+  measured; `tier()` and `locations()`), and `convert::main_tier_to_model`
+  takes one; `convert::dependent_tier_to_model`, `convert_pho_tier`,
+  `convert_sin_tier`, `mor_tier_to_model` and the text tier converters take
+  the tier's `Location`; `mor_tier_to_model` replaces `TryFrom<&ast::MorTier>`.
+  `parser::parse_main_tier_with_source` returns a
+  `ParsedMainTierLine { main_tier, source }` with the source already a
+  `SourceText`. `WorItemParsed::Separator`, `ContentItem::OverlapPoint` and
+  the underline items keep their source text; dependent-tier entries carry
+  their extents.
+- The bracket-spacing rule's closing-code end is a plain located offset; the
+  nonzero filter that stood in for the deleted `0..0` sentinel is gone, since
+  `Location` already says whether an item can be tested for adjacency.
+- **Breaking:** `MainTier::new` takes a `MainTierLocations { line, speaker,
+  content }` instead of three positional `Location`s; builders write
+  `MainTierLocations::UNLOCATED`.
+- `TreeSitterParser::parse_header` returns header payload locations in the
+  caller's coordinates. It lowered the line inside a synthetic document and
+  returned the result without rebasing, so the one located header payload
+  (`MediaHeader::whitespace_before_comma`) came back in wrapper coordinates;
+  the fragment API inherited the offset. Wrapper-lowered values are typed
+  `Synthetic<T>` inside the parser now and can only leave through the
+  wrapper's rebase, which is how the omission was found.
+- `parse_participant_entry_fragment` and `parse_mor_word_fragment` lower
+  inside one wrapper instead of handing their synthetic source to another
+  fragment API as a document; their diagnostics and spans are unchanged,
+  and a participant entry that lowers to some other header kind is now
+  reported (it used to be rejected silently).
+- The CA-omission refusal of main-tier and utterance fragments is decided
+  before the model is rebased, so the snippet comes straight from the
+  input-relative word instead of subtracting the document origin by hand.
+- The model crate's rustdoc examples build values through the location-first
+  constructors (`Location::Unlocated` for a programmatic value); fifteen of
+  them still showed the pre-0.31 signatures and did not compile, which the
+  inner loop (`just test`, `--all-targets`) never runs. Doctests are part of
+  `just gate`; run `cargo test --workspace --doc` after a constructor change.
+- **Breaking:** `Span` stores `usize` byte offsets in private fields, read
+  through `start()`/`end()`. `Span::new` serves trusted ordered producers;
+  `Span::try_new` refuses an inverted range and backs JSON decoding.
+  `Span::from_usize`, the `text-size` re-exports and `TextRange` conversions
+  are removed. `SpanShift` takes `(usize, isize)`. No producer narrows an
+  offset to `u32` any more, so silent truncation is gone from the parser,
+  re2c header recovery, the LSP and the splice gate.
+- **Breaking:** `Span::new` is a `const fn` that panics on `start > end` in
+  every build profile (previously a debug-only assertion), so an inverted range
+  from a producer bug fails at its call site instead of slicing wrongly in
+  release builds. `From<Range<usize>> for Span` is replaced by
+  `TryFrom<Range<usize>>`, which refuses inversion. `ErrorContext::new` and
+  `ErrorContext::from_reconstructed` take a `Span` instead of
+  `impl Into<Span>`. `DependentTierContentSpan::try_new` takes the body's raw
+  start and end and refuses an inverted pair itself, since the two bounds come
+  from different tokens.
+- **Breaking:** diagnostics carry `DiagnosticLocation` instead of
+  `SourceLocation`: an enum of `Known { span, position: Option<LineColumn> }`
+  or `Unlocated`. `LineColumn` holds a one-based line and byte column as
+  `NonZeroUsize`, always together. The JSON wire form is tagged,
+  `{"kind":"known","start":..,"end":..}` (plus `line` and `column` together)
+  or `{"kind":"unlocated"}`, and decoding refuses reversed spans, zero
+  positions and a line without its column; the JSON schema and the desktop
+  protocol (`DiagnosticLocation` union) follow. Read the span with `span()`
+  and the position with `position()`. `with_position`,
+  `from_offsets_with_position` and `calculate_line_column` are replaced by
+  `known_at` and `LineColumn::{of_offset, one_based, from_zero_based}`.
+  `ClanHiddenLineError` becomes `ClanLocationError` (`HiddenLine` or
+  `Unlocated`); `DiagnosticSourceError::Unlocated` and
+  `CatalogIneligibility::Unlocated` are new; `DiagnosticPresentation::file_span`
+  and `DiagnosticPresentation::position` (a `LineColumn`) replace its
+  `line()`/`column()`.
+- **Breaking:** every model value records its source position as
+  `location: Location` (`Located(Span)` or `Unlocated`) in place of
+  `span: Span`; `speaker_span`, `marker_span` and `content_span` become
+  `speaker_location`, `marker_location` and the content's own `location`.
+  Constructors take the location as their first argument
+  (`Word::simple(location, text)`, `ComTier::new(location,
+  content)`, `Retrace::new(location, marker_location, content, kind)` and so
+  on): the parsers pass the node's span, builders and tests write
+  `Location::Unlocated`. There is no setter, default or sentinel: `with_span`,
+  `Span::DUMMY`, `Span::dummy()`, `Span::is_dummy()`, `Spanned`, the
+  `Default` of `TierContent` and `SpliceError::DummySpan` are removed. Read
+  geometry with `Location::span() -> Option<Span>` or a `match`;
+  `Location::or` and `Location::map` combine; `DependentTier::location()`,
+  `empty_content_location()` and `map_location(impl FnOnce(Span) -> Span)`
+  replace `span()` and `with_span` (a projection rather than a setter, so an
+  unlocated tier cannot be given a location), with `TimTier::map_location`
+  beneath them. `Location::start_point` is the one spelling of "point at the
+  start of this construct". `MainTier::find_context_dependent_ca_omission`
+  returns the omission's `Location` and answers on the word's presence; the
+  former `find_context_dependent_ca_omission_span` skipped an unlocated word.
+  `ValidationContext::field_location` is a `Location` (`Unlocated` until a
+  parent narrows), no longer an `Option`.
+- **Breaking:** the rest of the model's `span` accessors follow the
+  location change: `SemanticDiffContext::{current,push,pop}_location`
+  (`normalize_span` and `normalize_span_option` are no longer exported),
+  `ValidationContext::with_field_location`, `ChatFile::headers_with_locations`,
+  `OverlapAnchor::utterance_location` and
+  `MediaTimingObligation::header_location`; `check_speaker_id` and
+  `Terminator::try_from_chat_str` take a `Location`, as does the re2c
+  crate's `GraLoweringReceipt::into_tier`. Offsets are `usize` throughout: `ChatFile::utterance_containing`,
+  `LineMap` and the LSP hover helpers, with `RebasedErrorSink::new` taking an
+  `isize` delta. `Line::header_with_span` is removed (it duplicated
+  `Line::header` with its arguments reversed), and
+  `Line::header_with_separator` takes the location first. In
+  talkbank-transform, `RefusedWord::source()` returns its `Location` in place
+  of `span()`. talkbank-lsp no longer re-exports `backend::features::code_action`.
+- **Breaking:** `TierContent::language_code` is `Option<LanguagePrecode>`,
+  a code with its own location (transparent on the wire), replacing the
+  `language_code` + `language_code_span` pair; `with_language_code` takes it.
+- **Breaking:** AST JSON carries no locations. Every `span` member (words,
+  markers, separators, terminators, CA elements, alignment sets, tiers,
+  utterances, header lines) leaves the wire and the schema; a value read back
+  from JSON is `Unlocated`, and a marker whose only field was its span
+  serializes as `{}`.
+- Header payload diagnostics point at their header's line instead of byte 0:
+  `@Participants` entries (E307, empty code or role, invalid role),
+  `@Languages` codes and the empty-header rules for `@Languages`,
+  `@Participants` and `@Options`, `@Date`, and `@L1 of`. An unmatched `@Bg`
+  (E526) points at the `@Bg` that opened the scope. The header validator
+  narrows the `ValidationContext` to the header's location, and
+  `ValidationContext::field_diagnostic_location` is the one place that turns
+  an absent narrowing into `Unlocated`; `LanguageCode::report_code_issues`
+  takes its anchor instead of reporting at offset 0 for callers to move.
+- E752 (timing bullets without `@Media`) and E767 (whitespace before the
+  `@Media` comma) fire on the construct's presence and only point with its
+  location, so a front end that records the construct without an offset no
+  longer silences them. The re2c front end did, for both.
+- `SpanShift` moves every located span, including one at byte 0 (the sentinel
+  guard that skipped `0..0` is gone); an unlocated value stays unlocated.
+- re2c: a value the lexer cannot place is `Unlocated` instead of claiming
+  `0..0`; the entries above place everything else. A fragment parsed from
+  empty input is located at the caller's offset with zero width.
+- The fabricated-AST gate counts `new_unchecked` and `from_checked_literal`
+  (`Span::DUMMY` no longer exists) and holds a second ratchet on production
+  `Location::Unlocated` in the parser crates: the tree-sitter parser at zero,
+  re2c at its measured count.
+- Rebasing a diagnostic into another coordinate space (including
+  `RebasedErrorSink`), or shifting it after an edit that moves its span, now
+  drops its cached line and column instead of leaving them stale.
+- Overlap-index, word-content and lexical-string validation without a field
+  span now reports an unlocated diagnostic instead of claiming byte 0.
+- **Breaking:** `FragmentRangeError` distinguishes `InputTooLarge` (tree-sitter's
+  `MAX_PARSER_INPUT_BYTES` input limit) from `RangeOverflows`; document origins
+  are no longer limited to 32 bits. Splice offsets (`EditTarget::InsertAt`,
+  `SpliceError`, gate offsets) are `usize`, and `SpliceError::OffsetOverflow`
+  reports `base` and `added`. The now unreachable `SpliceError::SourceTooLarge`,
+  `SpliceError::ReplacementTooLarge`, `CatalogFault::CoordinateExtent`,
+  `DiagnosticSourceError::SourceTooLarge` and `DiagnosticSourceError::DisplayRange`
+  are removed.
+
+- MOR word and content readers now use compiled required-prefix evidence before
+  repeated features and post-clitics. Fixed fields exclude Error/Absent without
+  erasing lexical Missing, empty-text checks or repeated-item recovery. The
+  generated metadata bridge adds a distinct required-prefix callback.
+
+- LSP quick fixes now select current server diagnostics and return versioned
+  document edits. Clients must advertise `workspace.workspaceEdit.documentChanges`;
+  quick-fix edits are withheld otherwise. Stale or foreign client diagnostics no
+  longer authorize edits, and reopened documents have independent admission.
+  E305/E306 now use the shared repair catalog, fixing CRLF terminator placement
+  and withholding empty-turn deletion when dependent tiers belong to that turn.
+
+- Raw diagnostic rendering borrows the current editable context instead of
+  caching stale source text and line offsets. Unrepresentable snippet line
+  offsets now return a rendering error instead of overflowing.
+
+- Ordinary inner-node readers now consume cached, compiled per-rule presence
+  evidence for morphology features and clitics, grammatical relations, content
+  wrappers, markers and separators. Required fields retain lexical Missing;
+  optional recovery and nested payload validation remain independent.
+
+- Spec regeneration writes model bootstrap sources before compiling runtime
+  generators. Source-only generators no longer depend on the production model,
+  and `just regen` orders symbol, grammar and model producers before consumers.
+  Direct runtime generation refuses stale bootstrap sources before writing.
+
+- File validation and derived alignment metadata share unknown-provenance
+  diagnostics. Both direct callers to parser-backed validation instead of
+  suggesting that unknown provenance can simply be marked as established.
+  Alignment admission, warning locations and known-span labels are unchanged.
+
+- `walk_files` with `Links::Skip` now skips a symlink used as the walk root,
+  including trailing-separator and trailing-dot spellings. This prevents
+  `to-json --prune` from deleting orphan JSON through a linked output root;
+  conversion through that explicitly selected path remains supported.
+
+- Present `%wor` consumers use `WorMainTierProjection::bind_present_timing`,
+  which returns count-matched evidence or count drift without an impossible
+  missing-tier state. Optional binding preserves its distinct missing outcome.
+  Remove the unreachable `TimingRefusal::MissingBinding` variant.
+
+- Derived equality, diff and span shifting now call the corresponding field
+  traits explicitly. An identically named inherent method on a field's type
+  can no longer redirect generated recursive behavior.
+
+- Derives now compile for zero-variant enums: `SemanticEq`, its generated
+  `SemanticDiff`, `SpanShift` and `ValidationTagged` eliminate the uninhabited
+  receiver instead of generating invalid variant-name or reference-match code.
+
+- `SpanShift` no longer requires a type parameter used only in skipped fields
+  to implement `SpanShift`. Active payloads retain inferred bounds, and
+  explicit constraints remain unchanged.
+
+- LSP hover and dependency-graph cautions describe pending or recovered
+  analysis instead of claiming an older-source result. Rename
+  `ParseState::StaleBaseline` to `PendingOrRecovered`; `Clean` means a
+  current-source parse without parser errors, not semantic validity.
+
+- Typed CST generation now supports per-rule required-position admission.
+  Eligible ordinary headers, dependent-tier envelopes and main tiers consume compiled proof of their
+  fixed positions while retaining lexical MISSING, optional recovery, source
+  failures and unexpected children. The generated slot API now parameterizes
+  ERROR payloads and preserves proof states through source-readable views.
+
+- Native re2c bullet tokens and AST slots carry checked numeric admission with
+  original spelling. Content lowering can omit rejected timing, and the WOR
+  fragment converter now requires a diagnostic sink.
+- Internal main-tier conversion takes its diagnostic source from the bound CST
+  owner rather than an independent text argument. Missing-child reporting also
+  consumes that owner, keeping source text and byte ranges together.
+- `debug sanitize` compares opened file identities before truncating output,
+  refusing hard-link and symbolic-link aliases of its source. Distinct output
+  files remain replaceable; failures can still leave partial destination data.
+- **Breaking:** `SanityScanThreshold` now has checked construction and a
+  read-only scalar accessor; its public field is gone. The CLI rejects nonfinite and nonpositive thresholds before file
+  access; finite positive factors and the default 1.5 remain supported.
+- Scripted adjudication now refuses unsupported schema versions before applying
+  decisions or writing either persistent document. Versions 1 and 2 remain
+  supported with the current choice representation.
+- Remove the experimental re2c AST's `Retrace::synthesized_missing_annotation`
+  field. An unannotated angle group now stays a bare `Group`, rather than
+  inventing a complete retrace. Sink-bearing file, utterance and main-tier
+  APIs continue to report its missing annotation.
+- `debug overlap-audit --database` and `debug linker-audit --anomalies` now
+  require a new destination instead of
+  overwriting an existing file. Input aliases and symlinks are refused too.
+  Read/write/flush failures exit unsuccessfully; newly created partial reports
+  are retained without a success message. Exploratory parsing is unchanged.
+- Regenerate typed CST traversal and its metadata bridge from the reviewed
+  TSGU producer. Compiled admission now narrows eligible composite kinds in
+  aliased grammars; lexical and alias-target positions retain missing-node
+  recovery. Generated carriers may gain a kind-proof parameter and admitted
+  aliases. Error, absence and source ownership remain independent contracts.
+- Refresh locked Rust and desktop JavaScript dependencies, including matching
+  Tauri API/dialog/updater packages and React 19.3.1.
+
 ### Fixed
 
+- The desktop app no longer links the `zip` crate (RUSTSEC-2026-0367,
+  RUSTSEC-2026-0368, RUSTSEC-2026-0369): the updater plugin's `zip` feature
+  unpacks only the v1 updater formats, and the app publishes v2 artifacts.
+  `rustls-webpki`, `webpki-roots` and `webpki-root-certs` are updated for
+  RUSTSEC-2026-0381 to RUSTSEC-2026-0383. No advisory is ignored.
+- The Windows CLAN bridge no longer probes or launches an uninitialized path
+  when the TalkBank registry key opens but `InstallPath` cannot be read. One
+  resolver now admits the value's status, `REG_SZ` type, termination, embedded
+  NULs and `MAX_PATH` capacity for both availability and launch. The default
+  path applies only when the key does not exist; an unopenable key or malformed
+  value reports CLAN as not found. `just send2clan-win32-doubles` checks this
+  against Win32 test doubles; native Windows behavior is not yet qualified.
+- AST-only validation no longer places document offsets inside invented word,
+  punctuation, tier or timing snippets. Diagnostics retain their absolute
+  locations and use checked source attachment for display. Speaker warnings
+  retain expected-code metadata with correctly local model-text coordinates.
+- E758 validation retains the original separator span without fabricating a
+  source snippet. Source-attached diagnostics still show the actual whitespace.
+- Native bullet overflow no longer becomes fabricated zero timing in terminal,
+  inline/nested, header, text-tier or WOR output. Rejected terminal positions
+  do not promote earlier inline bullets; surrounding content is retained.
+- Primary-parser WOR numeric overflow now reports the existing bullet rejection
+  instead of silently dropping the timestamp and relying on later alignment.
+- Main-tier fallback diagnostics no longer pair a tier-local snippet with
+  document-absolute context ranges. Fragment conversion uses the existing
+  diagnostic projection to keep synthetic newline bytes out of caller spans.
+- Native `%pho`, `%mod` and `%sin` parsing rejects empty groups rather than
+  silently accepting delimiters with no required phonological or sign item.
+- Native parsing rejects empty quotation, phonological-group and sign-group
+  delimiters instead of silently constructing empty containers. The shared
+  checked content admission also preserves the existing angle-group rule.
+- Header completion preserves existing values and emits explicit edits for
+  recognized names or unfinished templates. Bracket completion replaces only the
+  current draft, including after a prior annotation, and does not reinterpret
+  header/dependent-tier text or a recognized complete annotation as a draft.
+  The comment template now includes its required text; an unsupported bracketed
+  triple-quote suggestion is removed.
+- LSP speaker and dependent-tier completion now replace the recognized token
+  without duplicating existing colons or tabs. Speaker suggestions are deduplicated
+  across participant and ID headers; retrace and postcode descriptions are corrected.
+- LSP postcode completion now suggests model-serialized `[+ ...]` tags instead
+  of utterance terminators, replacing only the selected postcode with an
+  explicit UTF-16 edit range. Recognized postcodes take precedence over generic
+  bracket suggestions; unknown postcode values remain supported.
+- Normalization's rewrite guard now requires ordered, disjoint matches for
+  source-line content. It rejects deleted duplicate lines and reordered
+  utterances while retaining whitespace normalization and continuation joins.
+- Re2c file recovery diagnostics now retain their original lexer regions for
+  bullet spelling, angle-edge whitespace, stripped quotes/linkers and structural
+  failures. Missing group annotations highlight the containing main tier;
+  orphan dependent tiers highlight their own line. Recovery behavior is unchanged.
+- Error-code registries now carry conditional compilation through generated
+  lookups and array lengths, including nested `cfg_attr` gates. The compiler
+  checks that an enabled registry retains its required `UnknownError` variant.
 - Release installer compatibility consumes the same run's built CLI artifact
   before announcement, rather than requiring assets not yet uploaded. Verified
   alias evidence is release-bound; pending originals remain distinct from
@@ -5311,7 +5825,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/TalkBank/chatter/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/TalkBank/chatter/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/TalkBank/chatter/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/TalkBank/chatter/compare/v0.27.0...v0.28.0

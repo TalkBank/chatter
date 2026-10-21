@@ -10,7 +10,7 @@
 
 use crate::model::header::IDHeader;
 use crate::model::{DeclaredSpeaker, Participant, Utterance};
-use crate::{Header, Span, WriteChat};
+use crate::{Header, WriteChat};
 use tracing::{debug, info};
 
 use super::ChatFile;
@@ -47,13 +47,16 @@ impl ChatFile {
         })
     }
 
-    /// Iterates header lines with source spans in file order.
+    /// Iterates header lines with their source locations in file order.
     ///
     /// Useful for diagnostics or transforms that need both typed header values
-    /// and their byte locations in the source transcript.
-    pub fn headers_with_spans(&self) -> impl Iterator<Item = (&Header, crate::Span)> {
+    /// and where they sit in the source transcript (programmatic headers are
+    /// unlocated).
+    pub fn headers_with_locations(&self) -> impl Iterator<Item = (&Header, crate::Location)> {
         self.lines.iter().filter_map(|line| match line {
-            crate::model::Line::Header { header, span, .. } => Some((header.as_ref(), *span)),
+            crate::model::Line::Header {
+                header, location, ..
+            } => Some((header.as_ref(), *location)),
             _ => None,
         })
     }
@@ -73,13 +76,13 @@ impl ChatFile {
     /// home for "which utterance is byte N in": callers that want inclusive-end
     /// behaviour (for example an editor cursor resting at the end of a word)
     /// must widen the offset themselves and document why.
-    pub fn utterance_containing(&self, offset: u32) -> Option<&Utterance> {
+    pub fn utterance_containing(&self, offset: usize) -> Option<&Utterance> {
         self.utterances().find(|utterance| {
-            span_contains_half_open(utterance.main.span, offset)
+            span_contains_half_open(utterance.main.location, offset)
                 || utterance
                     .dependent_tiers
                     .iter()
-                    .any(|entry| span_contains_half_open(entry.tier.span(), offset))
+                    .any(|entry| span_contains_half_open(entry.tier.location(), offset))
         })
     }
 
@@ -235,8 +238,10 @@ impl ChatFile {
 
 /// Half-open containment: `start <= offset < end`.
 ///
-/// A [`Span::DUMMY`]/[`Span::is_dummy`] span never contains anything: it
-/// marks "no real source location," not a zero-width span at byte 0.
-fn span_contains_half_open(span: Span, offset: u32) -> bool {
-    !span.is_dummy() && offset >= span.start && offset < span.end
+/// An unlocated value contains nothing: it has no source position at all,
+/// which is a different fact from a zero-width span at byte 0.
+fn span_contains_half_open(location: crate::Location, offset: usize) -> bool {
+    location
+        .span()
+        .is_some_and(|span| span.contains_offset(offset))
 }

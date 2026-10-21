@@ -18,8 +18,8 @@ use super::helpers::{parse_lines_with_old_tree, parse_lines_with_removal};
 use super::normalize::{headers_enable_ca_mode, normalize_ca_omissions};
 use super::tier_plan::{PlanEntry, RetainAll, TierRouting};
 use crate::error::{
-    ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
-    Severity, SourceLocation,
+    DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError,
+    ParseErrors, ParseResult, Severity,
 };
 use crate::generated_traversal::ParsedSource;
 use crate::model::{ChatFile, Header, Line};
@@ -106,8 +106,8 @@ impl TreeSitterParser {
                 let error = ParseError::new(
                     ErrorCode::ParseFailed,
                     Severity::Error,
-                    SourceLocation::from_offsets(0, input.len()),
-                    ErrorContext::new(input, 0..input.len(), input),
+                    DiagnosticLocation::from_offsets(0, input.len()),
+                    ErrorContext::new(input, talkbank_model::Span::new(0, input.len()), input),
                     "Tree-sitter parse failed for chat file",
                 );
                 Err(ParseErrors::from(vec![error]))
@@ -143,8 +143,8 @@ impl TreeSitterParser {
                     vec![ParseError::new(
                         ErrorCode::ParseFailed,
                         Severity::Error,
-                        SourceLocation::from_offsets(0, input.len()),
-                        ErrorContext::new(input, 0..input.len(), input),
+                        DiagnosticLocation::from_offsets(0, input.len()),
+                        ErrorContext::new(input, talkbank_model::Span::new(0, input.len()), input),
                         "Parser returned no result and emitted no diagnostics",
                     )]
                 } else {

@@ -8,7 +8,6 @@
 //! - [Long Event](https://talkbank.org/0info/manuals/CHAT.html#LongEvent)
 
 use super::WriteChat;
-use crate::Span;
 use crate::string_newtype;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -96,9 +95,9 @@ pub struct LongFeatureBegin {
     pub label: LongFeatureLabel,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl LongFeatureBegin {
@@ -106,19 +105,11 @@ impl LongFeatureBegin {
     ///
     /// Parser/test code can use this constructor before source offsets are
     /// attached; semantic behavior depends only on the label payload.
-    pub fn new(label: impl Into<LongFeatureLabel>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, label: impl Into<LongFeatureLabel>) -> Self {
         Self {
             label: label.into(),
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata used by diagnostics.
-    ///
-    /// Span values do not affect begin/end pairing semantics.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 }
 
@@ -183,9 +174,9 @@ pub struct LongFeatureEnd {
     pub label: LongFeatureLabel,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl LongFeatureEnd {
@@ -193,19 +184,11 @@ impl LongFeatureEnd {
     ///
     /// Parser/test code can use this constructor before source offsets are
     /// attached; semantic behavior depends only on the label payload.
-    pub fn new(label: impl Into<LongFeatureLabel>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, label: impl Into<LongFeatureLabel>) -> Self {
         Self {
             label: label.into(),
-            span: Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata used by diagnostics.
-    ///
-    /// Span values do not affect begin/end pairing semantics.
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
-        self
     }
 }
 

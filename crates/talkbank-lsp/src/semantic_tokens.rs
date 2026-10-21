@@ -73,7 +73,7 @@ impl SemanticTokensProvider {
                 let content = part.strip_suffix('\n').unwrap_or(part);
                 let content = content.strip_suffix('\r').unwrap_or(content);
                 if !content.is_empty() {
-                    let position = index.offset_to_position(offset as u32);
+                    let position = index.offset_to_position(offset);
                     lsp_tokens.push(SemanticToken {
                         delta_line: position.line - previous.line,
                         delta_start: if position.line == previous.line {

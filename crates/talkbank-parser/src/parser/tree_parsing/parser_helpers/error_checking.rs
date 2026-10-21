@@ -5,7 +5,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, FromNodeKind, HeaderSepNode, NodeSlot, RecoveryNode, SourceBindingError,
     SourceSlice, extract_header_sep,
@@ -14,6 +14,7 @@ use crate::node_types::{GRA_DEPENDENT_TIER, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEP
 use tree_sitter::Node;
 
 use super::error_analysis::analyze_readable_dependent_error;
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::helpers::ReadableRecovery;
 
 /// Admit a header separator's generated MISSING-tab slot before diagnosing it.
@@ -32,8 +33,8 @@ fn missing_header_tab_error(node: Node, source: &str) -> Option<ParseError> {
         ParseError::new(
             ErrorCode::SyntaxError,
             Severity::Error,
-            SourceLocation::from_offsets(missing.start_byte(), missing.end_byte()),
-            ErrorContext::new(source, missing.byte_range(), "header separator"),
+            DiagnosticLocation::new(span_of(missing)),
+            ErrorContext::new(source, span_of(missing), "header separator"),
             "Header colon must be followed by a TAB; tree-sitter inserted the missing separator",
         )
         .with_suggestion("Insert a TAB immediately after the header colon"),
@@ -66,8 +67,8 @@ pub(crate) fn check_for_errors_recursive_with_context(
         errors.push(ParseError::new(
             ErrorCode::MissingRequiredElement,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), ""),
             format!(
                 "Missing required '{}'{} at byte {} (tree-sitter error recovery)",
                 node.kind(),
@@ -191,8 +192,8 @@ pub(crate) fn collect_recovery_nodes_retaining<'tree>(
             ParseError::new(
                 ErrorCode::UnparsableContent,
                 Severity::Error,
-                SourceLocation::from_offsets(start, end),
-                ErrorContext::new(source, start..end, text),
+                DiagnosticLocation::from_offsets(start, end),
+                ErrorContext::new(source, talkbank_model::Span::new(start, end), text),
                 format!("Unparsable content: tree-sitter could not parse '{first_line}'"),
             )
             .with_suggestion(
@@ -224,8 +225,8 @@ pub(crate) fn collect_recovery_nodes_retaining<'tree>(
             ParseError::new(
                 ErrorCode::MissingRequiredElement,
                 Severity::Error,
-                SourceLocation::from_offsets(start, end),
-                ErrorContext::new(source, start..end, ""),
+                DiagnosticLocation::from_offsets(start, end),
+                ErrorContext::new(source, talkbank_model::Span::new(start, end), ""),
                 format!(
                     "Missing required '{}': the document is incomplete here and was only \
                      parsed via tree-sitter recovery (recovery is not validity)",

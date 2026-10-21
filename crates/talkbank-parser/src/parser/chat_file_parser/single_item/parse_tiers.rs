@@ -6,10 +6,7 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use talkbank_model::{
-    ErrorCode, ErrorCollector, ErrorContext, ParseError, ParseErrors, Severity, SourceLocation,
-    Span,
-};
+use talkbank_model::{ErrorCode, ErrorCollector, ParseErrors, Severity};
 
 use super::TreeSitterParser;
 use crate::api::fragment::WrappedFragment;
@@ -65,52 +62,48 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
     // - WrappedFragment owns the source and its coordinate projection
     // - tier_sink: Collects errors to check if parsing succeeded
     let prefix = "@UTF8\n@Begin\n*CHI:\ta b c d e f g h i j k l m n o p q r s t u v w x y z .\n";
-    let fragment = WrappedFragment::new(&[prefix], input, "\n@End", 0)?;
+    let fragment = WrappedFragment::local(&[prefix], input, "\n@End")?;
 
-    // Project diagnostics through the same owner that will rebase the model.
+    // Diagnostics are projected by the same owner that will rebase the model.
     let tier_sink = ErrorCollector::new();
-    let adjusting_sink = fragment.error_sink(&tier_sink);
 
-    let file = parser.parse_chat_file_streaming(fragment.source(), &adjusting_sink);
-    drop(adjusting_sink);
+    let file = fragment.parse_file(parser, &tier_sink);
     let error_vec = tier_sink.into_vec();
 
-    // Extract the dependent tier from the parsed file
-    // We prioritize extracting the tier even if there were some parsing errors,
-    // since the tier content itself may have parsed successfully.
-    if let Some(utterance) = file.utterances().next() {
-        if let Some(entry) = utterance.dependent_tiers.first() {
-            Ok(fragment.rebase(entry.tier.clone()))
-        } else {
-            // No dependent tier found - this means parsing actually failed
-            if error_vec.is_empty() {
-                let span = Span::from(0..input.len());
-                let err = ParseError::new(
-                    ErrorCode::UnknownError,
-                    Severity::Error,
-                    SourceLocation::new(span),
-                    ErrorContext::new(input, 0..input.len(), ""),
-                    "No dependent tier found in parsed output",
-                );
-                Err(ParseErrors::from(vec![err]))
-            } else {
-                Err(ParseErrors::from(error_vec))
-            }
-        }
+    // Extract the dependent tier from the parsed file. The tier is preferred
+    // even when there were diagnostics, since its own content may have parsed;
+    // the two ways of finding nothing are told apart in one projection, so
+    // no borrowed view of the synthetic file is needed.
+    enum Found {
+        NoUtterance,
+        NoTier,
+        Tier(DependentTier),
+    }
+    let found = file.map(|file| match file.utterances().next() {
+        None => Found::NoUtterance,
+        Some(utterance) => match utterance.dependent_tiers.first() {
+            None => Found::NoTier,
+            Some(entry) => Found::Tier(entry.tier.clone()),
+        },
+    });
+    let missing = match found.try_map(|found| match found {
+        Found::Tier(tier) => Ok(tier),
+        Found::NoUtterance => Err("No utterance found in parsed output"),
+        Found::NoTier => Err("No dependent tier found in parsed output"),
+    }) {
+        Ok(tier) => return Ok(fragment.rebase(tier)),
+        Err(missing) => missing,
+    };
+    // Nothing to extract: the parse's own diagnostics explain it when there
+    // are any; otherwise the absence itself is the finding.
+    if error_vec.is_empty() {
+        Err(ParseErrors::from(vec![fragment.whole_input_error(
+            ErrorCode::UnknownError,
+            Severity::Error,
+            "",
+            missing,
+        )]))
     } else {
-        // No utterance found
-        if error_vec.is_empty() {
-            let span = Span::from(0..input.len());
-            let err = ParseError::new(
-                ErrorCode::UnknownError,
-                Severity::Error,
-                SourceLocation::new(span),
-                ErrorContext::new(input, 0..input.len(), ""),
-                "No utterance found in parsed output",
-            );
-            Err(ParseErrors::from(vec![err]))
-        } else {
-            Err(ParseErrors::from(error_vec))
-        }
+        Err(ParseErrors::from(error_vec))
     }
 }

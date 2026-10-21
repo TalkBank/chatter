@@ -1,13 +1,13 @@
 //! Public entry points lex caller-owned source into temporary token storage.
 //!
 //! Chumsky parsers borrow tokens only during parsing. Returned AST slices borrow
-//! the original input; reconstructed word text is owned by the AST. All token
-//! and recovery buffers are dropped when parsing returns.
+//! the original input, assembled words included. All token and recovery
+//! buffers are dropped when parsing returns.
 //!
 //! `parse_chat_file_to_model` also converts the AST into a fully owned model.
 
 use crate::ast::*;
-use talkbank_model::{ErrorSink, ParseError, Severity, SourceLocation, Span};
+use talkbank_model::{DiagnosticLocation, ErrorSink, ParseError, Severity, Span};
 
 use super::{dependent_tiers, file, headers, lex_to_tokens, main_tier};
 
@@ -33,20 +33,38 @@ pub fn parse_chat_file_to_model(
 
 /// Parse a main tier string starting with '*'.
 pub fn parse_main_tier(input: &str) -> Option<MainTier<'_>> {
-    parse_main_tier_with_source(input).map(|(tier, _source)| tier)
+    parse_main_tier_with_source(input).map(|line| line.main_tier.tier().clone())
 }
 
-/// Parse a main tier and return its original borrowed source alongside it.
-/// The source is identical to `input`; this paired API is retained for callers
-/// that pass both results directly to source-aware model conversion.
-pub fn parse_main_tier_with_source(input: &str) -> Option<(MainTier<'_>, &str)> {
+/// One main tier parsed from a caller's line, with what model conversion
+/// needs beside the AST: the located tier and the source its slices point
+/// into, already admitted as the text the converter locates against.
+pub struct ParsedMainTierLine<'a> {
+    /// The parsed tier with the line machine's locations for it.
+    pub main_tier: crate::ast::LocatedMainTier<'a>,
+    /// The caller's input, which the AST slices point into.
+    pub source: crate::source_text::SourceText<'a>,
+}
+
+/// Parse a main tier and return it located, with its source.
+///
+/// `None` when the grammar refuses the line. The line machine then places
+/// the line it accepted; that cannot fail for a line the grammar accepted,
+/// since both read the same unfiltered token stream here.
+pub fn parse_main_tier_with_source(input: &str) -> Option<ParsedMainTierLine<'_>> {
     use chumsky::Parser as _;
-    let (tokens, source) = crate::parser::lex_to_tokens_and_source(input, 0);
-    main_tier::main_tier_parser()
-        .parse(tokens.as_slice())
+    let lexed = super::LexedSource::new(input, 0);
+    let tokens = lexed.tokens();
+    let source = lexed.source_text();
+    let tier = main_tier::main_tier_parser(source)
+        .parse(tokens)
         .into_result()
-        .ok()
-        .map(|tier| (tier, source))
+        .ok()?;
+    let locations = lexed.main_tier_locations(0..tokens.len())?;
+    Some(ParsedMainTierLine {
+        main_tier: crate::ast::LocatedMainTier::new(tier, locations),
+        source,
+    })
 }
 
 /// Parse an @ID header content (after `@ID:\t`).
@@ -82,10 +100,13 @@ pub fn parse_participants_header<'a>(
 /// Parse a single word (content item) from main tier content.
 pub fn parse_word(input: &str) -> Option<WordWithAnnotations<'_>> {
     use chumsky::Parser as _;
-    let tokens = lex_to_tokens(input, crate::lexer::COND_MAIN_CONTENT);
-    let word_parser =
-        chumsky::primitive::choice((main_tier::rich_word(), main_tier::subtoken_word()));
-    let item = word_parser.parse(tokens.as_slice()).into_result().ok()?;
+    let lexed = super::LexedSource::new(input, crate::lexer::COND_MAIN_CONTENT);
+    let source = lexed.source_text();
+    let word_parser = chumsky::primitive::choice((
+        main_tier::rich_word(source),
+        main_tier::subtoken_word(source),
+    ));
+    let item = word_parser.parse(lexed.tokens()).into_result().ok()?;
     match item {
         ContentItem::Word(w) => Some(w),
         _ => None,
@@ -175,8 +196,12 @@ fn parse_text_tier_in_condition<'a>(
             errors.report(ParseError::new(
                 talkbank_model::ErrorCode::UnparsableContent,
                 Severity::Error,
-                SourceLocation::from_offsets(0, input.len()),
-                talkbank_model::ErrorContext::new(input, 0..input.len(), "text-tier body"),
+                DiagnosticLocation::from_offsets(0, input.len()),
+                talkbank_model::ErrorContext::new(
+                    input,
+                    talkbank_model::Span::new(0, input.len()),
+                    "text-tier body",
+                ),
                 "Native text-tier grammar cannot consume the complete caller input",
             ));
             TextTierParsed {
@@ -268,13 +293,13 @@ fn report_header_colon_without_tab(input: &str, errors: &impl ErrorSink) {
             Some(' ') => "A space".to_owned(),
             Some(character) => format!("'{character}'"),
         };
-        let span_start = current_line_start.min(u32::MAX as usize) as u32;
-        let span_end = (current_line_start + line.len()).min(u32::MAX as usize) as u32;
+        let span_start = current_line_start;
+        let span_end = current_line_start + line.len();
         errors.report(
             ParseError::new(
                 talkbank_model::errors::codes::ErrorCode::SyntaxError,
                 Severity::Error,
-                SourceLocation::new(Span::new(span_start, span_end)),
+                DiagnosticLocation::new(Span::new(span_start, span_end)),
                 None,
                 format!("{found} after the header colon; CHAT requires a single TAB"),
             )

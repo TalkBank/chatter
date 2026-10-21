@@ -1,30 +1,19 @@
 # Panic audit: talkbank-transform
 
 **Status:** Reference
-**Last updated:** 2026-06-14 19:57 EDT
+**Last updated:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/panic-audit/talkbank-transform.md)
 
-See [README](README.md) for the shared policy. This page records the
-crate-specific panic surface.
+See [shared policy](README.md) for enforcement and verification limits.
+The package inherits the workspace restriction lints.
 
-## Surface
+[num_words/num2text.rs](../../crates/talkbank-transform/src/num_words/num2text.rs)
+contains a production `unwrap_used` allowance on `NUM2LANG`.
+Its `LazyLock` parses embedded `num2lang.json` when first accessed.
+The source comment identifies compile-time-embedded data as the rationale;
+embedding bytes does not itself establish that JSON parsing succeeds.
 
-The crate's production code carries **no** `unwrap()` / `expect()` /
-`panic!` sites. The deny-level lints (`unwrap_used`, `expect_used`,
-`panic`, `unreachable`, `todo`, `unimplemented`; see `Cargo.toml`
-`[lints.clippy]`) pass with **zero** inline `#[allow]` exceptions. The
-only such calls live in test code (exempted crate-wide by the
-`#![cfg_attr(test, allow(...))]` in `lib.rs`) and in rustdoc examples.
-
-The crate previously hosted a large justified production panic surface
-in the Batchalign ML modules: ASR post-processing, retokenization,
-neural morphosyntax, forced-alignment decisions, and evaluation. Those
-modules were extracted out of chatter, so the production panic surface
-is now empty. A contributor who adds an `unwrap()` / `expect()` to
-production code gets a hard clippy error, and there is no allowlist of
-justified exceptions to maintain.
-
-## Verification
-
-`just clippy`, which covers this crate along with every other. See
-[README](README.md#verification) for what it checks and why the per-crate
-command that used to sit here could not fail.
+Keep data validity and execution of initialization in the verification scope
+when changing this owner. The former zero-production-exception claim is not
+true for this source. Test-only allowances elsewhere remain separate.
+This guide does not certify all transformation paths, optional feature graphs
+or dependencies.

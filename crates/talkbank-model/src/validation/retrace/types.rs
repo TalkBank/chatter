@@ -5,8 +5,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
-use crate::Span;
-
 /// Classification of leaf content in utterance structure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LeafKind {
@@ -24,7 +22,7 @@ pub struct RetraceCheck {
     /// Where E370 reports: the marker's own bytes when the parser recorded
     /// them (`Retrace::marker_span`), else the retrace's span, which is dummy
     /// under a backend that keeps no offsets and suppresses the label.
-    pub marker_span: Span,
+    pub marker_location: crate::Location,
     /// Index in leaf stream after which content must appear
     pub after_leaf_index: usize,
 }

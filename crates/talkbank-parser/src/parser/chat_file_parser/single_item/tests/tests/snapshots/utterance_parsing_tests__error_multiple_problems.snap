@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/utterance.rs
+assertion_line: 212
 expression: result
 ---
 Err(
@@ -8,13 +9,12 @@ Err(
             ParseError {
                 code: TreeParsingError,
                 severity: Error,
-                location: SourceLocation {
+                location: Known {
                     span: Span {
                         start: 0,
                         end: 11,
                     },
-                    line: None,
-                    column: None,
+                    position: None,
                 },
                 context: Some(
                     ErrorContext {

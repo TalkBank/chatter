@@ -6,7 +6,7 @@
 //!
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 
-use crate::Span;
+use crate::Location;
 
 /// Default maximum number of differences to collect before truncating.
 ///
@@ -66,6 +66,6 @@ pub struct SemanticDifference {
     pub left: String,
     /// String representation of the right (compared) value.
     pub right: String,
-    /// Source span for error reporting.
-    pub span: Option<Span>,
+    /// Source location of the differing node, when a located node encloses it.
+    pub location: Location,
 }

@@ -48,9 +48,9 @@ pub(crate) fn parse_cod_tier_with_separator<'tree>(
 ) -> Result<crate::parser::tier_parsers::ParsedDependentTier<CodTier>, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let children = crate::parser::typed_cst::extract_envelope(typed)?;
     let separator =
-        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot());
+        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot())?;
     crate::parser::tree_parsing::parser_helpers::surface_displaced(
         &children.children().unexpected,
         node.kind(),
@@ -60,7 +60,7 @@ pub(crate) fn parse_cod_tier_with_separator<'tree>(
     let children = children.admit_ranges()?;
     let content = parse_optional_text_tier_content(&children, errors)?;
     Ok(crate::parser::tier_parsers::ParsedDependentTier::new(
-        CodTier::new(content).with_span(span),
+        CodTier::new(span, content),
         separator,
     ))
 }
@@ -73,7 +73,7 @@ mod tests {
     /// Tests cod tier construction.
     #[test]
     fn test_cod_tier_construction() {
-        let tier = CodTier::from_text("general coding");
+        let tier = CodTier::from_text(talkbank_model::Location::Unlocated, "general coding");
         assert!(!tier.content.is_empty());
         assert_eq!(tier.to_chat_string(), "%cod:\tgeneral coding");
     }
@@ -81,7 +81,7 @@ mod tests {
     /// Tests cod tier single index.
     #[test]
     fn test_cod_tier_single_index() {
-        let tier = CodTier::from_text("<1> atul");
+        let tier = CodTier::from_text(talkbank_model::Location::Unlocated, "<1> atul");
         assert!(!tier.content.is_empty());
         assert_eq!(tier.to_chat_string(), "%cod:\t<1> atul");
     }
@@ -89,7 +89,7 @@ mod tests {
     /// Tests cod tier compound index.
     #[test]
     fn test_cod_tier_compound_index() {
-        let tier = CodTier::from_text("<1+2> eje");
+        let tier = CodTier::from_text(talkbank_model::Location::Unlocated, "<1+2> eje");
         assert!(!tier.content.is_empty());
         assert_eq!(tier.to_chat_string(), "%cod:\t<1+2> eje");
     }
@@ -97,7 +97,7 @@ mod tests {
     /// Tests cod tier multiple indices.
     #[test]
     fn test_cod_tier_multiple_indices() {
-        let tier = CodTier::from_text("<1 , 3> atul");
+        let tier = CodTier::from_text(talkbank_model::Location::Unlocated, "<1 , 3> atul");
         assert!(!tier.content.is_empty());
         assert_eq!(tier.to_chat_string(), "%cod:\t<1 , 3> atul");
     }
@@ -105,7 +105,10 @@ mod tests {
     /// Tests cod tier complex.
     #[test]
     fn test_cod_tier_complex() {
-        let tier = CodTier::from_text("<2 , 7> ledet <8> Itamar");
+        let tier = CodTier::from_text(
+            talkbank_model::Location::Unlocated,
+            "<2 , 7> ledet <8> Itamar",
+        );
         assert!(!tier.content.is_empty());
         assert_eq!(tier.to_chat_string(), "%cod:\t<2 , 7> ledet <8> Itamar");
     }
@@ -113,7 +116,7 @@ mod tests {
     /// Tests cod tier empty.
     #[test]
     fn test_cod_tier_empty() {
-        let tier = CodTier::from_text("");
+        let tier = CodTier::from_text(talkbank_model::Location::Unlocated, "");
         assert!(tier.is_empty());
         assert_eq!(tier.to_chat_string(), "%cod:\t");
     }

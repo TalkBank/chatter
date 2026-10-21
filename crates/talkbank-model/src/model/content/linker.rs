@@ -16,7 +16,6 @@
 //! - [Lazy Overlap Linker](https://talkbank.org/0info/manuals/CHAT.html#LazyOverlap_Linker)
 
 use super::WriteChat;
-use crate::Span;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -106,26 +105,18 @@ pub struct Linker {
     /// Source byte span of the linker token. Provenance only: skipped in
     /// serialization, schema, and semantic equality. Used by source-spacing
     /// validation (E758) to detect a leading space before the linker.
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     #[semantic_eq(skip)]
-    pub span: Span,
+    pub location: crate::Location,
 }
 
 impl Linker {
-    /// Builds a linker of `kind` at `span`.
-    pub fn new(kind: LinkerKind, span: Span) -> Self {
-        Self { kind, span }
-    }
-}
-
-impl From<LinkerKind> for Linker {
-    /// Wraps a kind with a dummy span, for programmatic construction (tests,
-    /// builders) where the source position is not meaningful.
-    fn from(kind: LinkerKind) -> Self {
+    /// Builds a linker of `kind` at `location`.
+    pub fn new(location: impl Into<crate::Location>, kind: LinkerKind) -> Self {
         Self {
             kind,
-            span: Span::DUMMY,
+            location: location.into(),
         }
     }
 }
@@ -151,14 +142,14 @@ mod tests {
     /// Round-trips the lazy-overlap-precedes linker (`+<`).
     #[test]
     fn linker_lazy_overlap_precedes_roundtrip() {
-        let linker = Linker::from(LinkerKind::LazyOverlapPrecedes);
+        let linker = Linker::new(crate::Location::Unlocated, LinkerKind::LazyOverlapPrecedes);
         assert_eq!(linker.to_string(), "+<", "Linker +< roundtrip failed");
     }
 
     /// Round-trips the other-completion linker (`++`).
     #[test]
     fn linker_other_completion_roundtrip() {
-        let linker = Linker::from(LinkerKind::OtherCompletion);
+        let linker = Linker::new(crate::Location::Unlocated, LinkerKind::OtherCompletion);
         assert_eq!(
             linker.to_string(),
             "++",
@@ -169,21 +160,21 @@ mod tests {
     /// Round-trips the quick-uptake-overlap linker (`+^`).
     #[test]
     fn linker_quick_uptake_overlap_roundtrip() {
-        let linker = Linker::from(LinkerKind::QuickUptakeOverlap);
+        let linker = Linker::new(crate::Location::Unlocated, LinkerKind::QuickUptakeOverlap);
         assert_eq!(linker.to_string(), "+^", "Linker +^ roundtrip failed");
     }
 
     /// Round-trips the self-completion linker (`+,`).
     #[test]
     fn linker_self_completion_roundtrip() {
-        let linker = Linker::from(LinkerKind::SelfCompletion);
+        let linker = Linker::new(crate::Location::Unlocated, LinkerKind::SelfCompletion);
         assert_eq!(linker.to_string(), "+,", "Linker +, roundtrip failed");
     }
 
     /// Round-trips the quotation-follows linker (`+"`).
     #[test]
     fn linker_quotation_follows_roundtrip() {
-        let linker = Linker::from(LinkerKind::QuotationFollows);
+        let linker = Linker::new(crate::Location::Unlocated, LinkerKind::QuotationFollows);
         assert_eq!(linker.to_string(), "+\"", "Linker +\" roundtrip failed");
     }
 
@@ -192,8 +183,8 @@ mod tests {
     #[test]
     fn span_is_not_semantic() {
         use crate::model::SemanticEq;
-        let a = Linker::new(LinkerKind::SelfCompletion, Span::new(3, 5));
-        let b = Linker::new(LinkerKind::SelfCompletion, Span::new(40, 42));
+        let a = Linker::new(crate::Span::new(3, 5), LinkerKind::SelfCompletion);
+        let b = Linker::new(crate::Span::new(40, 42), LinkerKind::SelfCompletion);
         assert!(a.semantic_eq(&b), "linker span must not affect semantic eq");
     }
 }

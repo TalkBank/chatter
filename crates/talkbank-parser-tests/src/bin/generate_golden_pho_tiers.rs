@@ -47,7 +47,11 @@ fn pho_tier_content(tier: &PhoTier) -> String {
 
 /// Render `%pho` items as content-only tier text.
 fn pho_items_content(items: &[PhoItem]) -> String {
-    let tier = PhoTier::new(PhoTierType::Pho, items.to_vec());
+    let tier = PhoTier::new(
+        talkbank_model::Location::Unlocated,
+        PhoTierType::Pho,
+        items.to_vec(),
+    );
     pho_tier_content(&tier)
 }
 

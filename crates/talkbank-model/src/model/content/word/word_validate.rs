@@ -1,7 +1,7 @@
 //! [`Validate`] implementations for [`Word`] and [`WordContents`].
 
 use crate::validation::ValidationContext;
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
 use super::content::WordContent;
 use super::word_contents::WordContents;
@@ -15,25 +15,13 @@ impl crate::validation::Validate for WordContents {
         errors: &impl crate::ErrorSink,
     ) {
         if self.0.is_empty() {
-            let span = match context.field_span {
-                Some(span) => span,
-                None => crate::Span::from_usize(0, 0),
-            };
-            let location = match context.field_span {
-                Some(span) => crate::SourceLocation::new(span),
-                None => crate::SourceLocation::at_offset(0),
-            };
-            // DEFAULT: Missing field text is reported as empty to match the offending value.
-            let source_text = context.field_text.clone().unwrap_or_default();
-            // DEFAULT: Missing label falls back to "word" for error messaging.
-            let label = context.field_label.unwrap_or("word");
-
+            let location = context.field_diagnostic_location();
             errors.report(
                 crate::ParseError::new(
                     crate::ErrorCode::EmptyWordContent,
                     crate::Severity::Error,
                     location,
-                    crate::ErrorContext::new(source_text.clone(), span, label),
+                    None,
                     "Word content cannot be empty",
                 )
                 .with_suggestion("Add at least one word content element"),
@@ -74,7 +62,7 @@ impl crate::validation::Validate for Word {
         self.content().validate(
             &context
                 .clone()
-                .with_field_span(self.span)
+                .with_field_location(self.location)
                 .with_field_text(self.raw_text())
                 .with_field_label("word"),
             errors,
@@ -84,11 +72,10 @@ impl crate::validation::Validate for Word {
         let cleaned = self.cleaned_text();
         if !structure::has_spoken_material(self) && self.untranscribed().is_none() {
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::EmptySpokenContent,
                     Severity::Error,
-                    SourceLocation::new(self.span),
-                    ErrorContext::new(cleaned, self.span, cleaned),
+                    self.location,
                     "Word has no spoken content",
                 )
                 .with_suggestion(
@@ -142,11 +129,10 @@ impl crate::validation::Validate for Word {
         if matches!(self.category, Some(crate::model::WordCategory::CAOmission)) {
             if !context.shared.ca_mode {
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::InvalidWordFormat,
                         Severity::Error,
-                        SourceLocation::new(self.span),
-                        ErrorContext::new(self.raw_text(), self.span, self.raw_text()),
+                        self.location,
                         "CA omission '(word)' used outside CA mode",
                     )
                     .with_suggestion(
@@ -167,11 +153,10 @@ impl crate::validation::Validate for Word {
             });
             if !has_spoken_text || has_invalid_lexical {
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::InvalidWordFormat,
                         Severity::Error,
-                        SourceLocation::new(self.span),
-                        ErrorContext::new(self.raw_text(), self.span, self.raw_text()),
+                        self.location,
                         "CA omission must include spoken text and must not contain shortenings",
                     )
                     .with_suggestion(
@@ -186,11 +171,10 @@ impl crate::validation::Validate for Word {
                 && matches!(self.content()[0], WordContent::Shortening(_));
             if is_standalone_shortening {
                 errors.report(
-                    ParseError::new(
+                    ParseError::at_location(
                         ErrorCode::InvalidWordFormat,
                         Severity::Error,
-                        SourceLocation::new(self.span),
-                        ErrorContext::new(self.raw_text(), self.span, self.raw_text()),
+                        self.location,
                         "Standalone shortening should be represented as CA omission in CA mode",
                     )
                     .with_suggestion(
@@ -207,11 +191,10 @@ impl crate::validation::Validate for Word {
         if let Some(intended) = structure::illegal_untranscribed_marker(self) {
             let suggested = intended.canonical();
             errors.report(
-                ParseError::new(
+                ParseError::at_location(
                     ErrorCode::IllegalUntranscribed,
                     Severity::Error,
-                    SourceLocation::new(self.span),
-                    ErrorContext::new(cleaned, self.span, cleaned),
+                    self.location,
                     format!(
                         "\"{}\" is not legal; did you mean to use \"{}\"?",
                         cleaned, suggested

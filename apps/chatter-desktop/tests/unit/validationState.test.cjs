@@ -119,7 +119,7 @@ function diagnostic(code, message, start = 1) {
     error: {
       code,
       severity: "Error",
-      location: { start, end: start + 1, line: 1, column: 1 },
+      location: { kind: "known", start, end: start + 1, line: 1, column: 1 },
       labels: [],
       message,
     },

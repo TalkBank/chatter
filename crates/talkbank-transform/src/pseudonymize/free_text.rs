@@ -1,6 +1,6 @@
 //! Unicode matching inside typed prose payloads, never raw CHAT structure.
 
-use talkbank_model::{DependentTier, Header, Span, WordText};
+use talkbank_model::{DependentTier, Header, WordText};
 use talkbank_parser::generated_traversal::{
     AsRawNode, RestOfLineNode, SourceSlice, TextSegmentNode,
 };
@@ -100,7 +100,12 @@ pub(super) fn plan<'input>(
     input: &'input PseudonymizationInput<'_, '_>,
 ) -> Result<Vec<FreeTextFinding<'input>>, FreeTextRefusal> {
     let mut findings = Vec::new();
-    for (index, (header, span)) in input.document().document().headers_with_spans().enumerate() {
+    for (index, (header, span)) in input
+        .document()
+        .document()
+        .headers_with_locations()
+        .enumerate()
+    {
         if header_is_prose(header) {
             inspect(
                 input,
@@ -116,7 +121,7 @@ pub(super) fn plan<'input>(
             if tier_is_prose(&entry.tier) {
                 inspect(
                     input,
-                    entry.span(),
+                    entry.location(),
                     ProseLocation::DependentTier {
                         utterance: utterance_index,
                         tier: tier_index,
@@ -133,15 +138,17 @@ pub(super) fn plan<'input>(
 
 fn inspect<'input>(
     input: &'input PseudonymizationInput<'_, '_>,
-    span: Span,
+    source: talkbank_model::Location,
     location: ProseLocation,
     owner: impl Fn() -> FreeTextOwner<'input>,
     findings: &mut Vec<FreeTextFinding<'input>>,
 ) -> Result<(), FreeTextRefusal> {
     let parsed = input.parsed_source();
+    // Text that cannot be placed in the source cannot be pseudonymized in it.
+    let span = source.span().ok_or(FreeTextRefusal)?;
     let node = parsed
         .root_node()
-        .named_descendant_for_byte_range(span.start as usize, span.end as usize)
+        .named_descendant_for_byte_range(span.start(), span.end())
         .ok_or(FreeTextRefusal)?;
     let root = parsed.bind(node).map_err(|_| FreeTextRefusal)?;
     for descendant in root.descendants() {

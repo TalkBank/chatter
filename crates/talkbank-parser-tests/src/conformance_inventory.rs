@@ -238,11 +238,13 @@ enum ShapeAxis {
     Range,
     /// `K: KindProof = Broad`.
     Kind,
+    /// `P: PresenceProof = BroadPresence`.
+    Presence,
 }
 
 impl ShapeAxis {
     /// The axis `param` declares, when it is a defaulted type parameter bounded
-    /// by exactly one of the two axis traits.
+    /// by exactly one of the closed axis traits.
     fn of(param: &GenericParam) -> Option<Self> {
         let GenericParam::Type(param) = param else {
             return None;
@@ -256,6 +258,7 @@ impl ShapeAxis {
         match trait_name.as_str() {
             "RangePhase" => Some(Self::Range),
             "KindProof" => Some(Self::Kind),
+            "PresenceProof" => Some(Self::Presence),
             _ => None,
         }
     }
@@ -272,7 +275,7 @@ fn names_tree_reading(generics: &syn::Generics) -> bool {
     if lifetime.lifetime.ident != "tree" {
         return false;
     }
-    let mut seen: Vec<ShapeAxis> = Vec::with_capacity(2);
+    let mut seen: Vec<ShapeAxis> = Vec::with_capacity(3);
     params.all(|param| match ShapeAxis::of(param) {
         Some(axis) if !seen.contains(&axis) => {
             seen.push(axis);

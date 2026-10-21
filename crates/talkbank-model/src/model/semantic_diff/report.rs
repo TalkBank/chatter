@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use super::context::SemanticDiffContext;
 use super::path::SemanticPath;
 use super::types::{DEFAULT_MAX_DIFFS, SemanticDiffKind, SemanticDifference};
-use crate::Span;
+use crate::Location;
 
 /// Collect and render semantic differences between two model values.
 ///
@@ -91,7 +91,7 @@ impl SemanticDiffReport {
         kind: SemanticDiffKind,
         left: impl Into<String>,
         right: impl Into<String>,
-        span: Option<Span>,
+        location: Location,
     ) {
         let remaining = match self.budget {
             ReportBudget::Available(slots) => slots,
@@ -106,7 +106,7 @@ impl SemanticDiffReport {
             kind,
             left: left.into(),
             right: right.into(),
-            span,
+            location,
         });
         self.budget = ReportBudget::remaining(remaining.get() - 1);
     }
@@ -132,7 +132,7 @@ impl SemanticDiffReport {
         right: impl Into<String>,
         ctx: &SemanticDiffContext,
     ) {
-        self.push(path, kind, left, right, ctx.current_span());
+        self.push(path, kind, left, right, ctx.current_location());
     }
 
     /// Renders all differences as a multi-line plain text report.
@@ -162,8 +162,8 @@ impl SemanticDiffReport {
                 first.left,
                 first.right
             ));
-            if let Some(span) = first.span {
-                out.push_str(&format!("  span:  {}..{}\n", span.start, span.end));
+            if let Some(span) = first.location.span() {
+                out.push_str(&format!("  span:  {}..{}\n", span.start(), span.end()));
             }
         }
 
@@ -185,8 +185,8 @@ Differences (first ",
                 diff.left,
                 diff.right
             ));
-            if let Some(span) = diff.span {
-                out.push_str(&format!("   span:  {}..{}\n", span.start, span.end));
+            if let Some(span) = diff.location.span() {
+                out.push_str(&format!("   span:  {}..{}\n", span.start(), span.end()));
             }
         }
 

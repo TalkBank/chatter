@@ -6,12 +6,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::{
-    AsRawNode, LongFeatureChoice, LongFeatureNode, extract_long_feature,
-    extract_long_feature_begin, extract_long_feature_end,
-};
+use crate::generated_traversal::{AsRawNode, LongFeatureNode};
 use crate::model::{LongFeatureBegin, LongFeatureEnd, LongFeatureLabel, UtteranceContent};
-use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 
 use super::{delimiter, marker_label, span_of};
@@ -25,21 +23,52 @@ use super::{delimiter, marker_label, span_of};
 /// cross-token begin/end pairing is validation's. Until 2026-09-09 this
 /// asserted child counts and kinds by position and matched `kind()`
 /// strings.
-pub(crate) fn parse_long_feature(
-    typed: LongFeatureNode<'_>,
-    source: &str,
+pub(crate) fn parse_long_feature<'tree>(
+    typed: crate::generated_traversal::SourceBound<'tree, '_, LongFeatureNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let children = extract_long_feature(typed);
-    surface_displaced(&children.unexpected, "long_feature", source, errors);
-    let SlotState::Present(choice) =
-        expect_present(children.content.slot(), "long_feature", source, errors)
-    else {
+    let source = typed.source();
+    // Admitted: every head of this choice is a rule, which tree-sitter never
+    // inserts MISSING, so the compiled grammar's proof leaves the slot no
+    // `Missing` state to handle.
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
+        typed.extract_canonical(),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
         return ParseOutcome::rejected();
     };
-    let built = match choice {
-        LongFeatureChoice::LongFeatureBegin(node) => {
-            let inner = extract_long_feature_begin(*node);
+    let children = associated.children();
+    surface_displaced(&children.unexpected, "long_feature", source, errors);
+    let choice = match associated.field_content().slot().view() {
+        crate::generated_traversal::SourceSlotView::Present(choice) => {
+            let Some(choice) = crate::parser::typed_cst::read_source_field(choice, errors) else {
+                return ParseOutcome::rejected();
+            };
+            choice
+        }
+        crate::generated_traversal::SourceSlotView::Error(bad) => {
+            errors.report(crate::parser::tree_parsing::helpers::unexpected_node_error(
+                bad.raw_node(),
+                source,
+                "long_feature",
+            ));
+            return ParseOutcome::rejected();
+        }
+        crate::generated_traversal::SourceSlotView::Absent(_) => return ParseOutcome::rejected(),
+    };
+    let built = match choice.view() {
+        crate::generated_traversal::LongFeatureChoiceBoundView::LongFeatureBegin(node) => {
+            let Ok(associated) = crate::parser::typed_cst::report_admission(
+                crate::parser::typed_cst::extract_inner(node),
+                node.raw_node(),
+                source,
+                errors,
+            ) else {
+                return ParseOutcome::rejected();
+            };
+            let inner = associated.children();
             surface_displaced(&inner.unexpected, "long_feature_begin", source, errors);
             // Every delimiter is checked (and reported) before the verdict;
             // a marker whose shape is not intact is not built.
@@ -60,21 +89,28 @@ pub(crate) fn parse_long_feature(
                 );
             let span = span_of(node.raw_node());
             marker_label(
-                inner.child_2.slot(),
+                associated.field_child_2().slot(),
                 "long_feature_begin",
-                "long_feature_begin_label",
-                source,
                 errors,
             )
             .filter(|_| intact)
             .map(|label| {
-                UtteranceContent::LongFeatureBegin(
-                    LongFeatureBegin::new(LongFeatureLabel::new(label)).with_span(span),
-                )
+                UtteranceContent::LongFeatureBegin(LongFeatureBegin::new(
+                    span,
+                    LongFeatureLabel::new(label),
+                ))
             })
         }
-        LongFeatureChoice::LongFeatureEnd(node) => {
-            let inner = extract_long_feature_end(*node);
+        crate::generated_traversal::LongFeatureChoiceBoundView::LongFeatureEnd(node) => {
+            let Ok(associated) = crate::parser::typed_cst::report_admission(
+                crate::parser::typed_cst::extract_inner(node),
+                node.raw_node(),
+                source,
+                errors,
+            ) else {
+                return ParseOutcome::rejected();
+            };
+            let inner = associated.children();
             surface_displaced(&inner.unexpected, "long_feature_end", source, errors);
             // Every delimiter is checked (and reported) before the verdict;
             // a marker whose shape is not intact is not built.
@@ -95,17 +131,16 @@ pub(crate) fn parse_long_feature(
                 );
             let span = span_of(node.raw_node());
             marker_label(
-                inner.child_2.slot(),
+                associated.field_child_2().slot(),
                 "long_feature_end",
-                "long_feature_end_label",
-                source,
                 errors,
             )
             .filter(|_| intact)
             .map(|label| {
-                UtteranceContent::LongFeatureEnd(
-                    LongFeatureEnd::new(LongFeatureLabel::new(label)).with_span(span),
-                )
+                UtteranceContent::LongFeatureEnd(LongFeatureEnd::new(
+                    span,
+                    LongFeatureLabel::new(label),
+                ))
             })
         }
     };

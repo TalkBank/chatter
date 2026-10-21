@@ -204,7 +204,8 @@ mod tests {
 
     #[test]
     fn cleaned_and_raw_text_remain_distinct() {
-        let word = Word::simple("hello").with_form_type(crate::model::FormType::C);
+        let word = Word::simple(crate::Location::Unlocated, "hello")
+            .with_form_type(crate::model::FormType::C);
         let raw = ChatRawText::from_word_raw(&word);
         let cleaned = ChatCleanedText::from_word(&word);
 
@@ -225,7 +226,7 @@ mod tests {
 
     #[test]
     fn cleaned_text_serializes_transparently() {
-        let word = Word::simple("test");
+        let word = Word::simple(crate::Location::Unlocated, "test");
         let text = ChatCleanedText::from_word(&word);
         let json = serde_json::to_string(&text).unwrap();
         assert_eq!(json, "\"test\"");

@@ -171,7 +171,12 @@ fn assert_reference_interior_edits(
         let selected: Vec<_> = match target {
             InteriorTarget::MainTiers => control
                 .utterances()
-                .map(|utterance| (utterance.main.span, "main"))
+                .map(|utterance| {
+                    (
+                        utterance.main.location.span().expect("located main tier"),
+                        "main",
+                    )
+                })
                 .collect(),
             InteriorTarget::DependentTiers => control
                 .utterances()
@@ -188,7 +193,12 @@ fn assert_reference_interior_edits(
                 .iter()
                 .filter_map(|line| {
                     use talkbank_model::model::{Header, Line};
-                    let Line::Header { header, span, .. } = line else {
+                    let Line::Header {
+                        header,
+                        location: span,
+                        ..
+                    } = line
+                    else {
                         return None;
                     };
                     let kind = match header.as_ref() {
@@ -197,17 +207,17 @@ fn assert_reference_interior_edits(
                         Header::ID(_) => "id",
                         _ => return None,
                     };
-                    Some((*span, kind))
+                    Some((span.span().expect("located header"), kind))
                 })
                 .collect(),
         };
         for (span, kind) in selected {
             let body = source
-                .get(span.start as usize..span.end as usize)
+                .get(span.start()..span.end())
                 .expect("source-bound UTF-8 edit target");
             for (offset, scalar) in body.char_indices() {
                 witnessed.insert(kind.to_owned());
-                let start = span.start as usize + offset;
+                let start = span.start() + offset;
                 let end = start + scalar.len_utf8();
                 let mut edited = source.to_owned();
                 edited.replace_range(start..end, "");

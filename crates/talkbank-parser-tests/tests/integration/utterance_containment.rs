@@ -45,13 +45,13 @@ fn utterance_containment_is_half_open_at_the_boundary() -> Result<(), TestError>
         .utterances()
         .next()
         .ok_or_else(|| TestError::Failure("no utterances".to_string()))?;
-    let end = first.main.span.end;
+    let end = first.main.location.span().expect("located").end();
 
     let at_end = file
         .utterance_containing(end)
         .ok_or_else(|| TestError::Failure("nothing at boundary".to_string()))?;
     assert_ne!(
-        at_end.main.span, first.main.span,
+        at_end.main.location, first.main.location,
         "offset at the first utterance's exclusive end must not resolve to it"
     );
     Ok(())
@@ -68,7 +68,7 @@ fn utterance_containing_finds_an_interior_offset() -> Result<(), TestError> {
         .utterances()
         .next()
         .ok_or_else(|| TestError::Failure("no utterances".to_string()))?;
-    let interior = first.main.span.start + 1;
+    let interior = first.main.location.span().expect("located").start() + 1;
     assert!(file.utterance_containing(interior).is_some());
     Ok(())
 }
@@ -81,6 +81,6 @@ fn utterance_containing_returns_none_past_the_last_utterance() -> Result<(), Tes
     let parser = make_parser()?;
     let file = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(source))?;
 
-    assert!(file.utterance_containing(source.len() as u32).is_none());
+    assert!(file.utterance_containing(source.len()).is_none());
     Ok(())
 }

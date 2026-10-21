@@ -137,10 +137,9 @@ fn find_in_scoped_tiers(
         }
 
         if search_main {
-            let span = utterance.main.span;
-            if !span.is_dummy() {
-                let hits =
-                    find_matches_in_span(text, span.start as usize, span.end as usize, matcher);
+            // Only a located main tier has text to search.
+            if let Some(span) = utterance.main.location.span() {
+                let hits = find_matches_in_span(text, span.start(), span.end(), matcher);
                 for (byte_offset, match_len) in hits {
                     if let Some(m) = make_match(
                         byte_offset,
@@ -165,13 +164,11 @@ fn find_in_scoped_tiers(
                     continue;
                 }
 
-                let span = dt.span();
-                if span.is_dummy() {
+                let Some(span) = dt.location().span() else {
                     continue;
-                }
+                };
 
-                let hits =
-                    find_matches_in_span(text, span.start as usize, span.end as usize, matcher);
+                let hits = find_matches_in_span(text, span.start(), span.end(), matcher);
                 for (byte_offset, match_len) in hits {
                     if let Some(m) = make_match(
                         byte_offset,

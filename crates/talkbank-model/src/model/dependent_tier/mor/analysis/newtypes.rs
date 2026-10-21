@@ -246,7 +246,7 @@ impl SemanticEq for MorFeature {
 
 impl SpanShift for MorFeature {
     /// Shifts spans after.
-    fn shift_spans_after(&mut self, _offset: u32, _delta: i32) {
+    fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {
         // No span fields
     }
 }

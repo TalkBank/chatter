@@ -40,8 +40,8 @@ group of files demonstrates:
 - `tiers/`: dependent tiers (`%mor`, `%gra`, `%pho`, `%wor`, etc.)
 - `ca/`: conversation analysis (overlaps, intonation)
 - `audio/`: audio-linked files with `%wor` word-level timing
-- `languages/`: one conversation per language, morphotagged with
-  `%mor`/`%gra`
+- `languages/`: language-specific and multilingual conversations,
+  code-switching and language-focused controls
 - `edge-cases/`: boundary and corner-case constructs
 - `word-features/`: feature-focused word-level fixtures
 
@@ -49,13 +49,24 @@ Do not maintain a second static fixture count here. The test harness discovers
 the current population. `just spec-status` reports specification claims and
 CHECK adjudication counts, not execution or corpus-representativeness coverage.
 
-## Validation
+## Focused checks
+
+Run these commands from the repository root:
 
 ```bash
 cargo test -p talkbank-parser-tests --test integration reference_corpus_parses::
 cargo test -p talkbank-parser-tests --test integration roundtrip_reference_corpus::
 just spec-status
 ```
+
+The first test selection requires a built model with no parser errors or
+internal faults; ordinary warnings are allowed. The second uses the same
+admission, parses, serializes and reparses each reference, then
+compares the two models semantically; it does not require byte-identical CHAT.
+Neither selection runs the model's full validation policy. `spec-status` reports
+specification claims, not a fresh execution of those claims. For validation and
+the broader verification workflow, follow the maintained
+[testing guide](../book/src/contributing/testing.md).
 
 ## Key Policies
 
@@ -78,4 +89,4 @@ just spec-status
 - [Testing](../book/src/contributing/testing.md)
 
 ---
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/corpus/README.md)

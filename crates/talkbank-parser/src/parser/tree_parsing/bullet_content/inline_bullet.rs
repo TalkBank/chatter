@@ -1,7 +1,8 @@
 //! Parser for structured `bullet` nodes in tier text.
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, BulletNode, SourceBound};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::media_bullet::parse_bullet_node;
 use talkbank_model::ParseOutcome;
 
@@ -51,8 +52,8 @@ pub(super) fn parse_inline_bullet<'tree>(
         errors.report(ParseError::new(
             ErrorCode::InvalidMediaBullet,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), ""),
             "Invalid bullet: both start and end timestamps are 0",
         ));
         return Ok(ParseOutcome::rejected());

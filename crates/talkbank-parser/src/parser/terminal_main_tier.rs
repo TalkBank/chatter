@@ -4,6 +4,7 @@ use crate::generated_traversal::{
     AsRawNode, ColonNode, ContentsNode, FromNodeKind, ParsedSource, SpeakerNode, StarNode, TabNode,
     TerminatorChoice,
 };
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::structure::{
     contents::parse_main_tier_contents, terminator::terminator_from_new_choice,
 };
@@ -81,18 +82,28 @@ impl<'tree> TerminalMainTier<'tree> {
             }
         };
         let end = self.ending.raw_node().end_byte();
-        let content = parse_main_tier_contents(contents, errors);
+        let content = match parse_main_tier_contents(contents, errors) {
+            Ok(content) => content,
+            Err(error) => {
+                crate::parser::typed_cst::report_cst_failure(
+                    self.first,
+                    parsed.source(),
+                    error,
+                    errors,
+                );
+                return ParseOutcome::Rejected;
+            }
+        };
         let mut main = MainTier::new(
+            talkbank_model::MainTierLocations {
+                line: Span::new(self.first.start_byte(), end).into(),
+                speaker: span_of(self.speaker.raw_node()).into(),
+                content: Span::new(self.colon.raw_node().end_byte(), end).into(),
+            },
             speaker.text().to_owned(),
             content,
             Some(terminator_from_new_choice(&self.ending)),
-        )
-        .with_span(Span::from_usize(self.first.start_byte(), end))
-        .with_speaker_span(Span::from_usize(
-            self.speaker.raw_node().start_byte(),
-            self.speaker.raw_node().end_byte(),
-        ))
-        .with_content_span(Span::from_usize(self.colon.raw_node().end_byte(), end));
+        );
         main.content.extract_terminal_bullet();
         ParseOutcome::Parsed(main)
     }

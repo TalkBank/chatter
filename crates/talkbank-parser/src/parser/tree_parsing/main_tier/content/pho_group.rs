@@ -27,8 +27,7 @@ pub(crate) fn parse_pho_group_content<'tree>(
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
+        crate::parser::typed_cst::extract_inner(typed),
         typed.raw_node(),
         source,
         errors,
@@ -48,17 +47,7 @@ pub(crate) fn parse_pho_group_content<'tree>(
             errors,
         );
     });
-    let group_items = match contents_of(associated.field_child_1().slot(), errors, |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected 'contents' at position 1 of main_pho_group, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    }) {
+    let group_items = match contents_of(associated.field_child_1().slot(), errors) {
         Some(contents) => parse_group_contents(&contents, errors),
         None => Vec::new(),
     };

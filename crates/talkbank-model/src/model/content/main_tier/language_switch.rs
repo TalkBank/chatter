@@ -88,7 +88,12 @@ impl MainTier {
         default_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
     ) -> Option<UnspannedSwitchTarget> {
-        let tier_language = self.content.language_code.as_ref().or(default_language);
+        let tier_language = self
+            .content
+            .language_code
+            .as_ref()
+            .map(|precode| &precode.code)
+            .or(default_language);
 
         // Collect ALL word-bearing items (including fillers `&~`, `&-`,
         // `&+` and other nonword tokens), not just MOR-bearing ones. The

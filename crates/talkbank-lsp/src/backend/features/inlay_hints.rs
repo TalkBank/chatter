@@ -56,7 +56,11 @@ pub fn generate_alignment_hints(
     let index = LineIndex::new(text);
 
     for utterance in chat_file.utterances() {
-        let main_line = index.offset_to_position(utterance.main.span.start).line;
+        // An utterance with no source location has no line to hint on.
+        let Some(main_span) = utterance.main.location.span() else {
+            continue;
+        };
+        let main_line = index.offset_to_position(main_span.start()).line;
         if main_line < range.start.line || main_line > range.end.line {
             continue;
         }
@@ -70,7 +74,7 @@ pub fn generate_alignment_hints(
         {
             let counts = MismatchCounts::from_pairs(mor_result.pairs());
             hints.push(alignment_hint(
-                index.offset_to_position(utterance.main.span.end),
+                index.offset_to_position(main_span.end()),
                 format!(
                     " [alignment: {} main ↔ {} mor]",
                     counts.source, counts.target
@@ -82,14 +86,15 @@ pub fn generate_alignment_hints(
         if let Some(gra_result) = alignments.gra.as_ref()
             && !gra_result.is_error_free()
             && let Some(gra_tier) = utterance.gra_tier()
+            && let Some(gra_span) = gra_tier.location.span()
         {
-            let gra_line = index.offset_to_position(gra_tier.span.start).line;
+            let gra_line = index.offset_to_position(gra_span.start()).line;
             if gra_line < range.start.line || gra_line > range.end.line {
                 continue;
             }
             let counts = MismatchCounts::from_pairs(gra_result.pairs());
             hints.push(alignment_hint(
-                index.offset_to_position(gra_tier.span.end),
+                index.offset_to_position(gra_span.end()),
                 format!(
                     " [alignment: {} gra ↔ {} mor]",
                     counts.target, counts.source

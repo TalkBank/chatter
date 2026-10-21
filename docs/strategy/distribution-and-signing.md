@@ -1,8 +1,15 @@
 # Distribution & Code Signing Strategy
 
-**Status:** Current (state-of-the-world below); the phased proposal and
-per-release decision log that follow are retained as historical context.
-**Last updated:** 2026-07-07 21:20 EDT
+**Status:** Historical decisions and release evidence; not an execution runbook
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/strategy/distribution-and-signing.md)
+
+For current installation and security-warning guidance, use
+[Installation](../../book/src/chatter/user-guide/installation.md). For release
+jobs, credentials and candidate checks, use
+[CI and Release](../../book/src/contributing/ci-and-release.md) and
+[coordinated publication/recovery](coordinated-release.md). The dated claims,
+tool versions, pricing, bypass instructions and unchecked proposals below are
+retained history, not current recommendations or proof of release readiness.
 
 ## State of the world (as of the 0.3.0 release)
 
@@ -399,9 +406,10 @@ independent trust root**:
   never be updated again. It is stored with the rest of the signing
   material outside this repository, NEVER in any repo tree.
 - **Manifest hosting needs no new server.** `createUpdaterArtifacts: true`
-  makes the bundler emit update bundles plus detached `.sig` signatures
-  (macOS `.app.tar.gz`, Windows `-setup.nsis.zip`, Linux
-  `.AppImage.tar.gz`). The endpoint is a static `latest.json` published on
+  makes the bundler emit v2 update bundles plus detached `.sig` signatures
+  (macOS `.app.tar.gz`, Windows `-setup.exe`, Linux `.AppImage`). None is a
+  zip or a gzipped AppImage, which is why the desktop crate builds the updater
+  plugin without its `zip` feature. The endpoint is a static `latest.json` published on
   the GitHub Release:
   `https://github.com/TalkBank/chatter/releases/latest/download/latest.json`.
   The release workflow generates and uploads it alongside the bundles.

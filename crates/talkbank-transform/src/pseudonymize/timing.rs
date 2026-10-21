@@ -1,8 +1,6 @@
 //! Source-bound `%wor` proposals only after count and lexical corroboration.
 
-use talkbank_model::alignment::{
-    WorTimingBinding, WorTimingCorrespondence, corroborate_wor_timing,
-};
+use talkbank_model::alignment::{WorTimingCorrespondence, corroborate_wor_timing};
 use talkbank_model::{DependentTier, WorTier, Word};
 
 use super::PseudonymizationInput;
@@ -15,8 +13,6 @@ pub enum TimingRefusal {
     CountDrift,
     /// Equal counts conceal differing lexical content.
     LexicalDrift,
-    /// A present tier unexpectedly failed to bind.
-    MissingBinding,
     /// Aligned word decisions or their source fields could not transfer safely.
     UnsafeWord(super::WordRefusal),
 }
@@ -83,12 +79,9 @@ pub(super) fn plan<'input>(
             let DependentTier::Wor(tier) = &entry.tier else {
                 continue;
             };
-            let outcome = match utterance.main.wor_projection().bind_timing(Some(tier)) {
-                WorTimingBinding::Missing(_) => {
-                    TimingOutcome::Refused(TimingRefusal::MissingBinding)
-                }
-                WorTimingBinding::Drifted(_) => TimingOutcome::Refused(TimingRefusal::CountDrift),
-                WorTimingBinding::CountMatched(matched) => match corroborate_wor_timing(matched) {
+            let outcome = match utterance.main.wor_projection().bind_present_timing(tier) {
+                Err(_) => TimingOutcome::Refused(TimingRefusal::CountDrift),
+                Ok(matched) => match corroborate_wor_timing(matched) {
                     WorTimingCorrespondence::Uncorroborated(_) => {
                         TimingOutcome::Refused(TimingRefusal::LexicalDrift)
                     }

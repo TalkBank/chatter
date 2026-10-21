@@ -53,7 +53,7 @@ pub(crate) fn check_overlap_index_values(
 ) {
     let index_context = context
         .clone()
-        .with_field_span(utterance.main.span)
+        .with_field_location(utterance.main.location)
         .with_field_label("overlap_index");
 
     // Collect all overlap points via the shared traversal.
@@ -64,6 +64,7 @@ pub(crate) fn check_overlap_index_values(
             // Validate the index value (must be 2-9).
             // Create a temporary OverlapPoint for the Validate trait.
             let point = crate::model::OverlapPoint::new(
+                crate::Location::Unlocated,
                 match region.kind {
                     OverlapRegionKind::Top => crate::model::OverlapPointKind::TopOverlapBegin,
                     OverlapRegionKind::Bottom => crate::model::OverlapPointKind::BottomOverlapBegin,

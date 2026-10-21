@@ -12,4 +12,6 @@
 mod helpers;
 
 // Re-export helpers for use in parser_api
-pub(super) use helpers::{wrapper_parse_generic_tier, wrapper_parse_tier};
+pub(super) use helpers::{
+    admit_wrapper, wrapper_parse_generic_tier, wrapper_parse_tier, wrapper_parse_tier_with_suffix,
+};

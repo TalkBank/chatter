@@ -142,6 +142,46 @@ mod discovery {
         );
     }
 
+    /// Root policy applies before directory lookup, including spellings that
+    /// would make the operating system follow a final directory link.
+    #[cfg(unix)]
+    #[test]
+    fn root_links_are_skipped_before_traversal_but_followed_when_requested() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("a.cha"), "").unwrap();
+        let linked = dir.path().join("linked");
+        std::os::unix::fs::symlink(&target, &linked).unwrap();
+        for root in [linked.clone(), linked.join(""), linked.join(".")] {
+            let calls = std::cell::Cell::new(0);
+            let skipped = walk_files(&root, Links::Skip, |_| {
+                calls.set(calls.get() + 1);
+                true
+            });
+            assert!(skipped.found().is_empty());
+            assert!(skipped.failures().is_empty());
+            assert_eq!(calls.get(), 0, "skipping must not offer target entries");
+            let followed = walk_files(&root, Links::Follow, is_chat_transcript_path);
+            assert!(followed.failures().is_empty());
+            assert_eq!(followed.found().len(), 1);
+            assert_eq!(followed.found()[0].relative(), Path::new("a.cha"));
+        }
+        for (name, target) in [
+            ("file-link", target.join("a.cha")),
+            ("dangling", dir.path().join("missing")),
+        ] {
+            let root = dir.path().join(name);
+            std::os::unix::fs::symlink(target, &root).unwrap();
+            let skipped = walk_files(&root, Links::Skip, |_| panic!("skipped root"));
+            assert!(skipped.found().is_empty());
+            assert!(skipped.failures().is_empty());
+            let followed = walk_files(&root, Links::Follow, |_| true);
+            assert!(followed.found().is_empty());
+            assert_eq!(followed.failures().len(), 1);
+        }
+    }
+
     /// A dangling link is a failure whatever its name: a link to an
     /// unmounted subcorpus (`Eng -> /unavailable/Eng`) hides every
     /// transcript under it, so it can never vanish from a run in silence.

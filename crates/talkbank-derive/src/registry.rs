@@ -1,9 +1,61 @@
 //! Registry syntax becomes admitted variants, ordered variants, then a complete registry.
 
 use proc_macro2::TokenStream;
-use syn::{Attribute, Data, DeriveInput, Fields, Ident, LitStr, Visibility};
+use quote::{ToTokens, quote, quote_spanned};
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::{Attribute, Data, DeriveInput, Fields, Ident, LitStr, Meta, Token, Visibility};
 
 use crate::metadata;
+
+/// Configuration-only projection, shared by every generated reference to its owner.
+/// Rust, not the macro host, evaluates the predicates for the target build.
+pub(crate) struct Configuration(Vec<Meta>);
+
+impl Configuration {
+    fn admit(attributes: &[Attribute]) -> syn::Result<Self> {
+        attributes
+            .iter()
+            .filter_map(|attribute| Self::project(&attribute.meta).transpose())
+            .collect::<syn::Result<Vec<_>>>()
+            .map(Self)
+    }
+
+    fn project(meta: &Meta) -> syn::Result<Option<Meta>> {
+        if meta.path().is_ident("cfg") {
+            return Ok(Some(meta.clone()));
+        }
+        if !meta.path().is_ident("cfg_attr") {
+            return Ok(None);
+        }
+        let list = meta.require_list()?;
+        let arguments = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+        let mut arguments = arguments.into_iter();
+        let Some(predicate) = arguments.next() else {
+            return Err(syn::Error::new_spanned(
+                meta,
+                "cfg_attr requires a predicate",
+            ));
+        };
+        let nested = arguments
+            .filter_map(|attribute| Self::project(&attribute).transpose())
+            .collect::<syn::Result<Vec<_>>>()?;
+        if nested.is_empty() {
+            return Ok(None);
+        }
+        syn::parse2(quote_spanned! {list.span()=>
+            cfg_attr(#predicate, #(#nested),*)
+        })
+        .map(Some)
+    }
+}
+
+impl ToTokens for Configuration {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let attributes = &self.0;
+        tokens.extend(quote! { #(#[#attributes])* });
+    }
+}
 
 /// Exclusive enforcement state; malformed syntax cannot become Active.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -71,6 +123,7 @@ pub(crate) struct RegistryVariant {
     code: CodeLiteral,
     enforcement: Enforcement,
     attributes: Vec<Attribute>,
+    configuration: Configuration,
 }
 
 impl RegistryVariant {
@@ -83,12 +136,16 @@ impl RegistryVariant {
     pub(crate) fn attributes(&self) -> &[Attribute] {
         &self.attributes
     }
+    pub(crate) fn configuration(&self) -> &Configuration {
+        &self.configuration
+    }
 }
 
 struct RegistryParts {
     name: Ident,
     visibility: Visibility,
     attributes: Vec<Attribute>,
+    configuration: Configuration,
     variants: Vec<RegistryVariant>,
 }
 
@@ -155,6 +212,7 @@ impl RegistrySyntax {
                 };
                 let code = CodeLiteral::admit(attr.parse_args::<LitStr>()?)?;
                 let enforcement = Enforcement::admit(&variant.attrs)?;
+                let configuration = Configuration::admit(&variant.attrs)?;
                 let attributes = variant
                     .attrs
                     .iter()
@@ -166,10 +224,12 @@ impl RegistrySyntax {
                     code,
                     enforcement,
                     attributes,
+                    configuration,
                 })
             })
             .collect::<syn::Result<Vec<_>>>()?;
         Ok(AdmittedVariants(RegistryParts {
+            configuration: Configuration::admit(&input.attrs)?,
             name: input.ident,
             visibility: input.vis,
             attributes: input.attrs,
@@ -224,7 +284,9 @@ impl OrderedVariants {
     }
 }
 
-/// The only registry input accepted by emission; construction stays in this module.
+/// Syntactically complete input; emission retains configuration and the compiler
+/// checks that the target's selected registry still contains its sentinel.
+/// Construction stays in this module.
 pub(crate) struct CompleteRegistry(RegistryParts);
 
 impl CompleteRegistry {
@@ -236,6 +298,9 @@ impl CompleteRegistry {
     }
     pub(crate) fn attributes(&self) -> &[Attribute] {
         &self.0.attributes
+    }
+    pub(crate) fn configuration(&self) -> &Configuration {
+        &self.0.configuration
     }
     pub(crate) fn variants(&self) -> &[RegistryVariant] {
         &self.0.variants

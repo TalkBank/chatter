@@ -14,9 +14,11 @@
 //!
 //! Run with: `cargo bench -p talkbank-parser`
 //!
-//! Note: `TreeSitterParser` is `!Sync`, so parser creation is included in the
-//! benchmark. This is intentional; it measures the full parse cost as callers
-//! experience it.
+//! Each case deliberately includes parser construction and public-model parsing.
+//! `!Sync` does not require this: a `bench_local` closure may reuse a parser on
+//! one thread. The re2c comparison target has separate constructor-inclusive
+//! and reused cases. These samples exclude file I/O and model validation; they
+//! are not an end-to-end CLI or cross-backend comparison.
 
 use talkbank_parser::TreeSitterParser;
 

@@ -100,8 +100,8 @@ impl PartialEq for CachedStr {
 #[derive(Clone, Debug, PartialEq, Deserialize, SemanticEq, SpanShift)]
 pub struct Word {
     /// Source location (byte offsets in original input).
-    #[serde(skip, default = "crate::Span::dummy")]
-    pub span: crate::Span,
+    #[serde(skip, default = "crate::Location::unlocated")]
+    pub location: crate::Location,
 
     /// Unique identifier for tier alignment.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -148,15 +148,18 @@ impl Word {
     ///
     /// Use this for testing or when constructing words without complex markers.
     /// This ensures invariants are maintained for simple cases.
-    pub fn simple(text: impl Into<smol_str::SmolStr>) -> Self {
+    pub fn simple(
+        location: impl Into<crate::Location>,
+        text: impl Into<smol_str::SmolStr>,
+    ) -> Self {
         let text = text.into();
-        Self::new_unchecked(text)
+        Self::new_unchecked(location, text)
     }
 
     /// Builds a plain word from nonempty lexical text. Both surface spelling
     /// and cleaned text are derived from the resulting structure.
-    pub fn new(text: WordText) -> Self {
-        Self::from_parts(text)
+    pub fn new(location: impl Into<crate::Location>, text: WordText) -> Self {
+        Self::from_parts(location, text)
     }
 
     /// Builds a word without punctuation-guard checks.
@@ -166,14 +169,17 @@ impl Word {
     /// assertion. [`Self::new`] accepts a nonempty proof, not a proof of CHAT
     /// validity. External CHAT tokens should use the fragment parser and
     /// propagate refusal rather than falling back to unchecked construction.
-    pub fn new_unchecked(cleaned_text: impl Into<smol_str::SmolStr>) -> Self {
-        Self::from_parts(WordText::new_unchecked(cleaned_text.into()))
+    pub fn new_unchecked(
+        location: impl Into<crate::Location>,
+        cleaned_text: impl Into<smol_str::SmolStr>,
+    ) -> Self {
+        Self::from_parts(location, WordText::new_unchecked(cleaned_text.into()))
     }
 
     /// The one place a plain `Word` is assembled from lexical content.
-    fn from_parts(cleaned: WordText) -> Self {
+    fn from_parts(location: impl Into<crate::Location>, cleaned: WordText) -> Self {
         Self {
-            span: crate::Span::DUMMY,
+            location: location.into(),
             word_id: None,
             content: WordContents::new(smallvec::smallvec![WordContent::Text(cleaned)]),
             category: None,
@@ -239,14 +245,6 @@ impl Word {
     /// category-aware change to `compute_untranscribed` harder to land.
     pub fn untranscribed(&self) -> Option<UntranscribedStatus> {
         UntranscribedStatus::from_marker_text(self.cleaned_text())
-    }
-
-    /// Sets source span metadata for diagnostics.
-    ///
-    /// Span metadata does not affect semantic equality or serialized content.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Sets an optional stable identifier used by alignment/metadata pipelines.
@@ -397,7 +395,7 @@ mod tests {
     /// complete mutation API rather than duplicating lexical behavior tests.
     #[test]
     fn content_replacement_paths_invalidate_cleaned_text() {
-        let mut indexed = Word::simple("old");
+        let mut indexed = Word::simple(crate::Location::Unlocated, "old");
         assert_eq!(indexed.cleaned_text(), "old");
         indexed.replace_content_at(
             0,
@@ -405,12 +403,12 @@ mod tests {
         );
         assert_eq!(indexed.cleaned_text(), "indexed");
 
-        let mut simple = Word::simple("old");
+        let mut simple = Word::simple(crate::Location::Unlocated, "old");
         assert_eq!(simple.cleaned_text(), "old");
         simple.replace_simple_text("simple");
         assert_eq!(simple.cleaned_text(), "simple");
 
-        let warmed = Word::simple("old");
+        let warmed = Word::simple(crate::Location::Unlocated, "old");
         assert_eq!(warmed.cleaned_text(), "old");
         let replaced = warmed.with_content(vec![WordContent::Text(
             WordText::new("builder").expect("a non-empty literal"),

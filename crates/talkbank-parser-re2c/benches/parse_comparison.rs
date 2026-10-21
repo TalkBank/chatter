@@ -10,14 +10,31 @@
     clippy::unimplemented
 )]
 
-//! Rigorous benchmark: TreeSitterParser vs Re2cParser (chumsky).
+//! Shared-model parsing benchmark: TreeSitterParser vs Re2cParser.
 //!
 //! Run: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 //!
 //! All content pre-loaded via `include_str!`. Zero I/O during timed sections.
 //! `divan::black_box()` prevents dead-code elimination.
+//! Both backends use ChatParser at offset zero with collected diagnostics.
+//! These timings do not include model validation or prove semantic equivalence.
 
+use talkbank_model::{ChatFile, ChatParser, ErrorCollector, ParseOutcome};
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_re2c::Re2cParser;
+
+/// Keep the result boundary identical: never compare a public model with a
+/// backend's borrowed intermediate AST. Diagnostic collection is timed too.
+fn parse_file(parser: &impl ChatParser, input: &str) -> ParseOutcome<ChatFile> {
+    observed(|errors| parser.parse_chat_file(input, 0, errors))
+}
+
+fn observed<T>(parse: impl FnOnce(&ErrorCollector) -> ParseOutcome<T>) -> ParseOutcome<T> {
+    let errors = ErrorCollector::new();
+    let outcome = parse(&errors);
+    drop(divan::black_box(errors.into_vec()));
+    outcome
+}
 
 fn main() {
     divan::main();
@@ -42,35 +59,35 @@ mod file_parse {
     fn basic_ts_ctor(b: divan::Bencher) {
         b.bench_local(|| {
             let p = TreeSitterParser::new().expect("grammar");
-            p.parse_chat_file(divan::black_box(BASIC))
+            parse_file(&p, divan::black_box(BASIC))
         });
     }
     #[divan::bench(name = "mor_gra__ts_ctor")]
     fn mor_gra_ts_ctor(b: divan::Bencher) {
         b.bench_local(|| {
             let p = TreeSitterParser::new().expect("grammar");
-            p.parse_chat_file(divan::black_box(MOR_GRA))
+            parse_file(&p, divan::black_box(MOR_GRA))
         });
     }
     #[divan::bench(name = "ca__ts_ctor")]
     fn ca_ts_ctor(b: divan::Bencher) {
         b.bench_local(|| {
             let p = TreeSitterParser::new().expect("grammar");
-            p.parse_chat_file(divan::black_box(INTONATION))
+            parse_file(&p, divan::black_box(INTONATION))
         });
     }
     #[divan::bench(name = "cjk__ts_ctor")]
     fn cjk_ts_ctor(b: divan::Bencher) {
         b.bench_local(|| {
             let p = TreeSitterParser::new().expect("grammar");
-            p.parse_chat_file(divan::black_box(CJK))
+            parse_file(&p, divan::black_box(CJK))
         });
     }
     #[divan::bench(name = "complex__ts_ctor")]
     fn complex_ts_ctor(b: divan::Bencher) {
         b.bench_local(|| {
             let p = TreeSitterParser::new().expect("grammar");
-            p.parse_chat_file(divan::black_box(COMPOUNDS))
+            parse_file(&p, divan::black_box(COMPOUNDS))
         });
     }
 
@@ -79,54 +96,50 @@ mod file_parse {
     #[divan::bench(name = "basic__ts_reuse")]
     fn basic_ts_reuse(b: divan::Bencher) {
         let p = TreeSitterParser::new().expect("grammar");
-        b.bench_local(|| p.parse_chat_file(divan::black_box(BASIC)));
+        b.bench_local(|| parse_file(&p, divan::black_box(BASIC)));
     }
     #[divan::bench(name = "mor_gra__ts_reuse")]
     fn mor_gra_ts_reuse(b: divan::Bencher) {
         let p = TreeSitterParser::new().expect("grammar");
-        b.bench_local(|| p.parse_chat_file(divan::black_box(MOR_GRA)));
+        b.bench_local(|| parse_file(&p, divan::black_box(MOR_GRA)));
     }
     #[divan::bench(name = "ca__ts_reuse")]
     fn ca_ts_reuse(b: divan::Bencher) {
         let p = TreeSitterParser::new().expect("grammar");
-        b.bench_local(|| p.parse_chat_file(divan::black_box(INTONATION)));
+        b.bench_local(|| parse_file(&p, divan::black_box(INTONATION)));
     }
     #[divan::bench(name = "cjk__ts_reuse")]
     fn cjk_ts_reuse(b: divan::Bencher) {
         let p = TreeSitterParser::new().expect("grammar");
-        b.bench_local(|| p.parse_chat_file(divan::black_box(CJK)));
+        b.bench_local(|| parse_file(&p, divan::black_box(CJK)));
     }
     #[divan::bench(name = "complex__ts_reuse")]
     fn complex_ts_reuse(b: divan::Bencher) {
         let p = TreeSitterParser::new().expect("grammar");
-        b.bench_local(|| p.parse_chat_file(divan::black_box(COMPOUNDS)));
+        b.bench_local(|| parse_file(&p, divan::black_box(COMPOUNDS)));
     }
 
     // ── Re2c (chumsky), zero-cost construction ─────────────────
 
     #[divan::bench(name = "basic__re2c")]
     fn basic_re2c(b: divan::Bencher) {
-        b.bench_local(|| talkbank_parser_re2c::parser::parse_chat_file(divan::black_box(BASIC)));
+        b.bench_local(|| parse_file(&Re2cParser, divan::black_box(BASIC)));
     }
     #[divan::bench(name = "mor_gra__re2c")]
     fn mor_gra_re2c(b: divan::Bencher) {
-        b.bench_local(|| talkbank_parser_re2c::parser::parse_chat_file(divan::black_box(MOR_GRA)));
+        b.bench_local(|| parse_file(&Re2cParser, divan::black_box(MOR_GRA)));
     }
     #[divan::bench(name = "ca__re2c")]
     fn ca_re2c(b: divan::Bencher) {
-        b.bench_local(|| {
-            talkbank_parser_re2c::parser::parse_chat_file(divan::black_box(INTONATION))
-        });
+        b.bench_local(|| parse_file(&Re2cParser, divan::black_box(INTONATION)));
     }
     #[divan::bench(name = "cjk__re2c")]
     fn cjk_re2c(b: divan::Bencher) {
-        b.bench_local(|| talkbank_parser_re2c::parser::parse_chat_file(divan::black_box(CJK)));
+        b.bench_local(|| parse_file(&Re2cParser, divan::black_box(CJK)));
     }
     #[divan::bench(name = "complex__re2c")]
     fn complex_re2c(b: divan::Bencher) {
-        b.bench_local(|| {
-            talkbank_parser_re2c::parser::parse_chat_file(divan::black_box(COMPOUNDS))
-        });
+        b.bench_local(|| parse_file(&Re2cParser, divan::black_box(COMPOUNDS)));
     }
 }
 
@@ -183,7 +196,7 @@ mod batch_parse {
         b.bench_local(|| {
             let p = TreeSitterParser::new().expect("grammar");
             for input in files {
-                let _ = p.parse_chat_file(divan::black_box(input));
+                drop(divan::black_box(parse_file(&p, divan::black_box(input))));
             }
         });
     }
@@ -193,7 +206,10 @@ mod batch_parse {
         let files = corpus();
         b.bench_local(|| {
             for input in files {
-                let _ = talkbank_parser_re2c::parser::parse_chat_file(divan::black_box(input));
+                drop(divan::black_box(parse_file(
+                    &Re2cParser,
+                    divan::black_box(input),
+                )));
             }
         });
     }
@@ -210,26 +226,34 @@ mod tier_parse {
     const MOR: &str = "pro|I v|want det|a n|cookie-PL .\n";
     const GRA: &str = "1|2|SUBJ 2|0|ROOT 3|2|DET 4|2|OBJ 5|2|PUNCT\n";
 
-    // TreeSitter fragment parsers use parse_main_tier(input) -> ParseResult
+    // Shared public-model fragment APIs, with the same diagnostic sink.
     #[divan::bench(name = "main_tier__ts")]
     fn main_tier_ts(b: divan::Bencher) {
         let p = TreeSitterParser::new().expect("grammar");
-        b.bench_local(|| p.parse_main_tier(divan::black_box(MAIN)));
+        b.bench_local(|| {
+            observed(|errors| ChatParser::parse_main_tier(&p, divan::black_box(MAIN), 0, errors))
+        });
     }
 
     #[divan::bench(name = "main_tier__re2c")]
     fn main_tier_re2c(b: divan::Bencher) {
-        b.bench_local(|| talkbank_parser_re2c::parser::parse_main_tier(divan::black_box(MAIN)));
+        b.bench_local(|| {
+            observed(|errors| Re2cParser.parse_main_tier(divan::black_box(MAIN), 0, errors))
+        });
     }
 
     #[divan::bench(name = "mor_tier__re2c")]
     fn mor_tier_re2c(b: divan::Bencher) {
-        b.bench_local(|| talkbank_parser_re2c::parser::parse_mor_tier(divan::black_box(MOR)));
+        b.bench_local(|| {
+            observed(|errors| Re2cParser.parse_mor_tier(divan::black_box(MOR), 0, errors))
+        });
     }
 
     #[divan::bench(name = "gra_tier__re2c")]
     fn gra_tier_re2c(b: divan::Bencher) {
-        b.bench_local(|| talkbank_parser_re2c::parser::parse_gra_tier(divan::black_box(GRA)));
+        b.bench_local(|| {
+            observed(|errors| Re2cParser.parse_gra_tier(divan::black_box(GRA), 0, errors))
+        });
     }
 }
 

@@ -31,7 +31,13 @@ pub fn parse_lenient(
     let error_vec = errors.into_vec();
     let error_vec = error_vec
         .into_iter()
-        .filter(|error| !generated.iter().any(|tier| tier.owns(error.location.span)))
+        // An unlocated diagnostic lies in no generated tier, so it is kept.
+        .filter(|error| {
+            !error
+                .location
+                .span()
+                .is_some_and(|span| generated.iter().any(|tier| tier.owns(span)))
+        })
         .collect();
     (chat_file, error_vec)
 }
@@ -55,15 +61,13 @@ impl<'file> GeneratedTier<'file> {
 
     fn owns(&self, diagnostic: talkbank_model::Span) -> bool {
         let owner = match self {
-            Self::Mor(tier) => tier.span,
-            Self::Gra(tier) => tier.span,
+            Self::Mor(tier) => tier.location,
+            Self::Gra(tier) => tier.location,
         };
-        !owner.is_dummy()
-            && !diagnostic.is_dummy()
-            && owner.start <= diagnostic.start
-            && diagnostic.start < owner.end
-            && diagnostic.start <= diagnostic.end
-            && diagnostic.end <= owner.end
+        // Only a located generated tier owns anything.
+        owner.span().is_some_and(|owner| {
+            owner.contains_span(diagnostic) && diagnostic.start() < owner.end()
+        })
     }
 }
 

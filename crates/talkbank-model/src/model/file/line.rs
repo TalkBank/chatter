@@ -25,7 +25,6 @@
 //! `Line` preserves exact source order.
 
 use super::Utterance;
-use crate::Span;
 use crate::{Header, TierSeparator, WriteChat};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -61,19 +60,20 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// Each line is parsed as a `Line::Header` or `Line::Utterance`:
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{Line, Header, Utterance, MainTier, BulletContent};
 ///
 /// let lines = vec![
-///     Line::header(Header::Utf8),
-///     Line::header(Header::Begin),
+///     Line::header(Location::Unlocated, Header::Utf8),
+///     Line::header(Location::Unlocated, Header::Begin),
 ///     // Languages header
 ///     // Participants header
 ///     // Utterance: *CHI: I want cookie .
 ///     // Dependent tier: %mor
-///     Line::header(Header::Comment { content: BulletContent::from_text("Between utterances") }),
+///     Line::header(Location::Unlocated, Header::Comment { content: BulletContent::from_text("Between utterances") }),
 ///     // Utterance: *MOT: you can have one .
 ///     // Dependent tier: %mor
-///     Line::header(Header::End),
+///     Line::header(Location::Unlocated, Header::End),
 /// ];
 /// ```
 ///
@@ -107,9 +107,9 @@ pub enum Line {
         header: Box<Header>,
 
         /// Source span for diagnostics (not serialized).
-        #[serde(skip, default = "crate::Span::dummy")]
+        #[serde(skip, default = "crate::Location::unlocated")]
         #[schemars(skip)]
-        span: Span,
+        location: crate::Location,
 
         /// The header's `colon tab trailing_space?` separator (E758
         /// provenance; not serialized). `TierSeparator::CLEAN` for a
@@ -126,37 +126,30 @@ pub enum Line {
 }
 
 impl Line {
-    /// Build a header line with dummy span metadata.
+    /// Build a header line with a clean separator.
     ///
-    /// Useful for fixtures and transformed model values where source offsets
-    /// are not retained.
-    pub fn header(header: Header) -> Self {
+    /// Parsers pass the header's span; fixtures and transformed values whose
+    /// source offsets are not retained pass `Location::Unlocated`.
+    pub fn header(location: impl Into<crate::Location>, header: Header) -> Self {
         Line::Header {
             header: Box::new(header),
-            span: Span::DUMMY,
+            location: location.into(),
             separator: TierSeparator::CLEAN,
         }
     }
 
-    /// Build a header line with explicit source span metadata.
-    ///
-    /// Parser-produced headers should prefer this to keep diagnostics precise.
-    pub fn header_with_span(header: Header, span: Span) -> Self {
-        Line::Header {
-            header: Box::new(header),
-            span,
-            separator: TierSeparator::CLEAN,
-        }
-    }
-
-    /// Build a header line with explicit source span and separator metadata.
+    /// Build a header line with its separator as written.
     ///
     /// Parser-produced headers that capture the `header_sep`'s trailing-space
-    /// provenance (E758) should prefer this over [`Self::header_with_span`].
-    pub fn header_with_separator(header: Header, span: Span, separator: TierSeparator) -> Self {
+    /// provenance (E758) use this instead of [`Self::header`].
+    pub fn header_with_separator(
+        location: impl Into<crate::Location>,
+        header: Header,
+        separator: TierSeparator,
+    ) -> Self {
         Line::Header {
             header: Box::new(header),
-            span,
+            location: location.into(),
             separator,
         }
     }
@@ -195,10 +188,10 @@ impl Line {
     }
 
     /// Return this line's source span.
-    pub fn span(&self) -> Span {
+    pub fn location(&self) -> crate::Location {
         match self {
-            Line::Header { span, .. } => *span,
-            Line::Utterance(u) => u.main.span,
+            Line::Header { location, .. } => *location,
+            Line::Utterance(u) => u.main.location,
         }
     }
 }

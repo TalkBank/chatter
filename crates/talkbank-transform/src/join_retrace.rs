@@ -367,8 +367,7 @@ impl<'a> EligibleJoin<'a> {
             terminator: v_terminator,
             postcodes: v_postcodes,
             bullet: v_bullet,
-            content_span: _,
-            language_code_span: _,
+            location: _,
         } = v.main.content;
 
         let unioned_bullet = union_bullets(u.main.content.bullet.as_ref(), v_bullet.as_ref());
@@ -394,7 +393,11 @@ impl<'a> EligibleJoin<'a> {
 /// result is `None`.
 fn union_bullets(u_bullet: Option<&Bullet>, v_bullet: Option<&Bullet>) -> Option<Bullet> {
     match (u_bullet, v_bullet) {
-        (Some(u), Some(v)) => Some(Bullet::new(u.timing.start_ms, v.timing.end_ms)),
+        (Some(u), Some(v)) => Some(Bullet::new(
+            talkbank_model::Location::Unlocated,
+            u.timing.start_ms,
+            v.timing.end_ms,
+        )),
         (Some(u), None) => Some(u.clone()),
         (None, Some(v)) => Some(v.clone()),
         (None, None) => None,

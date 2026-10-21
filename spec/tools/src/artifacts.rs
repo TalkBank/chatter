@@ -20,7 +20,9 @@
 //! rather than an argument, so a generator cannot be pointed at the wrong
 //! directory; [`build`](Artifact::build) returns the files rather than writing
 //! them, so the currency gate can answer a read-only question without writing
-//! anything; and one binary (`spec_gen`) both writes and checks from this list.
+//! anything. `model_sources_gen` writes bootstrap inputs before the runtime
+//! `spec_gen` is built; the latter checks the combined registry and writes only
+//! downstream artifacts.
 //!
 //! The first run of the check found the tree-sitter corpus already stale: it
 //! still held `errors/e311.txt` where the specs now produce `e311_1.txt` and
@@ -30,8 +32,8 @@
 //!
 //! # Adding an artifact
 //!
-//! Add a row. That is the whole change: the writer, the checker, the `just`
-//! recipes and the gate all iterate this slice. If a new artifact needs the
+//! Add a row to the appropriate phase: the writers and checker iterate these
+//! registries. If a new artifact needs the
 //! live parser or model, it belongs in `spec-runtime-tools`'s own registry
 //! instead, for the reason that crate exists.
 
@@ -125,21 +127,21 @@ pub struct Artifact {
     pub build: fn(&Path) -> Result<GeneratedFiles>,
 }
 
-/// Every artifact generated from `spec/` that needs no parser.
+/// Sources that must be written before compiling the runtime generators.
 ///
-/// Artifacts that RUN the parser live in `spec-runtime-tools`, which is the
-/// whole reason that crate is separate from this one. This said "needing the
-/// live `ErrorCode` enum" until R1's review; nothing in either half needs the
-/// enum any more, since it is generated here.
+/// `model_sources_gen` builds with only the source-generator package selected.
+/// The runtime writer checks these inputs but never writes them in-process.
+pub static BOOTSTRAP_ARTIFACTS: &[Artifact] = &[Artifact {
+    what: "talkbank-model's generated sources",
+    root: "crates/talkbank-model/src/errors",
+    // The model's error module is hand-authored apart from these two
+    // files, so claiming the directory would delete the rest of it.
+    ownership: Ownership::NamedFiles { retired: &[] },
+    build: build_model_sources,
+}];
+
+/// Source-rendered artifacts produced after fresh runtime observations exist.
 pub static ARTIFACTS: &[Artifact] = &[
-    Artifact {
-        what: "talkbank-model's generated sources",
-        root: "crates/talkbank-model/src/errors",
-        // The model's error module is hand-authored apart from these two
-        // files, so claiming the directory would delete the rest of it.
-        ownership: Ownership::NamedFiles { retired: &[] },
-        build: build_model_sources,
-    },
     Artifact {
         what: "tree-sitter corpus tests",
         root: "grammar/test/corpus/generated",
@@ -175,7 +177,10 @@ pub static ARTIFACTS: &[Artifact] = &[
 /// the caller named a root no artifact claims, which is a programming error at
 /// the call site rather than a runtime condition.
 pub fn artifact_for_root(root: &str) -> Option<&'static Artifact> {
-    ARTIFACTS.iter().find(|artifact| artifact.root == root)
+    BOOTSTRAP_ARTIFACTS
+        .iter()
+        .chain(ARTIFACTS)
+        .find(|artifact| artifact.root == root)
 }
 
 /// `spec/constructs`, under `repo_root`.
@@ -650,8 +655,8 @@ mod tests {
     /// signature here can see.
     #[test]
     fn no_artifact_root_contains_another() {
-        for outer in ARTIFACTS {
-            for inner in ARTIFACTS {
+        for outer in BOOTSTRAP_ARTIFACTS.iter().chain(ARTIFACTS) {
+            for inner in BOOTSTRAP_ARTIFACTS.iter().chain(ARTIFACTS) {
                 if std::ptr::eq(outer, inner) {
                     continue;
                 }

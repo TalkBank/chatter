@@ -12,11 +12,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Codes>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Part_of_Speech>
 //!
-//! ## Benefits
+//! ## Allocation and lifetime
 //!
-//! - **Memory savings**: 50-200MB for large corpora (5-20% reduction)
-//! - **Faster cloning**: Arc::clone is O(1) atomic increment
-//! - **Cache-friendly**: Interned strings are deduplicated in memory
+//! Lookup hits clone a shared allocation instead of copying its string bytes.
+//! The maps retain distinct symbols for the process lifetime; memory savings
+//! and contention depend on the workload and are not fixed guarantees.
+//! Initialization is once-only, but map access is still synchronized.
 //!
 //! ## Implementation
 //!
@@ -51,8 +52,10 @@ impl StringInterner {
 
     /// Intern a string, returning a reference-counted shared string.
     ///
-    /// If the string has been interned before, returns the existing Arc.
-    /// Otherwise, creates a new Arc and stores it for future use.
+    /// A lookup hit clones the stored Arc. A miss creates and inserts a new
+    /// allocation. Lookup and insertion are separate, so concurrent misses may
+    /// return equal strings with distinct allocations. Compare content, not
+    /// pointer identity; interning is not a provenance capability.
     pub fn intern(&self, s: &str) -> Arc<str> {
         // Fast path: check if already interned
         if let Some(entry) = self.cache.get(s) {

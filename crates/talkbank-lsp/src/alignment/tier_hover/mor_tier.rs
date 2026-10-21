@@ -29,7 +29,7 @@ pub fn find_mor_tier_hover_info(
         .and_then(|alignments| alignments.mor.as_ref());
 
     let offset = position_to_offset(document, position);
-    let mor_idx = find_mor_item_index_at_offset(tree, mor_tier.span, offset)?;
+    let mor_idx = find_mor_item_index_at_offset(tree, mor_tier.location.span()?, offset)?;
 
     // Get the mor item
     let mor_item = mor_tier.items().get(mor_idx)?;

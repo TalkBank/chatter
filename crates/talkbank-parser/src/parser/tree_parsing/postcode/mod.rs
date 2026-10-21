@@ -6,9 +6,10 @@
 //!   it has no named anchor, `#_Toc208734963` in the 2026-09-03 build)
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, PostcodeNode, SourceBound};
 use crate::model::Postcode;
+use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
 
 /// Parse a single postcode node [+ text].
@@ -35,15 +36,13 @@ pub fn parse_postcode_node<'tree>(
         .map(|s| s.trim_end());
 
     match code {
-        Some(c) if !c.is_empty() => ParseOutcome::parsed(Postcode::new(c).with_span(
-            talkbank_model::Span::from_usize(node.start_byte(), node.end_byte()),
-        )),
+        Some(c) if !c.is_empty() => ParseOutcome::parsed(Postcode::new(span_of(node), c)),
         _ => {
             errors.report(ParseError::new(
                 ErrorCode::InvalidPostcode,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), "postcode"),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, span_of(node), "postcode"),
                 "Postcode is missing required content".to_string(),
             ));
             ParseOutcome::rejected()
@@ -86,8 +85,8 @@ mod tests {
                 panic!("reference postcode must parse");
             };
             assert_eq!(
-                value.span,
-                talkbank_model::Span::from_usize(node.start_byte(), node.end_byte())
+                value.location,
+                talkbank_model::Location::Located(span_of(node))
             );
             assert!(errors.to_vec().is_empty());
             assert!(

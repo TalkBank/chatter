@@ -115,9 +115,9 @@ fn unsupported_thumbnail_spec_refuses_admission_without_losing_speech() {
     assert_eq!(diagnostic.code, ErrorCode::UnknownHeader);
     assert_eq!(diagnostic.severity, Severity::Error);
     assert_eq!(diagnostic.message, "Unsupported @Thumbnail header");
-    let span = diagnostic.location.span;
+    let span = diagnostic.location.span().expect("located diagnostic");
     assert_eq!(
-        source.get(span.start as usize..span.end as usize),
+        source.get(span.start()..span.end()),
         Some("@Thumbnail:\tanything at all\n"),
         "diagnostic covers the actual unsupported declaration"
     );

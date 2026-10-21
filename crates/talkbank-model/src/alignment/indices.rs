@@ -109,7 +109,7 @@ macro_rules! zero_indexed_newtype {
         // span shifting is a no-op. Required because pair types deriving
         // `SpanShift` recurse into their fields.
         impl SpanShift for $name {
-            fn shift_spans_after(&mut self, _offset: u32, _delta: i32) {}
+            fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {}
         }
     };
 }
@@ -242,11 +242,11 @@ impl std::fmt::Display for SemanticWordIndex1 {
 }
 
 impl SpanShift for SemanticWordIndex1 {
-    fn shift_spans_after(&mut self, _offset: u32, _delta: i32) {}
+    fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {}
 }
 
 impl SpanShift for GraHeadRef {
-    fn shift_spans_after(&mut self, _offset: u32, _delta: i32) {}
+    fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {}
 }
 
 /// The head of a `%gra` relation: either ROOT (authored as `0`) or a

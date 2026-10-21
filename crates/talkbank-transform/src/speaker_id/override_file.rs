@@ -238,8 +238,8 @@ pub struct MergeOverride {
     /// than panicking if a hand-edited file violates it).
     pub adult_roles: BTreeMap<String, InsertedRoleSpec>,
 
-    /// Map from input speaker codes to actions. Every speaker that
-    /// exists in the input must appear here.
+    /// Map from input speaker codes to actions. Mapping application currently
+    /// passes through input speakers absent from this map.
     pub mapping: BTreeMap<String, SpeakerAction>,
 
     /// Per-speaker Jaccard scores recorded at decision time.
@@ -249,9 +249,8 @@ pub struct MergeOverride {
     pub scores: BTreeMap<String, f64>,
 
     /// Winner-score / runner-up-score margin. Serialized as a
-    /// number; the divide-by-zero case is recorded as `f64::INFINITY`
-    /// (the spec also permits the string `"unbounded"` for that
-    /// case; this implementation uses the numeric form for now).
+    /// number; a positive winner against a zero runner-up is recorded as
+    /// `f64::INFINITY`. The wire reader does not accept a string sentinel.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub margin: Option<f64>,
 

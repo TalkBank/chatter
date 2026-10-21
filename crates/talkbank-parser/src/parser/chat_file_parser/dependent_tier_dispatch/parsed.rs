@@ -18,12 +18,12 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
     AsRawNode, GraDependentTierNode, ModDependentTierNode, MorDependentTierNode,
-    PhoDependentTierNode, SinDependentTierNode, SourceBound, SourceSlice, WorDependentTierNode,
-    extract_wor_dependent_tier,
+    PhoDependentTierNode, SinDependentTierNode, SourceBound, WorDependentTierNode,
 };
 use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::parser::node_span::span_of;
+use crate::parser::tier_parsers::admission::{TierAdmission, TierRecovery};
 use crate::parser::tier_parsers::gra::{
     parse_gra_tier_with_separator, recover_gra_tier_with_separator,
 };
@@ -46,19 +46,34 @@ pub(super) fn attach_mor<'tree>(
     errors: &impl ErrorSink,
 ) {
     let tier_node = n.raw_node();
-    let children = n.extract();
-    let separator = super::helpers::dependent_tier_separator(children.children().child_1.slot());
+    let Ok(children) = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(n),
+        tier_node,
+        n.source(),
+        errors,
+    ) else {
+        return;
+    };
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(children.children().child_1.slot()),
+        tier_node,
+        n.source(),
+        errors,
+    ) else {
+        return;
+    };
     let tier_span = span_of(tier_node);
-    if let Some(recovery) = TierRecovery::admit(n.source_slice()) {
-        report_tier_parse_error(recovery, "mor", errors);
-        utterance
-            .dependent_tiers
-            .push(DependentTierEntry::with_separator(
-                DependentTier::Mor(empty_mor_placeholder(tier_span)),
-                separator,
-            ));
-    } else {
-        match parse_mor_tier(n, errors) {
+    match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => {
+            report_tier_parse_error(recovery, "mor", errors);
+            utterance
+                .dependent_tiers
+                .push(DependentTierEntry::with_separator(
+                    DependentTier::Mor(empty_mor_placeholder(tier_span)),
+                    separator,
+                ));
+        }
+        TierAdmission::Healthy(healthy) => match parse_mor_tier(healthy, errors) {
             talkbank_model::ParseOutcome::Parsed(tier) => {
                 utterance
                     .dependent_tiers
@@ -75,7 +90,7 @@ pub(super) fn attach_mor<'tree>(
                         separator,
                     ));
             }
-        }
+        },
     }
 }
 
@@ -88,11 +103,10 @@ pub(super) fn attach_gra<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    let parsed = if let Some(recovery) = TierRecovery::admit(n.source_slice()) {
-        recover_gra_tier_with_separator(n)
-            .inspect(|_| report_tier_parse_error(recovery, "gra", errors))
-    } else {
-        parse_gra_tier_with_separator(n, errors)
+    let parsed = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => recover_gra_tier_with_separator(n)
+            .inspect(|_| report_tier_parse_error(recovery, "gra", errors)),
+        TierAdmission::Healthy(healthy) => parse_gra_tier_with_separator(healthy.node(), errors),
     };
     let tier = match parsed {
         Ok(tier) => tier,
@@ -115,26 +129,43 @@ pub(super) fn attach_pho<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    if let Some(recovery) = TierRecovery::admit(n.source_slice()) {
-        report_tier_parse_error(recovery, "pho", errors);
-    } else {
-        let children = n.extract();
-        let separator =
-            super::helpers::dependent_tier_separator(children.children().child_1.slot());
-        let tier = match parse_pho_tier(n, errors) {
-            Ok(tier) => tier,
-            Err(failure) => {
-                crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
-                return;
-            }
-        };
-        utterance
-            .dependent_tiers
-            .push(DependentTierEntry::with_separator(
-                DependentTier::Pho(tier),
-                separator,
-            ));
-    }
+    let healthy = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => {
+            report_tier_parse_error(recovery, "pho", errors);
+            return;
+        }
+        TierAdmission::Healthy(healthy) => healthy,
+    };
+    let n = healthy.node();
+    let Ok(children) = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(n),
+        tier_node,
+        n.source(),
+        errors,
+    ) else {
+        return;
+    };
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(children.children().child_1.slot()),
+        n.raw_node(),
+        n.source(),
+        errors,
+    ) else {
+        return;
+    };
+    let tier = match parse_pho_tier(n, errors) {
+        Ok(tier) => tier,
+        Err(failure) => {
+            crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
+            return;
+        }
+    };
+    utterance
+        .dependent_tiers
+        .push(DependentTierEntry::with_separator(
+            DependentTier::Pho(tier),
+            separator,
+        ));
 }
 
 /// Attach a `%mod` tier. Same error handling as [`attach_pho`].
@@ -145,26 +176,43 @@ pub(super) fn attach_mod<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    if let Some(recovery) = TierRecovery::admit(n.source_slice()) {
-        report_tier_parse_error(recovery, "mod", errors);
-    } else {
-        let children = n.extract();
-        let separator =
-            super::helpers::dependent_tier_separator(children.children().child_1.slot());
-        let tier = match parse_mod_tier(n, errors) {
-            Ok(tier) => tier,
-            Err(failure) => {
-                crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
-                return;
-            }
-        };
-        utterance
-            .dependent_tiers
-            .push(DependentTierEntry::with_separator(
-                DependentTier::Mod(tier),
-                separator,
-            ));
-    }
+    let healthy = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => {
+            report_tier_parse_error(recovery, "mod", errors);
+            return;
+        }
+        TierAdmission::Healthy(healthy) => healthy,
+    };
+    let n = healthy.node();
+    let Ok(children) = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(n),
+        tier_node,
+        n.source(),
+        errors,
+    ) else {
+        return;
+    };
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(children.children().child_1.slot()),
+        n.raw_node(),
+        n.source(),
+        errors,
+    ) else {
+        return;
+    };
+    let tier = match parse_mod_tier(n, errors) {
+        Ok(tier) => tier,
+        Err(failure) => {
+            crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
+            return;
+        }
+    };
+    utterance
+        .dependent_tiers
+        .push(DependentTierEntry::with_separator(
+            DependentTier::Mod(tier),
+            separator,
+        ));
 }
 
 /// Attach a `%sin` tier. Same error handling as [`attach_pho`].
@@ -175,20 +223,24 @@ pub(super) fn attach_sin<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    if let Some(recovery) = TierRecovery::admit(n.source_slice()) {
-        report_tier_parse_error(recovery, "sin", errors);
-    } else {
-        let tier = match parse_sin_tier_with_separator(n, errors) {
-            Ok(tier) => tier,
-            Err(failure) => {
-                crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
-                return;
-            }
-        };
-        utterance
-            .dependent_tiers
-            .push(tier.into_entry(DependentTier::Sin));
-    }
+    let healthy = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => {
+            report_tier_parse_error(recovery, "sin", errors);
+            return;
+        }
+        TierAdmission::Healthy(healthy) => healthy,
+    };
+    let n = healthy.node();
+    let tier = match parse_sin_tier_with_separator(n, errors) {
+        Ok(tier) => tier,
+        Err(failure) => {
+            crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
+            return;
+        }
+    };
+    utterance
+        .dependent_tiers
+        .push(tier.into_entry(DependentTier::Sin));
 }
 
 /// Attach a `%wor` tier. `%wor` is a generated tier; on a tier with a
@@ -238,45 +290,49 @@ pub(crate) fn parse_wor_entry<'tree>(
 ) -> Option<LoweredWorTier> {
     let input = n.source();
     let tier_node = n.node().raw_node();
-    if let Some(recovery) = TierRecovery::admit(n.source_slice()) {
-        report_tier_parse_error(recovery, "wor", errors);
-        None
-    } else {
-        let children = extract_wor_dependent_tier(n.node());
-        let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
-        let Ok(tier) = crate::parser::typed_cst::report_admission(
-            parse_wor_tier(n, errors),
-            tier_node,
-            input,
-            errors,
-        ) else {
+    let healthy = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => {
+            report_tier_parse_error(recovery, "wor", errors);
             return None;
-        };
-        let Ok(content_range) = crate::parser::typed_cst::report_admission(
-            super::content_range::wor(n),
-            tier_node,
-            input,
-            errors,
-        ) else {
-            return None;
-        };
-        Some(LoweredWorTier {
-            tier,
-            separator,
-            content_range,
-        })
-    }
-}
-
-/// Source-owned proof that a tier needs recovery, consumed by reporting.
-#[must_use]
-struct TierRecovery<'tree, 'source>(SourceSlice<'tree, 'source>);
-
-impl<'tree, 'source> TierRecovery<'tree, 'source> {
-    /// Healthy syntax cannot enter the recovery-reporting transition.
-    fn admit(tier: SourceSlice<'tree, 'source>) -> Option<Self> {
-        tier.raw_node().has_error().then_some(Self(tier))
-    }
+        }
+        TierAdmission::Healthy(healthy) => healthy,
+    };
+    let n = healthy.node();
+    let children = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(n),
+        tier_node,
+        input,
+        errors,
+    )
+    .ok()?;
+    let separator = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(children.children().child_1.slot()),
+        tier_node,
+        input,
+        errors,
+    )
+    .ok()?;
+    let Ok(tier) = crate::parser::typed_cst::report_admission(
+        parse_wor_tier(n, errors),
+        tier_node,
+        input,
+        errors,
+    ) else {
+        return None;
+    };
+    let Ok(content_range) = crate::parser::typed_cst::report_admission(
+        super::content_range::wor(n),
+        tier_node,
+        input,
+        errors,
+    ) else {
+        return None;
+    };
+    Some(LoweredWorTier {
+        tier,
+        separator,
+        content_range,
+    })
 }
 
 /// Consume native recovery evidence. A summary fallback describes the actual
@@ -289,9 +345,9 @@ fn report_tier_parse_error(
     errors: &impl ErrorSink,
 ) {
     use crate::parser::tree_parsing::parser_helpers::check_for_errors_recursive_with_context;
-    use talkbank_model::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+    use talkbank_model::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
-    let tier = recovery.0;
+    let tier = recovery.slice();
     let mut found = Vec::new();
     check_for_errors_recursive_with_context(tier, &mut found, Some(tier_name));
     if found.is_empty() {
@@ -299,8 +355,8 @@ fn report_tier_parse_error(
         found.push(ParseError::new(
             ErrorCode::UnparsableContent,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(tier.source(), node.byte_range(), tier.text()),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(tier.source(), span_of(node), tier.text()),
             format!("Unparsable %{tier_name} tier: tree-sitter recovered its syntax"),
         ));
     }
@@ -318,5 +374,11 @@ fn report_tier_parse_error(
 /// This is design rule 7: lenient recovery preserves malformed tier slots IN
 /// PLACE and never fabricates dummy model values.
 fn empty_mor_placeholder(span: talkbank_model::Span) -> MorTier {
-    MorTier::new_mor(Vec::new(), Terminator::Period { span }).with_span(span)
+    MorTier::new_mor(
+        span,
+        Vec::new(),
+        Terminator::Period {
+            location: span.into(),
+        },
+    )
 }

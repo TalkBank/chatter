@@ -3,7 +3,6 @@
 use super::{Database, ReceiptError, records};
 use sqlx::{Connection, Sqlite, Transaction};
 use std::path::Path;
-use talkbank_model::Span;
 use talkbank_transform::pseudonymize::*;
 
 /// Source evidence for a terminal non-publication receipt.
@@ -64,7 +63,9 @@ async fn insert(
     domain: &str,
     reason: &str,
     location: Option<WordLocation>,
-    span: Option<Span>,
+    // The refused word's source location: `None` when the refusal has no
+    // word, `Some(Unlocated)` when the word has no source position.
+    source: Option<talkbank_model::Location>,
     tier: Option<&str>,
 ) -> Result<(), ReceiptError> {
     let target = location.and_then(|location| match location.spelling() {
@@ -74,7 +75,8 @@ async fn insert(
     sqlx::query("INSERT INTO refusal (document_id, domain, reason, utterance, word, target, source_start, source_end, tier) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(domain).bind(reason).bind(integer(location.map(WordLocation::utterance))?)
         .bind(integer(location.map(WordLocation::word))?).bind(integer(target)?)
-        .bind(span.map(|span| i64::from(span.start))).bind(span.map(|span| i64::from(span.end)))
+        .bind(integer(source.and_then(talkbank_model::Location::span).map(|span| span.start()))?)
+        .bind(integer(source.and_then(talkbank_model::Location::span).map(|span| span.end()))?)
         .bind(tier).execute(&mut **transaction).await.map_err(|_| ReceiptError::Storage)?;
     Ok(())
 }
@@ -89,7 +91,7 @@ pub(super) async fn write_findings(
             "word",
             &format!("{:?}", word.reason()),
             Some(word.location()),
-            Some(word.span()),
+            Some(word.source()),
             None,
         )
         .await?;
@@ -101,7 +103,7 @@ pub(super) async fn write_findings(
                 "mor",
                 &format!("{reason:?}"),
                 Some(review.location()),
-                Some(review.word().span),
+                Some(review.word().location),
                 Some("mor"),
             )
             .await?;
@@ -114,7 +116,7 @@ pub(super) async fn write_findings(
                 "wor",
                 &format!("{reason:?}"),
                 None,
-                Some(review.original().span),
+                Some(review.original().location),
                 Some("wor"),
             )
             .await?;
@@ -131,7 +133,7 @@ pub(super) async fn write_findings(
             "pronunciation",
             reason,
             Some(review.location()),
-            Some(review.tier().span()),
+            Some(review.tier().location()),
             Some(review.tier().kind()),
         )
         .await?;

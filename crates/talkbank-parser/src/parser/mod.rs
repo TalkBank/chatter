@@ -33,7 +33,7 @@ mod terminal_main_tier;
 pub(crate) use child_capacity::ChildCapacity;
 
 /// The one `Node` to [`talkbank_model::Span`] conversion, shared by every region.
-mod node_span;
+pub(crate) mod node_span;
 
 /// A node's identity in its parse tree, as a type rather than a bare `usize`.
 mod node_identity;

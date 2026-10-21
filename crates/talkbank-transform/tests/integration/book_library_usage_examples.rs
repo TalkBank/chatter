@@ -13,27 +13,24 @@
 //! Compile + run the code examples shown in
 //! `book/src/chatter/integrating/library-usage.md`.
 //!
-//! The book renders those examples as `rust,ignore` fences because
+//! The book includes the anchored source below in `rust,ignore` fences because
 //! mdbook test can't disambiguate among the workspace's many compiled
 //! `libtalkbank_transform-HASH.rlib` candidates in the shared
 //! `target/debug/deps/` directory (it lacks Cargo's per-dep `--extern`
-//! machinery). To keep the examples honest against API drift, the
-//! same code lives here as a real integration test that Cargo runs
-//! with the correct extern wiring.
+//! machinery). Cargo compiles and runs this single source owner with the
+//! correct extern wiring; the book does not carry manually mirrored bodies.
 //!
-//! If you change library-usage.md, mirror the change here. Conversely,
-//! if these tests start failing after a library API change, the book
-//! is now drifted and needs the matching edit.
-//!
-//! Per-example helper functions are public-but-not-exported (this is
-//! a tests/ binary), one per book section, so a compile error
-//! diagnostic points at a single example.
+//! Keep the book's surrounding explanations consistent when changing these
+//! examples. Each test is a library recipe, not an application entrypoint.
 
+// ANCHOR: book_imports
 use talkbank_model::{DependentTier, ErrorSink, ParseError, ParseValidateOptions, WriteChat};
 use talkbank_parser::TreeSitterParser;
 use talkbank_transform::json::to_json_pretty_validated;
 use talkbank_transform::{PipelineError, parse_and_validate, parse_and_validate_with_parser};
+// ANCHOR_END: book_imports
 
+// ANCHOR: book_samples
 const SAMPLE_MINIMAL: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n";
 
 const SAMPLE_WITH_MOR: &str = "\
@@ -46,19 +43,21 @@ const SAMPLE_WITH_MOR: &str = "\
 %mor:\tco|hello n|world .
 @End
 ";
+// ANCHOR_END: book_samples
 
 /// Book example: "Parsing and Validating a CHAT File" (simplest entry).
+// ANCHOR: book_parse
 #[test]
 fn book_parsing_and_validating_simplest() -> Result<(), PipelineError> {
     let source = SAMPLE_MINIMAL.to_owned();
     let options = ParseValidateOptions::default().with_validation();
     let chat_file = parse_and_validate(&source, options)?;
 
-    // The book uses println!; the assertion checks the example's claim
-    // that utterances are iterable and have a speaker on the main tier.
+    // These are observable recipe results, not a new validity proof.
     let mut saw_speaker = false;
     for utt in chat_file.utterances() {
         let speaker = format!("{}", utt.main.speaker);
+        println!("Speaker: {speaker}");
         assert!(!speaker.is_empty(), "speaker code should render non-empty");
         saw_speaker = true;
     }
@@ -68,8 +67,10 @@ fn book_parsing_and_validating_simplest() -> Result<(), PipelineError> {
     );
     Ok(())
 }
+// ANCHOR_END: book_parse
 
 /// Book example: "Parsing and Validating a CHAT File" (batch with reused parser).
+// ANCHOR: book_reuse_parser
 #[test]
 fn book_parsing_and_validating_with_parser() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TreeSitterParser::new()?;
@@ -82,9 +83,11 @@ fn book_parsing_and_validating_with_parser() -> Result<(), Box<dyn std::error::E
     }
     Ok(())
 }
+// ANCHOR_END: book_reuse_parser
 
 /// Book example: "Working with the Model", top-level participants,
 /// dependent-tier iteration, MorTier::items() accessor.
+// ANCHOR: book_model
 #[test]
 fn book_working_with_the_model() -> Result<(), PipelineError> {
     let chat_file = parse_and_validate(
@@ -113,9 +116,11 @@ fn book_working_with_the_model() -> Result<(), PipelineError> {
     assert!(saw_mor_item, "SAMPLE_WITH_MOR should expose mor items");
     Ok(())
 }
+// ANCHOR_END: book_model
 
 /// Book example: "Serializing to CHAT", `WriteChat::to_chat_string()`
 /// convenience + the streaming `write_chat(&mut output)` form.
+// ANCHOR: book_chat
 #[test]
 fn book_serializing_to_chat() -> Result<(), Box<dyn std::error::Error>> {
     let chat_file = parse_and_validate(
@@ -131,8 +136,10 @@ fn book_serializing_to_chat() -> Result<(), Box<dyn std::error::Error>> {
     assert!(output.starts_with("@UTF8"));
     Ok(())
 }
+// ANCHOR_END: book_chat
 
 /// Book example: "Serializing to JSON" via the schema-validated helper.
+// ANCHOR: book_json
 #[test]
 fn book_serializing_to_json() -> Result<(), Box<dyn std::error::Error>> {
     let chat_file = parse_and_validate(
@@ -143,6 +150,7 @@ fn book_serializing_to_json() -> Result<(), Box<dyn std::error::Error>> {
     assert!(json.contains("\"speaker\""));
     Ok(())
 }
+// ANCHOR_END: book_json
 
 /// Book example: "Custom Error Handling", implementing the
 /// `ErrorSink` trait against the published `ParseError` shape.
@@ -151,16 +159,17 @@ fn book_serializing_to_json() -> Result<(), Box<dyn std::error::Error>> {
 /// COMPILES: a reader copying this out of the book gets code that builds
 /// against the current public API. A change to `ErrorSink`'s shape breaks this
 /// file, which is the point, and no runtime assertion would add to it.
+// ANCHOR: book_sink
 #[test]
 fn book_custom_error_handling() {
     struct MyErrorHandler;
 
     impl ErrorSink for MyErrorHandler {
         fn report(&self, _error: ParseError) {
-            // Book example formats with eprintln!, here we just
-            // verify the field types compile against the trait.
+            // This interface-only recipe deliberately discards the diagnostic.
         }
     }
 
     let _: &dyn ErrorSink = &MyErrorHandler;
 }
+// ANCHOR_END: book_sink

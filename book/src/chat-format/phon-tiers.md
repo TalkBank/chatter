@@ -5,10 +5,9 @@
 
 The Phon extension tiers provide syllable-level phonological annotation,
 segmental alignment between target and actual IPA, and per-phone time
-intervals. They are produced by the
-[Phon](https://www.phon.ca/) application. As of Phon 4.0.0-beta.9
-(2026-06-25), Phon reads and writes CHAT natively (see "Data quality notes"
-below for what this means for existing corpus files).
+intervals. They originate in the [Phon](https://www.phon.ca/) application.
+This chapter describes Chatter's supported CHAT representation and checks;
+it does not certify the output of a particular Phon exporter or release.
 
 **The authority for these formats is upstream, not this chapter.** Phon
 generates these tiers, so Phon specifies them; the current specification comes
@@ -19,8 +18,7 @@ than a rule to settle here.
 
 chatter parses and **validates all four tiers as first-class CHAT tiers**.
 
-> **The `x` prefix.** Phon exports use the unprefixed names.
-> Chatter accepts **both** the `x`-prefixed names (`%xmodsyl`,
+> **The `x` prefix.** Chatter accepts **both** the `x`-prefixed names (`%xmodsyl`,
 > `%xphosyl`, `%xphoaln`, `%xphoint`) and the unprefixed names (`%modsyl`,
 > `%phosyl`, `%phoaln`, `%phoint`); the parser and validator key off the tier
 > *kind*, not the literal prefix. Chatter's canonical serialized form currently
@@ -92,7 +90,7 @@ tiers: boundary, stress, and tone need no per-phone marker.
 
 ```chat
 *CHI:	I want three .
-%mod:	aɪ wɑnt θri
+%mod:	aɪ wɑnt θɹi
 %xmodsyl:	a:Dɪ:D w:Oɑ:Nn:Ct:C θ:Oɹ:Oi:N
 %pho:	aɪ wɑn fwi
 %xphosyl:	a:Dɪ:D w:Oɑ:Nn:C f:Ow:Oi:N
@@ -193,50 +191,13 @@ for the word-count implementation.
 Deep phonological analysis is Phon's domain; chatter parses the structure that
 validation needs and keeps the IPA content verbatim.
 
-## Phon XML source format
+## Interpreting mismatches
 
-In Phon's native XML format, phonological data is stored as structured elements:
+E725-E728 report disagreement between the CHAT tiers being checked. They do
+not establish whether the cause is source annotation, export conversion or a
+later edit. Review the corresponding source words and, for `%xphoaln`, the
+one-sided-pause bindings before deciding how to correct a file.
 
-```xml
-<ipaTarget>
-  <pho>
-    <pw>
-      <ph scType="onset"><base>θ</base></ph>
-      <ph scType="nucleus"><base>ɹ</base></ph>
-      <ph scType="nucleus"><base>i</base></ph>
-    </pw>
-  </pho>
-</ipaTarget>
-```
-
-Each `<pw>` (phonological word) element contains `<ph>` elements with syllable
-constituent types (`scType`). The `<alignment>` element provides phone-level
-mappings between target and actual using index-based `<pm>` (phone map) entries.
-
-## Data quality notes
-
-A small percentage of Phon corpus XML records have an orthography↔IPA word-count
-mismatch: the number of `<pw>` elements in `<ipaTarget>` / `<ipaActual>` differs
-from the number of `<w>` elements in `<orthography>`. This is expected in child
-phonology data: children may produce extra syllables, partial words, or
-over-productions relative to the target.
-
-For current counts on a local CHILDES/TalkBank data tree, run:
-
-```bash
-python3 scripts/analysis/scan_phon_mismatches.py /path/to/data
-```
-
-A subset of existing corpus CHAT files handle this discrepancy inconsistently
-between tiers:
-
-1. `%mod`/`%pho` map IPA words to orthography words one to one; extras are
-   silently dropped.
-2. `%xmodsyl`/`%xphosyl`/`%xphoaln` carry the full IPA word set, undropped.
-
-This produces CHAT files where `%xmodsyl` may have more words than `%mod`,
-triggering the E725-E728 word-count errors. As of Phon 4.0.0-beta.9
-(2026-06-25), Phon reads and writes CHAT natively; we have not yet seen
-output from that native export and do not know whether it reproduces this
-inconsistency. Files already affected remain in the corpora and must
-continue to validate against the behavior above.
+Do not truncate a tier or discard phones merely to equalize counts. A repair
+needs evidence about the intended transcription. Chatter's checks neither
+validate an upstream XML document nor certify an exporter's behavior.

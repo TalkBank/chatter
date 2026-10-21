@@ -9,7 +9,7 @@
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::widgets::ListState;
-use talkbank_model::{ClanHiddenLineError, SourceDiagnostic, resolve_clan_location};
+use talkbank_model::{ClanLocationError, SourceDiagnostic, resolve_clan_location};
 use thiserror::Error;
 
 use super::models::FileErrors;
@@ -328,7 +328,7 @@ pub enum OpenInClanError {
     #[error("Invalid file path")]
     InvalidPath,
     #[error("{0}")]
-    HiddenLine(#[from] ClanHiddenLineError),
+    ClanLocation(#[from] ClanLocationError),
     #[error("Failed to send to CLAN")]
     Send(#[from] send2clan::Error),
 }

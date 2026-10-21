@@ -9,7 +9,9 @@ this page says which of them CI repeats and which it does not.
 
 ## Local pre-merge contract
 
-`just gate` runs everything CI runs; `just push` runs it and then pushes. See
+`just gate` is the local publication check; `just push` runs it and then pushes,
+so it requires separate push authorization. It does not substitute for every
+platform, scheduled or release workflow. See
 [dev-checks](dev-checks.md#before-pushing) for what it contains and why each
 step catches something the others cannot.
 
@@ -26,8 +28,11 @@ the same test), the generated spec tests, the validation error corpus, and the
 gate registry. Each has a fast targeted command, listed with what it protects
 under [Testing, Never-Regress Gates](testing.md#never-regress-gates).
 
-Those commands take `--tests <filter>`, not `--test <name>`: each crate has one
-integration binary, so a per-file target name errors out.
+Those commands use test-name filters. `--tests <filter>` selects matching tests
+across test targets; `--test integration <filter>` selects the consolidated
+integration target explicitly. A module filename is not a separate Cargo test
+target. Check the selected and passed counts; exit zero with no selected tests
+does not verify a contract.
 
 **A red gate is a bug until proven otherwise, never a test expectation to
 quietly update.** That rule has teeth in both directions: a diagnostic that
@@ -62,8 +67,10 @@ pipelines.
 Worth knowing, because these are the gaps where a local run is the only signal:
 
 - **The vendored re2c lexer.** No workflow installs re2c, so nothing verifies
-  that the committed lexer matches `lexer.re`. `just verify-vendored-lexer` is
-  the only check, and it must be run by hand.
+  that the committed lexer matches `lexer.re`. The local `just gate` does run
+  `just verify-vendored-lexer`, using the version in `re2c-version.toml` and
+  including generated lexer inputs. This is a local publication check, not
+  evidence that CI executed it or that the parser's behavior is correct.
 - **The observation snapshot** (`spec/observations/example-diagnostics.json`)
   records, for every spec example, the codes each stage emitted and whether
   the parsed model serializes back byte-exact. It IS in CI, through its

@@ -5,7 +5,7 @@
 //!
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#Speaker_ID>
 
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, Span};
 
 /// Maximum number of Unicode scalar values in a CHAT speaker ID.
 const MAX_SPEAKER_ID_LENGTH: usize = 7;
@@ -64,17 +64,17 @@ fn assess_speaker_code(speaker: &str) -> SpeakerCodeSyntax {
 /// `span` is the location in the original file. Diagnostic context uses a
 /// code-local span because its `source_text` is only `speaker`, not the full
 /// file.
-pub fn check_speaker_id(speaker: &str, span: Span, errors: &impl ErrorSink) {
+pub fn check_speaker_id(speaker: &str, location: crate::Location, errors: &impl ErrorSink) {
     let SpeakerCodeSyntax::Invalid(invalid) = assess_speaker_code(speaker) else {
         return;
     };
-    let local_span = Span::from_usize(0, speaker.len());
+    let local_span = Span::new(0, speaker.len());
 
     let report_too_long = |character_count| {
         errors.report(ParseError::new(
             ErrorCode::InvalidSpeaker,
             Severity::Error,
-            SourceLocation::new(span),
+            DiagnosticLocation::from(location),
             ErrorContext::new(speaker, local_span, speaker),
             format!(
                 "Speaker ID '{}' exceeds maximum length of {} characters (has {})",
@@ -87,7 +87,7 @@ pub fn check_speaker_id(speaker: &str, span: Span, errors: &impl ErrorSink) {
         errors.report(ParseError::new(
             ErrorCode::InvalidSpeaker,
             Severity::Error,
-            SourceLocation::new(span),
+            DiagnosticLocation::from(location),
             ErrorContext::new(speaker, local_span, speaker),
             format!(
                 "Speaker ID '{}' contains invalid character '{}'. Speaker IDs must be ASCII and cannot contain colon (:) or whitespace",

@@ -18,7 +18,7 @@ use super::format::format_positional_mismatch;
 use super::helpers::{PositionalDomain, TierPosition, collect_tier_items, count_tier_positions};
 use super::types::AlignmentPair;
 use crate::model::{MainTier, UtteranceContent};
-use crate::{ErrorCode, ErrorLabel, ParseError, Severity, Span};
+use crate::{ErrorCode, ParseError, Severity};
 
 // ---------------------------------------------------------------------------
 // IndexPair
@@ -141,8 +141,8 @@ pub trait AlignableTier {
     /// Convert target items to diagnostic text for mismatch rendering.
     fn extract_target_items(&self) -> Vec<TierPosition>;
 
-    /// Source span for error labels.
-    fn span(&self) -> Span;
+    /// Source location for error labels; an unlocated tier gets none.
+    fn location(&self) -> crate::Location;
 
     /// Error code when the main tier has more alignable items than this tier.
     fn error_code_too_few(&self) -> ErrorCode;
@@ -211,9 +211,9 @@ pub fn positional_align<T: AlignableTier>(main: &MainTier, tier: &T) -> Position
             (tier.error_code_too_many(), tier.suggestion_too_many())
         };
 
-        let error = ParseError::at_span(code, Severity::Error, main.span, detailed_message)
-            .with_label(ErrorLabel::new(main.span, "Main tier"))
-            .with_label(ErrorLabel::new(tier.span(), tier.tier_name()))
+        let error = ParseError::at_location(code, Severity::Error, main.location, detailed_message)
+            .with_label_at(main.location, "Main tier")
+            .with_label_at(tier.location(), tier.tier_name())
             .with_suggestion(suggestion);
 
         errors.push(error);

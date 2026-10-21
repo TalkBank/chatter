@@ -4,20 +4,26 @@
 //! text, label length or presumed newline width participates in this reading.
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NewlineNode, Ranged, ReadableSlot, SourceBindingError, SourceBound,
-    TierSepNode, UtteranceChild1Choice, UtteranceChild1ChoiceBoundView, WorDependentTierNode,
+    AsRawNode, Never, NewlineNode, ReadableSlot, SourceBindingError, SourceBound, TierSepNode,
+    UtteranceChild1Choice, UtteranceChild1ChoiceBoundView, WorDependentTierNode,
 };
 use talkbank_model::Span;
 use talkbank_model::model::dependent_tier::DependentTierContentSpan;
 
-fn newline_start<'tree, 'source>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, NewlineNode<'tree>>, Ranged<'source>>,
-) -> Option<u32> {
+fn newline_start<'tree, 'source, E, A>(
+    slot: &ReadableSlot<
+        SourceBound<'tree, 'source, NewlineNode<'tree>>,
+        SourceBound<'tree, 'source, NewlineNode<'tree>>,
+        E,
+        Never,
+        A,
+    >,
+) -> Option<usize> {
     match slot {
         // Missing retains its native zero-width endpoint. It is not a present
         // newline or a syntax-validity claim, but no byte may be subtracted.
         ReadableSlot::Present(node) | ReadableSlot::Missing(node) => {
-            Some(node.raw_node().start_byte() as u32)
+            Some(node.raw_node().start_byte())
         }
         ReadableSlot::Error(_) | ReadableSlot::Absent(_) => None,
         ReadableSlot::Unexpected(never) => match *never {},
@@ -27,10 +33,10 @@ fn newline_start<'tree, 'source>(
 fn range<'tree>(
     tier: Span,
     separator: SourceBound<'tree, '_, TierSepNode<'tree>>,
-    end: Option<u32>,
+    end: Option<usize>,
 ) -> Result<Option<DependentTierContentSpan>, crate::CstFailure> {
     let Some(end) = end else { return Ok(None) };
-    DependentTierContentSpan::try_new(tier, Span::new(separator.raw_node().end_byte() as u32, end))
+    DependentTierContentSpan::try_new(tier, separator.raw_node().end_byte(), end)
         .map(Some)
         .map_err(|_| SourceBindingError::InvalidRange.into())
 }
@@ -40,13 +46,11 @@ fn range<'tree>(
 pub(super) fn wor<'tree>(
     node: SourceBound<'tree, '_, WorDependentTierNode<'tree>>,
 ) -> Result<Option<DependentTierContentSpan>, crate::CstFailure> {
-    let children = node.extract().admit_ranges()?;
-    let ReadableSlot::Present(separator) = &children.children().child_1.slot else {
-        return Ok(None);
-    };
-    let ReadableSlot::Present(body) = &children.children().child_2.slot else {
-        return Ok(None);
-    };
+    let children = crate::parser::typed_cst::extract_envelope(node)?.admit_ranges()?;
+    let crate::generated_traversal::SlotView::Present(separator) =
+        children.children().child_1.slot.view();
+    let crate::generated_traversal::SlotView::Present(body) =
+        children.children().child_2.slot.view();
     let body = body.extract().admit_ranges()?;
     range(
         crate::parser::node_span::span_of(node.raw_node()),
@@ -64,10 +68,9 @@ pub(super) fn selected<'tree>(
     macro_rules! read {
         ($node:expr) => {{
             let node = $node;
-            let children = node.extract().admit_ranges()?;
-            let ReadableSlot::Present(separator) = &children.children().child_1.slot else {
-                return Ok(None);
-            };
+            let children = crate::parser::typed_cst::extract_envelope(node)?.admit_ranges()?;
+            let crate::generated_traversal::SlotView::Present(separator) =
+                children.children().child_1.slot.view();
             range(
                 crate::parser::node_span::span_of(node.raw_node()),
                 *separator,
@@ -109,6 +112,18 @@ pub(super) fn selected<'tree>(
         C::PhoalnDependentTier(n) => read!(n),
         C::XphointDependentTier(n) => read!(n),
         C::XDependentTier(n) => read!(n),
-        C::UnsupportedDependentTier(n) => read!(n),
+        C::UnsupportedDependentTier(node) => {
+            // This rule is outside flat-envelope eligibility. Its recovery
+            // geometry retains the broad selected separator and newline.
+            let children = node.extract().admit_ranges()?;
+            let ReadableSlot::Present(separator) = &children.children().child_1.slot else {
+                return Ok(None);
+            };
+            range(
+                crate::parser::node_span::span_of(node.raw_node()),
+                *separator,
+                newline_start(&children.children().child_3.slot),
+            )
+        }
     }
 }

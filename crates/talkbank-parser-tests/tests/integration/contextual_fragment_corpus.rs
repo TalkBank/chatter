@@ -75,8 +75,11 @@ fn body_fragment_container_spans_exclude_synthetic_labels() {
             .into_option()
             .unwrap();
         assert_eq!(
-            tier.span,
-            talkbank_model::Span::from_usize(offset, offset + input.len())
+            tier.location,
+            talkbank_model::Location::Located(talkbank_model::Span::new(
+                offset,
+                offset + input.len()
+            ))
         );
         assert!(errors.is_empty());
         for ending in ["\n", "\r\n"] {
@@ -87,8 +90,11 @@ fn body_fragment_container_spans_exclude_synthetic_labels() {
                 .into_option()
                 .unwrap();
             assert_eq!(
-                tier.span,
-                talkbank_model::Span::from_usize(offset, offset + source.len())
+                tier.location,
+                talkbank_model::Location::Located(talkbank_model::Span::new(
+                    offset,
+                    offset + source.len()
+                ))
             );
             assert!(errors.is_empty());
             let source = format!("%com:\t{ending}");
@@ -98,14 +104,22 @@ fn body_fragment_container_spans_exclude_synthetic_labels() {
                 .into_option()
                 .unwrap();
             assert_eq!(
-                tier.span(),
-                talkbank_model::Span::from_usize(offset, offset + source.len())
+                tier.location(),
+                talkbank_model::Location::Located(talkbank_model::Span::new(
+                    offset,
+                    offset + source.len()
+                ))
             );
             assert!(errors.is_empty());
         }
         let errors = ErrorCollector::new();
+        // An empty body still has the admitted boundary: the tier is located
+        // at the caller's offset, with zero width, never left unlocated.
         let empty = p.parse_com_tier("", offset, &errors).into_option().unwrap();
-        assert_eq!(empty.span, talkbank_model::Span::DUMMY);
+        assert_eq!(
+            empty.location,
+            talkbank_model::Location::Located(talkbank_model::Span::new(offset, offset))
+        );
         assert!(errors.is_empty());
     }
 }
@@ -121,8 +135,8 @@ fn empty_fragment_diagnostics_use_the_admitted_document_boundary() {
         assert!(!errors.is_empty());
         for error in errors.to_vec() {
             assert_eq!(
-                error.location.span,
-                talkbank_model::Span::from_usize(offset, offset)
+                error.location.span().expect("located diagnostic"),
+                talkbank_model::Span::new(offset, offset)
             );
         }
     }
@@ -207,11 +221,10 @@ fn declared_alignment_labels_preserve_original_coordinates_under_rebasing() {
             // Alignment produces raw source ranges; SourceDiagnostic owns
             // later presentation enhancement. Never manufacture raw context.
             assert!(error.context.is_none(), "raw alignment finding: {fixture}");
-            for span in std::iter::once(error.location.span)
+            for span in std::iter::once(error.location.span().expect("located diagnostic"))
                 .chain(error.labels.iter().map(|label| label.span))
             {
-                assert_ne!(span, Span::DUMMY, "source-owned alignment range: {fixture}");
-                assert!(input.get(span.start as usize..span.end as usize).is_some());
+                assert!(input.get(span.start()..span.end()).is_some());
             }
         }
         for origin in [0, 25] {
@@ -220,15 +233,11 @@ fn declared_alignment_labels_preserve_original_coordinates_under_rebasing() {
             source.error_sink(&rebased).report_vec(local.clone().into());
             let mut expected = local.clone();
             for error in &mut expected {
-                error.location.span = Span::from_usize(
-                    error.location.span.start as usize + origin,
-                    error.location.span.end as usize + origin,
-                );
+                error.location = error
+                    .location
+                    .rebased(|span| Span::new(span.start() + origin, span.end() + origin));
                 for label in &mut error.labels {
-                    label.span = Span::from_usize(
-                        label.span.start as usize + origin,
-                        label.span.end as usize + origin,
-                    );
+                    label.span = Span::new(label.span.start() + origin, label.span.end() + origin);
                 }
             }
             assert_eq!(rebased.to_vec(), expected, "{fixture} at {origin}");

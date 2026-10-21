@@ -502,13 +502,12 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
             }
             if let Some(tier) = utterance.sin_tier() {
                 use talkbank_model::model::{SinItem, SinTier};
-                let structured = SinTier::new(tier.items.to_vec()).with_span(tier.span);
+                let structured = SinTier::new(tier.location, tier.items.to_vec());
                 assert_eq!(
                     &structured, tier,
                     "structured construction preserves groups and provenance"
                 );
                 assert_eq!(tier.is_empty(), tier.items.is_empty());
-                assert_eq!(tier.is_empty(), tier.is_empty());
                 let flat: Option<Vec<String>> = tier
                     .items
                     .iter()
@@ -519,15 +518,17 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                     .collect();
                 match flat {
                     Some(mut tokens) => {
-                        let rebuilt = SinTier::from_tokens(tokens.clone())
-                            .expect("nonempty parsed tokens")
-                            .with_span(tier.span);
+                        let rebuilt = SinTier::from_tokens(tier.location, tokens.clone())
+                            .expect("nonempty parsed tokens");
                         assert_eq!(&rebuilt, tier, "flat admission preserves token order");
                         assert_eq!(rebuilt.to_chat_string(), tier.to_chat_string());
                         // A failed imported token rejects the whole construction;
                         // it must not silently shorten an aligned tier.
                         tokens.push(String::new());
-                        assert!(SinTier::from_tokens(tokens).is_err());
+                        assert!(
+                            SinTier::from_tokens(talkbank_model::Location::Unlocated, tokens)
+                                .is_err()
+                        );
                         sign_shapes[0] += 1;
                     }
                     None => sign_shapes[1] += 1,
@@ -553,11 +554,19 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
             for dependent in &utterance.dependent_tiers {
                 use talkbank_model::model::{DependentTier, PhoItem, PhoTier};
                 let (original, rebuilt, family) = match &dependent.tier {
-                    DependentTier::Pho(tier) => (tier, PhoTier::new_pho(tier.items.to_vec()), 0),
-                    DependentTier::Mod(tier) => (tier, PhoTier::new_mod(tier.items.to_vec()), 1),
+                    DependentTier::Pho(tier) => (
+                        tier,
+                        PhoTier::new_pho(talkbank_model::Location::Unlocated, tier.items.to_vec()),
+                        0,
+                    ),
+                    DependentTier::Mod(tier) => (
+                        tier,
+                        PhoTier::new_mod(talkbank_model::Location::Unlocated, tier.items.to_vec()),
+                        1,
+                    ),
                     _ => continue, // This contract covers only phonological tiers.
                 };
-                assert!(rebuilt.span.is_dummy());
+                assert_eq!(rebuilt.location, talkbank_model::Location::Unlocated);
                 assert_eq!(rebuilt.is_pho(), family == 0);
                 assert_eq!(rebuilt.is_mod(), family == 1);
                 assert_eq!(rebuilt.len(), original.items.len());
@@ -588,8 +597,12 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                     .collect();
                 match tokens {
                     Some(tokens) => {
-                        let token_tier = PhoTier::from_tokens(original.tier_type, tokens);
-                        assert!(token_tier.span.is_dummy());
+                        let token_tier = PhoTier::from_tokens(
+                            talkbank_model::Location::Unlocated,
+                            original.tier_type,
+                            tokens,
+                        );
+                        assert_eq!(token_tier.location, talkbank_model::Location::Unlocated);
                         assert!(token_tier.semantic_eq(original));
                         assert_eq!(token_tier.to_chat(), original.to_chat());
                         phonology_shapes[0] += 1;
@@ -600,37 +613,48 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                         phonology_shapes[1] += 1;
                     }
                 }
-                let bound = rebuilt.with_span(original.span);
+                // Constructed at the parsed location, the tier IS the parsed tier.
+                let bound = PhoTier::new(
+                    original.location,
+                    original.tier_type,
+                    original.items.to_vec(),
+                );
                 assert_eq!(&bound, original);
                 let decoded: PhoTier =
                     serde_json::from_value(serde_json::to_value(&bound).expect("phonology JSON"))
                         .expect("reconstruct phonology");
-                assert!(decoded.span.is_dummy());
+                assert_eq!(decoded.location, talkbank_model::Location::Unlocated);
                 assert!(decoded.semantic_eq(original));
                 assert_eq!(decoded.to_chat(), original.to_chat());
                 phonology_witnesses[family] += 1;
             }
             if let Some(mor) = utterance.mor_tier() {
                 let rebuilt = talkbank_model::model::MorTier::new_mor(
+                    talkbank_model::Location::Unlocated,
                     mor.clone().into_items(),
                     mor.terminator.clone(),
                 );
-                assert!(
-                    rebuilt.span.is_dummy(),
+                assert_eq!(
+                    rebuilt.location,
+                    talkbank_model::Location::Unlocated,
                     "construction does not invent provenance"
                 );
                 assert!(rebuilt.semantic_eq(mor));
                 assert_eq!(rebuilt.to_chat(), mor.to_chat());
                 assert_eq!(rebuilt.to_content(), mor.to_content());
-                let bound = rebuilt.with_span(mor.span);
+                let bound = talkbank_model::model::MorTier::new_mor(
+                    mor.location,
+                    mor.clone().into_items(),
+                    mor.terminator.clone(),
+                );
                 assert_eq!(
                     &bound, mor,
-                    "unchanged morphology retains its original span"
+                    "unchanged morphology constructed at its original location is the original"
                 );
                 let decoded: talkbank_model::model::MorTier =
                     serde_json::from_value(serde_json::to_value(&bound).expect("morphology JSON"))
                         .expect("reconstruct morphology");
-                assert!(decoded.span.is_dummy());
+                assert_eq!(decoded.location, talkbank_model::Location::Unlocated);
                 assert!(decoded.semantic_eq(mor));
                 assert_eq!(decoded.to_chat(), mor.to_chat());
                 morphology_witnesses += 1;
@@ -665,8 +689,8 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                 None,
                 "exhausted undo stack cannot manufacture an item"
             );
-            let direct = TierContent::new(items);
-            let mut content = TierContent::default();
+            let direct = TierContent::new(talkbank_model::Location::Unlocated, items);
+            let mut content = TierContent::new(talkbank_model::Location::Unlocated, Vec::new());
             assert_eq!(
                 content.to_content_string(),
                 "",
@@ -681,13 +705,20 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                 .with_linkers(payload.linkers.clone().into_iter().collect())
                 .with_postcodes(payload.postcodes.clone().into_iter().collect());
             let mut main = MainTier::new(
+                talkbank_model::MainTierLocations::UNLOCATED,
                 expected.speaker.clone(),
                 payload.content.to_vec(),
                 payload.terminator.clone(),
             );
-            assert!(main.span.is_dummy() && main.speaker_span.is_dummy());
-            assert_eq!(content.content_span, None);
-            assert_eq!(content.language_code_span, None);
+            assert_eq!(
+                (main.location, main.speaker_location, content.location),
+                (
+                    talkbank_model::Location::Unlocated,
+                    talkbank_model::Location::Unlocated,
+                    talkbank_model::Location::Unlocated
+                ),
+                "construction does not invent provenance"
+            );
             for linker in &payload.linkers {
                 main = main.with_linker(*linker);
                 witnessed[0] = true;
@@ -710,21 +741,21 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                 main = main.with_bullet(bullet.clone());
                 witnessed[4] = true;
             }
-            // Copy only provenance belonging to this unchanged parsed payload.
-            if let Some(span) = payload.content_span {
-                content = content.with_content_span(span);
-                main = main.with_content_span(span);
+            // Copy only provenance belonging to this unchanged parsed payload:
+            // the content region's location, and the precode's (carried inside it).
+            if let talkbank_model::Location::Located(_) = payload.location {
+                content.location = payload.location;
+                main.content.location = payload.location;
                 witnessed[5] = true;
             }
-            if let Some(span) = payload.language_code_span {
-                content = content.with_language_code_span(span);
-                main = main.with_language_code_span(span);
+            if payload.language_code.as_ref().is_some_and(|precode| {
+                matches!(precode.location, talkbank_model::Location::Located(_))
+            }) {
                 witnessed[6] = true;
             }
-            main = main
-                .with_span(expected.span)
-                .with_speaker_span(expected.speaker_span)
-                .with_separator(expected.separator);
+            main.location = expected.location;
+            main.speaker_location = expected.speaker_location;
+            main = main.with_separator(expected.separator);
             assert_eq!(&content, payload, "{}", fixture.path().display());
             assert_eq!(&main, expected, "{}", fixture.path().display());
             assert_eq!(content.to_content_string(), payload.to_content_string());
@@ -744,9 +775,19 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                 fixture.path().display()
             );
             assert_eq!(reconstructed.to_chat(), expected.to_chat_string());
-            assert!(reconstructed.span.is_dummy() && reconstructed.speaker_span.is_dummy());
-            assert_eq!(reconstructed.content.content_span, None);
-            assert_eq!(reconstructed.content.language_code_span, None);
+            assert_eq!(
+                (
+                    reconstructed.location,
+                    reconstructed.speaker_location,
+                    reconstructed.content.location,
+                ),
+                (
+                    talkbank_model::Location::Unlocated,
+                    talkbank_model::Location::Unlocated,
+                    talkbank_model::Location::Unlocated
+                ),
+                "JSON readback carries no source location"
+            );
         }
     }
     assert_eq!(

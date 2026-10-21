@@ -1,20 +1,38 @@
-# spec   docs   GRAMMAR PATTERNS
+# Grammar Patterns and Review
 
-## Overview
-Short summary for `spec/docs/GRAMMAR_PATTERNS.md`. This document is intentionally concise; legacy detail has been trimmed.
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/spec/docs/GRAMMAR_PATTERNS.md)
 
-## Key Commands
-```bash
-cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.toml
-```
+The [Grammar Workflow](../../book/src/contributing/grammar-workflow.md) owns
+grammar editing, regeneration and affected verification. The grammar describes
+executable syntax, including recovery shapes; acceptance by it is not semantic
+CHAT validity.
 
-## Status and Limitations
-- This is a brief reference; consult AGENTS.md files for full workflow guidance.
-- Update alongside code changes to keep commands and references accurate.
+## Follow the owning representation
 
-## See Also
-- AGENTS.md
-- spec/AGENTS.md
+- Edit `grammar/grammar.js`, not generated parser C or node metadata.
+- Add reviewed construct/error examples through
+  [Spec Workflow](../../book/src/contributing/spec-workflow.md).
+- Let the generated typed traversal own CST structure and source association.
+  Handwritten lowering should consume its associated carriers rather than
+  reimplementing raw child-kind searches.
+- Preserve missing, unexpected and recovered states. Kind or source admission
+  does not prove syntactic completeness.
+- Keep lexical policy and model validation at their existing owners; do not
+  move a semantic rule into grammar recovery merely to satisfy an example.
 
----
-**Last modified:** 2026-09-24 00:21 EDT
+[Parsing](../../book/src/architecture/parsing.md) describes the current
+consumer migration boundary and recovery APIs. Do not infer full migration
+from a successful path or a generated file's presence.
+
+## Review a grammar change end to end
+
+Review the intended syntax, generated CST shape, handwritten lowering,
+diagnostics and typed serialization together. Inspect the real wrapped input
+before writing an expected tree. Authored fragment CSTs are not automatically
+compared with generated full-document CSTs.
+
+Use the root's consolidated regeneration workflow, then focused behavioral
+checks and explicit observation-diff adjudication. A stale generated parser,
+a finite equivalence result or generated currency cannot establish complete
+grammar correctness. Generator source access and independent regeneration
+remain separate from ordinary builds using committed generated files.

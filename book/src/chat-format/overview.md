@@ -1,13 +1,18 @@
 # CHAT Format Overview
 
 **Status:** Reference
-**Last updated:** 2026-05-11 21:51 EDT
+**Last updated:** {{git-dates:page}}
 
-CHAT (Codes for the Human Analysis of Transcripts) is a standardized transcription format for spoken language data, developed by MacWhinney as part of the [CHILDES](https://childes.talkbank.org/) and [TalkBank](https://talkbank.org/) projects. It is the most widely used format in child language research and conversational analysis.
+CHAT (Codes for the Human Analysis of Transcripts) is a transcription format
+used by [CHILDES](https://childes.talkbank.org/) and
+[TalkBank](https://talkbank.org/). These chapters introduce its representation
+in Chatter; the CHAT manual remains the format reference. Parser recovery is
+an implementation feature, not permission to treat malformed input as valid.
 
 ## File Anatomy
 
-Every CHAT file follows this structure:
+A typical transcript has a metadata preamble, speaker turns and optional
+dependent annotations:
 
 ```chat
 @UTF8
@@ -38,20 +43,21 @@ A CHAT file consists of:
 ## Key Conventions
 
 - **Tab separation**: a tab character separates the tier prefix from its content (e.g., `*CHI:⟶content`)
-- **Terminators**: every utterance ends with a terminator (`.`, `?`, `!`, or special forms like `+...`)
+- **Terminators**: ordinary utterances end with a terminator (`.`, `?`, `!`, or special forms like `+...`). The legacy [CA option](options.md) has a specific missing-terminator exception; CA symbols alone do not enable it.
 - **Line continuation**: long lines wrap with a tab at the start of continuation lines
 - **Speaker codes**: short identifiers; the validator accepts up to seven characters from `A-Z`, `0-9`, `_`, `-`, `'`; three uppercase letters is the convention (e.g., `CHI`, `MOT`, `FAT`, `INV`)
 - **Media linking**: timestamps link transcripts to audio/video via bullet markers
 
-## CHAT vs Other Formats
+## What validation establishes
 
-| Feature | CHAT | Praat TextGrid | ELAN EAF |
-|---------|------|----------------|----------|
-| Morphological tiers | Built-in (%mor, %gra) | No | No |
-| Dependency syntax | Built-in (%gra) | No | No |
-| Standardized POS | UD-style via %mor | No | No |
-| Word-level alignment | %wor tier | Interval-based | Interval-based |
-| Error recovery | Tree-sitter GLR | N/A | N/A |
+Chatter checks syntax and supported semantic rules. A successful parse may
+still produce diagnostics, and a recovered model is not evidence that the
+original input is valid. Validation does not establish transcription accuracy,
+recording identity or acoustic timing accuracy.
+
+Start with [Headers](headers.md), [Utterances](utterances.md) and
+[Dependent Tiers](dependent-tiers.md). For a runnable create/validate/repair
+exercise, use the [Quick Start](../chatter/user-guide/quick-start.md).
 
 ## References
 

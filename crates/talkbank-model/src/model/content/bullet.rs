@@ -81,9 +81,9 @@ pub struct Bullet {
     pub timing: MediaTiming,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 
     /// Provenance of this bullet (not serialized, not part of CHAT output).
     ///
@@ -101,10 +101,10 @@ impl Bullet {
     ///
     /// Use this constructor for FA-derived timing, hand-linked annotations,
     /// and any bullet that should not be overwritten by a subsequent UTR or FA pass.
-    pub fn new(start_ms: u64, end_ms: u64) -> Self {
+    pub fn new(location: impl Into<crate::Location>, start_ms: u64, end_ms: u64) -> Self {
         Self {
             timing: MediaTiming::new(start_ms, end_ms),
-            span: crate::Span::DUMMY,
+            location: location.into(),
             source: BulletSource::Authoritative,
         }
     }
@@ -113,20 +113,12 @@ impl Bullet {
     ///
     /// UTR sets this before FA runs to mark the audio window for grouping.
     /// `update_utterance_bullet` will overwrite it once FA produces word timings.
-    pub fn utr_hint(start_ms: u64, end_ms: u64) -> Self {
+    pub fn utr_hint(location: impl Into<crate::Location>, start_ms: u64, end_ms: u64) -> Self {
         Self {
             timing: MediaTiming::new(start_ms, end_ms),
-            span: crate::Span::DUMMY,
+            location: location.into(),
             source: BulletSource::Utr,
         }
-    }
-
-    /// Attach source span metadata used by diagnostics.
-    ///
-    /// Span metadata is not serialized and does not affect timing semantics.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 }
 
@@ -151,14 +143,14 @@ mod tests {
 
     #[test]
     fn bullet_roundtrip() {
-        let bullet = Bullet::new(0, 1073);
+        let bullet = Bullet::new(crate::Location::Unlocated, 0, 1073);
         let output = bullet.to_string();
         assert_eq!(output, "\u{0015}0_1073\u{0015}");
     }
 
     #[test]
     fn bullet_zero_time_roundtrip() {
-        let bullet = Bullet::new(0, 0);
+        let bullet = Bullet::new(crate::Location::Unlocated, 0, 0);
         let output = bullet.to_string();
         assert_eq!(output, "\u{0015}0_0\u{0015}");
     }

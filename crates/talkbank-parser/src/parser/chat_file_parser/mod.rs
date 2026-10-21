@@ -30,7 +30,7 @@
 
 pub(crate) mod chat_file;
 mod dependent_tier_dispatch;
-mod header_dispatch;
+pub(crate) mod header_dispatch;
 mod header_parser;
 mod parser_struct;
 mod single_item;

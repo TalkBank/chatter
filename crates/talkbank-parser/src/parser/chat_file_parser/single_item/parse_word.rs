@@ -8,7 +8,7 @@
 
 use super::TreeSitterParser;
 use crate::error::{
-    ErrorCode, ErrorContext, ParseError, ParseErrors, ParseResult, Severity, SourceLocation,
+    DiagnosticLocation, ErrorCode, ErrorContext, ParseError, ParseErrors, ParseResult, Severity,
 };
 use crate::generated_traversal::{
     AsRawNode, FromNodeKind, NodeSlot, ParsedSource, SourceBound, SourceFileChoice, SourceFileNode,
@@ -28,8 +28,8 @@ pub(super) fn parse_word(parser: &TreeSitterParser, input: &str) -> ParseResult<
         errors.push(ParseError::new(
             ErrorCode::InvalidWordFormat,
             Severity::Error,
-            SourceLocation::from_offsets(0, 0),
-            ErrorContext::new(input, 0..0, input),
+            DiagnosticLocation::from_offsets(0, 0),
+            ErrorContext::new(input, talkbank_model::Span::new(0, 0), input),
             "Empty word input",
         ));
         return Err(errors);
@@ -53,8 +53,8 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
             ParseErrors::from(vec![ParseError::new(
                 code,
                 Severity::Error,
-                SourceLocation::from_offsets(0, input.len()),
-                ErrorContext::new(input, 0..input.len(), input),
+                DiagnosticLocation::from_offsets(0, input.len()),
+                ErrorContext::new(input, talkbank_model::Span::new(0, input.len()), input),
                 message,
             )])
         };
@@ -121,8 +121,8 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
                     errors.push(ParseError::new(
                         ErrorCode::InvalidWordFormat,
                         Severity::Error,
-                        SourceLocation::from_offsets(0, input.len()),
-                        ErrorContext::new(input, 0..input.len(), input),
+                        DiagnosticLocation::from_offsets(0, input.len()),
+                        ErrorContext::new(input, talkbank_model::Span::new(0, input.len()), input),
                         "Failed to build word from parse tree",
                     ));
                 }

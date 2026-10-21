@@ -155,15 +155,10 @@ impl crate::validation::Validate for ReplacementWords {
 
             if !crate::validation::word::structure::has_spoken_material(replacement_word) {
                 errors.report(
-                    crate::ParseError::new(
+                    crate::ParseError::at_location(
                         crate::ErrorCode::EmptySpokenContent,
                         crate::Severity::Error,
-                        crate::SourceLocation::new(replacement_word.span),
-                        crate::ErrorContext::new(
-                            replacement_word.raw_text(),
-                            replacement_word.span,
-                            replacement_word.raw_text(),
-                        ),
+                        replacement_word.location,
                         "Replacement word is empty",
                     )
                     .with_suggestion("Remove empty word from replacement or fix parsing issue"),
@@ -172,15 +167,10 @@ impl crate::validation::Validate for ReplacementWords {
 
             if let Some(crate::model::WordCategory::Omission) = replacement_word.category {
                 errors.report(
-                    crate::ParseError::new(
+                    crate::ParseError::at_location(
                         crate::ErrorCode::ReplacementContainsOmission,
                         crate::Severity::Error,
-                        crate::SourceLocation::new(replacement_word.span),
-                        crate::ErrorContext::new(
-                            replacement_word.raw_text(),
-                            replacement_word.span,
-                            replacement_word.raw_text(),
-                        ),
+                        replacement_word.location,
                         "Replacement word cannot be an omission (0-prefix)",
                     )
                     .with_suggestion("Remove the 0 prefix from replacement words"),
@@ -189,15 +179,10 @@ impl crate::validation::Validate for ReplacementWords {
 
             if replacement_word.untranscribed().is_some() {
                 errors.report(
-                    crate::ParseError::new(
+                    crate::ParseError::at_location(
                         crate::ErrorCode::ReplacementContainsUntranscribed,
                         crate::Severity::Error,
-                        crate::SourceLocation::new(replacement_word.span),
-                        crate::ErrorContext::new(
-                            replacement_word.raw_text(),
-                            replacement_word.span,
-                            replacement_word.raw_text(),
-                        ),
+                        replacement_word.location,
                         "Replacement word cannot be untranscribed (xxx, yyy, www)",
                     )
                     .with_suggestion(
@@ -326,17 +311,18 @@ impl IntoIterator for ReplacedWordAnnotations {
 /// # Examples
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{Replacement, Word};
 ///
 /// // Single word replacement
 /// let replacement = Replacement::from_word(
-///     Word::simple("dog")
+///     Word::simple(Location::Unlocated, "dog")
 /// );
 ///
 /// // Multi-word replacement
 /// let replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![
-///     Word::simple("went"),
-///     Word::simple("home"),
+///     Word::simple(Location::Unlocated, "went"),
+///     Word::simple(Location::Unlocated, "home"),
 /// ]).expect("nonempty words"));
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
@@ -412,18 +398,21 @@ impl crate::validation::Validate for Replacement {
 /// # Examples
 ///
 /// ```
+/// use talkbank_model::Location;
 /// use talkbank_model::model::{ReplacedWord, Replacement, ContentAnnotation, ScopedError, Word};
 ///
 /// // Simple replacement
 /// let replaced = ReplacedWord::new(
-///     Word::simple("doggie"),
-///     Replacement::from_word(Word::simple("dog"))
+///     Location::Unlocated,
+///     Word::simple(Location::Unlocated, "doggie"),
+///     Replacement::from_word(Word::simple(Location::Unlocated, "dog"))
 /// );
 ///
 /// // With error annotation
 /// let replaced = ReplacedWord::new(
-///     Word::simple("goed"),
-///     Replacement::from_word(Word::simple("went"))
+///     Location::Unlocated,
+///     Word::simple(Location::Unlocated, "goed"),
+///     Replacement::from_word(Word::simple(Location::Unlocated, "went"))
 /// ).with_scoped_annotations(vec![
 ///     ContentAnnotation::Error(ScopedError { code: Some("grammar".into()) })
 /// ]);
@@ -456,26 +445,20 @@ pub struct ReplacedWord {
     pub scoped_annotations: ReplacedWordAnnotations,
 
     /// Source span for diagnostics (not serialized to JSON).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl ReplacedWord {
     /// Creates a replaced word with no scoped annotations.
-    pub fn new(word: Word, replacement: Replacement) -> Self {
+    pub fn new(location: impl Into<crate::Location>, word: Word, replacement: Replacement) -> Self {
         Self {
             word,
             replacement,
             scoped_annotations: ReplacedWordAnnotations::new(Vec::new()),
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Sets source span metadata used in diagnostics.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 
     /// Replaces scoped annotations attached to this replaced word.
@@ -509,15 +492,10 @@ impl crate::validation::Validate for ReplacedWord {
         // E387: Check if replacement is used with phonological fragment
         if let Some(crate::model::WordCategory::PhonologicalFragment) = self.word.category {
             errors.report(
-                crate::ParseError::new(
+                crate::ParseError::at_location(
                     crate::ErrorCode::ReplacementOnFragment,
                     crate::Severity::Error,
-                    crate::SourceLocation::new(self.word.span),
-                    crate::ErrorContext::new(
-                        self.word.cleaned_text(),
-                        self.word.span,
-                        self.word.cleaned_text(),
-                    ),
+                    self.word.location,
                     "Replacement [: text] is not allowed for fragments",
                 )
                 .with_suggestion(
@@ -529,15 +507,10 @@ impl crate::validation::Validate for ReplacedWord {
         // E388: Check if replacement is used with nonword
         if let Some(crate::model::WordCategory::Nonword) = self.word.category {
             errors.report(
-                crate::ParseError::new(
+                crate::ParseError::at_location(
                     crate::ErrorCode::ReplacementOnNonword,
                     crate::Severity::Error,
-                    crate::SourceLocation::new(self.word.span),
-                    crate::ErrorContext::new(
-                        self.word.cleaned_text(),
-                        self.word.span,
-                        self.word.cleaned_text(),
-                    ),
+                    self.word.location,
                     "Replacement [: text] is not allowed for nonwords",
                 )
                 .with_suggestion(
@@ -549,15 +522,10 @@ impl crate::validation::Validate for ReplacedWord {
         // E389: Check if replacement is used with filler
         if let Some(crate::model::WordCategory::Filler) = self.word.category {
             errors.report(
-                crate::ParseError::new(
+                crate::ParseError::at_location(
                     crate::ErrorCode::ReplacementOnFiller,
                     crate::Severity::Error,
-                    crate::SourceLocation::new(self.word.span),
-                    crate::ErrorContext::new(
-                        self.word.cleaned_text(),
-                        self.word.span,
-                        self.word.cleaned_text(),
-                    ),
+                    self.word.location,
                     "Replacement [: text] is not allowed for fillers",
                 )
                 .with_suggestion(
@@ -568,7 +536,7 @@ impl crate::validation::Validate for ReplacedWord {
 
         let replacement_context = context
             .clone()
-            .with_field_span(self.word.span)
+            .with_field_location(self.word.location)
             .with_field_text(self.word.cleaned_text().to_string())
             .with_field_label("replacement");
         self.replacement.validate(&replacement_context, errors);

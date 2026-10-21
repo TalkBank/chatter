@@ -14,17 +14,21 @@ pub mod item;
 pub mod tier;
 pub mod word;
 
-use crate::generated_traversal::{MorDependentTierNode, SourceBound};
+use crate::generated_traversal::MorDependentTierNode;
+use crate::parser::tier_parsers::admission::HealthyTier;
 use talkbank_model::ErrorSink;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::MorTier;
 
 pub use tier::parse_mor_tier_inner;
 
-/// Converts one `%mor` tier from a source-bound CST node.
+/// Converts one `%mor` tier from a tier admitted as recovery-free.
 ///
-/// Bind the generated node through its existing `ParsedSource` owner before
-/// calling. Equal source bytes from another parse do not establish ownership.
+/// Bind the generated node through its existing `ParsedSource` owner, then
+/// admit it with [`crate::parser::tier_parsers::admission::TierAdmission`];
+/// a tier that carries a recovery node takes the dispatcher's whole-tier
+/// recovery report instead and never enters this parser. Equal source bytes
+/// from another parse do not establish ownership.
 ///
 /// Returns [`ParseOutcome::Rejected`] when the tier has any
 /// unrecoverable parse failure: a malformed item, an unrecognized
@@ -33,16 +37,17 @@ pub use tier::parse_mor_tier_inner;
 /// whether to mark the morphology as `BlockedByMorParseFailure` (rule
 /// 6e) or skip it.
 pub fn parse_mor_tier<'tree>(
-    node: SourceBound<'tree, '_, MorDependentTierNode<'tree>>,
+    tier: HealthyTier<'tree, '_, MorDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<MorTier> {
-    parse_mor_tier_inner(node, errors)
+    parse_mor_tier_inner(tier, errors)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::generated_traversal::{AsRawNode, SourceBindingError};
+    use crate::parser::tier_parsers::admission::TierAdmission;
     use talkbank_model::ErrorCollector;
 
     #[test]
@@ -71,6 +76,9 @@ mod tests {
                 Err(SourceBindingError::ForeignTree)
             ));
             let errors = ErrorCollector::new();
+            let TierAdmission::Healthy(tier) = TierAdmission::admit(tier) else {
+                panic!("reference tier must be recovery-free");
+            };
             let ParseOutcome::Parsed(parsed) = parse_mor_tier(tier, &errors) else {
                 panic!("source-bound reference tier must parse");
             };

@@ -114,7 +114,9 @@ impl fmt::Display for BackendReport {
                 write!(
                     f,
                     "{} {:?} {:?}",
-                    finding.code, finding.severity, finding.location.span
+                    finding.code,
+                    finding.severity,
+                    finding.location.span().expect("located diagnostic")
                 )?;
             }
             f.write_str("] ")?;
@@ -197,14 +199,14 @@ impl CaseReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use talkbank_model::{ErrorSink, Span};
+    use talkbank_model::ErrorSink;
 
     fn findings(code: ErrorCode, severity: Severity) -> ErrorCollector {
         let sink = ErrorCollector::new();
-        sink.report(ParseError::at_span(
+        sink.report(ParseError::at_location(
             code,
             severity,
-            Span::DUMMY,
+            talkbank_model::Location::Unlocated,
             "instrument policy control",
         ));
         sink

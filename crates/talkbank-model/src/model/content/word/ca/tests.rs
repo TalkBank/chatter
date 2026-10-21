@@ -18,39 +18,39 @@ use crate::model::WriteChat;
 /// Builds a CA element with default span metadata.
 #[test]
 fn test_ca_element_creation() {
-    let elem = CAElement::new(CAElementType::PitchUp);
+    let elem = CAElement::new(crate::Location::Unlocated, CAElementType::PitchUp);
     assert_eq!(elem.element_type, CAElementType::PitchUp);
-    assert_eq!(elem.span, None);
+    assert_eq!(elem.location, crate::Location::Unlocated);
 }
 
 /// Preserves explicit span metadata on CA elements.
 #[test]
 fn test_ca_element_with_span() {
     let span = Span::new(0, 3);
-    let elem = CAElement::new(CAElementType::PitchUp).with_span(span);
-    assert_eq!(elem.span, Some(span));
+    let elem = CAElement::new(span, CAElementType::PitchUp);
+    assert_eq!(elem.location, crate::Location::Located(span));
 }
 
 /// Builds a CA delimiter with default span metadata.
 #[test]
 fn test_ca_delimiter_creation() {
-    let delim = CADelimiter::new(CADelimiterType::Faster);
+    let delim = CADelimiter::new(crate::Location::Unlocated, CADelimiterType::Faster);
     assert_eq!(delim.delimiter_type, CADelimiterType::Faster);
-    assert_eq!(delim.span, None);
+    assert_eq!(delim.location, crate::Location::Unlocated);
 }
 
 /// Preserves explicit span metadata on CA delimiters.
 #[test]
 fn test_ca_delimiter_with_span() {
     let span = Span::new(5, 8);
-    let delim = CADelimiter::new(CADelimiterType::Softer).with_span(span);
-    assert_eq!(delim.span, Some(span));
+    let delim = CADelimiter::new(span, CADelimiterType::Softer);
+    assert_eq!(delim.location, crate::Location::Located(span));
 }
 
 /// Serializes CA elements to their CHAT glyph form.
 #[test]
 fn test_ca_element_write_chat() {
-    let elem = CAElement::new(CAElementType::PitchUp);
+    let elem = CAElement::new(crate::Location::Unlocated, CAElementType::PitchUp);
     let mut output = String::new();
     let _ = elem.write_chat(&mut output);
     assert_eq!(output, "↑");
@@ -59,7 +59,7 @@ fn test_ca_element_write_chat() {
 /// Serializes CA delimiters to their CHAT glyph form.
 #[test]
 fn test_ca_delimiter_write_chat() {
-    let delim = CADelimiter::new(CADelimiterType::Faster);
+    let delim = CADelimiter::new(crate::Location::Unlocated, CADelimiterType::Faster);
     let mut output = String::new();
     let _ = delim.write_chat(&mut output);
     assert_eq!(output, "∆");

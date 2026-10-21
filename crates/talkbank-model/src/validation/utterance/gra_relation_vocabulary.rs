@@ -157,7 +157,7 @@ pub(crate) fn check_gra_relation_vocabulary(utterance: &Utterance, errors: &impl
             continue;
         };
         for relation in tier.relations() {
-            report_if_not_universal(relation, tier.span, errors);
+            report_if_not_universal(relation, tier.location, errors);
         }
     }
 }
@@ -165,7 +165,7 @@ pub(crate) fn check_gra_relation_vocabulary(utterance: &Utterance, errors: &impl
 /// Emit the diagnostic for one relation, when its head is unknown.
 fn report_if_not_universal(
     relation: &GrammaticalRelation,
-    span: crate::Span,
+    location: crate::Location,
     errors: &impl ErrorSink,
 ) {
     let label = relation.relation.as_str();
@@ -181,17 +181,17 @@ fn report_if_not_universal(
         None => format!("\"{label}\""),
     };
 
-    // The span covers the whole tier, so the message carries the relation's
+    // The location covers the whole tier, so the message carries the relation's
     // own triple. A tier can hold dozens of relations and a corpus editor
     // fixing these by hand needs to know WHICH one, not just that one of them
     // is wrong.
     let triple = format!("{}|{}|{}", relation.index, relation.head, label);
 
     errors.report(
-        ParseError::at_span(
+        ParseError::at_location(
             ErrorCode::GraRelationHeadNotUniversal,
             Severity::Error,
-            span,
+            location,
             format!(
                 "%gra relation {triple}: {what} is not a Universal Dependencies \
                  relation, \"{head}\" is not one of the 37 universal relations"

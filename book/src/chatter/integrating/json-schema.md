@@ -8,7 +8,9 @@ This repository generates JSON Schema from Rust-owned types with
 by `chatter to-json`.
 
 Keeping that schema generated from the Rust source of truth lets cross-language
-integrations consume a stable contract without re-deriving the shapes by hand.
+integrations consume the revision's model contract without re-deriving the
+shapes by hand. Pin the schema and producer revision together; the identifier
+alone is not a compatibility or deployment guarantee.
 
 ## Available schemas
 
@@ -17,9 +19,10 @@ integrations consume a stable contract without re-deriving the shapes by hand.
 | `ChatFile` transcript model | `https://talkbank.org/schemas/v0.1/chat-file.json` | `schema/chat-file.schema.json` | `just schema-gen` |
 
 The generated schema declares both `$schema` (JSON Schema 2020-12) and `$id`
-(the canonical URL above). External consumers that want to track the
-current transcript-model version should follow the `v0.1` URL; there is
-no `/latest/` alias in the generated artifacts.
+(the canonical URL above). Use the checked-in artifact from the producer's
+revision for reproducible validation. Its `$id` does not prove that a hosted
+copy has been updated to that revision. There is no `/latest/` alias in the
+generated artifacts.
 
 ## Transcript schema: `ChatFile`
 
@@ -57,7 +60,11 @@ chatter to-json input.cha --skip-schema-validation
 ```
 
 `chatter from-json` deserializes JSON back into the internal `ChatFile` model
-and re-serializes it to CHAT format. The input should conform to this schema.
+and re-serializes it to CHAT format. It does not run JSON Schema validation
+or whole-document CHAT validation. Deserialization enforces the model's
+deserialization rules, not all transcript invariants. Validate imported JSON
+against the matching schema and validate the resulting CHAT separately when
+admission is required.
 
 ### Roundtrip expectations
 
@@ -80,10 +87,10 @@ roundtrip test suites rather than assuming byte-for-byte identity.
 ```python
 import json
 import jsonschema
-import urllib.request
 
-schema_url = "https://talkbank.org/schemas/v0.1/chat-file.json"
-schema = json.loads(urllib.request.urlopen(schema_url).read())
+# Run from a checkout matching the producer revision.
+with open("schema/chat-file.schema.json") as f:
+    schema = json.load(f)
 
 with open("transcript.json") as f:
     data = json.load(f)
@@ -93,15 +100,9 @@ jsonschema.validate(data, schema)
 
 #### IDE autocompletion
 
-```json
-{
-  "$schema": "https://talkbank.org/schemas/v0.1/chat-file.json",
-  "lines": [],
-  "participants": {},
-  "languages": [],
-  "options": []
-}
-```
+Associate transcript JSON files with that same local schema in your editor's
+JSON settings. A schema association supplies completion and shape diagnostics;
+it does not run Chatter's cross-header, language, timing, or alignment rules.
 
 #### Generate types from the schema
 
@@ -128,7 +129,7 @@ generated artifacts stay in sync.
 - `schema/chat-file.schema.json`: generated schema
 - `crates/talkbank-transform/src/json.rs`: schema loading and validation
 - `crates/talkbank-model/src/model/`: Rust data model
-- `tests/integration/generate_schema/`: shared schema generation helpers
+- `crates/talkbank-transform/tests/integration/generate_schema/`: shared schema generation helpers
 
 Schema generation is an explicit operation: `just schema-gen` selects the
 ignored generator, and `just regen` includes it. Ordinary tests only check

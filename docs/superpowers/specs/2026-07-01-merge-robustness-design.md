@@ -1,9 +1,36 @@
 # Merge Robustness: Dedupe-on-Insert, @Languages Subset Matching, Multi-Adult-Speaker
 
-**Status:** Draft
+**Status:** Historical design; not a current implementation checklist
 **Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/superpowers/specs/2026-07-01-merge-robustness-design.md)
 
-## Context
+## Current routing and limits
+
+This July proposal records the reasoning behind participant deduplication,
+donor-language subset admission and per-speaker adult roles. Its descriptions
+of "current" behavior, line numbers, proposed signatures and test names refer
+to the design-time snapshot, not today's implementation.
+
+The maintained [Merge Architecture](../../../book/src/architecture/merge-architecture.md)
+describes the typed library assembly path. `merge_with_placement` now contains
+participant deduplication/refusal; `DeclaredLanguages::require_subset_of`
+owns declared-language subset admission. `judgment_to_pending` collects multiple
+adult roles and delegates role disambiguation. These source observations do
+not certify every proposed case or establish recording or speaker identity.
+
+Use [Adjudication Workflow](../../../book/src/architecture/adjudication-workflow.md)
+and [Override File Format](../../../book/src/chatter/integrating/merge-overrides.md)
+for maintained decision and persistence contracts. Pending/override version two
+and scripted-decision versions one/two are distinct compatibility domains;
+the proposal's schema discussion must not be applied to every input format.
+
+`chatter merge`, `chatter pipeline` and `chatter batch` have been removed.
+The proposed `chatter batch` regeneration procedure below is historical, not
+a recovery instruction. Preserve existing decision records; this document
+does not authorize deleting or regenerating them, executing corpus operations,
+or restoring removed commands. Follow [current contributor guidance](../../../AGENTS.md),
+not the companion plan's historical per-task gates or commit cadence.
+
+## Historical context
 
 A corpus-scale merge (donor ASR re-transcriptions merged into hand-made
 reference transcripts, session by session) surfaced three genuine gaps in

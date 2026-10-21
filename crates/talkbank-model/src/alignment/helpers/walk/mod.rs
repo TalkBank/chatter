@@ -87,21 +87,21 @@ pub enum ContentItem<'a> {
 impl ContentItem<'_> {
     /// The SOURCE span of this item when it is a comma separator.
     ///
-    /// `None` for a comma with no source position. Both callers exist to reason
-    /// about byte offsets, and under the re2c front end every separator carries
-    /// `Span::DUMMY` (`re2c/convert/items.rs` stamps it unconditionally), so a
-    /// comma that is real but position-less must not read as a position. One
-    /// caller guarded `!= Span::DUMMY` and the other did not, which meant `,,`
-    /// reported E258 at byte 0 under that parser. Folding the guard in here
-    /// makes the asymmetry unrepresentable rather than remembered.
+    /// `None` for a comma with no source position (an unlocated separator).
+    /// Both callers exist to reason about byte offsets, so a comma that is real
+    /// but position-less must not read as a position. Before locations were
+    /// typed, one caller guarded the `0..0` sentinel and the other did not,
+    /// which meant `,,` reported E258 at byte 0 under the re2c front end;
+    /// answering through `Location::span` here makes that asymmetry
+    /// unrepresentable rather than remembered.
     pub fn comma_span(&self) -> Option<crate::Span> {
         let Self::Separator(separator) = self else {
             return None;
         };
         separator
             .is_comma()
-            .then(|| separator.span())
-            .filter(|span| *span != crate::Span::DUMMY)
+            .then(|| separator.location())
+            .and_then(crate::Location::span)
     }
 
     /// The SOURCE span of this item when it is a word-family item.
@@ -111,11 +111,11 @@ impl ContentItem<'_> {
     /// only in which end they read.
     pub fn word_span(&self) -> Option<crate::Span> {
         match self {
-            Self::Word(word) => Some(word.span),
+            Self::Word(word) => word.location.span(),
             // The ORIGINAL word's span, not the wrapper's: both callers
             // read `replaced.word.span`, because the editorial replacement is
             // not what occupies source position here.
-            Self::ReplacedWord(replaced) => Some(replaced.word.span),
+            Self::ReplacedWord(replaced) => replaced.word.location.span(),
             Self::Separator(_)
             | Self::Event(_)
             | Self::Pause(_)

@@ -240,6 +240,7 @@ fn every_main_tier_word_resolves_as_the_row_says() -> Result<(), TestError> {
             .content
             .language_code
             .as_ref()
+            .map(|precode| &precode.code)
             .or_else(|| declared.first());
         let mut seen: Vec<(String, LanguageResolution)> = Vec::new();
         walk_words(&utterance.main.content.content, None, &mut |item| {

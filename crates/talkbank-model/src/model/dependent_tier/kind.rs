@@ -101,15 +101,154 @@ impl DependentTier {
         }
     }
 
-    /// The span of a tier line that declares NO content.
+    /// The same tier with its enclosing span re-expressed through `project`.
+    ///
+    /// For fragment owners that parse a tier inside a wrapper they built and
+    /// then clamp its span to the caller's input before moving it into the
+    /// caller's coordinates. Payload and child locations are moved by
+    /// [`SpanShift`](crate::SpanShift). An unlocated tier stays unlocated by
+    /// construction: there is no span to project, and so no way to attach a
+    /// location to a tier built without one.
+    #[must_use]
+    pub fn map_location(self, project: impl FnOnce(crate::Span) -> crate::Span) -> Self {
+        match self {
+            Self::Mor(mut t) => {
+                t.location = t.location.map(project);
+                Self::Mor(t)
+            }
+            Self::Gra(mut t) => {
+                t.location = t.location.map(project);
+                Self::Gra(t)
+            }
+            Self::Pho(mut t) => {
+                t.location = t.location.map(project);
+                Self::Pho(t)
+            }
+            Self::Mod(mut t) => {
+                t.location = t.location.map(project);
+                Self::Mod(t)
+            }
+            Self::Sin(mut t) => {
+                t.location = t.location.map(project);
+                Self::Sin(t)
+            }
+            Self::Act(mut t) => {
+                t.location = t.location.map(project);
+                Self::Act(t)
+            }
+            Self::Cod(mut t) => {
+                t.location = t.location.map(project);
+                Self::Cod(t)
+            }
+            Self::Add(mut t) => {
+                t.location = t.location.map(project);
+                Self::Add(t)
+            }
+            Self::Com(mut t) => {
+                t.location = t.location.map(project);
+                Self::Com(t)
+            }
+            Self::Exp(mut t) => {
+                t.location = t.location.map(project);
+                Self::Exp(t)
+            }
+            Self::Gpx(mut t) => {
+                t.location = t.location.map(project);
+                Self::Gpx(t)
+            }
+            Self::Int(mut t) => {
+                t.location = t.location.map(project);
+                Self::Int(t)
+            }
+            Self::Sit(mut t) => {
+                t.location = t.location.map(project);
+                Self::Sit(t)
+            }
+            Self::Spa(mut t) => {
+                t.location = t.location.map(project);
+                Self::Spa(t)
+            }
+            Self::Alt(mut t) => {
+                t.location = t.location.map(project);
+                Self::Alt(t)
+            }
+            Self::Coh(mut t) => {
+                t.location = t.location.map(project);
+                Self::Coh(t)
+            }
+            Self::Def(mut t) => {
+                t.location = t.location.map(project);
+                Self::Def(t)
+            }
+            Self::Eng(mut t) => {
+                t.location = t.location.map(project);
+                Self::Eng(t)
+            }
+            Self::Err(mut t) => {
+                t.location = t.location.map(project);
+                Self::Err(t)
+            }
+            Self::Fac(mut t) => {
+                t.location = t.location.map(project);
+                Self::Fac(t)
+            }
+            Self::Flo(mut t) => {
+                t.location = t.location.map(project);
+                Self::Flo(t)
+            }
+            Self::Modsyl(mut t) => {
+                t.location = t.location.map(project);
+                Self::Modsyl(t)
+            }
+            Self::Phosyl(mut t) => {
+                t.location = t.location.map(project);
+                Self::Phosyl(t)
+            }
+            Self::Phoaln(mut t) => {
+                t.location = t.location.map(project);
+                Self::Phoaln(t)
+            }
+            Self::Xphoint(mut t) => {
+                t.location = t.location.map(project);
+                Self::Xphoint(t)
+            }
+            Self::Gls(mut t) => {
+                t.location = t.location.map(project);
+                Self::Gls(t)
+            }
+            Self::Ort(mut t) => {
+                t.location = t.location.map(project);
+                Self::Ort(t)
+            }
+            Self::Par(mut t) => {
+                t.location = t.location.map(project);
+                Self::Par(t)
+            }
+            Self::Wor(mut t) => {
+                t.location = t.location.map(project);
+                Self::Wor(t)
+            }
+            Self::UserDefined(mut t) => {
+                t.location = t.location.map(project);
+                Self::UserDefined(t)
+            }
+            Self::Unsupported(mut t) => {
+                t.location = t.location.map(project);
+                Self::Unsupported(t)
+            }
+            Self::Tim(t) => Self::Tim(t.map_location(project)),
+        }
+    }
+
+    /// The location of a tier line that declares NO content.
     ///
     /// The two halves of the question are deliberately separate:
     /// [`Self::declares_nothing`] holds the exhaustive per-variant decision,
     /// and [`Self::span`] holds the per-variant span. Composing them here means
     /// there is exactly one of each to keep correct.
     #[must_use]
-    pub fn empty_content_span(&self) -> Option<crate::Span> {
-        self.declares_nothing().then(|| self.span())
+    pub fn empty_content_location(&self) -> Option<crate::Location> {
+        self.declares_nothing().then(|| self.location())
     }
 
     /// Returns the canonical dependent-tier identifier used in CHAT tags.
@@ -159,88 +298,42 @@ impl DependentTier {
         }
     }
 
-    /// Replace only enclosing source metadata; payload and child spans remain
-    /// unchanged. Fragment owners use this after projecting wrapper-owned labels
-    /// out of the caller range, just as each concrete tier's `with_span` does.
-    pub fn with_span(self, span: crate::Span) -> Self {
-        match self {
-            Self::Mor(t) => Self::Mor(t.with_span(span)),
-            Self::Gra(t) => Self::Gra(t.with_span(span)),
-            Self::Pho(t) => Self::Pho(t.with_span(span)),
-            Self::Mod(t) => Self::Mod(t.with_span(span)),
-            Self::Sin(t) => Self::Sin(t.with_span(span)),
-            Self::Act(t) => Self::Act(t.with_span(span)),
-            Self::Cod(t) => Self::Cod(t.with_span(span)),
-            Self::Add(t) => Self::Add(t.with_span(span)),
-            Self::Com(t) => Self::Com(t.with_span(span)),
-            Self::Exp(t) => Self::Exp(t.with_span(span)),
-            Self::Gpx(t) => Self::Gpx(t.with_span(span)),
-            Self::Int(t) => Self::Int(t.with_span(span)),
-            Self::Sit(t) => Self::Sit(t.with_span(span)),
-            Self::Spa(t) => Self::Spa(t.with_span(span)),
-            Self::Alt(t) => Self::Alt(t.with_span(span)),
-            Self::Coh(t) => Self::Coh(t.with_span(span)),
-            Self::Def(t) => Self::Def(t.with_span(span)),
-            Self::Eng(t) => Self::Eng(t.with_span(span)),
-            Self::Err(t) => Self::Err(t.with_span(span)),
-            Self::Fac(t) => Self::Fac(t.with_span(span)),
-            Self::Flo(t) => Self::Flo(t.with_span(span)),
-            Self::Modsyl(t) => Self::Modsyl(t.with_span(span)),
-            Self::Phosyl(t) => Self::Phosyl(t.with_span(span)),
-            Self::Phoaln(t) => Self::Phoaln(t.with_span(span)),
-            Self::Xphoint(t) => Self::Xphoint(t.with_span(span)),
-            Self::Gls(t) => Self::Gls(t.with_span(span)),
-            Self::Ort(t) => Self::Ort(t.with_span(span)),
-            Self::Par(t) => Self::Par(t.with_span(span)),
-            Self::Tim(t) => Self::Tim(t.with_span(span)),
-            Self::Wor(t) => Self::Wor(t.with_span(span)),
-            Self::UserDefined(mut t) => {
-                t.span = span;
-                Self::UserDefined(t)
-            }
-            Self::Unsupported(mut t) => {
-                t.span = span;
-                Self::Unsupported(t)
-            }
-        }
-    }
-
     /// Returns enclosing source metadata without affecting semantic equality
     /// or serialization. All variants expose it through this owner.
-    pub fn span(&self) -> crate::Span {
+    pub fn location(&self) -> crate::Location {
         match self {
-            DependentTier::Mor(t) => t.span,
-            DependentTier::Gra(t) => t.span,
-            DependentTier::Pho(t) => t.span,
-            DependentTier::Mod(t) => t.span,
-            DependentTier::Sin(t) => t.span,
-            DependentTier::Act(t) => t.span,
-            DependentTier::Cod(t) => t.span,
-            DependentTier::Add(t) => t.span,
-            DependentTier::Com(t) => t.span,
-            DependentTier::Exp(t) => t.span,
-            DependentTier::Gpx(t) => t.span,
-            DependentTier::Int(t) => t.span,
-            DependentTier::Sit(t) => t.span,
-            DependentTier::Spa(t) => t.span,
-            DependentTier::Alt(t) => t.span,
-            DependentTier::Coh(t) => t.span,
-            DependentTier::Def(t) => t.span,
-            DependentTier::Eng(t) => t.span,
-            DependentTier::Err(t) => t.span,
-            DependentTier::Fac(t) => t.span,
-            DependentTier::Flo(t) => t.span,
-            DependentTier::Modsyl(t) => t.span,
-            DependentTier::Phosyl(t) => t.span,
-            DependentTier::Phoaln(t) => t.span,
-            DependentTier::Xphoint(t) => t.span,
-            DependentTier::Gls(t) => t.span,
-            DependentTier::Ort(t) => t.span,
-            DependentTier::Par(t) => t.span,
-            DependentTier::Tim(t) => t.span(),
-            DependentTier::Wor(t) => t.span,
-            DependentTier::UserDefined(t) => t.span,
-            DependentTier::Unsupported(t) => t.span,
+            DependentTier::Mor(t) => t.location,
+            DependentTier::Gra(t) => t.location,
+            DependentTier::Pho(t) => t.location,
+            DependentTier::Mod(t) => t.location,
+            DependentTier::Sin(t) => t.location,
+            DependentTier::Act(t) => t.location,
+            DependentTier::Cod(t) => t.location,
+            DependentTier::Add(t) => t.location,
+            DependentTier::Com(t) => t.location,
+            DependentTier::Exp(t) => t.location,
+            DependentTier::Gpx(t) => t.location,
+            DependentTier::Int(t) => t.location,
+            DependentTier::Sit(t) => t.location,
+            DependentTier::Spa(t) => t.location,
+            DependentTier::Alt(t) => t.location,
+            DependentTier::Coh(t) => t.location,
+            DependentTier::Def(t) => t.location,
+            DependentTier::Eng(t) => t.location,
+            DependentTier::Err(t) => t.location,
+            DependentTier::Fac(t) => t.location,
+            DependentTier::Flo(t) => t.location,
+            DependentTier::Modsyl(t) => t.location,
+            DependentTier::Phosyl(t) => t.location,
+            DependentTier::Phoaln(t) => t.location,
+            DependentTier::Xphoint(t) => t.location,
+            DependentTier::Gls(t) => t.location,
+            DependentTier::Ort(t) => t.location,
+            DependentTier::Par(t) => t.location,
+            DependentTier::Tim(t) => t.location(),
+            DependentTier::Wor(t) => t.location,
+            DependentTier::UserDefined(t) => t.location,
+            DependentTier::Unsupported(t) => t.location,
         }
     }
 }

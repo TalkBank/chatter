@@ -1,6 +1,6 @@
 # talkbank-build
 
-**Last modified:** 2026-09-06 03:03 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-build/README.md)
 
 Small, standard-library-only build support for deterministic source fingerprints.
 Each consumer hashes its own packaged source directory. No repository root,
@@ -14,3 +14,6 @@ symbolic links fail the build instead of admitting a partial fingerprint.
 The digest uses FNV-1a for cache invalidation, not cryptographic attestation.
 Comments and test-only source edits deliberately invalidate too. This does not
 fingerprint the compiler, dependency lockfile, enabled features or runtime state.
+The caller must supply a stable source tree: enumeration followed by file reads
+is not an atomic filesystem snapshot. A successful digest is not a release or
+provenance certificate.

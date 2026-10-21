@@ -1,29 +1,37 @@
-//! Track construction sentinels separately from admitted boundary-test evidence.
+//! Two ratchets over how model values come to exist.
 //!
-//! The lexical count is not a correctness or CHAT-coverage metric. Named
-//! diagnostic/source-boundary tests may intentionally supply an unknown span
-//! or assert that one was refused. Their exact inventories are checked below;
-//! they do not consume the general construction allowance or claim CHAT coverage.
+//! The lexical counts are not correctness or CHAT-coverage metrics. They hold
+//! two populations at their measured size so that each may only shrink.
 //!
-//! # What this counts, and why those two spellings
+//! # What this counts, and why those spellings
 //!
-//! `new_unchecked` mints a model value without the check its safe constructor
-//! performs. `Span::DUMMY` is `Span { start: 0, end: 0 }`, which is ALSO the
-//! legal zero-width position at the first byte of a file, so a fabricated span
-//! and a measured one at the start of a document are the same value. The type's
-//! own comment concedes it, opening with "KNOWN HAZARD, for maintainers" and
-//! admitting that "the VALUE is still overloaded, and that part is not fixed".
-//! A paragraph explaining why something is safe is a work item with an address,
-//! and this gate is the address.
+//! **Fabrications.** `new_unchecked` and `from_checked_literal` mint a model
+//! value without the check its safe constructor performs. Until 2026-10-18 the
+//! list also carried `Span::DUMMY`, the sentinel `Span { start: 0, end: 0 }`,
+//! which was ALSO the legal zero-width position at the first byte of a file.
+//! The source-location batches deleted it: a value with no source position is
+//! `Location::Unlocated`, a variant, not a span that happens to be zero, so
+//! the overloaded value this gate was built to count no longer exists.
+//!
+//! **Parser-minted unlocated values.** A parser is where values are born, and
+//! it has every node's span in hand; a parser that writes `Location::Unlocated`
+//! has thrown away a location it had. The tree-sitter parser's ceiling is
+//! ZERO. The re2c parser's lexer keeps no offsets for the items inside a tier,
+//! so its count is a measured ceiling that falls as the lexer learns them.
+//! Only PRODUCTION text counts here: a parser's own tests build values by hand
+//! like every other test. `DiagnosticLocation::Unlocated` is a different
+//! statement (a diagnostic with nothing to point at, which a parser may
+//! legitimately raise about an unrepresentable input) and is not counted.
 //!
 //! # Why a ratchet rather than a ban
 //!
-//! Both spellings are load-bearing today. CHAT semantic examples belong in
-//! specs/reference inputs, but constructor, wire-format and failure-boundary
-//! tests legitimately exercise values that no parser should admit. Preserve
-//! those contracts. Typed construction is a supported producer, distinct from
-//! parser provenance; derived raw spelling cannot contradict its structure.
-//! The lexical ratchet prioritizes review, not automatic deletion of tests.
+//! Both fabrication spellings are load-bearing today. CHAT semantic examples
+//! belong in specs/reference inputs, but constructor, wire-format and
+//! failure-boundary tests legitimately exercise values that no parser should
+//! admit. Preserve those contracts. Typed construction is a supported producer,
+//! distinct from parser provenance; derived raw spelling cannot contradict its
+//! structure. The lexical ratchet prioritizes review, not automatic deletion of
+//! tests.
 //!
 //! # The dev-dependency shortcut, tried 2026-09-08 and half misread
 //!
@@ -91,7 +99,14 @@ use crate::test_hygiene::blank_literals;
 ///
 /// Deliberately literal rather than a syntactic analysis: this is a ratchet on
 /// a population, not a proof about any one call site.
-const FABRICATIONS: &[&str] = &["new_unchecked", "Span::DUMMY", "from_checked_literal"];
+const FABRICATIONS: &[&str] = &["new_unchecked", "from_checked_literal"];
+
+/// The spellings that leave a model value without a source position.
+///
+/// Matched only where the preceding character is not part of an identifier,
+/// so `DiagnosticLocation::Unlocated` is not a hit. The second spelling is the
+/// serde-default function; a parser has no business naming it either.
+const UNLOCATED_MINTS: &[&str] = &["Location::Unlocated", "Location::unlocated"];
 
 /// Per-crate ceiling.
 ///
@@ -99,7 +114,8 @@ const FABRICATIONS: &[&str] = &["new_unchecked", "Span::DUMMY", "from_checked_li
 /// it. A crate ABSENT from this list has a ceiling of ZERO, which is what stops
 /// a new crate full of fabrication from arriving without any number moving.
 const CEILING: &[(&str, usize)] = &[
-    ("chatter", 1),
+    // `chatter` left the list on 2026-10-18, batches 3c and 3d: its one
+    // sentinel was a `Span::DUMMY`.
     // `talkbank-lsp` left the list on 2026-09-09: its seven sentinels were
     // the hand-built utterances of the dependency-graph tests and of the
     // post-clitic hover-label test, all parsed CHAT now.
@@ -180,7 +196,7 @@ const CEILING: &[(&str, usize)] = &[
     // two tests of that copy branch stay, saying so, as its only pin.
     //
     // 358 -> 347 the same day: six alignment count-mismatch tests, which
-    // asserted a diagnostic landed at `Span::from_usize(0, 20)` beside a
+    // asserted a diagnostic landed at `Span::new(0, 20)` beside a
     // comment saying that span was `*CHI: one two .`. The replacement is a
     // STRONGER claim, not the same one relocated: it reads the main tier's
     // span off the parse and asserts the diagnostic points there, whatever
@@ -257,7 +273,14 @@ const CEILING: &[(&str, usize)] = &[
     // `from_checked_literal`, a door this list counts (its definition and
     // the macro's one call are the two sites that arrived); four test
     // literals in `validation/{utterance,word}/tests.rs` went through it.
-    ("talkbank-model", 100),
+    // 100 -> 99 on 2026-10-18: the gate reported the ceiling above reality
+    // (drift that predates the span geometry batch, whose sentinel counts
+    // are unchanged), tightened with the source-location batch 3a.
+    // 99 -> 23 on 2026-10-18, batches 3c and 3d: `Span::DUMMY` is gone from
+    // the language. Every former sentinel is a `Location::Unlocated` argument
+    // to a constructor that now demands one, and that spelling is not a
+    // fabrication outside the parsers (see `UNLOCATED_MINTS`).
+    ("talkbank-model", 23),
     // 8 -> 6 the same day: the user-defined and unsupported tier dispatchers
     // read their prefix through `expect_present` and one `tier_name` helper
     // (a MISSING prefix builds no tier, where its empty placeholder text
@@ -268,10 +291,15 @@ const CEILING: &[(&str, usize)] = &[
     // the checked `Word::new(NonEmptyString, WordText)`, its two emptiness
     // guards now the constructors' refusals, so the parser's one
     // `new_unchecked` call is gone.
-    ("talkbank-parser", 6),
+    // 6 -> 0 on 2026-10-18, batches 3c and 3d: the six were `Span::DUMMY`.
+    // The row is gone; the crate's ceiling is the implicit zero.
     // 23 -> 21 on 2026-09-09: the two tier labels the converter wrote for a
     // `%phoaln`/`%xphoint` line that would not parse are `non_empty_literal!`.
-    ("talkbank-parser-re2c", 21),
+    // 21 -> 18 on 2026-10-18: the same drift report as `talkbank-model`,
+    // tightened with the source-location batch 3a.
+    // 18 -> 4 the same day, batches 3c and 3d: the rest were `Span::DUMMY`,
+    // and the converter's unlocated items are counted by the second ratchet.
+    ("talkbank-parser-re2c", 4),
     // 10 -> 9 and 12 -> 11 on 2026-09-08, the first two conversions this
     // ratchet was built to make provable: `test_complex_signature` and
     // `raw_text_rebuild_preserves_nonlexical_word_markers` now PARSE their
@@ -280,38 +308,80 @@ const CEILING: &[(&str, usize)] = &[
     // writer tests are `Word::new` over compile-time non-empty literals; the
     // three `Span::DUMMY` terminators stay, a hand-built terminator having no
     // source and the writer reading no span.
-    ("talkbank-parser-tests", 6),
+    // 6 -> 0 on 2026-10-18, batches 3c and 3d: the three `Span::DUMMY`
+    // terminators of the utterance writer tests are `Location::Unlocated`,
+    // and the row is gone.
     // 11 -> 7 the same day: the sanitizer's placeholders are proven text
     // (`PlaceholderToken` holds a `NonEmptyString`, a literal prefix and
     // the index), handed to the word-text types through `From`; the
     // shortening placeholder and one test literal are `non_empty_literal!`.
-    ("talkbank-transform", 6),
+    // 6 -> 0 on 2026-10-18, batches 3c and 3d: all six were `Span::DUMMY`.
 ];
 
-/// Reviewed source-boundary evidence, not hand-built CHAT semantic examples.
-/// Exact sentinel counts are checked in both directions, including disappearance.
-const BOUNDARY_SPANS: &[(&str, usize)] = &[
-    // Observe empty-fragment unknown locations and reject missing locations
-    // on diagnostics produced from parsed source; neither constructs an AST.
-    (
-        "crates/talkbank-parser-tests/tests/integration/contextual_fragment_corpus.rs",
-        2,
-    ),
-    // Unknown-location admission, overflow and rebasing contracts.
-    (
-        "crates/talkbank-parser-tests/tests/integration/public_error_types.rs",
-        6,
-    ),
-    // Reject an external splice proposal with an unadmitted coordinate.
-    (
-        "crates/talkbank-parser-tests/tests/integration/splice_corpus.rs",
-        1,
-    ),
-    // Assertions that parsed reference decorations have real source locations.
-    (
-        "crates/talkbank-parser-tests/tests/integration/tier_decoration_corpus.rs",
-        2,
-    ),
+/// Per-parser ceiling on unlocated values minted in PRODUCTION code.
+///
+/// A RATCHET like [`CEILING`], over the parser crates only: every other crate
+/// may build an unlocated value, which is what `Location::Unlocated` is for.
+const PARSER_UNLOCATED_CEILING: &[(&str, usize)] = &[
+    // Every node has a span, and the fragment API rebases what it wraps. The
+    // one fallback arm it had (an annotated word's wrapper span, read off the
+    // word "in case" it was unlocated) went with batch 3c: the construct
+    // starts where its node starts.
+    ("talkbank-parser", 0),
+    // The re2c lexer records offsets for tiers, words and headers, not for the
+    // separators, terminators, markers and `%mor`/`%gra` items inside a tier,
+    // which it rebuilds from kinds alone. Measured on 2026-10-18 with batch
+    // 3c; falls as the lexer learns the offsets.
+    // 110 -> 107 on 2026-10-18: a spelling change, not learned offsets. The
+    // main tier's three positional locations became one
+    // `MainTierLocations::UNLOCATED`, which this textual count does not see;
+    // the three unlocated parts are still unlocated.
+    // 107 -> 55 on 2026-10-18 (Part B1): learned offsets. Tokens for
+    // terminators, linkers, overlap and underline markers, the action marker
+    // and `%wor` separators carry their whole lexeme, located through
+    // `convert::locate`; main-tier locations and dependent- and text-tier
+    // extents come from the line machine (`LexedSource::main_tier_locations`,
+    // `LexedSource::extent`). What remains: items whose rich token keeps only
+    // a payload (the `[- eng]` precode, events, freecodes, long features,
+    // nonvocals, other spoken events), hull extents for retraces, groups,
+    // quotations and replaced words, word-body markers and the media comma's
+    // leading whitespace (Parts B3 and B4).
+    // 55 -> 44 on 2026-10-19 (Part B3): every `WordBodyItem` marker carries
+    // its lexeme (compound, stress, syllable pause, clitic boundary, overlap
+    // point, CA element and delimiter, underline begin and end) and the
+    // lengthening run is a `LengtheningRun`, so `convert/words.rs` places
+    // them through `convert::locate`. What remains there is the word's own
+    // `map_or` fallback for a subtoken-rebuilt `raw_text`.
+    // 44 -> 21 on 2026-10-19 (Part B4, lexer): every tag-extracting rule
+    // (`emit_t1!`, `emit_t1t2!`) emits an `Extracted` carrying its payload AND
+    // its whole lexeme, so events, freecodes, long features, nonvocals, the
+    // other-spoken event, the `[- eng]` precode, bullets (main-tier, inline
+    // and `%wor`) and the media comma's leading whitespace are placed at
+    // themselves. What remains: hull extents for retraces, groups, quotations
+    // and replaced words and their `Annotated` wrappers (no opening or
+    // closing token kept yet), an orphan annotation lowered as a freecode
+    // (`ParsedAnnotation` and `ScopedAnnotationParsed` still carry payload
+    // slices; carrying `Extracted` there is the companion to the hull work),
+    // the subtoken-rebuilt word's `raw_text`, and the honest `Unlocated`
+    // arms of `locate` and the slice fallbacks.
+    // 21 -> 3 on 2026-10-19 (Part B4, hulls): every annotation keeps its
+    // lexeme (`ScopedAnnotationParsed`, `ParsedAnnotation::Retrace`, the
+    // precode and postcode tokens), groups and quotations keep their
+    // delimiters (`Enclosure`), a retrace keeps its marker and, when it took
+    // a bare group's brackets, those too, and a replacement keeps its `[:`.
+    // Retraces, groups, quotations, replaced words, their `Annotated`
+    // wrappers (at both content levels) and orphan-annotation freecodes are
+    // placed as hulls; the parser's pre-parse mirror of E757 is gone, since
+    // the model rule now fires on these wrappers.
+    // 3 -> 2 on 2026-10-19 (Part B4, words): a word the parser assembles from
+    // subtokens borrows its covering source slice (first token through last)
+    // instead of concatenating display forms, so every word is placed and
+    // the annotated hull refuses like the retrace hulls instead of skipping.
+    // What remains, textually: the one honest fallback arm of `located`,
+    // which every placement routes through, and the separator slice
+    // fallback. Both answer `Unlocated` only for a slice that is not from
+    // the source being converted, a programming error.
+    ("talkbank-parser-re2c", 2),
 ];
 
 /// Fabricated-AST construction may only fall.
@@ -327,72 +397,62 @@ impl Gate for FabricatedAstGate {
             Ok(counted) => counted,
             Err(failure) => return Outcome::failed(failure),
         };
-        let recorded: BTreeMap<&str, usize> = CEILING.iter().copied().collect();
+        let fabricated: BTreeMap<String, usize> = counted
+            .iter()
+            .map(|(crate_name, counts)| (crate_name.clone(), counts.fabrications))
+            .collect();
+        // Only the parsers are held on unlocated mints; every other crate's
+        // count is measured and ignored, which is what makes the row list the
+        // whole policy.
+        let parser_rows: BTreeMap<&str, usize> = PARSER_UNLOCATED_CEILING.iter().copied().collect();
+        let unlocated: BTreeMap<String, usize> = counted
+            .iter()
+            .filter(|(crate_name, _)| parser_rows.contains_key(crate_name.as_str()))
+            .map(|(crate_name, counts)| (crate_name.clone(), counts.unlocated_mints))
+            .collect();
 
-        let mut grew: Vec<String> = Vec::new();
-        let mut shrank: Vec<String> = Vec::new();
-        let mut vanished: Vec<String> = Vec::new();
-        for standing in standings(&counted, &recorded) {
-            match standing {
-                Standing::Listed {
-                    crate_name,
-                    now,
-                    was,
-                } => match now.cmp(&was) {
-                    Ordering::Greater => {
-                        grew.push(format!("{crate_name}: {was} -> {now}, {} added", now - was));
-                    }
-                    Ordering::Less => {
-                        shrank.push(format!("(\"{crate_name}\", {now}),   // was {was}"));
-                    }
-                    Ordering::Equal => {}
-                },
-                Standing::Unlisted { crate_name, now } => {
-                    if now > 0 {
-                        grew.push(format!(
-                            "{crate_name}: 0 -> {now}, {now} added \
-                             (no ceiling row, so the ceiling is zero)"
-                        ));
-                    }
-                }
-                Standing::Vanished { crate_name, was } => {
-                    vanished.push(format!(
-                        "{crate_name}: the ceiling records {was}, and no file of that \
-                         crate is in the tree"
-                    ));
-                }
-            }
-        }
+        let mut verdict = Verdict::default();
+        verdict.absorb(
+            "fabrication",
+            &fabricated,
+            &CEILING.iter().copied().collect(),
+        );
+        verdict.absorb("parser-minted unlocated value", &unlocated, &parser_rows);
 
-        if grew.is_empty() && shrank.is_empty() && vanished.is_empty() {
-            let total: usize = counted.values().sum();
-            let carrying = counted.values().filter(|found| **found > 0).count();
+        if verdict.is_clean() {
+            let total: usize = fabricated.values().sum();
+            let carrying = fabricated.values().filter(|found| **found > 0).count();
+            let minted: Vec<String> = unlocated
+                .iter()
+                .map(|(crate_name, now)| format!("{crate_name} {now}"))
+                .collect();
             return tree.clean(format!(
                 "fabricated-AST construction: {total} across {carrying} crate(s), at the \
-                 ceiling"
+                 ceiling; parser-minted unlocated values: {}, at the ceiling",
+                minted.join(", ")
             ));
         }
         Outcome::failed(report([
             listing(
-                "FAIL: fabricated-AST construction GREW. A test that builds its own\n\
-                 AST states the input twice, and nothing forces the raw text and the\n\
-                 parsed structure to agree. Reach for a spec example, which is\n\
-                 lowered to a real file and run through both stages, before reaching\n\
-                 for another fabricated one:",
-                &grew,
+                "FAIL: the population GREW. A test that builds its own AST states the\n\
+                 input twice, and nothing forces the raw text and the parsed structure\n\
+                 to agree; a parser that leaves a value unlocated has thrown away a\n\
+                 span it had. Reach for a spec example, which is lowered to a real\n\
+                 file and run through both stages, or pass the node's span:",
+                &verdict.grew,
             ),
             listing(
                 "FAIL: the ceiling now sits ABOVE reality, which leaves room for a new\n\
                  fabrication to arrive under cover of an unrelated deletion. Lower\n\
                  these in this commit:",
-                &shrank,
+                &verdict.shrank,
             ),
             listing(
                 "FAIL: the ceiling names a crate the walk never saw. A rename moves\n\
                  every one of its fabrications to a crate with no row, and a deletion\n\
                  is progress that has to be banked rather than left as headroom.\n\
                  Move the row or delete it:",
-                &vanished,
+                &verdict.vanished,
             ),
         ]))
     }
@@ -402,7 +462,10 @@ impl Gate for FabricatedAstGate {
             "a new fabrication in a crate already at its ceiling",
             "1 added",
             |edit| {
-                edit.write(PROBE_FILE, "fn f() { let s = Span::DUMMY; }\n");
+                edit.write(
+                    PROBE_FILE,
+                    "fn f() { let s = Span::new_unchecked(0, 0); }\n",
+                );
                 Ok(())
             },
         )
@@ -412,27 +475,51 @@ impl Gate for FabricatedAstGate {
             |edit| {
                 edit.write(
                     "crates/talkbank-probe-new/src/lib.rs",
-                    "fn f() { let s = Span::DUMMY; }\n",
+                    "fn f() { let s = Span::new_unchecked(0, 0); }\n",
                 );
                 Ok(())
             },
         )
         .refusing(
-            "a reviewed boundary gains another sentinel",
-            "boundary sentinel inventory changed",
+            "an unlocated value minted in the tree-sitter parser",
+            "talkbank-parser: 0 -> 1",
             |edit| {
-                let (path, _) = BOUNDARY_SPANS[0];
-                let mut source = edit.read(path)?;
-                source.push_str("\nfn extra() { let s = Span::DUMMY; }\n");
-                edit.write(path, source);
+                edit.write(
+                    PARSER_PROBE_FILE,
+                    "fn f() -> talkbank_model::Location { talkbank_model::Location::Unlocated }\n",
+                );
                 Ok(())
             },
         )
-        .refusing(
-            "a reviewed boundary disappears",
-            "boundary sentinel inventory changed",
+        .accepting(
+            "an unlocated value in a parser's TESTS is not a mint",
             |edit| {
-                edit.write(BOUNDARY_SPANS[0].0, "// removed boundary\n");
+                edit.write(
+                PARSER_PROBE_FILE,
+                "fn f() {}\n#[cfg(test)]\nmod tests {\n    fn g() -> talkbank_model::Location { \
+                 talkbank_model::Location::Unlocated }\n}\n",
+            );
+                Ok(())
+            },
+        )
+        .accepting(
+            "an unlocated DIAGNOSTIC is not an unlocated value",
+            |edit| {
+                edit.write(
+                    PARSER_PROBE_FILE,
+                    "fn f() -> talkbank_model::DiagnosticLocation { \
+                 talkbank_model::DiagnosticLocation::Unlocated }\n",
+                );
+                Ok(())
+            },
+        )
+        .accepting(
+            "an unlocated value outside the parsers is a builder's right",
+            |edit| {
+                edit.write(
+                    PROBE_FILE,
+                    "fn f() -> crate::Location { crate::Location::Unlocated }\n",
+                );
                 Ok(())
             },
         )
@@ -456,7 +543,8 @@ impl Gate for FabricatedAstGate {
                 // deletion half is the one that used to pass silently: with
                 // absence reading as zero, `chatter` went 1 -> 0 and the gate
                 // said "lower the ceiling", banking a cleanup nobody did.
-                edit.remove_dir("crates/chatter");
+                // `chatter` has no row now; the re2c parser sits in both lists.
+                edit.remove_dir("crates/talkbank-parser-re2c");
                 Ok(())
             },
         )
@@ -473,14 +561,17 @@ impl Gate for FabricatedAstGate {
             |edit| {
                 edit.write(
                     PROBE_FILE,
-                    "// Never write Span::DUMMY here, and never new_unchecked.\n\
-                     /// `Span::DUMMY` is the hazard this gate counts.\n",
+                    "// Never write new_unchecked here, and never from_checked_literal.\n\
+                     /// `new_unchecked` is the hazard this gate counts.\n",
                 );
                 Ok(())
             },
         )
         .accepting("a file outside `crates/` is out of scope", |edit| {
-            edit.write("xtask/src/probe.rs", "fn f() { let s = Span::DUMMY; }\n");
+            edit.write(
+                "xtask/src/probe.rs",
+                "fn f() { let s = Span::new_unchecked(0, 0); }\n",
+            );
             Ok(())
         })
     }
@@ -548,11 +639,78 @@ fn standings<'a>(
     all
 }
 
-/// The file every counting probe writes into.
+/// The file every fabrication-counting probe writes into.
 ///
 /// Under a crate that already has a ceiling, so the probe that adds one moves
 /// that crate's number rather than introducing a crate.
 const PROBE_FILE: &str = "crates/talkbank-model/src/probe_fabricated_ast.rs";
+
+/// The file the unlocated-mint probes write into: production text of the
+/// tree-sitter parser, whose ceiling is zero.
+const PARSER_PROBE_FILE: &str = "crates/talkbank-parser/src/probe_unlocated.rs";
+
+/// The three failure lists one population contributes to the report.
+///
+/// Both populations are judged by the same three rules ([`Standing`]), so the
+/// judging is written once and each population names itself in its rows.
+#[derive(Default)]
+struct Verdict {
+    grew: Vec<String>,
+    shrank: Vec<String>,
+    vanished: Vec<String>,
+}
+
+impl Verdict {
+    fn is_clean(&self) -> bool {
+        self.grew.is_empty() && self.shrank.is_empty() && self.vanished.is_empty()
+    }
+
+    /// Judge one population against its ceiling rows.
+    fn absorb(
+        &mut self,
+        population: &str,
+        counted: &BTreeMap<String, usize>,
+        recorded: &BTreeMap<&str, usize>,
+    ) {
+        for standing in standings(counted, recorded) {
+            match standing {
+                Standing::Listed {
+                    crate_name,
+                    now,
+                    was,
+                } => match now.cmp(&was) {
+                    Ordering::Greater => self.grew.push(format!(
+                        "{crate_name}: {was} -> {now}, {} added ({population})",
+                        now - was
+                    )),
+                    Ordering::Less => self.shrank.push(format!(
+                        "(\"{crate_name}\", {now}),   // was {was} ({population})"
+                    )),
+                    Ordering::Equal => {}
+                },
+                Standing::Unlisted { crate_name, now } => {
+                    if now > 0 {
+                        self.grew.push(format!(
+                            "{crate_name}: 0 -> {now}, {now} added \
+                             (no ceiling row, so the ceiling is zero; {population})"
+                        ));
+                    }
+                }
+                Standing::Vanished { crate_name, was } => self.vanished.push(format!(
+                    "{crate_name}: the ceiling records {was}, and no file of that \
+                     crate is in the tree ({population})"
+                )),
+            }
+        }
+    }
+}
+
+/// What one crate's files add up to, in both populations.
+#[derive(Clone, Copy, Default)]
+struct Counts {
+    fabrications: usize,
+    unlocated_mints: usize,
+}
 
 /// Occurrences per crate, over the CODE of each file.
 ///
@@ -561,26 +719,11 @@ const PROBE_FILE: &str = "crates/talkbank-model/src/probe_fabricated_ast.rs";
 /// When the walk fails or a file cannot be read. Either makes the count a floor
 /// rather than a measurement, and a floor compared against a ceiling reports
 /// progress that did not happen.
-fn count_by_crate(tree: &ReadTree) -> Result<BTreeMap<String, usize>, String> {
-    // Admit the entire reviewed inventory before subtracting any allowance.
-    // A missing/changed entry never produces a partial clean measurement.
-    for &(path, expected) in BOUNDARY_SPANS {
-        let source = tree
-            .read_to_string(&crate::gate::tree::RelPath::new(path))
-            .map_err(|err| format!("FAIL: boundary sentinel inventory changed: {path}: {err}"))?;
-        let blanked = blank_literals(&source);
-        if blanked.matches("Span::DUMMY").count() != expected
-            || fabrications_in(&source) != expected
-        {
-            return Err(format!(
-                "FAIL: boundary sentinel inventory changed: {path}; review its {expected} admitted unknown-span observations"
-            ));
-        }
-    }
+fn count_by_crate(tree: &ReadTree) -> Result<BTreeMap<String, Counts>, String> {
     let files = tree
         .files_under("crates")
         .map_err(|err| format!("FAIL: could not enumerate the crates tree: {err}"))?;
-    let mut per: BTreeMap<String, usize> = BTreeMap::new();
+    let mut per: BTreeMap<String, Counts> = BTreeMap::new();
     for path in files {
         let as_str = path.as_str();
         if as_str.contains("/target/") {
@@ -598,22 +741,25 @@ fn count_by_crate(tree: &ReadTree) -> Result<BTreeMap<String, usize>, String> {
             let text = tree.read_to_string(&path).map_err(|err| {
                 format!("FAIL: a file could not be read, so the count is a floor: {err}")
             })?;
-            if BOUNDARY_SPANS
-                .iter()
-                .any(|(boundary, _)| *boundary == as_str)
-            {
-                0
-            } else {
-                fabrications_in(&text)
+            Counts {
+                fabrications: fabrications_in(&text),
+                unlocated_mints: if is_test_path(as_str) {
+                    0
+                } else {
+                    unlocated_mints_in(production_text(&text))
+                },
             }
         } else {
-            0
+            Counts::default()
         };
         // Not `entry(crate_name.to_owned())`, which allocates the key on every
         // file to throw it away on all but the first. The name is only owned
         // when it is first seen.
         match per.get_mut(crate_name) {
-            Some(running) => *running += found,
+            Some(running) => {
+                running.fabrications += found.fabrications;
+                running.unlocated_mints += found.unlocated_mints;
+            }
             None => {
                 per.insert(crate_name.to_owned(), found);
             }
@@ -666,6 +812,40 @@ fn fabrications_in(source: &str) -> usize {
         .sum()
 }
 
+/// Whether a path holds tests by convention: an integration `tests/` tree or
+/// a `tests.rs` / `_tests.rs` module file.
+fn is_test_path(path: &str) -> bool {
+    path.contains("/tests/") || path.ends_with("tests.rs")
+}
+
+/// The production part of a source file: everything before its first
+/// `#[cfg(test)]`. Inline test modules sit at the end of a file in this
+/// workspace, and the limit is declared in [`UNPROVEN`].
+fn production_text(source: &str) -> &str {
+    match source.find("#[cfg(test)]") {
+        Some(end) => &source[..end],
+        None => source,
+    }
+}
+
+/// Occurrences of [`UNLOCATED_MINTS`] in the CODE of `source`, where the
+/// character before the match is not part of an identifier: so
+/// `crate::Location::Unlocated` and `talkbank_model::Location::Unlocated`
+/// count and `DiagnosticLocation::Unlocated` does not.
+fn unlocated_mints_in(source: &str) -> usize {
+    let blanked = blank_literals(source);
+    UNLOCATED_MINTS
+        .iter()
+        .flat_map(|needle| blanked.match_indices(needle))
+        .filter(|(at, _)| {
+            !blanked[..*at]
+                .chars()
+                .next_back()
+                .is_some_and(|before| before.is_alphanumeric() || before == '_')
+        })
+        .count()
+}
+
 /// What no plant of this gate reaches.
 static UNPROVEN: &[UnprovenRule] = &[
     UnprovenRule::new(
@@ -677,10 +857,29 @@ static UNPROVEN: &[UnprovenRule] = &[
     ),
     UnprovenRule::new(
         "BLOCK COMMENTS, which `blank_literals` does not handle",
-        "`/* Span::DUMMY */` counts, because `blank_literals` blanks `//` line \
+        "`/* new_unchecked */` counts, because `blank_literals` blanks `//` line \
          comments and string literals only. A plant of that shape WOULD make \
          the gate fire, as a false positive of the counter rather than of the \
          rule, so it is a bad probe. Three sibling gates declare the identical \
          limit.",
+    ),
+    UnprovenRule::new(
+        "SPELLING: the unlocated-mint count is textual",
+        "`UNLOCATED_MINTS` are matched as text. A `use talkbank_model::Location::Unlocated;` \
+         followed by bare `Unlocated` counts once for the import however many \
+         values it mints, and a consumer's `Location::Unlocated => ..` match arm \
+         in parser production code counts as a mint although it mints nothing. \
+         The first is a cheap evasion and the second forbids a legitimate match \
+         in a crate held at zero; both are limits of a text scan, declared \
+         rather than probed, because a probe of either would pass or fail for \
+         the counter's reason, not the rule's.",
+    ),
+    UnprovenRule::new(
+        "PLACEMENT of `#[cfg(test)]`, which ends the production text",
+        "The unlocated-mint count reads a file up to its first `#[cfg(test)]`, \
+         which is where this workspace puts inline test modules. A test module \
+         ABOVE production code would hide the production text below it from \
+         the count. A plant of that shape would pass, as a false negative of \
+         the cut rather than of the rule, so it is not probed.",
     ),
 ];

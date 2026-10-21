@@ -21,7 +21,7 @@
 // Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.
 #![deny(clippy::wildcard_enum_match_arm)]
 use crate::model::{Bullet, ChatFile, UtteranceContent, Word};
-use crate::{ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorContext, ErrorSink, ParseError, Severity, Span};
 use std::collections::HashMap;
 
 // Import error codes
@@ -144,10 +144,10 @@ fn validate_global_timeline(bullets: &[BulletInfo], errors: &impl ErrorSink) {
                 ParseError::new(
                     E701,
                     Severity::Error,
-                    SourceLocation::new(bullet_info.bullet.span),
+                    DiagnosticLocation::from(bullet_info.bullet.location),
                     ErrorContext::new(
                         bullet_text(bullet_info.bullet),
-                        Span::from_usize(0, bullet_text(bullet_info.bullet).len()),
+                        Span::new(0, bullet_text(bullet_info.bullet).len()),
                         bullet_text(bullet_info.bullet),
                     ),
                     format!(
@@ -195,10 +195,10 @@ fn validate_speaker_timelines(bullets: &[BulletInfo], errors: &impl ErrorSink) {
                     ParseError::new(
                         E704,
                         Severity::Error,
-                        SourceLocation::new(bullet_info.bullet.span),
+                        DiagnosticLocation::from(bullet_info.bullet.location),
                         ErrorContext::new(
                             bullet_text(bullet_info.bullet),
-                            Span::from_usize(0, bullet_text(bullet_info.bullet).len()),
+                            Span::new(0, bullet_text(bullet_info.bullet).len()),
                             bullet_text(bullet_info.bullet),
                         ),
                         format!(
@@ -238,7 +238,6 @@ fn bullet_text(bullet: &Bullet) -> String {
 #[cfg(test)]
 mod tests {
     use super::has_transcribed_content;
-    use crate::Span;
     use crate::model::{
         BracketedContent, BracketedItem, Group, Retrace, RetraceKind, UtteranceContent, Word,
         WordCategory,
@@ -249,7 +248,8 @@ mod tests {
     #[test]
     fn fillers_count_as_transcribed_content() {
         let content = vec![UtteranceContent::Word(Box::new(
-            Word::new_unchecked("you_know").with_category(WordCategory::Filler),
+            Word::new_unchecked(crate::Location::Unlocated, "you_know")
+                .with_category(WordCategory::Filler),
         ))];
 
         assert!(has_transcribed_content(&content));
@@ -257,7 +257,10 @@ mod tests {
 
     #[test]
     fn untranscribed_only_content_has_no_lexical_transcription() {
-        let content = vec![UtteranceContent::Word(Box::new(Word::new_unchecked("xxx")))];
+        let content = vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
+            crate::Location::Unlocated,
+            "xxx",
+        )))];
 
         assert!(!has_transcribed_content(&content));
     }
@@ -268,18 +271,19 @@ mod tests {
     fn retraced_words_are_transcribed_content() {
         let retraced = Retrace {
             content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+                crate::Location::Unlocated,
                 "dog",
             )))]),
             kind: RetraceKind::Full,
             is_group: true,
-            span: Span::from_usize(0, 0),
-            marker_span: None,
+            location: crate::Location::Unlocated,
+            marker_location: crate::Location::Unlocated,
         };
         let content = vec![
             UtteranceContent::Retrace(Box::new(retraced)),
             // Everything OUTSIDE the retrace is untranscribed, so the retrace
             // is the only thing that supplies lexical transcription.
-            UtteranceContent::Word(Box::new(Word::simple("xxx"))),
+            UtteranceContent::Word(Box::new(Word::simple(crate::Location::Unlocated, "xxx"))),
         ];
 
         assert!(has_transcribed_content(&content));
@@ -291,9 +295,10 @@ mod tests {
     fn words_nested_inside_a_bracketed_group_are_transcribed_content() {
         let inner = Group {
             content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+                crate::Location::Unlocated,
                 "dog",
             )))]),
-            span: Span::from_usize(0, 0),
+            location: crate::Location::Unlocated,
             trailing_space: None,
         };
         let outer = Group {
@@ -301,7 +306,7 @@ mod tests {
             // means and could not say until `BracketedItem::Group` existed: it
             // used to build an ANNOTATED group with an empty list.
             content: BracketedContent::new(vec![BracketedItem::Group(inner)]),
-            span: Span::from_usize(0, 0),
+            location: crate::Location::Unlocated,
             trailing_space: None,
         };
         let content = vec![UtteranceContent::Group(outer)];

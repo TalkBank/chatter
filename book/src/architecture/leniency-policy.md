@@ -3,36 +3,34 @@
 **Status:** Current
 **Last updated:** {{git-dates:page}}
 
-This document is the single source of truth for how the tree-sitter grammar,
-Rust validation layer, and CLI tooling divide responsibility for enforcing the
-CHAT specification. It consolidates decisions scattered across `grammar.js`
-comments, analysis documents, and code.
+This chapter records selected leniency rulings and explains how grammar,
+validation and presentation differ. The grammar, authored specifications and
+owning implementations remain authoritative for their contracts; this prose is
+not an exhaustive acceptance matrix.
 
 > **Scope**: Documentation only. This document does not implement new validation
-> rules; it records what exists, what is intentionally absent, and proposes a
-> roadmap for closing gaps.
+> rules or authorize stricter profiles. Retained rulings are not reopened merely
+> because a documentation description needs correction.
 
 ---
 
 ## Philosophy: Parse, Don't Validate
 
-The tree-sitter grammar intentionally accepts a **superset** of valid CHAT. The
-rationale:
+The grammar recognizes structure, including some forms whose validity requires
+later context. Tree-sitter can also recover from syntax errors. Recovery is not
+a declaration that the input belongs to valid CHAT, and rejected syntax can
+still produce diagnostics even when no model can be built.
 
-1. **Maximise parse coverage**: Real-world `.cha` files contain legacy patterns,
-   whitespace variations, and edge cases. A grammar that rejects them produces no
-   AST and therefore no diagnostics. Accepting them gives the validation layer
-   something to work with.
+Separate three questions:
 
-2. **Separate syntax from semantics**: The grammar captures structure (headers,
-   utterances, tiers, annotations). The Rust validation layer enforces semantic
-   rules (required headers, participant declarations, alignment counts).
+1. What structure could the parser build, and what diagnostics did it emit?
+2. Does that structure and its source provenance pass the selected validation?
+3. Which already-produced diagnostics should a user interface display?
 
-3. **Enable configurable strictness**: Different consumers need different
-   policies. A roundtrip pipeline can be strict; an editor providing live
-   diagnostics should be lenient. Validation profiles (see
-   [Validation Profile Infrastructure](#validation-profile-infrastructure)) make
-   this possible.
+An editor may retain recovery content for inspection without admitting it for
+transformation. A roundtrip alone does not certify validity. See
+[parser/model contracts](parser-model-contracts.md) and
+[validation architecture](errors-and-validation/validation.md).
 
 ### Three-Tier Classification
 
@@ -51,32 +49,27 @@ formalised here.
 
 ## Leniency Matrix
 
-Master table of every documented leniency decision in the grammar. The
-**Status** column indicates whether downstream validation compensates for the
-grammar's permissiveness.
+The earlier table mixed current behavior, approximate line numbers and obsolete
+MOR rules. Use these source-owned references instead of treating an optional
+grammar position as permission to omit required information:
 
-| # | Grammar Construct | Spec Requirement | Grammar Behavior | Tier | Validation | Error Code | Status |
-|---|---|---|---|---|---|---|---|
-| 1 | `@UTF8` header | Required, must be first line | Optional (not enforced) | A | Validated | E503 | OK |
-| 2 | `@Begin` header | Required | Optional (`grammar.js` ~L104) | A | Validated | E504 | OK |
-| 3 | `@End` header | Required | Optional (`grammar.js` ~L106) | A | Validated | E502 | OK |
-| 4 | Pre-first-utterance header order | No enforced order (matches CLAN CHECK) | `choice()`, any order (`grammar.js` ~L122-135) | C | N/A (by design) |, | OK |
-| 5 | Headers after utterances | Allowed (e.g. `@Bg`, `@Eg`, `@G`, `@Comment`) | Interleaved freely | C | N/A (by design) |, | OK |
-| 6 | Content type context restrictions | Unified across contexts | Unified `base_content_item` (`grammar.js` ~L731-738) | C | N/A (by design); specific semantic rules (E371, E372) exist separately |, | OK |
-| 7 | Terminator presence | Required (except CA mode) | Optional (`grammar.js` ~L691-692) | A | Validated | E305 | OK |
-| 8 | Bare shortening as word | CA mode only | Accepted anywhere | A | Validated | E2xx | OK |
-| 9 | Trailing whitespace in annotations | Not specified | Optional trailing space (`grammar.js` ~L957, 966, 975, 1004, 1013) | C | N/A |, | OK |
-| 10 | MOR segment Unicode | Very permissive (broad language support) | Exclusion-based regex (`grammar.js` ~L1909-1915) | C | N/A (by design) |, | OK |
-| 11 | MOR fusional suffixes with hyphens | ALNUM + IPA only | Allows hyphens (`grammar.js` ~L1942-1945) | C | N/A (by design) |, | OK |
-| 12 | MOR nested translations | No nested structures | Allows `()` and `[]` nesting (`grammar.js` ~L1954-1966) | C | N/A (by design) |, | OK |
-| 13 | Linkers / language codes | Truly optional | Optional | C | N/A |, | OK |
-| 14 | Word annotations | Truly optional | Optional | C | N/A |, | OK |
-| 15 | Media bullet | Truly optional | Optional | C | N/A |, | OK |
-| 16 | Group whitespace (leading/trailing) | No whitespace inside `<` `>` | Optional (`grammar.js` ~L1097, 1099) | C | N/A |, | OK |
-| 17 | Long feature label characters | Limited character set | `/[A-Za-z0-9@%_-]+/` (`grammar.js` ~L1327) | C | N/A |, | OK |
-| 18 | Catch-all headers (`$.anything`) | Structured content for some headers | `/[^\r\n]+/` for ~19 header types | C | N/A (content is opaque) |, | OK |
-| 19 | Header gap whitespace | Single space/tab | `repeat1(choice(space, tab))` (`grammar.js` ~L467, 477, 489) | C | N/A |, | OK |
-| 20 | `@Types` header whitespace | No spaces around commas | Optional whitespace around commas (`grammar.js` ~L584-592) | C | N/A |, | OK |
+| Boundary | Owning reference |
+| --- | --- |
+| Required headers and contextual header rules | [Headers](../chat-format/headers.md) and authored error specifications |
+| Terminators and CA exceptions | [CA options](../chat-format/options.md) |
+| MOR lexical structure, features and required terminator | [MOR](../chat-format/mor-tier.md) |
+| Nested content and tier-specific projections | [Dependent tiers](../chat-format/dependent-tiers.md) |
+| Optional timing versus timing validity | [Bullet validation](bullet-validation.md) |
+| Diagnostic selection, presentation and cache reuse | [Validation cache](parser-and-grammar/validation-cache.md) |
+
+MOR is currently a main morphological word plus optional post-clitics, with
+POS/lemma/features and a required tier terminator. It has no separate nested
+translation or fusional-suffix grammar of the form previously listed here.
+Opaque retained characters are not semantic support for a legacy dialect.
+
+The A/B/C labels classify individual decisions, not whole constructs. For
+example, a bullet may be optional in one position while any supplied bullet
+still has syntax, interval and media-linkage obligations.
 
 ---
 
@@ -152,21 +145,25 @@ log, archived, holds the full record).
 
 - **Behaviour**: `E701`/`E704` run for every file, CA included; there is no
   CA-mode skip.
-- **Rationale**: the temporal rules carry a 500 ms tolerance and per-speaker
-  semantics, and with them the CA reference files and all 994 kept
-  CA-declared files validate clean (full-population measurement). A CA-mode
-  skip has no CLAN CHECK counterpart and would be internally incoherent:
-  `E362` bullet monotonicity runs on CA files, so `E701`/`E704` must too.
+- **Rationale**: CA does not waive the temporal rules. Timing selection,
+  tolerance, per-speaker comparisons and the separate E704 producers are
+  described in [bullet validation](bullet-validation.md). `E362` remains
+  applicable too. Do not infer a current population-wide acceptance result
+  from this policy.
 - **Revisit**: closed. No CA-specific temporal policy is needed: no policy
   difference between CA and non-CA files exists.
 
-### Decision 7: Pipeline severity threshold, errors only
+### Decision 7: Ordinary warnings do not block admission
 
-- **Behaviour**: Pipeline returns failure only if at least one diagnostic
-  has `Severity::Error`.
+- **Behaviour**: Ordinary warning diagnostics do not alone cause failure.
+  This is not the converse claim that every failure requires an error-severity
+  diagnostic: internal failures, rejected parsing and incomplete validation
+  have explicit failure paths.
 - **Implementation**: `talkbank-transform/src/pipeline/parse.rs`.
 - **Rationale**: Warnings should not block parse/transform/export pipelines.
-- **Revisit**: Keep as default; add explicit `--strict` flag/profile if needed.
+- **Boundary**: `CompletedDiagnostics` checks internal-failure evidence before
+  severity filtering. Required validation preserves incomplete-parse refusal.
+  Presentation severity remapping is not admission policy.
 
 ### Decision 8: Spacing warnings W210/W211, retired
 
@@ -228,37 +225,11 @@ log, archived, holds the full record).
 
 ## Validation Gap Roadmap
 
-Concrete items where the grammar is lenient but no validation compensates.
-Each proposes a new error code and priority.
-
-### ~~Priority 1: `@UTF8` Presence (E503)~~, DONE
-
-- **Grammar**: `@UTF8` is optional.
-- **Spec**: Required, must be the first line.
-- **Implemented**: `E503` (`MissingUTF8Header`) added to `check_headers()` in
-  `talkbank-model/src/validation/header/structure.rs`.
-- **Severity**: Error.
-- **Note**: All 340 reference corpus files contain `@UTF8`, zero roundtrip
-  impact.
-
-### ~~Priority 2: Pre-First-Utterance Header Order (proposed E534)~~, Not a Gap
-
-- **Grammar**: `choice()` accepts headers in any order between `@Begin` and the
-  first utterance.
-- **Assessment**: CLAN CHECK does not enforce any ordering for post-`@Begin`
-  headers; it validates presence and format only. Our grammar's flexible
-  ordering matches CHECK's behavior.
-- **Status**: Reclassified from Tier B (GAP) to Tier C (by design).
-
-### ~~Priority 3: Content Type Context Validation~~, Not a Gap
-
-- **Grammar**: Unified `base_content_item` accepts any content type in any
-  context.
-- **Assessment**: The unified rule is correct by design. Nested groups are legal
-  CHAT (e.g., `<the <dag> [: dog]> [= something]`). The two specific semantic
-  restrictions that do exist (no pauses in pho groups, E371; no nested
-  quotations, E372) are already validated.
-- **Status**: Reclassified from Tier A (PARTIAL) to Tier C (by design).
+This chapter does not allocate new error codes or authorize a stricter policy.
+Required-header checks already exist; broad grammar acceptance is not by itself
+a missing validator. A new gap needs a declared requirement, an authored
+counterexample and legal controls, with parser-versus-validator ownership
+adjudicated before implementation. See [Spec Workflow](../contributing/spec-workflow.md).
 
 ---
 
@@ -274,8 +245,9 @@ They are separate types, and deliberately not in the same crate.
 
 #### `RuleSelection` (`talkbank-model/src/errors/config.rs`)
 
-Which rules run. Every field here changes the diagnostics that exist, which is
-why this type, and only this type, derives the validation cache key.
+Which optional rules run. This contributes the rule-selection fragment of cache
+identity; it is not the entire key. Parser identity, source content, resolved
+path and alignment coverage also matter. See the cache chapter above.
 
 ```rust,ignore
 let rules = RuleSelection::new().with_strict_linkers(); // turns on the [Opt-in] codes
@@ -340,58 +312,31 @@ let sink = ConfigurableErrorSink::new(&inner, policy);
 It must never wrap a sink whose output feeds a cache write or a run tally: those
 consume the complete diagnostic set.
 
-#### Runner-Level Flags (`talkbank-transform`, `chatter`)
+#### Command options and proposed profiles
 
-| Flag | Effect |
-|------|--------|
-| `--skip-alignment` | Skip tier alignment validation |
-| `--roundtrip` | Test serialization idempotency after validation |
-| `--force` | Clear cache for path and revalidate |
-| `--max-errors N` | Stop once N errors (never warnings) are found (N is at least 1) |
+Use the [validation guide](../chatter/user-guide/validation-errors.md) and the
+command's help for its supported options. Do not infer a CLI profile selector
+from the existence of library presentation presets. `strict()` changes displayed
+severity; it does not turn on every optional validator or repair missing evidence.
 
-### What Is Missing
+Earlier suggestions for `reference-compatible`, `strict-chat`, `lint`,
+serialized profiles and corpus-specific rules were proposals, not implemented
+contracts or standing permission to tighten validation. A future policy needs an
+explicit semantic design, source-owned specs and compatible cache identity.
+Retired codes remain retired.
 
-| Gap | Description | Effort |
-|-----|-------------|--------|
-| No `--profile` CLI flag | Users cannot select `strict` / `lenient` / `lint` from the command line | Medium |
-| No profile serialization | Cannot load profiles from TOML/JSON config files | Medium |
-| No corpus-specific profiles | E.g., HSLLD-specific rules | Future |
+## Downstream Recovery Is a Separate Contract
 
-### Proposed Profiles
+Applications that generate or replace tiers must carry their own admission,
+mutation and output guarantees. Chatter's parse-health metadata alone does not
+prove that a downstream transformation preserved provenance or refused invalid
+input. Inspect the exact application's producer and consumer boundaries.
 
-From the permissiveness regression log:
-
-| Profile | Purpose | Behaviour |
-|---------|---------|-----------|
-| `reference-compatible` | Current permissive baseline | Default, matches current validation behaviour |
-| `strict-chat` | Full spec enforcement | Re-enable selected tightenings (E248, etc.; E254 and E214 are retired codes and are not candidates) |
-
-The roundtrip gate should be pinned to an agreed profile to prevent future
-ambiguity about what "pass" means.
-
----
-
-## Silent Recovery Points (NLP Pipelines)
-
-An earlier Python-Rust boundary audit identified several
-places where `batchalign-core` silently massages data without diagnostics. These
-are related to leniency because they represent permissive acceptance without
-transparency.
-
-| Pipeline | Recovery Mechanism | Diagnostics? |
-|----------|-------------------|-------------|
-| Stanza morphosyntax | `retokenize.rs` DP alignment; `Word::new_unchecked` fallback | **No** |
-| Whisper/Wave2Vec FA | `forced_alignment.rs` DP "best fit" | **No** |
-| Google Translate | Imported verbatim into `%xtra` | **No filtering** |
-| Stanza segmentation | Silent abort on assignment mismatch | **No** |
-
-**Key infrastructure gap**: `ParseHealth` exists in `talkbank-model` (per-utterance
-tier cleanliness flags with `taint()`, `is_clean()`, `can_align_main_to_mor()`
-methods). It is used by the tree-sitter and direct parsers during parsing.
-However, `batchalign-core` does **not** read, write, or propagate `ParseHealth`
-during any mutation (morphosyntax injection, FA injection, retokenisation). The
-infrastructure exists in the model layer but is not connected to the pipeline
-layer.
+An earlier downstream audit is not a current implementation inventory. This
+chapter does not claim present behavior for Stanza, forced alignment, translation
+or segmentation, and does not infer downstream wiring from old method names.
+The [library admission guide](../chatter/integrating/library-usage.md) describes
+Chatter's source-preservation and tier-replacement boundaries.
 
 ---
 
@@ -400,9 +345,9 @@ layer.
 | Source | What It Contains |
 |--------|-----------------|
 | Grammar governance analysis (archived) | Proposed this document; leniency matrix concept; three-tier classification |
-| Permissiveness regression log (archived) | 8 permissiveness regression decisions with rationale |
-| Python-Rust boundary audit (archived) | Silent recovery points; ParseHealth gap; NLP pipeline audit |
-| `grammar/grammar.js` | Inline comments on each leniency decision (line references in matrix above) |
+| Permissiveness regression log (archived) | Historical rulings; the decisions above retain their specific scope |
+| Python-Rust boundary audit (archived) | Historical downstream observations, not current runtime acceptance |
+| `grammar/grammar.js` | Inline comments on each leniency decision (follow named rules rather than old line numbers) |
 | `talkbank-model/src/errors/config.rs` | `RuleSelection` API (and the cache key derived from it) |
 | `talkbank-transform/src/presentation.rs` | `PresentationPolicy` and the `ConfigurableErrorSink` adapter |
 | `talkbank-model/src/validation/header/structure.rs` | Header validation: E501, E502, E503, E504-E533 |

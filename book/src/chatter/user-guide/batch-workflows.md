@@ -53,19 +53,24 @@ chatter validate /path/to/corpus/ --audit validation.jsonl
 
 ## CHAT-JSON Roundtrip
 
-Convert an entire corpus to JSON and back:
+Export a directory using the built-in batch command. Choose a fresh output
+directory outside the input tree; preserve the original transcripts:
 
 ```bash
-# CHAT → JSON
-for f in corpus/**/*.cha; do
-  chatter to-json "$f" > "${f%.cha}.json"
-done
-
-# JSON → CHAT
-for f in corpus/**/*.json; do
-  chatter from-json "$f" > "${f%.json}.roundtrip.cha"
-done
+chatter to-json corpus/ --output-dir corpus-json/
 ```
+
+The export preserves the directory structure. To restore one exported file
+into a new CHAT file:
+
+```bash
+chatter from-json corpus-json/example.json --output restored.cha
+chatter --tui-mode disable validate restored.cha
+```
+
+`from-json` takes a single input file, not a directory. For transcripts with
+`@Media`, choose names that preserve the transcript/media naming contract;
+arbitrarily renaming a restored transcript can introduce a validation finding.
 
 The roundtrip is designed to preserve the `ChatFile` model. In regression
 tests, compare normalized output rather than assuming byte-for-byte identity
@@ -92,27 +97,27 @@ the system Known Folder API rather than environment variables.
 
 ```bash
 chatter cache stats    # Show the cache's location, size and entry count
-chatter cache clear --all
+chatter cache clear --prefix corpus/ --dry-run
 ```
+
+The second command previews a scoped removal; it does not delete entries.
+Only remove `--dry-run` after checking that the listed scope is what you intend.
+Cache clearing affects performance, not the source transcripts.
 
 Do not delete the cache file manually while `chatter` is running.
 
 ## Reference Corpus Validation
 
 This repository includes a reference corpus at
-`corpus/reference/` (currently ~100 `.cha` files; verify by
-`find corpus/reference -name '*.cha' | wc -l`). The parser must
-handle every file in this corpus at 100%:
-
-```bash
-cargo test -p talkbank-parser-tests reference_corpus_parses
-```
-
-This runs the parser equivalence test; each `.cha` file is its own test, so reports individual failures.
+`corpus/reference/`. It is a finite regression population, not a substitute
+for validating your own inputs or proving support for every CHAT construct.
+Contributors should use the current commands in the
+[reference corpus guide](../../contributing/reference-corpus.md).
 
 ## Integration with batchalign
 
 The Batchalign pipeline uses the same Rust core (via PyO3) for CHAT
 parsing and serialization. Batchalign itself is the upstream `batchalign3`
-project, outside this repository. Files processed
-by Batchalign produce valid CHAT that passes `chatter validate`.
+project, outside this repository. Validate generated transcripts before using
+them downstream, and review their words, speakers and timing separately:
+successful format validation does not establish transcription accuracy.

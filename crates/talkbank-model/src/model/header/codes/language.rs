@@ -8,7 +8,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>
 
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -198,9 +198,10 @@ impl std::borrow::Borrow<str> for LanguageCode {
 }
 
 impl Validate for LanguageCode {
-    /// Enforce basic CHAT-facing language-code constraints.
-    fn validate(&self, _context: &ValidationContext, errors: &impl crate::ErrorSink) {
-        self.report_code_issues(errors);
+    /// Enforce basic CHAT-facing language-code constraints, anchored where
+    /// the parent narrowed the context (the header line, or unlocated).
+    fn validate(&self, context: &ValidationContext, errors: &impl crate::ErrorSink) {
+        self.report_code_issues(context.field_diagnostic_location(), errors);
     }
 }
 
@@ -209,11 +210,14 @@ impl LanguageCode {
     /// 3-lowercase-letter shape, no disallowed placeholders, and ISO 639-3
     /// registry membership. Context-free so BOTH validation layers share
     /// one rule: header validation (`Validate for LanguageCode`, covering
-    /// `@Languages` / `@ID`) and word-level explicit-switch validation
-    /// (`resolve_word_language`, which re-anchors the reported spans to
-    /// the word). Diagnostics anchor at offset 0; callers with a real
-    /// span remap `location.span` after collection.
-    pub(crate) fn report_code_issues(&self, errors: &impl crate::ErrorSink) {
+    /// `@Languages` / `@ID` / `@L1 of`) and word-level explicit-switch
+    /// validation (`resolve_word_language`). The caller names the anchor:
+    /// the header line, the word, or `Unlocated` when it has none.
+    pub(crate) fn report_code_issues(
+        &self,
+        location: DiagnosticLocation,
+        errors: &impl crate::ErrorSink,
+    ) {
         let is_three_lowercase =
             self.0.len() == 3 && self.0.chars().all(|c| c.is_ascii_lowercase());
 
@@ -223,8 +227,12 @@ impl LanguageCode {
                 ParseError::new(
                     ErrorCode::InvalidLanguageCode,
                     Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new(self.as_str(), 0..self.0.len(), "language_code"),
+                    location,
+                    ErrorContext::new(
+                        self.as_str(),
+                        crate::Span::new(0, self.0.len()),
+                        "language_code",
+                    ),
                     format!(
                         "Language code '{}' should be 3 characters (got {})",
                         self.0,
@@ -241,8 +249,12 @@ impl LanguageCode {
                 ParseError::new(
                     ErrorCode::InvalidLanguageCode,
                     Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new(self.as_str(), 0..self.0.len(), "language_code"),
+                    location,
+                    ErrorContext::new(
+                        self.as_str(),
+                        crate::Span::new(0, self.0.len()),
+                        "language_code",
+                    ),
                     format!(
                         "Language code '{}' should be lowercase letters only",
                         self.0
@@ -257,8 +269,12 @@ impl LanguageCode {
                 ParseError::new(
                     ErrorCode::InvalidLanguageCode,
                     Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new(self.as_str(), 0..self.0.len(), "language_code"),
+                    location,
+                    ErrorContext::new(
+                        self.as_str(),
+                        crate::Span::new(0, self.0.len()),
+                        "language_code",
+                    ),
                     format!("Language code '{}' is a disallowed placeholder", self.0),
                 )
                 .with_suggestion(
@@ -276,8 +292,12 @@ impl LanguageCode {
                 ParseError::new(
                     ErrorCode::InvalidLanguageCode,
                     Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new(self.as_str(), 0..self.0.len(), "language_code"),
+                    location,
+                    ErrorContext::new(
+                        self.as_str(),
+                        crate::Span::new(0, self.0.len()),
+                        "language_code",
+                    ),
                     format!(
                         "Language code '{}' is not in the ISO 639-3 registry",
                         self.0

@@ -4,6 +4,91 @@
 use super::*;
 use miette::Diagnostic;
 
+#[test]
+fn mutable_error_context_is_the_raw_render_source() {
+    let mut error = ParseError::new(
+        ErrorCode::MissingNode,
+        Severity::Error,
+        DiagnosticLocation::from_offsets(0, 3),
+        ErrorContext::new("old\n", crate::Span::new(0, 3), "old").with_line_offset(2),
+        "context boundary",
+    );
+    let span = miette::SourceSpan::from((0, 3));
+    {
+        let source = error.source_code().expect("initial context");
+        let contents = source.read_span(&span, 0, 0).expect("initial span");
+        assert!(contents.data().starts_with(b"old"));
+        assert_eq!(contents.line(), 1);
+    }
+    let context = error.context.as_mut().expect("mutable context");
+    context.source_text = "new\n".to_owned();
+    context.line_offset = Some(17);
+    {
+        let source = error.source_code().expect("updated context");
+        let contents = source.read_span(&span, 0, 0).expect("updated span");
+        assert!(contents.data().starts_with(b"new"));
+        assert_eq!(contents.line(), 16);
+    }
+    error.context = None;
+    assert!(error.source_code().is_none());
+    error.context = Some(ErrorContext::new("end\n", crate::Span::new(0, 3), "end"));
+    let source = error.source_code().expect("replacement context");
+    let contents = source.read_span(&span, 0, 0).expect("replacement span");
+    assert!(contents.data().starts_with(b"end"));
+    assert_eq!(contents.line(), 0);
+}
+
+#[test]
+fn raw_context_line_offset_overflow_is_refused() {
+    let error = ParseError::new(
+        ErrorCode::MissingNode,
+        Severity::Error,
+        DiagnosticLocation::from_offsets(4, 5),
+        ErrorContext::new("a\nb\nc\n", crate::Span::new(4, 5), "c").with_line_offset(usize::MAX),
+        "line offset boundary",
+    );
+    assert!(
+        error
+            .source_code()
+            .expect("context")
+            .read_span(&miette::SourceSpan::from((4, 1)), 0, 0)
+            .is_err()
+    );
+}
+
+#[test]
+fn raw_context_render_line_extent_is_checked() {
+    for source in ["a\nb", "a\nb\n"] {
+        let error = ParseError::new(
+            ErrorCode::MissingNode,
+            Severity::Error,
+            DiagnosticLocation::from_offsets(0, 1),
+            ErrorContext::new(source, crate::Span::new(0, 1), "a").with_line_offset(usize::MAX),
+            "render extent boundary",
+        );
+        let mut rendered = String::new();
+        assert!(
+            miette::NarratableReportHandler::new()
+                .render_report(&mut rendered, &error)
+                .is_err()
+        );
+    }
+    for source in ["a", "a\n"] {
+        let error = ParseError::new(
+            ErrorCode::MissingNode,
+            Severity::Error,
+            DiagnosticLocation::from_offsets(0, 1),
+            ErrorContext::new(source, crate::Span::new(0, 1), "a").with_line_offset(usize::MAX),
+            "last representable line",
+        );
+        let mut rendered = String::new();
+        miette::NarratableReportHandler::new()
+            .render_report(&mut rendered, &error)
+            .expect("one representable line");
+        assert!(rendered.contains(&usize::MAX.to_string()));
+    }
+}
+
 /// Tests error code documentation url.
 #[test]
 fn test_error_code_documentation_url() {
@@ -17,8 +102,8 @@ fn test_error_json_serialization() -> Result<(), String> {
     let error = ParseError::new(
         ErrorCode::InternalError,
         Severity::Error,
-        SourceLocation::from_offsets(0, 4),
-        ErrorContext::new("*CHI:\thello", 0..4, "*CHI"),
+        DiagnosticLocation::from_offsets(0, 4),
+        ErrorContext::new("*CHI:\thello", crate::Span::new(0, 4), "*CHI"),
         "Invalid speaker name",
     )
     .with_suggestion("Use only ASCII characters in speaker names");
@@ -34,7 +119,7 @@ fn test_error_json_serialization() -> Result<(), String> {
 /// Tests parse error at span constructor.
 #[test]
 fn test_parse_error_at_span_constructor() {
-    let span = Span::from_usize(2, 5);
+    let span = Span::new(2, 5);
     let error = ParseError::at_span(
         ErrorCode::InternalError,
         Severity::Error,
@@ -42,7 +127,7 @@ fn test_parse_error_at_span_constructor() {
         "span-only error",
     );
 
-    assert_eq!(error.location.span, span);
+    assert_eq!(error.location.span().expect("located diagnostic"), span);
     assert_eq!(error.context, None);
     assert_eq!(error.message, "span-only error");
 }
@@ -50,7 +135,7 @@ fn test_parse_error_at_span_constructor() {
 /// Tests parse error from source span constructor.
 #[test]
 fn test_parse_error_from_source_span_constructor() -> Result<(), String> {
-    let span = Span::from_usize(1, 4);
+    let span = Span::new(1, 4);
     let error = ParseError::from_source_span(
         ErrorCode::InternalError,
         Severity::Error,
@@ -60,7 +145,7 @@ fn test_parse_error_from_source_span_constructor() -> Result<(), String> {
         "source-backed error",
     );
 
-    assert_eq!(error.location.span, span);
+    assert_eq!(error.location.span().expect("located diagnostic"), span);
     assert_eq!(error.message, "source-backed error");
     let context = error
         .context
@@ -79,16 +164,16 @@ fn test_parse_errors_separation() {
     errors.push(ParseError::new(
         ErrorCode::InternalError,
         Severity::Error,
-        SourceLocation::from_offsets(0, 4),
-        ErrorContext::new("line 1", 0..4, "text"),
+        DiagnosticLocation::from_offsets(0, 4),
+        ErrorContext::new("line 1", crate::Span::new(0, 4), "text"),
         "Error message",
     ));
 
     errors.push(ParseError::new(
         ErrorCode::SpeakerNotFoundInParticipants,
         Severity::Warning,
-        SourceLocation::from_offsets(5, 9),
-        ErrorContext::new("line 2", 0..4, "text"),
+        DiagnosticLocation::from_offsets(5, 9),
+        ErrorContext::new("line 2", crate::Span::new(0, 4), "text"),
         "Warning message",
     ));
 
@@ -110,8 +195,8 @@ fn make_test_error(code: ErrorCode) -> ParseError {
     ParseError::new(
         code,
         Severity::Error,
-        SourceLocation::from_offsets(0, 4),
-        ErrorContext::new("test", 0..4, "test"),
+        DiagnosticLocation::from_offsets(0, 4),
+        ErrorContext::new("test", crate::Span::new(0, 4), "test"),
         format!("Test error {}", code),
     )
 }
@@ -127,8 +212,8 @@ fn test_parse_tracker_counts_severities() {
     tracker.report(ParseError::new(
         ErrorCode::SpeakerNotFoundInParticipants,
         Severity::Warning,
-        SourceLocation::from_offsets(0, 4),
-        ErrorContext::new("test", 0..4, "test"),
+        DiagnosticLocation::from_offsets(0, 4),
+        ErrorContext::new("test", crate::Span::new(0, 4), "test"),
         "Warning",
     ));
 
@@ -168,8 +253,8 @@ fn test_error_collector_has_errors() {
     sink.report(ParseError::new(
         ErrorCode::SpeakerNotFoundInParticipants,
         Severity::Warning,
-        SourceLocation::from_offsets(0, 4),
-        ErrorContext::new("test", 0..4, "test"),
+        DiagnosticLocation::from_offsets(0, 4),
+        ErrorContext::new("test", crate::Span::new(0, 4), "test"),
         "Warning",
     ));
     assert!(!sink.has_errors());
@@ -272,14 +357,12 @@ fn test_line_offset_adjustment_in_labels() -> Result<(), String> {
     let line_number = 481;
 
     // Span relative to context_text (error is at the '<' character, position 26)
-    let span_in_context = Span::from_usize(26, 27);
+    let span_in_context = Span::new(26, 27);
 
     // Create location with line/column
-    let location = SourceLocation::from_offsets_with_position(
-        22542, // byte offset in full file
-        22543,
-        line_number,
-        27, // column
+    let location = DiagnosticLocation::known_at(
+        crate::Span::new(22542, 22543),
+        crate::LineColumn::one_based(line_number, 27).expect("one-based position"),
     );
 
     // Create context with line_offset
@@ -295,7 +378,7 @@ fn test_line_offset_adjustment_in_labels() -> Result<(), String> {
     );
 
     // Get the miette labels, spans are relative to source_text with NO adjustment.
-    // SourceCodeWithOffset handles line numbering natively in read_span.
+    // ErrorContext handles line numbering natively in read_span.
     let labels = error
         .labels()
         .ok_or_else(|| "Expected labels".to_string())?;
@@ -315,9 +398,12 @@ fn test_line_offset_adjustment_in_labels() -> Result<(), String> {
 fn test_line_offset_no_adjustment_for_line_1() -> Result<(), String> {
     // Create an error at line 1 (no adjustment needed)
     let context_text = "*PAR:\thello";
-    let span_in_context = Span::from_usize(6, 11);
+    let span_in_context = Span::new(6, 11);
 
-    let location = SourceLocation::from_offsets_with_position(6, 11, 1, 7);
+    let location = DiagnosticLocation::known_at(
+        crate::Span::new(6, 11),
+        crate::LineColumn::one_based(1, 7).expect("one-based position"),
+    );
     let context = ErrorContext::new(context_text, span_in_context, "hello").with_line_offset(1);
 
     let error = ParseError::new(
@@ -353,8 +439,8 @@ fn test_miette_output_uses_line_offset() -> Result<(), String> {
     let errors = vec![ParseError::new(
         ErrorCode::UnknownError,
         Severity::Error,
-        SourceLocation::from_offsets(error_start, error_end),
-        ErrorContext::new("", Span::from_usize(0, 0), ""),
+        DiagnosticLocation::from_offsets(error_start, error_end),
+        ErrorContext::new("", Span::new(0, 0), ""),
         "Test error".to_string(),
     )];
 

@@ -312,8 +312,8 @@ pub struct ExampleFrontmatter {
 ///
 /// One variant per rule set a spec example may ask for: the default, plus one
 /// for each opt-in option `talkbank_model::RuleSelection` carries. The
-/// mapping to a `RuleSelection` lives in the spec runtime, which is the only
-/// crate that sees both this vocabulary and the model.
+/// typed mapping to a `RuleSelection` is available with `model-runtime`.
+/// Source-only generators leave that feature disabled.
 ///
 /// # How this stays in step with the model, across a workspace boundary
 ///
@@ -402,6 +402,7 @@ impl RuleProfile {
     /// makes this field a list rather than a keyword, and the match below is
     /// where the compiler will say so.
     #[must_use]
+    #[cfg(feature = "model-runtime")]
     pub fn selection(self) -> talkbank_model::RuleSelection {
         let plain = talkbank_model::RuleSelection::new();
         match self {

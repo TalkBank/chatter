@@ -8,7 +8,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Time_Duration_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Time_Start_Header>
 
-use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
+use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 
 use crate::model::header::{DateDigitError, DateDigits, InvalidTimeDuration, InvalidTimeStart};
 
@@ -22,7 +22,7 @@ use crate::model::header::{DateDigitError, DateDigits, InvalidTimeDuration, Inva
 /// users get actionable fixes instead of a single generic format error.
 pub(super) fn check_date_format(
     date: &str,
-    span: Span,
+    location: crate::Location,
     errors: &impl ErrorSink,
     error_code: ErrorCode,
 ) {
@@ -31,15 +31,13 @@ pub(super) fn check_date_format(
     ];
 
     let make_err = |context_label: &str, message: String| {
-        let mut err = ParseError::new(
+        ParseError::new(
             error_code,
             Severity::Error,
-            SourceLocation::at_offset(span.start as usize),
-            ErrorContext::new(date, 0..date.len(), context_label),
+            DiagnosticLocation::from(location),
+            ErrorContext::new(date, crate::Span::new(0, date.len()), context_label),
             message,
-        );
-        err.location.span = span;
-        err
+        )
     };
 
     let parts: Vec<&str> = date.split('-').collect();
@@ -168,15 +166,15 @@ pub(super) fn check_date_format(
 /// optional-empty policy.
 pub(super) fn check_time_duration_format(
     invalid: InvalidTimeDuration<'_>,
-    span: Span,
+    location: crate::Location,
     errors: &impl ErrorSink,
 ) {
     let duration = invalid.into_text();
-    let mut err = ParseError::new(
+    let err = ParseError::new(
         ErrorCode::InvalidTimeDuration,
         Severity::Error,
-        SourceLocation::at_offset(span.start as usize),
-        ErrorContext::new(duration, 0..duration.len(), "time_duration"),
+        DiagnosticLocation::from(location),
+        ErrorContext::new(duration, crate::Span::new(0, duration.len()), "time_duration"),
         format!(
             "Invalid @Time Duration: '{}'. Must be one of the depfile.cut forms (HH:MM:SS, HH:MM-HH:MM, HH:MM:SS-HH:MM:SS) with legal clock values (hours 00-23, minutes/seconds 00-59)",
             duration
@@ -185,7 +183,6 @@ pub(super) fn check_time_duration_format(
     .with_suggestion(
         "Use one of: HH:MM:SS (single), HH:MM-HH:MM (range), HH:MM:SS-HH:MM:SS (range), with valid clock values (hours 00-23, minutes/seconds 00-59). No comma-joined segments, no semicolon separator.",
     );
-    err.location.span = span;
     errors.report(err);
 }
 
@@ -195,21 +192,20 @@ pub(super) fn check_time_duration_format(
 /// arbitrary unassessed text. The original spelling survives the assessment.
 pub(super) fn check_time_start_format(
     invalid: InvalidTimeStart<'_>,
-    span: Span,
+    location: crate::Location,
     errors: &impl ErrorSink,
 ) {
     let start = invalid.into_text();
-    let mut err = ParseError::new(
+    let err = ParseError::new(
         ErrorCode::InvalidTimeStart,
         Severity::Error,
-        SourceLocation::at_offset(span.start as usize),
-        ErrorContext::new(start, 0..start.len(), "time_start"),
+        DiagnosticLocation::from(location),
+        ErrorContext::new(start, crate::Span::new(0, start.len()), "time_start"),
         format!(
             "Invalid @Time Start: '{}'. Use HH:MM:SS or MM:SS with legal clock values (hours 00-23, minutes/seconds 00-59)",
             start
         ),
     )
     .with_suggestion("Use HH:MM:SS or MM:SS with hours 00-23 and minutes/seconds 00-59, no millisecond suffix, no range.");
-    err.location.span = span;
     errors.report(err);
 }

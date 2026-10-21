@@ -55,9 +55,9 @@ pub struct Event {
     pub event_type: EventType,
 
     /// Source location metadata for diagnostics (not serialized).
-    #[serde(skip, default = "crate::Span::dummy")]
+    #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
-    pub span: crate::Span,
+    pub location: crate::Location,
 }
 
 impl Event {
@@ -65,19 +65,11 @@ impl Event {
     ///
     /// This is the common constructor for parser/model assembly before source
     /// offsets are finalized.
-    pub fn new(event_type: impl Into<EventType>) -> Self {
+    pub fn new(location: impl Into<crate::Location>, event_type: impl Into<EventType>) -> Self {
         Self {
             event_type: event_type.into(),
-            span: crate::Span::DUMMY,
+            location: location.into(),
         }
-    }
-
-    /// Attach source span metadata used by diagnostics.
-    ///
-    /// Span metadata is intentionally excluded from semantic equality.
-    pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
-        self
     }
 }
 

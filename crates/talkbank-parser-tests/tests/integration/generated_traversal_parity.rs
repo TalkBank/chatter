@@ -13,7 +13,7 @@
 //! Parity tests: validate the generated `extract_*` free functions against
 //! real CHAT data.
 //!
-//! These tests parse the 74-file reference corpus with tree-sitter and exercise
+//! These tests parse the complete reference corpus with tree-sitter and exercise
 //! the generated extraction functions on every matching node. They verify:
 //! 1. Extraction doesn't panic on any real-world CST
 //! 2. Required children are Present in well-formed CHAT
@@ -35,7 +35,8 @@ use talkbank_parser_tests::generated_traversal::*;
 /// `node.utf8_text(source.as_bytes())` in `tree_parsing/main_tier/structure/
 /// contents.rs`).
 fn node_text<'s>(node: tree_sitter::Node, source: &'s str) -> &'s str {
-    node.utf8_text(source.as_bytes()).unwrap_or("")
+    node.utf8_text(source.as_bytes())
+        .expect("node text belongs to the parsed UTF-8 source")
 }
 
 /// Walk a tree-sitter tree, calling `callback` on every node.
@@ -388,7 +389,6 @@ fn test_speaker_parity_with_existing_parser() {
     let chat_parser = talkbank_parser::TreeSitterParser::new().expect("grammar loads");
 
     let mut total_tiers = 0;
-    let mut matching_speakers = 0;
     let mut files = 0;
 
     for fixture in corpus.fixtures() {
@@ -404,9 +404,14 @@ fn test_speaker_parity_with_existing_parser() {
         walk_all(tree.root_node(), &mut |node| {
             if node.kind() == "main_tier" {
                 let c = extract_main_tier(classify::<MainTierNode>(node));
-                if let NodeSlot::Present(spk) = c.speaker.slot() {
-                    gen_speakers.push(node_text(spk.raw_node(), source).to_string());
-                }
+                let NodeSlot::Present(spk) = c.speaker.slot() else {
+                    panic!(
+                        "{}: valid main tier has no present speaker: {:?}",
+                        fixture.path().display(),
+                        c.speaker.slot()
+                    );
+                };
+                gen_speakers.push(node_text(spk.raw_node(), source).to_string());
             }
         });
 
@@ -417,20 +422,46 @@ fn test_speaker_parity_with_existing_parser() {
             .collect();
 
         total_tiers += gen_speakers.len();
-        for (g, e) in gen_speakers.iter().zip(existing_speakers.iter()) {
-            if g == e {
-                matching_speakers += 1;
-            }
-        }
+        assert!(
+            speaker_sequences_match(&gen_speakers, &existing_speakers),
+            "{}: generated {gen_speakers:?}, model {existing_speakers:?}",
+            fixture.path().display()
+        );
 
         files += 1;
     }
 
-    eprintln!("Speaker parity: {matching_speakers}/{total_tiers} match across {files} files");
-    assert_eq!(
-        matching_speakers, total_tiers,
-        "All speakers should match between generated and existing parser"
+    eprintln!("Speaker parity: {total_tiers} speakers match across {files} files");
+    assert!(
+        total_tiers > 0,
+        "reference corpus must exercise speaker parity"
     );
+}
+
+fn speaker_sequences_match(generated: &[String], existing: &[String]) -> bool {
+    generated == existing
+}
+
+#[test]
+fn speaker_parity_instrument_rejects_missing_extra_and_reordered_speakers() {
+    let expected = ["CHI".to_owned(), "MOT".to_owned()];
+    assert!(speaker_sequences_match(&expected, &expected));
+    for corrupted in [
+        vec![],
+        vec!["CHI".to_owned()],
+        vec!["CHI".to_owned(), "MOT".to_owned(), "CHI".to_owned()],
+        vec!["MOT".to_owned(), "CHI".to_owned()],
+        vec!["CHI".to_owned(), "FAT".to_owned()],
+    ] {
+        assert!(
+            !speaker_sequences_match(&corrupted, &expected),
+            "accepted {corrupted:?}"
+        );
+        assert!(
+            !speaker_sequences_match(&expected, &corrupted),
+            "accepted reversed {corrupted:?}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

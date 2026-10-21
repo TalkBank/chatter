@@ -31,8 +31,9 @@ mod id;
 mod metadata;
 mod participants;
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::node_types::{COMMA, PARTICIPANTS_HEADER, WHITESPACES};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::unknown_header_from_node;
 use tree_sitter::Node;
 
@@ -107,14 +108,12 @@ fn error_is_only_commas(error_node: Node) -> bool {
 pub(super) fn unknown_header(
     node: Node,
     source: &str,
-    label: &str,
     suggested_fix: &str,
     parse_reason: impl Into<String>,
 ) -> Result<talkbank_model::model::Header, crate::CstFailure> {
     // The one builder, in `parser_helpers::header_slots`, since 2026-09-08;
-    // this wrapper keeps the structured headers' calling shape. The legacy
-    // `label` is not authored input and must not substitute for unreadable text.
-    let _ = label;
+    // this wrapper keeps the structured headers' calling shape. It used to
+    // take a legacy label too, received and discarded.
     Ok(unknown_header_from_node(
         node,
         source,
@@ -134,8 +133,8 @@ pub(crate) fn report_header_structural_errors(
         if !(child.is_error() || child.is_missing()) {
             continue;
         }
-        let location = SourceLocation::from_offsets(child.start_byte(), child.end_byte());
-        let context = ErrorContext::new(source, child.start_byte()..child.end_byte(), header_kind);
+        let location = DiagnosticLocation::new(span_of(child));
+        let context = ErrorContext::new(source, span_of(child), header_kind);
 
         if child.is_missing() {
             errors.report(ParseError::new(

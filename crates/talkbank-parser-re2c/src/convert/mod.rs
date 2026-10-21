@@ -19,3 +19,35 @@ pub use items::*;
 pub use text_tiers::*;
 pub use tiers::*;
 pub use words::*;
+
+/// An optional span as a `Location`: the one place `None` becomes `Unlocated`
+/// for the hull computations, so no converter spells the fallback itself.
+pub(crate) fn located(span: Option<talkbank_model::Span>) -> talkbank_model::Location {
+    span.map_or(
+        talkbank_model::Location::Unlocated,
+        talkbank_model::Location::Located,
+    )
+}
+
+/// Where a slice the lexer borrowed from `source` sits, or `Unlocated` when
+/// the slice is not from this source (a programming error pairing an AST with
+/// the wrong source). One owner for the question; every converter used to
+/// spell the `map_or` itself.
+pub(crate) fn locate(
+    source: crate::source_text::SourceText<'_>,
+    slice: &str,
+) -> talkbank_model::Location {
+    located(source.span_of(slice))
+}
+
+/// The same question for a diagnostic: where to report about a slice, or an
+/// unlocated diagnostic when the slice is not from `source`.
+pub(crate) fn diagnostic_location(
+    source: crate::source_text::SourceText<'_>,
+    slice: &str,
+) -> talkbank_model::DiagnosticLocation {
+    source.span_of(slice).map_or(
+        talkbank_model::DiagnosticLocation::Unlocated,
+        talkbank_model::DiagnosticLocation::new,
+    )
+}

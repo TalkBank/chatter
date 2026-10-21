@@ -3,123 +3,81 @@
 **Status:** Reference
 **Last updated:** {{git-dates:page}}
 
-How the workspace's dev and test profile settings keep compilation fast, and
-what to avoid. The workspace root `Cargo.toml` comments are the source of truth
-for the exact settings; re-run `cargo build --timings` for current numbers.
+Use the workspace's existing profiles and focused development commands before
+changing compiler settings. This chapter explains the checked-in configuration,
+not a benchmark or a promise about a contributor's effective configuration.
 
-## Background: How Rust Compilation Works
+## Checked-in profiles
 
-Rust compilation has two key mechanisms for speed:
+The root `Cargo.toml` owns these settings:
 
-1. **Incremental compilation**: When you change one file and rebuild, the compiler
-   remembers which "codegen units" within each crate were affected and only
-   recompiles those. This is the primary speedup mechanism for local iterative
-   development (edit-compile-test cycles).
+| Profile | Explicit setting | Purpose |
+| --- | --- | --- |
+| `dev`, `test` | `debug = "line-tables-only"` | Retain source locations for backtraces without local-variable debug information |
+| `dev`, `test` | `split-debuginfo = "off"` | Keep debug information in the linked artifact |
+| `dev.build-override` | `opt-level = 3` | Optimize build scripts and proc macros |
+| `release` | No explicit overrides | Use Cargo's release defaults |
+| `dist` | Inherits `release`, `lto = "thin"` | Distribution-specific linking policy |
 
-2. **Crate-level caching**: Cargo tracks which crates have changed inputs
-   (source files, dependencies, feature flags). Unchanged crates are skipped
-   entirely. This helps when you edit a leaf crate and don't need to rebuild
-   unrelated crates.
+There is no workspace-wide `profile.dev.package."*"` or
+`profile.test.package."*"` optimization override. The manifest records the
+historical reason for the debug-information choice; it does not establish a
+current directory-scan cost on every platform. Distribution and ordinary release
+builds are not the same profile.
 
-Additionally, there are external tools:
+Cargo configuration and environment variables can override manifest profiles.
+Use the [Cargo profile reference](https://doc.rust-lang.org/cargo/reference/profiles.html)
+for inheritance and debug-information semantics. A debugger session requiring
+local variables needs a deliberately selected full-debug configuration, not an
+assumption that the default development artifact contains them.
 
-3. **sccache**: A shared compilation cache that stores compiled artifacts by
-   content hash. Designed for CI environments where builds start from a clean
-   state. It works by wrapping `rustc` and checking a cache before invoking the
-   real compiler.
+## Distinguish three kinds of reuse
 
-4. **Linker choice**: The linker runs after all crates are compiled to produce
-   the final binary. Faster linkers (like `lld`) can shave seconds off link time
-   for large binaries.
+- Cargo can reuse an unchanged crate's existing artifacts.
+- Rust incremental compilation reuses compiler work within a rebuilt crate.
+- A compiler cache such as sccache can reuse eligible compiler invocations.
 
-## Settings this workspace uses
+These mechanisms answer different questions. A wrapper setting is not itself
+an incremental-compilation setting: Cargo exposes them separately. Inspect
+profile/configuration overrides and `CARGO_INCREMENTAL`, as well as
+`RUSTC_WRAPPER` and `RUSTC_WORKSPACE_WRAPPER`. Both wrappers can be active and
+nested. See [Cargo's wrapper configuration](https://doc.rust-lang.org/cargo/reference/config.html#buildrustc-wrapper).
 
-- **`debug = "line-tables-only"`** in `[profile.dev]` and `[profile.test]`.
-  Backtraces keep file and line information, while the bulky type and variable
-  metadata (full DWARF, large `.dSYM` bundles and `.o` files that inflate
-  linker input) is skipped. You cannot inspect local variables in a debugger
-  (lldb/gdb); for most development workflows this is the right tradeoff.
-- **`split-debuginfo = "off"`** in the same profiles. macOS defaults to
-  `unpacked`, which leaves one `.rcgu.o` per codegen unit in
-  `target/debug/deps` and makes warm test runs pay for scanning tens of
-  thousands of directory entries.
-- **`opt-level = 3` for build scripts and proc macros**
-  (`[profile.dev.build-override]`).
-- **No workspace-wide third-party optimization.** `[profile.dev.package."*"]`
-  and `[profile.test.package."*"]` with `opt-level = 1` are not set: with the
-  workspace's third-party dependency surface (axum, async-trait, tokio's full
-  feature set, and so on) their build-time cost is prohibitive. Where runtime
-  is the bottleneck for a specific test, opt in locally rather than setting it
-  workspace-wide.
+[sccache's Rust documentation](https://github.com/mozilla/sccache/blob/main/docs/Rust.md)
+requires incremental compilation to be disabled for caching and lists other
+eligibility constraints. Its linker restriction covers `bin`, `dylib`,
+`cdylib` and `proc-macro` crates; it is not a blanket exclusion of `rlib`
+compilation. A configured wrapper therefore does not prove a cache hit, and
+an uncached invocation does not mean Cargo rebuilt every dependency.
+Use `sccache --show-stats` when investigating an existing sccache setup.
 
-## Do not let a compiler wrapper disable incremental compilation
+Do not impose a global wrapper, linker or incremental policy from this guide.
+The repository ignores a contributor's `.cargo/config.toml`; preserve any
+existing target, linker and environment settings when making a local change.
+Check the installed coverage tool's compatibility before applying a wrapper
+override to an instrumented run. A historical wrapper problem is not evidence
+that every current version has the same defect.
 
-A global `~/.cargo/config.toml` that sets `rustc-wrapper` (for example to
-sccache) disables Rust incremental compilation entirely, because the wrapper
-interposes between Cargo and rustc and breaks the incremental artifact
-protocol. sccache also gives near-zero benefit for this workspace: rlib
-crates, which most workspace crates produce, cannot be cached by sccache. The
-result is that every build after a one-line change is a full rebuild of the
-dependency chain; a change to `talkbank-model`, near the root of the crate
-graph, recompiles 11+ downstream crates.
+## Investigate one slow boundary
 
-If your global config sets a wrapper, override it for this project only with a
-local `.cargo/config.toml`:
+1. Name the affected package, command, profile, features and target. Separate
+   compilation from linking, code generation, test execution and coverage export.
+2. Reuse retained timings when their inputs match. Otherwise add `--timings` to
+   the necessary Cargo build for that scope, for example
+   `cargo build -p talkbank-model --timings`. Inspect the generated report in
+   `target/cargo-timings/` (or the selected target directory).
+3. Record whether artifacts were warm, what changed, and the compiler/tool
+   versions and relevant overrides. Compare equivalent commands; a clean build
+   and a warm no-op are different workloads.
+4. Change one justified setting and retain both build and runtime consequences.
+   Do not delete the target directory merely to investigate a warm-build delay,
+   or run concurrent Cargo commands in the same workspace.
+5. Restore experimental local overrides before obtaining release evidence.
+   A faster build under different features, instrumentation, backend or profile
+   does not qualify the intended release artifact.
 
-```toml
-[build]
-rustc-wrapper = ""
-```
-
-Other Rust projects on the system are unaffected, and sccache stays available
-for CI and other projects. The file is gitignored (the repository's
-`.gitignore` names `/.cargo/config.toml`) rather than committed because
-the empty-string value trips a `cargo-llvm-cov` bug that treats `""` as a real
-wrapper path instead of "no wrapper"; each contributor opts in locally, and CI
-does not carry the override.
-
-The `lld` linker (`linker = "lld"` in the global config, `ld64.lld` from
-Homebrew's LLVM on macOS) is fine and slightly faster than Apple's default
-linker for a workspace of this size.
-
-## Optional: Cranelift Backend for Maximum Iteration Speed
-
-For the fastest possible "does it compile?" checks during rapid iteration,
-Rust nightly supports the Cranelift codegen backend:
-
-```bash
-cargo +nightly -Z codegen-backend=cranelift build
-```
-
-Cranelift generates code ~2x faster than LLVM but produces unoptimized output
-and is nightly-only. It is useful for compile-check cycles but not for
-correctness testing or benchmarking.
-
-## General Principles for Rust Compile Time
-
-1. **Incremental compilation is king for local dev.** Anything that disables it
-   (sccache, certain rustc-wrapper tools) is a net negative for iterative
-   development.
-
-2. **sccache is for CI, not local dev.** It shines when doing clean builds from
-   scratch (CI runners, cross-compilation). For edit-rebuild cycles, incremental
-   compilation is far more valuable.
-
-3. **Optimize dependencies, not your own crates, where the dependency surface
-   is small.** `[profile.dev.package."*"]` with `opt-level = 1` speeds test
-   execution at little compile cost when dependencies rarely change, but its
-   build-time cost grows with the dependency set. This workspace does not set
-   it (or the `profile.test` equivalent); where runtime is the bottleneck for a
-   specific test, opt in locally.
-
-4. **Debug info has a real cost.** Full DWARF debug info inflates binary sizes
-   and link times. Use `line-tables-only` unless you actively need a debugger.
-
-5. **Measure before optimizing.** Use `cargo build --timings` to generate an
-   HTML report showing per-crate compile times and parallelism. Use
-   `sccache --show-stats` to verify cache effectiveness.
-
-6. **Watch for crate graph bottlenecks.** Crates that sit at the root of the
-   dependency graph (like `talkbank-model`) are the critical path, changes to
-   them trigger the longest rebuild chains. Keep these crates lean and consider
-   splitting them if they grow too large.
+This guide does not prescribe an alternate codegen backend or linker, or claim
+a fixed speedup for one. Such experiments need their own supported toolchain,
+target and correctness evidence. Use [Development Checks](dev-checks.md) for
+the normal feedback commands and [CI and Release](ci-and-release.md) for the
+publication checks; timing work does not replace either.

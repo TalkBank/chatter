@@ -110,7 +110,7 @@ pub(super) fn assert_walk_views(
         if let ContentItem::Separator(separator) = item {
             let spelling = separator.to_chat_string();
             assert_eq!(
-                source.get(separator.span().to_range()),
+                source.get(separator.location().span().expect("located").to_range()),
                 Some(spelling.as_str())
             );
             assert_eq!(separator.to_string(), spelling);

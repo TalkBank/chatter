@@ -3,11 +3,17 @@
 //! Each variant corresponds to a grammar.js rule or token.
 //! Names are taken directly from grammar.js where possible.
 
+mod bullet;
+mod extracted;
 mod inspection;
+mod lang_suffix;
 mod pause;
 mod postcode;
 mod prefix;
+pub use bullet::{BulletTimes, MediaBulletToken};
+pub use extracted::Extracted;
 pub use inspection::{LexError, LexResult};
+pub use lang_suffix::LangSuffix;
 pub use pause::PauseLexeme;
 pub use postcode::PostcodeToken;
 pub use prefix::{DependentBodyKind, DependentPrefixToken, PrefixToken};
@@ -15,8 +21,10 @@ pub use prefix::{DependentBodyKind, DependentPrefixToken, PrefixToken};
 use serde::Serialize;
 use strum::EnumDiscriminants;
 
-/// Token returned by the lexer. Each variant carries
-/// a borrowed slice of the source input (zero-copy).
+/// Token returned by the lexer. Each variant carries a borrowed slice of the
+/// source input (zero-copy): the whole lexeme for a plain token, and an
+/// [`Extracted`] payload-plus-lexeme pair for a tag-extracting rule, so every
+/// token can be placed at itself.
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants, Serialize)]
 pub enum Token<'a> {
     // ── Structure ───────────────────────────────────────────
@@ -166,33 +174,34 @@ pub enum Token<'a> {
     /// same confusion the model type exists to prevent.
     CodeSwitchShortcut(&'a str),
     /// grammar.js: code_switch_annotation, explicit form `[@s:code]`.
-    /// Rich token: the tag marks the language code alone.
-    CodeSwitchExplicit(&'a str),
+    /// Rich token: the payload is the language code alone, the lexeme the
+    /// whole annotation; so for every `Extracted` variant below.
+    CodeSwitchExplicit(Extracted<'a>),
     /// grammar.js: freecode = token(/\[\^ [^\]\r\n]+\]/)
     /// Rich token: [^ content] with tag marking content boundaries.
-    Freecode(&'a str),
+    Freecode(Extracted<'a>),
     /// grammar.js: ca_continuation_marker = token('[^c]')
     CaContinuationMarker(&'a str),
     /// grammar.js: error_marker_annotation = token(prec(8, /\[\*[^\]]*\]/))
-    ErrorMarkerAnnotation(&'a str),
+    ErrorMarkerAnnotation(Extracted<'a>),
 
     // ── Annotations with content ────────────────────────────
     /// grammar.js: indexed_overlap_precedes = token(prec(8, /\[< ?[1-9]? ?\]/))
-    OverlapPrecedes(&'a str),
+    OverlapPrecedes(Extracted<'a>),
     /// grammar.js: indexed_overlap_follows = token(prec(8, /\[> ?[1-9]? ?\]/))
-    OverlapFollows(&'a str),
+    OverlapFollows(Extracted<'a>),
     /// [= text], explanation
-    ExplanationAnnotation(&'a str),
+    ExplanationAnnotation(Extracted<'a>),
     /// [=! text], paralinguistic
-    ParaAnnotation(&'a str),
+    ParaAnnotation(Extracted<'a>),
     /// [=? text], alternative transcription
-    AltAnnotation(&'a str),
+    AltAnnotation(Extracted<'a>),
     /// [% text], percent annotation
-    PercentAnnotation(&'a str),
+    PercentAnnotation(Extracted<'a>),
     /// [+ code], postcode
     Postcode(PostcodeToken<'a>),
     /// [- lang], language code
-    Langcode(&'a str),
+    Langcode(Extracted<'a>),
     /// Opening `[:`; replacement words are parsed structurally.
     ReplacementBegin(&'a str),
 
@@ -270,17 +279,20 @@ pub enum Token<'a> {
     /// grammar.js: token('&+'), fragment
     PrefixFragment(&'a str),
     /// grammar.js: event = seq(event_marker, event_segment+)
-    /// Complete event token: the tag-extracted event description text
-    /// (e.g., "laughs" from `&=laughs`, "clears:throat" from `&=clears:throat`).
-    Event(&'a str),
+    /// The payload is the tag-extracted description (e.g. "laughs" from
+    /// `&=laughs`, "clears:throat" from `&=clears:throat`); the lexeme is the
+    /// whole `&=...`.
+    Event(Extracted<'a>),
     /// grammar.js: zero = token(prec(3, '0'))
     Zero(&'a str),
 
     /// Rich other_spoken_event: &*SPK:word
-    /// Fields extracted by tags: speaker (t1..t2), text (t3..end).
+    /// Fields extracted by tags: speaker (t1..t2), text (t3..end); `lexeme` is
+    /// the whole match, for placement.
     OtherSpokenEvent {
         speaker: &'a str,
         text: &'a str,
+        lexeme: &'a str,
     },
 
     // ── Word suffixes ───────────────────────────────────────
@@ -290,12 +302,13 @@ pub enum Token<'a> {
     /// from `spec/form_markers/form_marker_registry.json`. A list here used
     /// to enumerate it and had already drifted: it omitted `@z` and quoted a
     /// `grammar.js` regex that no longer exists.
-    FormMarker(&'a str),
+    FormMarker(Extracted<'a>),
     /// grammar.js: word_lang_suffix = `token.immediate(/@s(?::[a-z]{2,3}(?:[+&][a-z]{2,3})*)? /)`
-    /// `@s` (bare shortcut) carries `None`; `@s:eng+zho` carries `Some("eng+zho")`.
-    WordLangSuffix(Option<&'a str>),
+    /// `@s` (bare shortcut) has no codes; `@s:eng+zho` has `eng+zho`; both
+    /// keep the whole suffix as the lexeme.
+    WordLangSuffix(LangSuffix<'a>),
     /// grammar.js: pos_tag = seq(token.immediate('$'), /[a-zA-Z:]+/)
-    PosTag(&'a str),
+    PosTag(Extracted<'a>),
 
     // ── Separators ──────────────────────────────────────────
     /// grammar.js: comma = ','
@@ -354,15 +367,15 @@ pub enum Token<'a> {
 
     // ── Misc structural ─────────────────────────────────────
     /// grammar.js: long_feature_begin = seq('&', '{l=', label)
-    LongFeatureBegin(&'a str),
+    LongFeatureBegin(Extracted<'a>),
     /// grammar.js: long_feature_end = seq('&', '}l=', label)
-    LongFeatureEnd(&'a str),
+    LongFeatureEnd(Extracted<'a>),
     /// grammar.js: nonvocal_begin = seq('&', '{n=', label)
-    NonvocalBegin(&'a str),
+    NonvocalBegin(Extracted<'a>),
     /// grammar.js: nonvocal_end = seq('&', '}n=', label)
-    NonvocalEnd(&'a str),
+    NonvocalEnd(Extracted<'a>),
     /// grammar.js: nonvocal_simple = seq('&', '{n=', label, '}')
-    NonvocalSimple(&'a str),
+    NonvocalSimple(Extracted<'a>),
 
     /// grammar.js: ampersand = '&'
     Ampersand(&'a str),
@@ -374,7 +387,7 @@ pub enum Token<'a> {
     /// `LeftBracket` and take the whole utterance down with E321 "unparsable",
     /// while tree-sitter parsed it and reported E207 "unknown annotation",
     /// which is what `spec/errors/E207.md` says should happen.
-    UnknownAnnotation(&'a str),
+    UnknownAnnotation(Extracted<'a>),
     /// grammar.js: left_bracket = '['
     LeftBracket(&'a str),
     /// grammar.js: right_bracket = ']'
@@ -385,9 +398,8 @@ pub enum Token<'a> {
     /// `raw_text` carries the full original slice including NAK delimiters,
     /// so no downstream reconstruction is needed.
     MediaBullet {
-        raw_text: &'a str,
-        start_time: &'a str,
-        end_time: &'a str,
+        #[serde(flatten)]
+        bullet: MediaBulletToken<'a>,
     },
 
     // ── CA elements (typed, one variant per CAElementType) ──
@@ -466,7 +478,7 @@ pub enum Token<'a> {
     /// grammar.js: text_segment = /[^\u0015\r\n]+/
     TextSegment(&'a str),
     /// grammar.js: inline_pic = /\u0015%pic:"filename"\u0015/
-    InlinePic(&'a str),
+    InlinePic(Extracted<'a>),
 
     // ── Errors (context-specific, one per condition) ───────
     //

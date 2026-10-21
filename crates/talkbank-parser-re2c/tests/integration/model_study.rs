@@ -51,7 +51,7 @@ fn reference_replacement_words_are_structural_and_source_bound() {
                 for word in &replaced.replacement.words {
                     let spelling = word.to_chat_string();
                     assert_eq!(
-                        source.get(word.span.start as usize..word.span.end as usize),
+                        source.get(word.location.span().expect("located").to_range()),
                         Some(spelling.as_str())
                     );
                     words.push(spelling);
@@ -154,7 +154,10 @@ fn lengthening_json_requires_a_nonzero_count() {
     use talkbank_model::{WordLengthening, WriteChat};
     assert!(serde_json::from_str::<WordLengthening>(r#"{"count":0}"#).is_err());
     let default: WordLengthening = serde_json::from_str("{}").unwrap();
-    assert_eq!(default, WordLengthening::default());
+    assert_eq!(
+        default,
+        WordLengthening::new(talkbank_model::Location::Unlocated)
+    );
     assert_eq!(default.to_chat_string(), ":");
     let long: WordLengthening = serde_json::from_str(r#"{"count":256}"#).unwrap();
     assert_eq!(long.to_chat_string(), ":".repeat(256));
@@ -233,12 +236,11 @@ fn main_tier_retrace_structure() {
 fn main_tier_equivalence_simple() {
     let input = "*CHI:\thello world .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let (re2c_parsed, re2c_src) =
-        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &line.main_tier,
+        line.source,
         &conversion_errors,
     );
     assert!(conversion_errors.into_vec().is_empty());
@@ -254,12 +256,11 @@ fn main_tier_equivalence_simple() {
 fn main_tier_equivalence_retrace() {
     let input = "*CHI:\tthe the [/] dog .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let (re2c_parsed, re2c_src) =
-        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &line.main_tier,
+        line.source,
         &conversion_errors,
     );
     assert!(conversion_errors.into_vec().is_empty());
@@ -275,12 +276,11 @@ fn main_tier_equivalence_retrace() {
 fn main_tier_equivalence_compound() {
     let input = "*CHI:\tI want ice+cream .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let (re2c_parsed, re2c_src) =
-        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &line.main_tier,
+        line.source,
         &conversion_errors,
     );
     assert!(conversion_errors.into_vec().is_empty());
@@ -296,12 +296,11 @@ fn main_tier_equivalence_compound() {
 fn main_tier_equivalence_event() {
     let input = "*CHI:\t&=laughs .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let (re2c_parsed, re2c_src) =
-        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &line.main_tier,
+        line.source,
         &conversion_errors,
     );
     assert!(conversion_errors.into_vec().is_empty());
@@ -317,12 +316,11 @@ fn main_tier_equivalence_event() {
 fn main_tier_equivalence_pause() {
     let input = "*CHI:\tI (.) want cookies .\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let (re2c_parsed, re2c_src) =
-        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &line.main_tier,
+        line.source,
         &conversion_errors,
     );
     assert!(conversion_errors.into_vec().is_empty());
@@ -338,12 +336,11 @@ fn main_tier_equivalence_pause() {
 fn main_tier_equivalence_trailing_off() {
     let input = "*CHI:\tI was going to the +...\n";
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let (re2c_parsed, re2c_src) =
-        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &line.main_tier,
+        line.source,
         &conversion_errors,
     );
     assert!(conversion_errors.into_vec().is_empty());
@@ -361,7 +358,12 @@ fn mor_tier_equivalence() {
     let errors = talkbank_model::errors::ErrorCollector::new();
     let ts_result = ts().parse_mor_tier_fragment(input, 0, &errors);
     let re2c_parsed = talkbank_parser_re2c::parser::parse_mor_tier(input);
-    let re2c_tier = match talkbank_model::model::MorTier::try_from(&re2c_parsed) {
+    let re2c_source = talkbank_parser_re2c::source_text::SourceText::new(input);
+    let re2c_tier = match talkbank_parser_re2c::convert::mor_tier_to_model(
+        &re2c_parsed,
+        talkbank_model::Location::Located(re2c_source.whole()),
+        re2c_source,
+    ) {
         Ok(t) => t,
         Err(e) => panic!("re2c MorTier conversion failed: {:?}", e),
     };
@@ -391,7 +393,7 @@ fn gra_tier_equivalence() {
         talkbank_parser_re2c::source_text::SourceText::new(input),
         &errors,
     )
-    .tier_without_health();
+    .tier_without_health(talkbank_model::Location::Unlocated);
     if let talkbank_model::ParseOutcome::Parsed(ts_tier) = ts_result {
         assert!(
             ts_tier.semantic_eq(&re2c_tier),
@@ -485,12 +487,12 @@ fn whole_file_spans_are_reported() {
         panic!("re2c must parse this input");
     };
 
-    let item_spans = |f: &talkbank_model::ChatFile| -> Vec<talkbank_model::Span> {
+    let item_spans = |f: &talkbank_model::ChatFile| -> Vec<talkbank_model::Location> {
         f.utterances()
             .flat_map(|u| u.main.content.content.iter())
             .filter_map(|item| match item {
-                talkbank_model::model::UtteranceContent::Separator(sep) => Some(sep.span()),
-                talkbank_model::model::UtteranceContent::Word(w) => Some(w.span),
+                talkbank_model::model::UtteranceContent::Separator(sep) => Some(sep.location()),
+                talkbank_model::model::UtteranceContent::Word(w) => Some(w.location),
                 _ => None,
             })
             .collect()
@@ -502,7 +504,9 @@ fn whole_file_spans_are_reported() {
         "two words and two commas, got {ts_spans:?}"
     );
     assert!(
-        ts_spans.iter().all(|s| *s != talkbank_model::Span::DUMMY),
+        ts_spans
+            .iter()
+            .all(|s| matches!(s, talkbank_model::Location::Located(_))),
         "tree-sitter must place every item, got {ts_spans:?}"
     );
     assert_eq!(
@@ -512,34 +516,29 @@ fn whole_file_spans_are_reported() {
     );
 }
 
-/// A MULTI-TOKEN word must be placed too, not just a single-token one.
-///
-/// `subtoken_word` rebuilds `raw_text` as an owned concatenation
-/// of its tokens' display forms, so that string is a DIFFERENT ALLOCATION from
-/// the source and `SourceText::span_of` correctly refuses it. The word then
-/// keeps `Span::DUMMY`. `whole_file_spans_are_reported` cannot see this: every
-/// word in its input is a single token.
+/// A word with internal structure must be placed too, not just a plain one,
+/// and placed where tree-sitter places it. `whole_file_spans_are_reported`
+/// cannot see this: every word in its input is a plain token.
 #[test]
 fn multi_token_words_are_placed_too() {
     let input =
         std::env::var("PROBE_INPUT").unwrap_or_else(|_| "*CHI:\tthe he(l)lo world .\n".to_string());
     let input = input.as_str();
     let ts_mt = ts().parse_main_tier(input).unwrap();
-    let (re2c_parsed, re2c_src) =
-        talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &line.main_tier,
+        line.source,
         &conversion_errors,
     );
     assert!(conversion_errors.into_vec().is_empty());
-    let spans = |mt: &talkbank_model::model::MainTier| -> Vec<talkbank_model::Span> {
+    let spans = |mt: &talkbank_model::model::MainTier| -> Vec<talkbank_model::Location> {
         mt.content
             .content
             .iter()
             .filter_map(|i| match i {
-                talkbank_model::model::UtteranceContent::Word(w) => Some(w.span),
+                talkbank_model::model::UtteranceContent::Word(w) => Some(w.location),
                 _ => None,
             })
             .collect()
@@ -626,5 +625,104 @@ fn re2c_reports_no_diagnostic_twice() {
 fn word_fragment_conversion_retains_caller_source_span() {
     let input = String::from("hello");
     let word = re2c_word(&input);
-    assert_eq!(word.span, talkbank_model::Span::from_usize(0, input.len()));
+    assert_eq!(
+        word.location,
+        talkbank_model::Location::Located(talkbank_model::Span::new(0, input.len()))
+    );
+}
+
+/// Word-body markers are placed at their own bytes: the lengthening run and
+/// the compound marker inside `ba::ll+y` carry the spans of `::` and `+`.
+#[test]
+fn word_body_markers_are_placed_at_their_lexemes() {
+    let input = "*CHI:\tba::ll+y .\n";
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
+    let mt = talkbank_parser_re2c::convert::main_tier_to_model(
+        &line.main_tier,
+        line.source,
+        &conversion_errors,
+    );
+    assert!(conversion_errors.into_vec().is_empty());
+    let word = mt
+        .content
+        .content
+        .iter()
+        .find_map(|item| match item {
+            talkbank_model::model::UtteranceContent::Word(w) => Some(w),
+            _ => None,
+        })
+        .expect("one word");
+    let colons = input.find("::").unwrap();
+    let plus = input.find('+').unwrap();
+    let mut seen_lengthening = false;
+    let mut seen_compound = false;
+    for content in word.content().iter() {
+        match content {
+            talkbank_model::model::WordContent::Lengthening(run) => {
+                assert_eq!(run.count.get(), 2);
+                assert_eq!(
+                    run.location,
+                    talkbank_model::Location::Located(talkbank_model::Span::new(
+                        colons,
+                        colons + 2
+                    ))
+                );
+                seen_lengthening = true;
+            }
+            talkbank_model::model::WordContent::CompoundMarker(marker) => {
+                assert_eq!(
+                    marker.location,
+                    talkbank_model::Location::Located(talkbank_model::Span::new(plus, plus + 1))
+                );
+                seen_compound = true;
+            }
+            _ => {}
+        }
+    }
+    assert!(seen_lengthening && seen_compound, "{:?}", word.content());
+}
+
+/// A word the lexer's rich word rule rejects is assembled from subtokens, and
+/// its text is its slice of the source, so it is placed like any other word.
+/// The rich rule admits a marker-initial word only when text follows the
+/// markers, so two bare pitch arrows lex as two `CaPitchUp` tokens and the
+/// parser assembles them; a body of two CA elements and no text is the proof
+/// the assembled path ran.
+#[test]
+fn assembled_words_borrow_their_source_slice() {
+    let input = "*CHI:\tthe \u{2191}\u{2191} there .\n";
+    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let words: Vec<&talkbank_parser_re2c::ast::WordWithAnnotations<'_>> = line
+        .main_tier
+        .tier()
+        .tier_body
+        .contents
+        .iter()
+        .filter_map(|item| match item {
+            talkbank_parser_re2c::ast::ContentItem::Word(word) => Some(word),
+            _ => None,
+        })
+        .collect();
+    let assembled = words
+        .iter()
+        .find(|w| w.raw_text == "\u{2191}\u{2191}")
+        .unwrap_or_else(|| panic!("no assembled word in {words:?}"));
+    assert!(
+        assembled
+            .body
+            .iter()
+            .all(|item| matches!(item, talkbank_parser_re2c::ast::WordBodyItem::CaElement(..)))
+            && assembled.body.len() == 2,
+        "the arrows were not assembled from subtokens: {:?}",
+        assembled.body
+    );
+    for word in words {
+        let span = line
+            .source
+            .span_of(word.raw_text)
+            .unwrap_or_else(|| panic!("{:?} is not a slice of the source", word.raw_text));
+        assert_eq!(line.source.text_at(span), word.raw_text);
+        assert_eq!(&input[span.start()..span.end()], word.raw_text);
+    }
 }

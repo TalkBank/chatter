@@ -168,7 +168,7 @@ impl std::borrow::Borrow<str> for SpeakerCode {
 impl Validate for SpeakerCode {
     /// Enforces CHAT speaker-id constraints used by parser/validator compatibility checks.
     fn validate(&self, _context: &ValidationContext, errors: &impl crate::ErrorSink) {
-        crate::validation::check_speaker_id(self.as_str(), crate::Span::DUMMY, errors);
+        crate::validation::check_speaker_id(self.as_str(), crate::Location::Unlocated, errors);
     }
 }
 

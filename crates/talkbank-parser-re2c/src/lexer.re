@@ -107,7 +107,10 @@ impl<'a> Iterator for Lexer<'a> {
         macro_rules! emit_t1 {
             ($variant:ident) => {{
                 let end = self.cursor;
-                return Some((Token::$variant(&yyinput[self.t1..end]), start..end));
+                let token = crate::token::Extracted::from_lexed(
+                    &yyinput[self.t1..end], &yyinput[start..end],
+                );
+                return Some((Token::$variant(token), start..end));
             }};
         }
 
@@ -118,7 +121,10 @@ impl<'a> Iterator for Lexer<'a> {
         macro_rules! emit_t1t2 {
             ($variant:ident) => {{
                 let end = self.cursor;
-                return Some((Token::$variant(yyinput[self.t1..self.t2].trim()), start..end));
+                let token = crate::token::Extracted::from_lexed(
+                    yyinput[self.t1..self.t2].trim(), &yyinput[start..end],
+                );
+                return Some((Token::$variant(token), start..end));
             }};
         }
 
@@ -771,7 +777,7 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT> "[+ " @t1 [^\x00\]\r\n]+ @t2 "]" {
             let end = self.cursor;
             let postcode = crate::token::PostcodeToken::from_lexed(
-                &yyinput[self.t1..self.t2], talkbank_model::Span::from_usize(start, end));
+                &yyinput[self.t1..self.t2], &yyinput[start..end]);
             return Some((Token::Postcode(postcode), start..end));
         }
 
@@ -1014,8 +1020,9 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT> "@s" (":" @t1 [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)? {
             // Bare @s → None (shortcut). @s:eng+zho → Some("eng+zho").
             let end = self.cursor;
-            let content = if self.t1 != NONE { Some(&yyinput[self.t1..end]) } else { None };
-            return Some((Token::WordLangSuffix(content), start..end));
+            let codes = if self.t1 != NONE { Some(&yyinput[self.t1..end]) } else { None };
+            let suffix = crate::token::LangSuffix::from_lexed(codes, &yyinput[start..end]);
+            return Some((Token::WordLangSuffix(suffix), start..end));
         }
 
         // grammar.js: pos_tag = seq(token.immediate('$'), /[a-zA-Z:]+/)
@@ -1029,9 +1036,11 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT, MOR_CONTENT, GRA_CONTENT, TIER_CONTENT, COM_CONTENT, USER_TIER_CONTENT> "\u0015" @t1 [0-9]+ @t2 "_" @t3 [0-9]+ @t4 "\u0015" {
             let end = self.cursor;
             return Some((Token::MediaBullet {
-                raw_text: &yyinput[start..end],
-                start_time: &yyinput[self.t1..self.t2],
-                end_time: &yyinput[self.t3..self.t4],
+                bullet: crate::token::MediaBulletToken::from_lexed(
+                    &yyinput[start..end],
+                    &yyinput[self.t1..self.t2],
+                    &yyinput[self.t3..self.t4],
+                ),
             }, start..end));
         }
 
@@ -1092,6 +1101,7 @@ impl<'a> Iterator for Lexer<'a> {
             return Some((Token::OtherSpokenEvent {
                 speaker: &yyinput[self.t1..self.t2],
                 text: &yyinput[self.t3..end],
+                lexeme: &yyinput[start..end],
             }, start..end));
         }
 

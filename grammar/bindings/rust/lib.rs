@@ -41,6 +41,23 @@ unsafe extern "C" {
         kind: *const u8,
         kind_length: usize,
     ) -> i32;
+    fn tree_sitter_talkbank_required_graph_new_v15(
+        language: *const std::ffi::c_void,
+    ) -> *mut std::ffi::c_void;
+    fn tree_sitter_talkbank_required_graph_drop_v15(graph: *mut std::ffi::c_void);
+    fn tree_sitter_talkbank_required_rule_v15(
+        graph: *const std::ffi::c_void,
+        parent: *const std::ffi::c_char,
+        children: *const *const std::ffi::c_char,
+        count: usize,
+        optional: usize,
+    ) -> i32;
+    fn tree_sitter_talkbank_required_prefix_v15(
+        graph: *const std::ffi::c_void,
+        parent: *const std::ffi::c_char,
+        children: *const *const std::ffi::c_char,
+        count: usize,
+    ) -> i32;
 }
 
 /// The tree-sitter [`LanguageFn`] for this grammar.
@@ -55,6 +72,35 @@ pub const LANGUAGE_METADATA_BRIDGE: unsafe extern "C" fn(
     *const u8,
     usize,
 ) -> i32 = tree_sitter_talkbank_nonmissing_kind_v15;
+
+/// Create the supplied immutable TSGU graph for a live native language.
+/// The returned graph must be released with [`REQUIRED_GRAPH_DROP`] before its language.
+pub const REQUIRED_GRAPH_NEW: unsafe extern "C" fn(
+    *const std::ffi::c_void,
+) -> *mut std::ffi::c_void = tree_sitter_talkbank_required_graph_new_v15;
+
+/// Release exactly one graph created by [`REQUIRED_GRAPH_NEW`].
+pub const REQUIRED_GRAPH_DROP: unsafe extern "C" fn(*mut std::ffi::c_void) =
+    tree_sitter_talkbank_required_graph_drop_v15;
+
+/// Check a borrowed generated descriptor against a live immutable TSGU graph.
+/// Parent/child strings must be NUL-terminated; all addresses have static code lifetime.
+pub const REQUIRED_RULE: unsafe extern "C" fn(
+    *const std::ffi::c_void,
+    *const std::ffi::c_char,
+    *const *const std::ffi::c_char,
+    usize,
+    usize,
+) -> i32 = tree_sitter_talkbank_required_rule_v15;
+
+/// Check a borrowed fixed prefix over every complete selected reduction path.
+/// Parent/child strings must be NUL-terminated and live through the call.
+pub const REQUIRED_PREFIX: unsafe extern "C" fn(
+    *const std::ffi::c_void,
+    *const std::ffi::c_char,
+    *const *const std::ffi::c_char,
+    usize,
+) -> i32 = tree_sitter_talkbank_required_prefix_v15;
 
 /// The content of the [`node-types.json`] file for this grammar.
 ///

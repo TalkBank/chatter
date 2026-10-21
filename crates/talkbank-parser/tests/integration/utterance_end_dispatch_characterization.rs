@@ -76,9 +76,12 @@ fn valid_terminator_postcode_bullet_unchanged() {
 
     // Period terminator at the captured span (25..26).
     match &content.terminator {
-        Some(Terminator::Period { span }) => {
+        Some(Terminator::Period { location: span }) => {
             assert_eq!(
-                (span.start, span.end),
+                (
+                    span.span().expect("located").start(),
+                    span.span().expect("located").end()
+                ),
                 (25, 26),
                 "period terminator span must be preserved"
             );
@@ -105,8 +108,8 @@ fn valid_terminator_postcode_bullet_unchanged() {
         "bullet timestamps must be preserved"
     );
     assert_eq!(
-        (bullet.span.start, bullet.span.end),
-        (35, 43),
+        bullet.location.span().expect("located").to_range(),
+        35..43,
         "bullet span must be preserved"
     );
 }

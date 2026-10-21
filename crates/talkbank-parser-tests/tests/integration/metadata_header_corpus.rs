@@ -51,7 +51,7 @@ fn metadata_headers_legal_payloads_preserve_order_unicode_and_wire_trust() {
                         seen.push("types");
                     }
                     Header::Situation { text } => {
-                        assert_eq!(text.as_ref(), "café α — jeu partagé");
+                        assert_eq!(text.as_ref(), "café α \u{2014} jeu partagé");
                         seen.push("situation");
                     }
                     _ => {}
@@ -101,9 +101,14 @@ fn metadata_headers_fragments_agree_with_document_payloads_and_rebasing() {
                 let mut compared = 0;
                 for (original, rebased) in file.lines.iter().zip(shifted.lines.iter()) {
                     let (
-                        Line::Header { header, span, .. },
                         Line::Header {
-                            span: shifted_span, ..
+                            header,
+                            location: span,
+                            ..
+                        },
+                        Line::Header {
+                            location: shifted_span,
+                            ..
                         },
                     ) = (original, rebased)
                     else {
@@ -112,9 +117,16 @@ fn metadata_headers_fragments_agree_with_document_payloads_and_rebasing() {
                     if !metadata(header.as_ref()) {
                         continue;
                     }
-                    assert_eq!(shifted_span.start as usize, span.start as usize + origin);
-                    assert_eq!(shifted_span.end as usize, span.end as usize + origin);
-                    let fragment = &source[span.start as usize..span.end as usize];
+                    assert_eq!(
+                        shifted_span.span().expect("located").start(),
+                        span.span().expect("located").start() + origin
+                    );
+                    assert_eq!(
+                        shifted_span.span().expect("located").end(),
+                        span.span().expect("located").end() + origin
+                    );
+                    let fragment = &source[span.span().expect("located").start()
+                        ..span.span().expect("located").end()];
                     let errors = ErrorCollector::new();
                     let parsed = ChatParser::parse_header(&parser, fragment, origin, &errors)
                         .into_option()

@@ -62,7 +62,10 @@ fn reference_indexed_overlaps_keep_kind_index_and_word_positions() {
         );
         assert_eq!(point.to_string(), expected);
         assert_eq!(point.to_chat_string(), expected);
-        let span = point.span.expect("parsed marker retains its source span");
+        let span = point
+            .location
+            .span()
+            .expect("parsed marker retains its source span");
         assert_eq!(source.get(span.to_range()), Some(expected.as_str()));
         witnessed.insert(glyph);
     };

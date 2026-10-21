@@ -8,13 +8,16 @@
 use std::num::NonZeroUsize;
 
 use crate::generated_traversal::{
-    AsRawNode, GraRelationChildren, GraRelationNode, KindSlot, NoChild, RangeAdmittedChildren,
+    AsRawNode, GraRelationChildren, GraRelationNode, Never, PresenceProof, RangeAdmittedChildren,
     Ranged, ReadableSlot, SourceBound, SourceBoundKind,
 };
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::GrammaticalRelation;
-use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use talkbank_model::{
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity,
+};
 
 /// Converts one `gra_relation` node (`index|head|label`) into `GrammaticalRelation`.
 ///
@@ -31,8 +34,8 @@ pub(super) fn parse_gra_relation<'tree>(
 ) -> Result<ParseOutcome<GrammaticalRelation>, crate::CstFailure> {
     let source = typed.source();
     let node = typed.raw_node();
-    let relation_span = node.start_byte()..node.end_byte();
-    let children = typed.extract();
+    let relation_span = span_of(node);
+    let children = crate::parser::typed_cst::extract_inner(typed)?;
     surface_displaced(
         &children.children().unexpected,
         "gra_relation",
@@ -54,8 +57,8 @@ pub(super) fn parse_gra_relation<'tree>(
                     ParseError::new(
                         ErrorCode::InvalidGrammarIndex,
                         Severity::Error,
-                        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                        ErrorContext::new(source, relation_span.clone(), index_text),
+                        DiagnosticLocation::new(span_of(node)),
+                        ErrorContext::new(source, relation_span, index_text),
                         "Index cannot be 0 (indices are 1-indexed)".to_string(),
                     )
                     .with_suggestion("Index must start at 1 for the first word"),
@@ -68,8 +71,8 @@ pub(super) fn parse_gra_relation<'tree>(
                 ParseError::new(
                     ErrorCode::MalformedGrammarRelation,
                     Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, relation_span.clone(), index_text),
+                    DiagnosticLocation::new(span_of(node)),
+                    ErrorContext::new(source, relation_span, index_text),
                     format!("Invalid index '{}': must be a positive integer", index_text),
                 )
                 .with_suggestion("Index must be 1, 2, 3, ... (1-indexed)"),
@@ -89,8 +92,8 @@ pub(super) fn parse_gra_relation<'tree>(
                 ParseError::new(
                     ErrorCode::UnexpectedGrammarNode,
                     Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, relation_span.clone(), head_text),
+                    DiagnosticLocation::new(span_of(node)),
+                    ErrorContext::new(source, relation_span, head_text),
                     format!(
                         "Invalid head '{}': must be a non-negative integer",
                         head_text
@@ -110,7 +113,7 @@ pub(super) fn parse_gra_relation<'tree>(
         errors.report(ParseError::new(
             ErrorCode::MalformedGrammarRelation,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            DiagnosticLocation::new(span_of(node)),
             ErrorContext::new(source, relation_span, relation_text),
             "Missing grammatical relation label".to_string(),
         ));
@@ -133,12 +136,12 @@ enum RelationField {
 }
 
 impl RelationField {
-    fn read<'tree, 'source>(
+    fn read<'tree, 'source, P: PresenceProof>(
         self,
         relation: &RangeAdmittedChildren<
             'tree,
             'source,
-            GraRelationChildren<'tree, Ranged<'source>>,
+            GraRelationChildren<'tree, Ranged<'source>, P>,
         >,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<&'source str> {
@@ -156,8 +159,8 @@ impl RelationField {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(parent.source(), node.byte_range(), ""),
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(parent.source(), span_of(node), ""),
                 format!("Missing {name} in grammatical relation"),
             ));
             return ParseOutcome::rejected();
@@ -166,12 +169,18 @@ impl RelationField {
     }
 }
 
-fn read_present_text<'tree, 'source, T: SourceBoundKind<'tree>>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, T>, Ranged<'source>>,
+fn read_present_text<'tree, 'source, T: SourceBoundKind<'tree>, E, A>(
+    slot: &ReadableSlot<
+        SourceBound<'tree, 'source, T>,
+        SourceBound<'tree, 'source, T>,
+        E,
+        Never,
+        A,
+    >,
 ) -> Option<&'source str> {
     match slot {
         ReadableSlot::Present(field) => Some(field.text()),
-        ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => None,
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(_) => None,
         ReadableSlot::Unexpected(never) => match *never {},
     }
 }

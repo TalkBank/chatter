@@ -25,6 +25,7 @@
 //! exists to prevent, and it would do it quietly.
 
 use talkbank_model::alignment::helpers::{WordItemMut, walk_code_switch_spans, walk_words_mut};
+use talkbank_model::model::LanguagePrecode;
 use talkbank_model::model::{
     ChatFile, CodeSwitchSpan, Header, LanguageCode, Line, WordLanguageMarker,
 };
@@ -93,8 +94,15 @@ pub fn retag_language(
             }
             Line::Utterance(utterance) => {
                 let content = &mut utterance.main.content;
-                if content.language_code.as_ref() == Some(from) {
-                    content.language_code = Some(to.clone());
+                if content.language_code.as_ref().map(|precode| &precode.code) == Some(from) {
+                    // Retagging keeps the precode where it was.
+                    let location = content
+                        .language_code
+                        .as_ref()
+                        .map_or(talkbank_model::Location::Unlocated, |precode| {
+                            precode.location
+                        });
+                    content.language_code = Some(LanguagePrecode::new(location, to.clone()));
                     stats.utterance_scopes += 1;
                 }
                 walk_words_mut(content.content.as_mut_slice(), None, &mut |item| {

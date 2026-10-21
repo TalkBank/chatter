@@ -1,13 +1,16 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
+assertion_line: 12
 expression: result
 ---
 Ok(
     Word {
-        span: Span {
-            start: 0,
-            end: 13,
-        },
+        location: Located(
+            Span {
+                start: 0,
+                end: 13,
+            },
+        ),
         word_id: None,
         content: WordContents(
             [
@@ -26,7 +29,7 @@ Ok(
                                 2,
                             ),
                         ),
-                        span: Some(
+                        location: Located(
                             Span {
                                 start: 1,
                                 end: 5,
@@ -42,7 +45,7 @@ Ok(
                                 3,
                             ),
                         ),
-                        span: Some(
+                        location: Located(
                             Span {
                                 start: 5,
                                 end: 9,

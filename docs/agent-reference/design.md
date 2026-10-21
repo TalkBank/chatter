@@ -44,13 +44,16 @@ louder.
 - **A total function silently discards information.** Return it; make the
   lossy path the explicit one. Its commonest disguise is a log line.
 - **Knowledge duplicated with no owner**, held together by a test asserting
-  two things stay equal. One owner, then delete the test.
+  two things stay equal. Establish one owner, then remove only the redundant
+  synchronization check, preserving that owner's boundary contracts.
 
 **Decision test before writing any type:** name a wrong value it permits and
 ask what would notice. If the answer is a reviewer, a comment or a doc, the
-type is wrong; if the compiler, it is right. **After any type change, count
-what it removed**: lines, variants, checks, tests, branches. Nothing means
-you relocated a defect rather than eliminating one.
+type may need stronger admission. Compiler rejection closes a caller route,
+but cannot establish the semantic correctness of the admitting constructor.
+After a type change, identify the forbidden state or transition it removed
+and the evidence for its boundary. Counts of lines, branches or tests removed
+are not correctness evidence.
 
 **A single type is a point fix; the technique is a graph of them.** A node
 per distinct meaning, an edge per transition, each edge `fn(Previous) ->
@@ -83,16 +86,17 @@ cannot see are on you: `unwrap_or(<literal>)`, `unwrap_or_default()`, a
 `Default` on a type whose wrong value is invisible, a sentinel that is also a
 legal value.
 
-**Every touch leaves the types better than it found them**, and deletes
-whatever the improved type made impossible to fail. A ratchet that only
-`main()` performs is not a ratchet: write a gate, run it, then break it on
-purpose and watch it fail before believing any claim that rests on it.
+**Improve types within the authorized scope.** Remove obsolete routes only
+after their replacement invariants are established. Verify an enforcement
+claim at its actual boundary, including a negative control. Reuse existing
+verification owners; a new automatic gate requires workflow approval.
 
-**Remove tests by making illegal states unrepresentable.** A test guarding an
-invariant is a standing admission that nothing enforces it. What legitimately
-survives: wire formats, roundtrips between two separate functions,
-measurements, policy choices with real alternatives, and behaviour a
-signature cannot describe. A surviving test says which of those it is.
+**Use types and boundary tests together.** Private constructors and consuming
+transitions close caller bypasses; tests still establish correct admission,
+wire behavior, policy and public-boundary outcomes. Retain legal and rejected
+constructor cases and meaningful compile-fail controls. Remove only tests whose
+specific obligation has become redundant, naming its replacement evidence.
+Introducing a type does not by itself justify deleting its boundary tests.
 
 **Record what you notice even when you are not fixing it.**
 
@@ -101,8 +105,10 @@ signature cannot describe. A surviving test says which of those it is.
 1. Types are the first layer of documentation: newtypes at stable
    boundaries, no tuple-packed seams, enums over two or more bools.
 2. Domain errors via `thiserror`; streaming diagnostics via `ErrorSink`;
-   `ParseOutcome` for parse results; no silent swallowing (`.ok()`,
-   `.unwrap_or_default()`).
+   explicit outcomes for parser production. Streaming `ParseOutcome` and
+   whole-document `ParseProduct` have different diagnostic ownership; neither
+   certifies validity. Use `Result` for fallible operations where appropriate;
+   do not silently swallow failures through `.ok()` or defaults.
 3. Exhaustive matches on `UtteranceContent` and `BracketedItem`: no catch-all
    that discards content; all group types recurse.
 4. "Consecutive" on the main tier always means in-order recursive traversal
@@ -173,6 +179,25 @@ signature cannot describe. A surviving test says which of those it is.
     left open: the counter and the extractor can no longer be asked a
     `%wor` count (`PositionalDomain` has no `Wor`), and the overlap
     collector walks with the projection's own leaf set.
+
+22. **Source locations are a typed fact, never a sentinel.** `Span` is
+    geometry only (`start <= end`, asserted in every profile, no `Default`).
+    Every model value carries `location: Location` (`Located(Span)` or
+    `Unlocated`), given to its constructor as the first argument: a parser
+    passes the node's span, a builder or JSON readback writes `Unlocated`.
+    There is no setter, default or placeholder span; AST JSON carries no
+    locations. A consumer leaves a `Location` only through `match` or
+    `span() -> Option<Span>` and states its unlocated policy at that arm.
+    Diagnostics carry `DiagnosticLocation` (`Known` with an optional paired
+    `LineColumn`, or `Unlocated`), with `From<Location>`. **Presence decides,
+    location points:** whether a validation rule fires depends on the
+    construct existing in the model, never on its having a span; the span
+    only chooses where the diagnostic points. A value with no location of its
+    own reports where its parent narrowed the `ValidationContext`
+    (`field_diagnostic_location`), or `Unlocated`, never byte 0. The parser
+    crates are held on production `Location::Unlocated` by the fabricated-AST
+    gate (tree-sitter at zero). Full contract:
+    `book/src/architecture/errors-and-validation/chat-core-errors.md`.
 
 ## Coding standards
 

@@ -1,20 +1,25 @@
-//! `chatter debug overlap`, CA overlap audit.
+//! `chatter debug overlap-audit`, exploratory CA overlap audit.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use talkbank_model::alignment::helpers::overlap_groups::analyze_file_overlaps;
 use talkbank_model::errors::NullErrorSink;
 
+use super::AuditError;
+use super::report::OpenReport;
+
 /// Run the overlap-audit debug command.
-pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
-    let mut db_writer: Option<std::io::BufWriter<std::fs::File>> = database_path.map(|p| {
-        let file = std::fs::File::create(p).unwrap_or_else(|e| {
-            eprintln!("ERROR: cannot create database file {}: {e}", p.display());
-            std::process::exit(1);
-        });
-        std::io::BufWriter::new(file)
-    });
+///
+/// Existing destinations are refused, including input aliases. Discovery and
+/// parser setup precede output creation. Later I/O failures retain any partial
+/// report and return an error, never a completion receipt. Parsing remains
+/// exploratory: this command does not certify CHAT validity.
+pub fn run_overlap_audit(
+    paths: &[PathBuf],
+    database_path: Option<&Path>,
+) -> Result<(), AuditError> {
+    let (files, parser) = super::transcripts_and_parser(paths);
+    let mut report = database_path.map(OpenReport::create).transpose()?;
 
     let mut files_processed = 0;
     let mut total_groups = 0;
@@ -29,15 +34,11 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
         "file\tutterances\tgroups\tbottoms\torphan_tops\torphan_bottoms\ttimed\tconsistent\tquality"
     );
 
-    let (files, parser) = super::transcripts_and_parser(paths);
     for path in files {
-        let source = match std::fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("ERROR: cannot read {}: {e}", path.display());
-                continue;
-            }
-        };
+        let source = std::fs::read_to_string(&path).map_err(|source| AuditError::Read {
+            path: path.clone(),
+            source,
+        })?;
 
         let chat = parser.parse_chat_file_streaming(&source, &NullErrorSink);
         let analysis = analyze_file_overlaps(&chat.lines);
@@ -95,7 +96,7 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
         );
 
         // Write JSON lines record if database output requested
-        if let Some(ref mut db_file) = db_writer {
+        if let Some(writer) = report {
             let record = serde_json::json!({
                 "file": path.to_string_lossy(),
                 "filename": filename,
@@ -108,9 +109,7 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
                 "temporally_consistent": consistent,
                 "quality": quality,
             });
-            writeln!(db_file, "{}", record).unwrap_or_else(|e| {
-                eprintln!("ERROR: failed to write database record: {e}");
-            });
+            report = Some(writer.record(&record)?);
         }
 
         files_processed += 1;
@@ -122,6 +121,7 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
         total_consistent += consistent;
     }
 
+    let finished = report.map(OpenReport::finish).transpose()?;
     eprintln!();
     eprintln!("=== Summary ===");
     eprintln!("  Files processed:    {files_processed}");
@@ -135,7 +135,8 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
         eprintln!("  Timed pairs:        {total_timed}");
         eprintln!("  Temporally ok:      {total_consistent} ({pct:.0}%)");
     }
-    if let Some(path) = database_path {
-        eprintln!("  Database written:   {}", path.display());
+    if let Some(report) = finished {
+        eprintln!("  Database written:   {}", report.path().display());
     }
+    Ok(())
 }

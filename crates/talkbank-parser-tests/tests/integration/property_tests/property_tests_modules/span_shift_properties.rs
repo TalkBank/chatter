@@ -12,7 +12,8 @@ use talkbank_model::{Span, SpanShift};
 /// Avoids `(0, 0)` because `SpanShift` treats dummy spans as no-ops,
 /// which would trivially satisfy most properties.
 fn arb_nondummy_span() -> impl Strategy<Value = Span> {
-    (1u32..10_000, 1u32..1_000).prop_map(|(start, len)| Span::new(start, start.saturating_add(len)))
+    (1usize..10_000, 1usize..1_000)
+        .prop_map(|(start, len)| Span::new(start, start.saturating_add(len)))
 }
 
 proptest! {
@@ -23,7 +24,7 @@ proptest! {
     #[test]
     fn shift_zero_is_identity(
         span in arb_nondummy_span(),
-        offset in 0u32..20_000
+        offset in 0usize..20_000
     ) {
         let original = span;
         let mut shifted = span;
@@ -42,22 +43,22 @@ proptest! {
     #[test]
     fn shift_positive_moves_forward(
         span in arb_nondummy_span(),
-        delta in 1i32..500
+        delta in 1isize..500
     ) {
         // Use an offset that is at or before the span start, so the shift applies.
-        let offset = span.start.saturating_sub(1);
+        let offset = span.start().saturating_sub(1);
         let mut shifted = span;
         shifted.shift_spans_after(offset, delta);
 
         // The span should have moved forward by exactly delta.
         prop_assert_eq!(
-            shifted.start,
-            (span.start as i64 + delta as i64) as u32,
+            shifted.start(),
+            span.start() + delta.unsigned_abs(),
             "start should increase by delta"
         );
         prop_assert_eq!(
-            shifted.end,
-            (span.end as i64 + delta as i64) as u32,
+            shifted.end(),
+            span.end() + delta.unsigned_abs(),
             "end should increase by delta"
         );
     }
@@ -69,10 +70,10 @@ proptest! {
     #[test]
     fn shift_then_unshift_is_identity(
         span in arb_nondummy_span(),
-        delta in 1i32..500
+        delta in 1isize..500
     ) {
         // Use an offset at or before span start so the shift applies.
-        let offset = span.start.saturating_sub(1);
+        let offset = span.start().saturating_sub(1);
         let original = span;
 
         let mut shifted = span;
@@ -93,16 +94,14 @@ proptest! {
     #[test]
     fn shift_preserves_width(
         span in arb_nondummy_span(),
-        delta in -500i32..500
+        delta in -500isize..500
     ) {
         let original_width = span.len();
         // Use an offset at or before span start so the full span is shifted.
-        let offset = span.start.saturating_sub(1);
+        let offset = span.start().saturating_sub(1);
 
         // Guard: skip cases where clamping to 0 would distort the width.
-        let new_start = (span.start as i64) + (delta as i64);
-        let new_end = (span.end as i64) + (delta as i64);
-        if new_start < 0 || new_end < 0 {
+        if span.start().checked_add_signed(delta).is_none() || span.end().checked_add_signed(delta).is_none() {
             // Clamping invalidates the width-preservation guarantee.
             return Ok(());
         }

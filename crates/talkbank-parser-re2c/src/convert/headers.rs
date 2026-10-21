@@ -2,11 +2,12 @@
 #![allow(clippy::unreachable, clippy::unwrap_used, clippy::expect_used)]
 
 use crate::ast;
+use crate::source_text::SourceText;
 use crate::token::Token;
 use talkbank_model::model::*;
 
 /// Convert a parsed header to model Header.
-pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
+pub fn header_to_model(h: &ast::HeaderParsed<'_>, source: SourceText<'_>) -> Header {
     let (prefix, content) = match h {
         ast::HeaderParsed::Participants(participants) => {
             return Header::Participants {
@@ -135,15 +136,21 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 .filter(|t| matches!(t, Token::MediaWord(_) | Token::MediaFilename(_)))
                 .map(|t| t.text())
                 .collect();
-            // Whitespace between the filename and the FIRST comma. Recorded as
+            // Whitespace directly before the FIRST comma (the lexer's `" "+`
+            // is greedy, so it is one token), as the tree-sitter grammar's
+            // `optional($.whitespaces)` child before the comma. Recorded as
             // provenance so the validation rule (E767) fires for this front end
             // too; the tree-sitter parser records the same fact from its
             // `optional($.whitespaces)` child. Reporting it from one parser's
             // lowering is what made the two disagree when E767 was introduced.
             let whitespace_before_comma = content
                 .iter()
-                .take_while(|t| !matches!(t, Token::Comma(_)))
-                .any(|t| matches!(t, Token::Whitespace(_)));
+                .position(|t| matches!(t, Token::Comma(_)))
+                .and_then(|comma| comma.checked_sub(1))
+                .and_then(|before| match &content[before] {
+                    Token::Whitespace(gap) => Some(*gap),
+                    _ => None,
+                });
             // The lexer splits on the comma, so a well-formed header always
             // satisfies the filename invariant; going through the checked
             // constructor keeps this parser honest if that ever stops holding,
@@ -168,13 +175,9 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
             match media {
                 Ok((filename, media_type)) => {
                     let mut mh = MediaHeader::new(filename, MediaType::from_text(media_type));
-                    if whitespace_before_comma {
-                        // No offsets in this front end's tokens, so the span is
-                        // the one it can supply. See the Span::DUMMY note in the
-                        // illegal-states program: this parser has no span
-                        // provenance at all, which is a known gap rather than a
-                        // local shortcut.
-                        mh = mh.with_whitespace_before_comma(talkbank_model::Span::DUMMY);
+                    if let Some(gap) = whitespace_before_comma {
+                        // The gap is the whitespace token's own bytes.
+                        mh = mh.with_whitespace_before_comma(super::locate(source, gap));
                     }
                     if let Some(status) = words.get(2) {
                         mh = mh.with_status(MediaStatus::from_text(status));
@@ -352,17 +355,15 @@ pub(crate) fn tokens_to_bullet_content(tokens: &[Token<'_>]) -> BulletContent {
             Token::Continuation(_) => {
                 segments.push(BulletContentSegment::continuation());
             }
-            Token::MediaBullet {
-                start_time,
-                end_time,
-                ..
-            } => {
-                let (start_ms, end_ms) = super::items::bullet_times(start_time, end_time);
-                segments.push(BulletContentSegment::bullet(start_ms, end_ms));
+            Token::MediaBullet { bullet } => {
+                if let Some(times) = bullet.times() {
+                    let (start_ms, end_ms) = times.pair();
+                    segments.push(BulletContentSegment::bullet(start_ms, end_ms));
+                }
             }
             Token::InlinePic(s) => {
-                // Token carries tag-extracted filename directly
-                segments.push(BulletContentSegment::picture(*s));
+                // The token's payload is the tag-extracted filename.
+                segments.push(BulletContentSegment::picture(s.text()));
             }
             _ => {
                 // Other tokens (LanguageCode, ParticipantWord, etc.), include as text

@@ -13,8 +13,9 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#PID_Header>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, NoChild, PidHeaderNode, SourceBound, SourceSlotView};
+use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
+use crate::generated_traversal::{AsRawNode, PidHeaderNode, SourceBound, SourceSlotView};
+use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::CstFailure;
 use talkbank_model::model::{Header, PidValue};
@@ -29,7 +30,7 @@ pub fn parse_pid_header<'tree>(
 ) -> Result<Header, CstFailure> {
     let node = typed.raw_node();
     let source = typed.source();
-    let associated = typed.extract();
+    let associated = crate::parser::typed_cst::extract_envelope(typed)?;
     let children = associated.children();
     // The value: the `free_text` position's text, decoded, and NOT empty. A
     // line with nothing after the tab leaves the position present with
@@ -50,10 +51,10 @@ pub fn parse_pid_header<'tree>(
                 Held::Value(value.text().to_owned())
             }
         }
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
-            Held::Nothing
-        }
-        SourceSlotView::Unexpected(never) => match never {},
+        SourceSlotView::Missing(_) => Held::Nothing,
+        SourceSlotView::Unexpected(never)
+        | SourceSlotView::Error(never)
+        | SourceSlotView::Absent(never) => match never {},
     };
     surface_displaced(&children.unexpected, "pid_header", source, errors);
     // An empty value lowers as unknown with no report of its own: the
@@ -63,7 +64,6 @@ pub fn parse_pid_header<'tree>(
         return super::super::unknown_header(
             node,
             source,
-            "@PID",
             "Expected @PID:\t<value>",
             "Missing PID value in @PID header",
         );
@@ -72,14 +72,13 @@ pub fn parse_pid_header<'tree>(
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), "pid_header"),
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), "pid_header"),
             "Missing PID value in @PID header",
         ));
         return super::super::unknown_header(
             node,
             source,
-            "@PID",
             "Expected @PID:\t<value>",
             "Missing PID value in @PID header",
         );

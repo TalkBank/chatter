@@ -276,14 +276,14 @@ fn reference_descriptions_preserve_main_tiers_and_participant_demographics() {
                     .content
                     .language_code
                     .as_ref()
-                    .is_some_and(|code| code.as_str() != desc.langs[0])
+                    .is_some_and(|precode| precode.code.as_str() != desc.langs[0])
             });
             if let Some((index, original)) = observed {
                 let mut overridden = desc.clone();
                 let mut payload = original.main.content.clone();
                 let code = payload.language_code.take().expect("observed override");
                 overridden.utterances[index].text = payload.to_content_string();
-                overridden.utterances[index].lang = Some(code.as_str().to_owned());
+                overridden.utterances[index].lang = Some(code.code.as_str().to_owned());
                 let result =
                     build_chat(&overridden).expect("source language through structured input");
                 assert!(

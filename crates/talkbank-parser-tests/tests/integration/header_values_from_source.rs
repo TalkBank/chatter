@@ -204,7 +204,11 @@ fn a_repeated_header_is_reported_at_the_repeated_line() -> Result<(), TestError>
         .map(|(at, _)| at)
         .ok_or_else(|| TestError::Failure("fixture has one @Languages".to_string()))?;
     let line_end = second + source[second..].find('\n').unwrap_or(0);
-    let start = duplicate.location.span.start as usize;
+    let start = duplicate
+        .location
+        .span()
+        .expect("located diagnostic")
+        .start() as usize;
     if (second..line_end).contains(&start) {
         Ok(())
     } else {

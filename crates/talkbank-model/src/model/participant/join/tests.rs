@@ -24,7 +24,10 @@ use crate::{ErrorCollector, ParseError};
 /// The sink is the join's only route to the map, so this is also the shortest
 /// honest way to read the diagnostics back.
 fn join(headers: Vec<Header>) -> (IndexMap<SpeakerCode, Participant>, Vec<ParseError>) {
-    let lines: Vec<Line> = headers.into_iter().map(Line::header).collect();
+    let lines: Vec<Line> = headers
+        .into_iter()
+        .map(|header| Line::header(crate::Location::Unlocated, header))
+        .collect();
     let errors = ErrorCollector::new();
     let participants = build_participants_from_lines(&lines).report_into(&errors);
     (participants, errors.into_vec())

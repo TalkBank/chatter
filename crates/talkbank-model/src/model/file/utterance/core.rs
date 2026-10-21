@@ -49,14 +49,14 @@ use crate::{
 /// # Example
 ///
 /// ```
-/// use talkbank_model::model::{Utterance, MainTier, Terminator};
-/// use talkbank_model::Span;
+/// use talkbank_model::model::{MainTier, MainTierLocations, Terminator, Utterance};
 ///
 /// let utterance = Utterance::new(
 ///     MainTier::new(
+///         MainTierLocations::UNLOCATED,
 ///         "CHI",
 ///         vec![/* words */],
-///         Terminator::Period { span: Span::DUMMY },
+///         Terminator::Period { location: talkbank_model::Location::Unlocated },
 ///     )
 /// );
 /// // Dependent tiers can be added via builder methods

@@ -47,7 +47,7 @@ impl<'a> SourceText<'a> {
     /// that were where it is.
     #[must_use]
     pub fn whole(self) -> Span {
-        Span::from_usize(0, self.0.len())
+        Span::new(0, self.0.len())
     }
 
     /// The span of `slice` within this source.
@@ -63,7 +63,15 @@ impl<'a> SourceText<'a> {
         let start = slice.as_ptr() as usize;
         let end = start.checked_add(slice.len())?;
         (start >= base && end <= base.checked_add(self.0.len())?)
-            .then(|| Span::from_usize(start - base, end - base))
+            .then(|| Span::new(start - base, end - base))
+    }
+}
+
+impl<'a> SourceText<'a> {
+    /// The bytes of this text at `span`, which the caller obtained from this
+    /// text (`span_of`, or a hull of such spans).
+    pub fn text_at(self, span: Span) -> &'a str {
+        &self.0[span.start()..span.end()]
     }
 }
 
@@ -76,14 +84,14 @@ mod tests {
         let text = "*CHI:\thello ,, world .\n";
         let source = SourceText::new(text);
         let comma = &text[12..13];
-        assert_eq!(source.span_of(comma), Some(Span::from_usize(12, 13)));
+        assert_eq!(source.span_of(comma), Some(Span::new(12, 13)));
     }
 
     #[test]
     fn the_whole_source_spans_the_whole_source() {
         let text = "abc";
         let source = SourceText::new(text);
-        assert_eq!(source.span_of(text), Some(Span::from_usize(0, 3)));
+        assert_eq!(source.span_of(text), Some(Span::new(0, 3)));
     }
 
     /// A slice of a DIFFERENT string is refused rather than given a dummy.
@@ -104,6 +112,6 @@ mod tests {
     fn an_empty_slice_at_the_end_is_inside() {
         let text = "abc";
         let source = SourceText::new(text);
-        assert_eq!(source.span_of(&text[3..3]), Some(Span::from_usize(3, 3)));
+        assert_eq!(source.span_of(&text[3..3]), Some(Span::new(3, 3)));
     }
 }

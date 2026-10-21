@@ -185,7 +185,13 @@ fn diagnostic_evidence_consumer_roundtrip_preserves_admission() {
         panic!("pipeline relabeled a tool failure as CHAT invalidity");
     };
     assert_eq!(read(&failure)[0].message, "producer failure");
-    assert_eq!(read(&failure)[0].location.span, Span::new(0, 1));
+    assert_eq!(
+        read(&failure)[0]
+            .location
+            .span()
+            .expect("located diagnostic"),
+        Span::new(0, 1)
+    );
     assert!(CompletedDiagnostics::admit(consume(failure)).is_err());
 
     // Completion is not validity: ordinary input errors remain admissible.

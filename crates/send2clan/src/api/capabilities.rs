@@ -20,6 +20,11 @@ use crate::ffi;
 /// - **Bit 3 (0x08)**: Timeout support (always enabled)
 /// - **Bits 4-31**: Reserved for future use (currently 0)
 ///
+/// Bits 2 and 3 are unconditional legacy flags, including on unsupported
+/// platforms. They do not test Unicode roundtrips or guarantee an end-to-end
+/// timeout. Bit 1 uses [`crate::is_clan_available`] and inherits its limitations;
+/// no bit certifies successful GUI delivery.
+///
 /// # Typical Values
 ///
 /// - **macOS with CLAN**: `0x0F` (all bits set)

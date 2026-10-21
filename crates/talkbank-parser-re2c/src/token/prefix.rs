@@ -18,7 +18,7 @@ impl<'a> PrefixToken<'a> {
     pub(crate) fn from_lexed(payload: &'a str, matched: &'a str, start: usize) -> Self {
         let prefix = matched.trim_end_matches(' ');
         let separator = if prefix.ends_with(":\t") && prefix.len() < matched.len() {
-            TierSeparator::with_trailing_space(Span::from_usize(
+            TierSeparator::with_trailing_space(Span::new(
                 start + prefix.len(),
                 start + matched.len(),
             ))
