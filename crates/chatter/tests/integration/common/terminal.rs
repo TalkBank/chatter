@@ -33,7 +33,9 @@ impl Pty {
                 slave.as_mut_ptr(),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
-                &mut size,
+                // libc declares this pointer const on Linux and mutable on
+                // Darwin. A mutable raw pointer type-checks against both ABIs.
+                &raw mut size,
             )
         };
         assert_eq!(result, 0, "openpty: {}", std::io::Error::last_os_error());

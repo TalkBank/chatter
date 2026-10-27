@@ -9,6 +9,22 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-10-27
+
+This is the first published release in the 0.32 series. It includes the CLI
+redesign and library changes in the [full 0.32 change list](https://github.com/TalkBank/chatter/blob/v0.32.0/CHANGELOG.md); see the
+[0.32 migration guide](https://talkbank.github.io/chatter/contributing/migration-0.32.html)
+and [CLI migration table](https://talkbank.github.io/chatter/chatter/user-guide/cli-reference.html#migration).
+The 0.32.0 tag remains an unpublished candidate, superseded by this release.
+
+### Fixed
+
+- Keep platform metadata in an owned box within the admitted publication state,
+  avoiding the oversized Linux enum without changing replacement policy.
+- Pass PTY window dimensions through a raw pointer compatible with Linux's
+  const and Darwin's mutable `openpty` signatures. Both platform lint checks
+  retain warnings-as-errors enforcement.
+
 ## [0.32.0] - 2026-10-27
 
 This release reorganizes the CLI around common tasks and explicit specialist
@@ -5914,7 +5930,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.32.1...HEAD
+[0.32.1]: https://github.com/TalkBank/chatter/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/TalkBank/chatter/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/TalkBank/chatter/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/TalkBank/chatter/compare/v0.29.0...v0.30.0

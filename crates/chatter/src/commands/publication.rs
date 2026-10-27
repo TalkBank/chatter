@@ -53,7 +53,7 @@ type Result<T> = std::result::Result<T, PublicationError>;
 enum Destination {
     New(PathBuf),
     #[cfg(any(target_os = "macos", target_os = "linux", windows))]
-    Replace(metadata::ExistingFile),
+    Replace(Box<metadata::ExistingFile>),
 }
 
 /// Completed staging; it cannot be constructed from incomplete output bytes.
@@ -94,7 +94,9 @@ impl Destination {
                 }
                 #[cfg(any(target_os = "macos", target_os = "linux", windows))]
                 {
-                    metadata::ExistingFile::admit(resolved, attributes).map(Self::Replace)
+                    metadata::ExistingFile::admit(resolved, attributes)
+                        .map(Box::new)
+                        .map(Self::Replace)
                 }
                 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
                 {
