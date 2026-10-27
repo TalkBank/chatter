@@ -159,10 +159,8 @@ impl StagedOutput {
             #[cfg(any(target_os = "macos", target_os = "linux", windows))]
             Destination::Replace(existing) => {
                 let path = existing.recheck()?;
-                #[cfg(not(windows))]
-                file.persist(&path).map_err(|error| error.error)?;
-                #[cfg(windows)]
-                metadata::persist(file, &path)?;
+                talkbank_transform::file_replacement::FileReplacement::prepare(file, &path)?
+                    .publish()?;
                 Ok(PublishedOutput(path))
             }
         }

@@ -64,6 +64,11 @@ registry publication and native platform acceptance are separate obligations.
 
 ### Fixed
 
+- Windows file replacement retains open identity handles while atomically
+  publishing staged bytes. Reports, saved decisions and CHAT edits share the
+  rename boundary; unsupported filesystems fail without deleting the target.
+- Review admits a missing override file only under an existing directory;
+  Windows path-not-found errors cannot admit a non-directory ancestor.
 - Both parsers retain rejected source instead of inventing words, empty tiers,
   terminators or successful declarations. Recovery survives CHAT/JSON roundtrips
   and cannot confer alignment or timing trust. Native lexing no longer treats

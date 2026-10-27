@@ -244,7 +244,8 @@ impl PendingPublication {
                             ));
                         }
                         staged.as_file().set_permissions(permissions)?;
-                        staged.persist(destination).map_err(|error| error.error)?;
+                        crate::file_replacement::FileReplacement::prepare(staged, &destination)?
+                            .publish()?;
                     }
                 }
                 Ok(())

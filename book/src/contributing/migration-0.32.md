@@ -40,6 +40,12 @@ back; a multi-file command is not a filesystem transaction. Audit publication
 also requires complete run accounting. Directory conversion retains its
 explicit stale-output and prune policies.
 
+Windows replacement uses handle-based POSIX rename semantics so retained source
+identity handles remain valid while the new directory entry becomes visible.
+Filesystems or Windows versions that do not support that operation return an
+error without a delete/copy fallback. The staged file retains its admitted
+metadata; existing readers and other hard links retain the old bytes.
+
 The following sections retain the detailed library/protocol migrations from
 the development changelog, grouped by consumer. Intermediate implementation
 states superseded before release are omitted.

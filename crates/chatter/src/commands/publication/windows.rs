@@ -208,21 +208,6 @@ impl ExistingFile {
     }
 }
 
-/// tempfile's Windows persist resets file attributes to NORMAL. Keep the
-/// copied attributes by using the underlying rename directly for replacement.
-pub(super) fn persist(file: NamedTempFile, path: &Path) -> Result<()> {
-    // SAFETY: live NUL-terminated same-volume paths; no copy fallback is enabled.
-    checked(unsafe {
-        MoveFileExW(
-            wide(file.path())?.as_ptr(),
-            wide(path)?.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING,
-        )
-    })?;
-    // TempPath cleanup sees the now-absent temporary name, never the destination.
-    Ok(())
-}
-
 fn same_policy(left: &Metadata, right: &Metadata) -> bool {
     left.file_attributes() == right.file_attributes()
         && left.creation_time() == right.creation_time()

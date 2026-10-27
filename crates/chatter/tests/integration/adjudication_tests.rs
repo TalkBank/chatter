@@ -197,12 +197,14 @@ fn adjudicate_identity_failures_preserve_inputs() -> Result<(), TestError> {
         MissingPending,
         MissingScript,
         UninspectableOverrides,
+        MissingOverrideParent,
     }
     let harness = CliHarness::new()?;
     for failure in [
         Failure::MissingPending,
         Failure::MissingScript,
         Failure::UninspectableOverrides,
+        Failure::MissingOverrideParent,
     ] {
         let dir = tempdir()?;
         let pending = dir.path().join("pending.toml");
@@ -225,6 +227,11 @@ fn adjudicate_identity_failures_preserve_inputs() -> Result<(), TestError> {
                 pending.clone(),
                 script.clone(),
                 script.join("overrides.toml"),
+            ),
+            Failure::MissingOverrideParent => (
+                pending.clone(),
+                script.clone(),
+                dir.path().join("missing-parent").join("overrides.toml"),
             ),
         };
         let output = harness

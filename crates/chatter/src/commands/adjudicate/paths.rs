@@ -57,7 +57,67 @@ pub(super) enum PublicationError {
 /// The missing override file is permitted; pending and script inputs must exist.
 pub(super) struct AdjudicationPaths<'a> {
     pending: &'a Path,
-    overrides: &'a Path,
+    overrides: OverrideDestination<'a>,
+}
+
+/// Absence is admitted only under an existing directory. Windows reports a
+/// non-directory ancestor as NotFound too; that is not a vacant file slot.
+enum OverrideDestination<'a> {
+    Existing { path: &'a Path, identity: Handle },
+    Vacant { path: &'a Path },
+}
+
+impl<'a> OverrideDestination<'a> {
+    fn admit(path: &'a Path) -> Result<Self, PathAdmissionError> {
+        let admit = || -> io::Result<Self> {
+            match Handle::from_path(path) {
+                Ok(identity) => Ok(Self::Existing { path, identity }),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    // A dangling symlink is not a vacant directory entry.
+                    match path.symlink_metadata() {
+                        Ok(_) => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::AlreadyExists,
+                                "unresolved output entry",
+                            ));
+                        }
+                        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                        Err(error) => return Err(error),
+                    }
+                    let parent = path
+                        .parent()
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .unwrap_or(Path::new("."));
+                    if !parent.metadata()?.is_dir() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::NotADirectory,
+                            "override parent is not a directory",
+                        ));
+                    }
+                    Ok(Self::Vacant { path })
+                }
+                Err(error) => Err(error),
+            }
+        };
+        admit().map_err(|source| PathAdmissionError::Identity {
+            role: FileRole::Overrides,
+            path: path.to_path_buf(),
+            source,
+        })
+    }
+
+    fn path(&self) -> &'a Path {
+        match self {
+            Self::Existing { path, .. } | Self::Vacant { path } => path,
+        }
+    }
+
+    fn distinct_from(&self, other: &Handle, role: FileRole) -> Result<(), PathAdmissionError> {
+        match self {
+            Self::Existing { identity, .. } => distinct(identity, FileRole::Overrides, other, role),
+            Self::Vacant { .. } => Ok(()),
+        }
+    }
 }
 
 impl<'a> AdjudicationPaths<'a> {
@@ -67,25 +127,8 @@ impl<'a> AdjudicationPaths<'a> {
         script: Option<&'a Path>,
     ) -> Result<Self, PathAdmissionError> {
         let pending_identity = identity(pending, FileRole::Pending)?;
-        let override_identity = match Handle::from_path(overrides) {
-            Ok(handle) => Some(handle),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-            Err(source) => {
-                return Err(PathAdmissionError::Identity {
-                    role: FileRole::Overrides,
-                    path: overrides.to_path_buf(),
-                    source,
-                });
-            }
-        };
-        if let Some(handle) = &override_identity {
-            distinct(
-                &pending_identity,
-                FileRole::Pending,
-                handle,
-                FileRole::Overrides,
-            )?;
-        }
+        let overrides = OverrideDestination::admit(overrides)?;
+        overrides.distinct_from(&pending_identity, FileRole::Pending)?;
         if let Some(script) = script {
             let handle = identity(script, FileRole::Script)?;
             distinct(
@@ -94,9 +137,7 @@ impl<'a> AdjudicationPaths<'a> {
                 &handle,
                 FileRole::Script,
             )?;
-            if let Some(overrides) = &override_identity {
-                distinct(overrides, FileRole::Overrides, &handle, FileRole::Script)?;
-            }
+            overrides.distinct_from(&handle, FileRole::Script)?;
         }
         Ok(Self { pending, overrides })
     }
@@ -105,7 +146,7 @@ impl<'a> AdjudicationPaths<'a> {
         self.pending
     }
     pub(super) fn overrides(&self) -> &Path {
-        self.overrides
+        self.overrides.path()
     }
 
     /// Preserve the established sequential publication policy. A failure of the
@@ -116,9 +157,9 @@ impl<'a> AdjudicationPaths<'a> {
         overrides: &OverrideFile,
     ) -> Result<(), PublicationError> {
         overrides
-            .write(self.overrides)
+            .write(self.overrides.path())
             .map_err(|source| PublicationError::Overrides {
-                path: self.overrides.to_path_buf(),
+                path: self.overrides.path().to_path_buf(),
                 source,
             })?;
         pending

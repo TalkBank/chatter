@@ -342,6 +342,7 @@ fn linux_replacement_preserves_posix_metadata_attributes_and_acl() {
 #[cfg(windows)]
 #[test]
 fn windows_replacement_preserves_named_streams_and_timestamps() {
+    use std::io::Read;
     use std::os::windows::fs::MetadataExt;
     let directory = tempfile::tempdir().unwrap();
     let input = directory.path().join("input.cha");
@@ -350,6 +351,7 @@ fn windows_replacement_preserves_named_streams_and_timestamps() {
     fs::write(&input, REFERENCE).unwrap();
     fs::write(&output, "old output").unwrap();
     fs::write(&stream, "retained stream").unwrap();
+    let mut reader = fs::File::open(&output).unwrap();
     let before = fs::metadata(&output).unwrap();
     let result = normalize(&input, &output);
     assert!(result.status.success(), "{result:?}");
@@ -359,4 +361,7 @@ fn windows_replacement_preserves_named_streams_and_timestamps() {
     assert_eq!(before.file_attributes(), after.file_attributes());
     assert_eq!(fs::read_to_string(&output).unwrap(), REFERENCE);
     assert_eq!(fs::read_to_string(&stream).unwrap(), "retained stream");
+    let mut retained = String::new();
+    reader.read_to_string(&mut retained).unwrap();
+    assert_eq!(retained, "old output");
 }

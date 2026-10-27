@@ -31,10 +31,8 @@ impl PreparedFile {
     }
 
     pub(crate) fn publish(self) -> io::Result<()> {
-        self.temporary
-            .persist(self.destination)
-            .map(|_| ())
-            .map_err(|error| error.error)
+        crate::file_replacement::FileReplacement::prepare(self.temporary, &self.destination)?
+            .publish()
     }
 }
 

@@ -72,6 +72,7 @@ mod atomic_file;
 pub mod build_chat;
 pub mod dependent_tiers;
 pub mod extract;
+pub mod file_replacement;
 pub mod fix_s;
 pub mod join_retrace;
 pub mod media_timing;
