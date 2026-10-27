@@ -1,7 +1,7 @@
 //! Sanitization policy.
 //!
 //! v1 ships exactly one preset, [`SanitizationPolicy::strict`], whose
-//! coverage is documented in the crate `README.md`. The type is a unit
+//! coverage is documented in the book's sanitizer guide. The type is a unit
 //! marker rather than a struct of toggles, bundling field-level
 //! booleans here would be boolean-blindness for a single preset and
 //! would lock the API into a shape future variants are unlikely to
@@ -15,7 +15,8 @@
 pub struct SanitizationPolicy(());
 
 impl SanitizationPolicy {
-    /// Strict policy: full v1 leak-surface coverage minus speaker codes.
+    /// The v1 lexical-redaction policy, with explicitly retained metadata.
+    /// This preset is not a complete de-identification guarantee.
     pub fn strict() -> Self {
         Self(())
     }

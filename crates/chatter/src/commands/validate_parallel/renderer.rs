@@ -31,25 +31,19 @@ use talkbank_transform::validation_runner::{
 /// the runtime has one line where presentation matters, and so every renderer
 /// (text, JSON, audit) is created through a single seam.
 ///
-/// Audit construction creates its output file, so a failure here means the
-/// user asked for an unwritable `--audit` path. It is returned before any
-/// validation work begins, and the command's boundary reports it and exits;
-/// nothing here terminates the process.
+/// Audit construction admits the opened output against discovered inputs.
+/// Failure is returned before validation work; the command boundary reports
+/// it and exits. Nothing here terminates the process.
 pub fn create_presentation_renderer(
     presentation: &StreamedPresentation,
-) -> Result<Box<dyn ValidationRenderer>, AuditFileError> {
+    inputs: &talkbank_transform::paths::ExpandedArguments,
+) -> crate::exit_codes::CommandResult<Box<dyn ValidationRenderer>> {
     match presentation {
         StreamedPresentation::Lines { verbosity } => Ok(lines_renderer(*verbosity)),
         StreamedPresentation::Json => Ok(Box::new(JsonRenderer::new())),
-        StreamedPresentation::Audit { output_path } => {
-            match super::audit_renderer::AuditRenderer::new(output_path) {
-                Ok(renderer) => Ok(Box::new(renderer)),
-                Err(error) => Err(AuditFileError {
-                    path: output_path.clone(),
-                    error,
-                }),
-            }
-        }
+        StreamedPresentation::Audit { output_path } => Ok(Box::new(
+            super::audit_renderer::AuditRenderer::new(output_path, inputs)?,
+        )),
     }
 }
 
@@ -57,15 +51,6 @@ pub fn create_presentation_renderer(
 /// built.
 pub(super) fn lines_renderer(verbosity: Verbosity) -> Box<dyn ValidationRenderer> {
     Box::new(TextRenderer::new(verbosity))
-}
-
-/// The `--audit` file could not be created: the only way to build a
-/// renderer that can fail, so the only failure, with its path.
-pub struct AuditFileError {
-    /// The path asked for.
-    pub path: std::path::PathBuf,
-    /// Why it could not be created.
-    pub error: std::io::Error,
 }
 
 /// The stderr sentence for a run whose cache failed, for the renderers
@@ -107,20 +92,20 @@ pub struct RenderedRun {
 /// runner's drop guard makes it unreachable, and if that ever regressed
 /// this keeps the failure visible.
 pub(super) fn render_run(
-    events: impl IntoIterator<Item = ValidationEvent>,
+    events: impl IntoIterator<Item = crate::exit_codes::CommandResult<ValidationEvent>>,
     renderer: &mut dyn ValidationRenderer,
     label: &Path,
     roundtrip: RoundtripCheck,
-) -> RenderedRun {
+) -> crate::exit_codes::CommandResult<RenderedRun> {
     let mut ending: Option<RunEnding> = None;
     let mut files_completed = 0usize;
     for event in events {
-        match event {
-            ValidationEvent::Discovering => renderer.handle_discovering(),
-            ValidationEvent::Started { total_files } => renderer.handle_started(total_files),
+        match event? {
+            ValidationEvent::Discovering => renderer.handle_discovering()?,
+            ValidationEvent::Started { total_files } => renderer.handle_started(total_files)?,
             ValidationEvent::FileComplete(file) => {
                 files_completed += 1;
-                renderer.handle_file_complete(file, files_completed);
+                renderer.handle_file_complete(file, files_completed)?;
             }
             ValidationEvent::Finished(finished) => ending = Some(finished),
         }
@@ -133,8 +118,8 @@ pub(super) fn render_run(
             roundtrip,
             files_completed,
         },
-    );
-    RenderedRun { ending, output }
+    )?;
+    Ok(RenderedRun { ending, output })
 }
 
 /// Whether a run's output is whole: an audit's file, or JSON mode's
@@ -146,9 +131,6 @@ pub enum RenderedOutput {
     /// The `--audit` file could not be written whole (its error already
     /// said), so the run fails whatever it found.
     AuditFileIncomplete,
-    /// JSON mode's standard output stopped taking records (a consumer that
-    /// closed the pipe), so the stream is incomplete and the run fails.
-    StdoutIncomplete,
 }
 
 /// Rendering interface for streamed validation events.
@@ -157,43 +139,33 @@ pub enum RenderedOutput {
 /// is the runner's ([`talkbank_transform::ErrorLimit`]), counted from each
 /// file's status, so a renderer returns no counts.
 pub trait ValidationRenderer {
-    /// Handle the start of file discovery.
-    fn handle_discovering(&mut self);
-    /// Handle the start of validation once the total file count is known.
-    fn handle_started(&mut self, total_files: usize);
-    /// Render one file's result: its status and its diagnostics, together,
-    /// once. Taken by value, so a renderer that keeps the diagnostics moves
-    /// them rather than copying.
-    fn handle_file_complete(&mut self, file: FileCompleteEvent, files_completed: usize);
-    /// Render how the run ended, in this renderer's channel: the progress
-    /// display's end, a stop or loss, and the summary. Exhaustive over
-    /// [`RunEnding`], so every ending, including the failures, is rendered on
-    /// purpose and never by a stray write elsewhere. Says whether the output
-    /// the run promised is whole.
-    fn finish(&mut self, end: &RunEnding, summary: SummaryContext<'_>) -> RenderedOutput;
-
-    /// Say one fact about the run before it starts, in this renderer's
-    /// channel.
-    fn handle_notice(&mut self, notice: &RunNotice);
-
-    /// Whether a Ctrl-C may be acknowledged on stderr.
+    /// Report discovery before any file result is shown.
+    fn handle_discovering(&mut self) -> crate::exit_codes::CommandResult;
+    /// Report the admitted input count.
+    fn handle_started(&mut self, total_files: usize) -> crate::exit_codes::CommandResult;
+    /// Render one owned file result, stopping on output failure.
+    fn handle_file_complete(
+        &mut self,
+        file: FileCompleteEvent,
+        files_completed: usize,
+    ) -> crate::exit_codes::CommandResult;
+    /// Finish output from the actual run ending.
+    fn finish(
+        &mut self,
+        end: &RunEnding,
+        summary: SummaryContext<'_>,
+    ) -> crate::exit_codes::CommandResult<RenderedOutput>;
+    /// Report a run notice in this presentation's channel.
+    fn handle_notice(&mut self, notice: &RunNotice) -> crate::exit_codes::CommandResult;
+    /// Whether interruption may be acknowledged on stderr.
     fn interrupt_report(&self) -> InterruptReport;
-
-    /// Render one fact about what cache maintenance did.
-    ///
-    /// On the trait rather than decided inside the cache, because "how does
-    /// this run speak" is exactly what a renderer is for, and a cache event is
-    /// an event like any other. Putting it here also forces the question the
-    /// old stderr write let everyone avoid: whether an AUDIT run records that
-    /// it pruned twelve rows.
-    fn handle_cache_event(&mut self, event: &CacheEvent);
+    /// Report cache maintenance in this presentation's channel.
+    fn handle_cache_event(&mut self, event: &CacheEvent) -> crate::exit_codes::CommandResult;
 }
 
 /// Human-readable renderer with optional progress throttling.
 struct TextRenderer {
-    /// How much to print.
     verbosity: Verbosity,
-    /// Whether a progress display is showing.
     progress: TextProgress,
 }
 
@@ -264,9 +236,9 @@ impl TextRenderer {
         stats: &ValidationStatsSnapshot,
         roundtrip: RoundtripCheck,
         status: Option<&str>,
-    ) {
+    ) -> crate::exit_codes::CommandResult {
         match self.verbosity {
-            Verbosity::Quiet => return,
+            Verbosity::Quiet => return Ok(()),
             Verbosity::Normal => {}
         }
 
@@ -292,6 +264,7 @@ impl TextRenderer {
         for line in cache_summary_lines(stats) {
             outln!("{line}");
         }
+        Ok(())
     }
 }
 
@@ -310,14 +283,15 @@ pub(super) fn cache_summary_lines(stats: &ValidationStatsSnapshot) -> Vec<String
 }
 
 impl ValidationRenderer for TextRenderer {
-    fn handle_discovering(&mut self) {
+    fn handle_discovering(&mut self) -> crate::exit_codes::CommandResult {
         if let TextProgress::Showing(progress_bar) = &self.progress {
             progress_bar.set_length(1);
             progress_bar.bar().set_message("Discovering files...");
         }
+        Ok(())
     }
 
-    fn handle_started(&mut self, total_files: usize) {
+    fn handle_started(&mut self, total_files: usize) -> crate::exit_codes::CommandResult {
         if let TextProgress::Showing(progress_bar) = &self.progress {
             progress_bar.set_length(total_files as u64);
             let style = match ProgressStyle::default_bar()
@@ -331,9 +305,14 @@ impl ValidationRenderer for TextRenderer {
             };
             progress_bar.bar().set_style(style.progress_chars("#>-"));
         }
+        Ok(())
     }
 
-    fn handle_file_complete(&mut self, file: FileCompleteEvent, files_completed: usize) {
+    fn handle_file_complete(
+        &mut self,
+        file: FileCompleteEvent,
+        files_completed: usize,
+    ) -> crate::exit_codes::CommandResult {
         // A failed file names itself on the progress line.
         if let (TextProgress::Showing(progress_bar), true) =
             (&mut self.progress, file.status.failed())
@@ -376,15 +355,20 @@ impl ValidationRenderer for TextRenderer {
                 eprintln!("✗ {} (read error: {})", file.path.display(), message);
             }
         }
+        Ok(())
     }
 
-    fn finish(&mut self, end: &RunEnding, summary: SummaryContext<'_>) -> RenderedOutput {
+    fn finish(
+        &mut self,
+        end: &RunEnding,
+        summary: SummaryContext<'_>,
+    ) -> crate::exit_codes::CommandResult<RenderedOutput> {
         match end {
             RunEnding::Complete(stats) => {
                 let stats = stats.snapshot();
                 self.finish_progress(summary.files_completed, "Validation complete");
                 self.report_cache_errors(stats);
-                self.print_summary(stats, summary.roundtrip, None);
+                self.print_summary(stats, summary.roundtrip, None)?;
             }
             RunEnding::NothingFound => {
                 self.clear_progress();
@@ -397,7 +381,7 @@ impl ValidationRenderer for TextRenderer {
                 self.report_cache_errors(stats);
                 eprintln!("{}", stop_sentence(*reason, unprocessed));
                 let status = format!("STOPPED ({reason}); {unprocessed} file(s) not validated");
-                self.print_summary(stats, summary.roundtrip, Some(&status));
+                self.print_summary(stats, summary.roundtrip, Some(&status))?;
             }
             RunEnding::Incomplete { stats, cause } => {
                 let lost_files = stats.missing_files();
@@ -408,23 +392,25 @@ impl ValidationRenderer for TextRenderer {
                 eprintln!("{}", incomplete_sentence(stats, lost_files, cause));
                 self.report_cache_errors(stats);
                 let status = format!("INCOMPLETE; {lost_files} file(s) never accounted for");
-                self.print_summary(stats, summary.roundtrip, Some(&status));
+                self.print_summary(stats, summary.roundtrip, Some(&status))?;
             }
             RunEnding::Aborted(reason) => {
                 self.clear_progress();
                 eprintln!("Error: {reason}");
             }
         }
-        RenderedOutput::Complete
+        Ok(RenderedOutput::Complete)
     }
 
     /// A terminal run says it in words, on stderr, where it always did.
-    fn handle_cache_event(&mut self, event: &CacheEvent) {
+    fn handle_cache_event(&mut self, event: &CacheEvent) -> crate::exit_codes::CommandResult {
         eprintln!("{}", event.sentence());
+        Ok(())
     }
 
-    fn handle_notice(&mut self, notice: &RunNotice) {
+    fn handle_notice(&mut self, notice: &RunNotice) -> crate::exit_codes::CommandResult {
         eprintln!("{}", notice.sentence());
+        Ok(())
     }
 
     fn interrupt_report(&self) -> InterruptReport {
@@ -435,54 +421,57 @@ impl ValidationRenderer for TextRenderer {
 /// JSONL renderer for machine-readable output, writing to stdout (whose
 /// own line buffering flushes each record).
 struct JsonRenderer {
-    /// Standard output, or why it stopped taking records: a consumer that
-    /// closed the pipe, for one. After a failure nothing more is written.
-    out: JsonOutput,
-}
-
-/// Where the JSON renderer's records go.
-enum JsonOutput {
-    /// Standard output, still taking records.
-    Writing(std::io::Stdout),
-    /// A write failed; the stream is incomplete.
-    Failed,
+    out: std::io::Stdout,
 }
 
 impl JsonRenderer {
     fn new() -> Self {
         Self {
-            out: JsonOutput::Writing(std::io::stdout()),
+            out: std::io::stdout(),
         }
     }
 
-    /// Write one record, unless an earlier write failed. A failed write
-    /// ends the stream (stderr stays empty in JSON mode; the run's exit
-    /// status says it).
-    fn write(&mut self, record: &JsonRecord<'_>) {
-        if let JsonOutput::Writing(stdout) = &self.out
-            && record.write_line(&mut stdout.lock()).is_err()
-        {
-            self.out = JsonOutput::Failed;
-        }
+    /// A failed record stops the run immediately. Machine mode keeps stderr
+    /// empty while preserving the actual error until the process boundary.
+    fn write(&mut self, record: &JsonRecord<'_>) -> crate::exit_codes::CommandResult {
+        use std::io::Write;
+        let mut stdout = self.out.lock();
+        record
+            .write_line(&mut stdout)
+            .and_then(|()| stdout.flush())
+            .map_err(crate::exit_codes::CommandStop::MachineOutput)
     }
 }
 
 impl ValidationRenderer for JsonRenderer {
-    fn handle_discovering(&mut self) {}
+    fn handle_discovering(&mut self) -> crate::exit_codes::CommandResult {
+        Ok(())
+    }
 
-    fn handle_started(&mut self, _total_files: usize) {}
+    fn handle_started(&mut self, _total_files: usize) -> crate::exit_codes::CommandResult {
+        Ok(())
+    }
 
     /// One record per file, from its one event: a valid file with warnings
     /// is one `valid` record carrying them, never an `invalid` record and
     /// then a `valid` one.
-    fn handle_file_complete(&mut self, file: FileCompleteEvent, _files_completed: usize) {
-        self.write(&file_record(&file));
+    fn handle_file_complete(
+        &mut self,
+        file: FileCompleteEvent,
+        _files_completed: usize,
+    ) -> crate::exit_codes::CommandResult {
+        self.write(&file_record(&file))?;
+        Ok(())
     }
 
     /// Every ending is records on stdout, never a stderr line: JSON mode
     /// keeps stderr empty. A stop or a loss is its own record, BEFORE the
     /// summary, and the summary's `outcome` names the ending.
-    fn finish(&mut self, end: &RunEnding, summary: SummaryContext<'_>) -> RenderedOutput {
+    fn finish(
+        &mut self,
+        end: &RunEnding,
+        summary: SummaryContext<'_>,
+    ) -> crate::exit_codes::CommandResult<RenderedOutput> {
         // The record that explains the ending, before the summary.
         match end {
             RunEnding::Complete(_) | RunEnding::NothingFound => {}
@@ -498,7 +487,7 @@ impl ValidationRenderer for JsonRenderer {
                     talkbank_transform::CancelReason::Requested => {
                         StopRecord::Cancelled { unprocessed_files }
                     }
-                }));
+                }))?;
             }
             RunEnding::Incomplete { stats, cause } => {
                 self.write(&JsonRecord::Incomplete {
@@ -506,25 +495,22 @@ impl ValidationRenderer for JsonRenderer {
                     total_files: stats.snapshot().total_files().get(),
                     cause: WireLossCause::of(cause),
                     detail: cause.to_string(),
-                });
+                })?;
             }
             RunEnding::Aborted(reason) => self.write(&JsonRecord::Aborted {
                 reason: reason.to_string(),
-            }),
+            })?,
         }
         if let Some(record) = json_summary(summary, end) {
-            self.write(&record);
+            self.write(&record)?;
         }
-        match self.out {
-            JsonOutput::Writing(_) => RenderedOutput::Complete,
-            JsonOutput::Failed => RenderedOutput::StdoutIncomplete,
-        }
+        Ok(RenderedOutput::Complete)
     }
 
     /// A machine-facing run gets a record on the stream, because stderr is
     /// promised empty and silence would throw away a result the caller asked
     /// for by passing `--force`.
-    fn handle_cache_event(&mut self, event: &CacheEvent) {
+    fn handle_cache_event(&mut self, event: &CacheEvent) -> crate::exit_codes::CommandResult {
         self.write(&JsonRecord::Cache(match event {
             CacheEvent::Pruned { rows, versions } => CacheRecord::Prune {
                 rows_deleted: *rows,
@@ -537,20 +523,19 @@ impl ValidationRenderer for JsonRenderer {
                 operation: *operation,
                 error,
             },
-        }));
+        }))?;
+        Ok(())
     }
 
     /// A record on stdout: stderr is promised empty.
-    fn handle_notice(&mut self, notice: &RunNotice) {
+    fn handle_notice(&mut self, notice: &RunNotice) -> crate::exit_codes::CommandResult {
         self.write(&JsonRecord::Notice(match notice {
             RunNotice::Suppressing(codes) => NoticeRecord::Suppressing {
                 codes: codes.codes().iter().map(|code| code.as_str()).collect(),
             },
-            RunNotice::CheckXphonIgnored => NoticeRecord::DeprecatedFlag {
-                flag: "--check-xphon",
-            },
             RunNotice::InterruptUnavailable(error) => NoticeRecord::InterruptUnavailable { error },
-        }));
+        }))?;
+        Ok(())
     }
 
     /// Silent: the stop is reported as the run's `stop` record.

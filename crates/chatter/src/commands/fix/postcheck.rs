@@ -9,13 +9,16 @@ use talkbank_transform::splice::{
 
 /// The only text-bearing success this command may offer to its write branch.
 #[derive(Debug)]
-pub(super) struct PostCheckedFix<'source> {
+pub(in crate::commands) struct PostCheckedFix<'source> {
     verified: VerifiedRepairs<'source>,
 }
 
 impl PostCheckedFix<'_> {
-    pub(super) fn text(&self) -> &str {
+    pub(in crate::commands) fn text(&self) -> &str {
         self.verified.bytes().text()
+    }
+    pub(in crate::commands) fn source(&self) -> &str {
+        self.verified.diagnosis().source()
     }
     pub(super) fn edit_count(&self) -> usize {
         self.verified.bytes().plan().sites().len()

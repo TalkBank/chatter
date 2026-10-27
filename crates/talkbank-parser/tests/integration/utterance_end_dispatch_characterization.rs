@@ -92,7 +92,7 @@ fn valid_terminator_postcode_bullet_unchanged() {
     // One `[+ trn]` postcode.
     assert_eq!(content.postcodes.len(), 1, "exactly one postcode");
     assert_eq!(
-        content.postcodes[0].text.as_str(),
+        content.postcodes[0].text().expect("admitted postcode"),
         "trn",
         "postcode text must be preserved"
     );
@@ -101,6 +101,7 @@ fn valid_terminator_postcode_bullet_unchanged() {
     let bullet = content
         .bullet
         .as_ref()
+        .and_then(talkbank_model::BulletState::as_parsed)
         .expect("valid media bullet must be attached");
     assert_eq!(
         (bullet.timing.start_ms, bullet.timing.end_ms),
@@ -152,10 +153,13 @@ fn malformed_bullet_emits_exact_e360() {
         content.terminator
     );
 
-    // The malformed bullet is dropped, and there is no postcode on this line.
+    // The malformed source occupies the terminal slot without numeric timing.
     assert!(content.postcodes.is_empty(), "no postcodes on this line");
     assert!(
-        content.bullet.is_none(),
-        "a malformed bullet must not be attached to the model"
+        matches!(
+            content.bullet,
+            Some(talkbank_model::BulletState::Unparsed { .. })
+        ),
+        "malformed source must remain explicit recovery"
     );
 }

@@ -2,6 +2,7 @@
 
 use talkbank_model::model::{ParseHealthState, ParseHealthTier};
 use talkbank_model::{ChatParser, ErrorCode, ErrorCollector, ParseOutcome, SemanticEq, Span};
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 
 #[test]
 fn rejected_morphology_retains_taint_and_reports_its_source_boundary() {
@@ -35,21 +36,21 @@ fn rejected_morphology_retains_taint_and_reports_its_source_boundary() {
                     .parse_health()
                     .is_tier_tainted(ParseHealthTier::Mor)
             );
-            assert!(utterance.dependent_tiers.is_empty());
+            let talkbank_model::DependentTier::UnparsedMor(raw) =
+                &utterance.dependent_tiers[0].tier
+            else {
+                panic!("rejected morphology must retain explicit source");
+            };
+            assert_eq!(raw.source(), &source[start..end + 1]);
+            assert_eq!(
+                raw.location().span(),
+                Some(Span::new(start + offset, end + 1 + offset))
+            );
             let diagnostics = errors.into_vec();
             assert!(
                 diagnostics
                     .iter()
                     .any(|error| error.code == ErrorCode::UnparsableContent)
-            );
-            let tier_errors: Vec<_> = diagnostics
-                .iter()
-                .filter(|error| error.code == ErrorCode::TierValidationError)
-                .collect();
-            assert_eq!(tier_errors.len(), 1);
-            assert_eq!(
-                tier_errors[0].location.span().expect("located diagnostic"),
-                Span::new(start + offset, end + offset)
             );
         }
     }
@@ -129,5 +130,51 @@ fn empty_pos_diagnostics_name_the_original_item_at_any_offset() {
             );
             assert!(diagnoses[0].message.contains(item));
         }
+    }
+}
+
+/// Reuse the existing MOR feature/clitic control; transport faults must not
+/// turn a valid prefix into a successful shortened model.
+#[test]
+fn fragment_refusal_is_not_an_empty_or_truncated_mor_model() {
+    use talkbank_parser_re2c::parser::{parse_mor_tier_with_errors, parse_mor_word_with_errors};
+    let body = "pron|it~aux|be-Fin-Ind-Pres-S3 .";
+    for ending in ["", "\n", "\r", "\r\n"] {
+        let input = format!("{body}{ending}");
+        let errors = ErrorCollector::new();
+        let tier = parse_mor_tier_with_errors(&input, &errors)
+            .into_option()
+            .unwrap();
+        assert!(errors.into_vec().is_empty());
+        assert_eq!(tier.items().len(), 1);
+        assert_eq!(tier.items()[0].post_clitics.len(), 1);
+        assert_eq!(tier.items()[0].post_clitics[0].features.len(), 4);
+        assert_eq!(tier.location.span(), Some(Span::new(0, input.len())));
+    }
+    for input in [
+        String::new(),
+        body.trim_end_matches(" .").to_owned(),
+        format!("{body}\n\n"),
+        format!("{body}\0ignored"),
+    ] {
+        let errors = ErrorCollector::new();
+        assert!(parse_mor_tier_with_errors(&input, &errors).is_rejected());
+        assert!(!errors.into_vec().is_empty());
+    }
+    let word = "verb|want-Fin-Ind-Pres";
+    let errors = ErrorCollector::new();
+    let parsed = parse_mor_word_with_errors(word, &errors)
+        .into_option()
+        .unwrap();
+    assert_eq!(parsed.features.len(), 3);
+    assert!(errors.into_vec().is_empty());
+    for input in [
+        String::new(),
+        format!("{word}\0ignored"),
+        format!("{word} |broken"),
+    ] {
+        let errors = ErrorCollector::new();
+        assert!(parse_mor_word_with_errors(&input, &errors).is_rejected());
+        assert!(!errors.into_vec().is_empty());
     }
 }

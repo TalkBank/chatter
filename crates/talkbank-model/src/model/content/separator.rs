@@ -257,7 +257,7 @@ impl Separator {
 
 impl WriteChat for Separator {
     /// Serializes the canonical CHAT token for this separator.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             Separator::Comma { .. } => w.write_str(","),
             Separator::Semicolon { .. } => w.write_str(";"),

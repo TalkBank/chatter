@@ -1,6 +1,8 @@
 //! Publish a coherent analysis only while its document revision remains current.
 
-use super::super::documents::OpenDocument;
+use super::super::documents::{
+    CurrentDocumentRevision, DocumentRevision, OpenDocument, content_modified,
+};
 use super::super::state::{Backend, BackendInitError};
 use super::DocumentAnalysis;
 use std::sync::Arc;
@@ -8,18 +10,22 @@ use tower_lsp::lsp_types::*;
 
 /// Analyze one revision. No DashMap guard crosses an await or parser callback.
 pub(crate) async fn validate_and_publish(backend: &Backend, uri: Url, document: Arc<OpenDocument>) {
-    if let Some(diagnostics) = analyze_revision(backend, &uri, &document) {
+    let revision = DocumentRevision::retained(uri, document);
+    if let Some(diagnostics) = analyze_revision(backend, &revision) {
         backend
             .client
-            .publish_diagnostics(uri, diagnostics, Some(document.version))
+            .publish_diagnostics(
+                revision.uri().clone(),
+                diagnostics,
+                Some(revision.version()),
+            )
             .await;
     }
 }
 
 /// Source, URI, version and diagnostics from one admitted editor revision.
 pub(crate) struct RevisionDiagnostics {
-    uri: Url,
-    document: Arc<OpenDocument>,
+    revision: DocumentRevision,
     items: Vec<Diagnostic>,
 }
 
@@ -27,7 +33,7 @@ pub(crate) struct RevisionDiagnostics {
 pub(crate) struct CurrentRevisionDiagnostics<'a> {
     snapshot: &'a RevisionDiagnostics,
     // Borrowed from the document-map guard, so this admission cannot escape it.
-    _current: &'a Arc<OpenDocument>,
+    _current: CurrentDocumentRevision<'a>,
 }
 
 impl CurrentRevisionDiagnostics<'_> {
@@ -38,15 +44,15 @@ impl CurrentRevisionDiagnostics<'_> {
 
 impl RevisionDiagnostics {
     pub(crate) fn uri(&self) -> &Url {
-        &self.uri
+        self.revision.uri()
     }
 
     pub(crate) fn version(&self) -> i32 {
-        self.document.version
+        self.revision.version()
     }
 
     pub(crate) fn source(&self) -> &str {
-        &self.document.source
+        self.revision.source()
     }
 
     pub(crate) fn items(&self) -> &[Diagnostic] {
@@ -63,11 +69,10 @@ impl RevisionDiagnostics {
         backend: &Backend,
         project: impl FnOnce(CurrentRevisionDiagnostics<'_>) -> T,
     ) -> Option<T> {
-        let current = backend.documents.get(&self.uri)?;
-        Arc::ptr_eq(current.value(), &self.document).then(|| {
+        self.revision.with_current(backend, |current| {
             project(CurrentRevisionDiagnostics {
                 snapshot: self,
-                _current: current.value(),
+                _current: current,
             })
         })
     }
@@ -78,28 +83,16 @@ pub(crate) fn document_diagnostics(
     backend: &Backend,
     uri: &Url,
 ) -> tower_lsp::jsonrpc::Result<Option<RevisionDiagnostics>> {
-    let document = backend
-        .documents
-        .get(uri)
-        .map(|entry| Arc::clone(entry.value()));
-    let Some(document) = document else {
+    let Some(revision) = DocumentRevision::capture(backend, uri)? else {
         return Ok(None);
     };
-    let items = analyze_revision(backend, uri, &document).ok_or_else(|| {
-        tower_lsp::jsonrpc::Error::new(tower_lsp::jsonrpc::ErrorCode::ContentModified)
-    })?;
-    Ok(Some(RevisionDiagnostics {
-        uri: uri.clone(),
-        document,
-        items,
-    }))
+    let items = analyze_revision(backend, &revision).ok_or_else(content_modified)?;
+    Ok(Some(RevisionDiagnostics { revision, items }))
 }
 
-fn analyze_revision(
-    backend: &Backend,
-    uri: &Url,
-    document: &Arc<OpenDocument>,
-) -> Option<Vec<Diagnostic>> {
+fn analyze_revision(backend: &Backend, revision: &DocumentRevision) -> Option<Vec<Diagnostic>> {
+    let uri = revision.uri();
+    let document = revision.document();
     let previous = backend
         .analyses
         .get(uri)
@@ -119,11 +112,7 @@ fn analyze_revision(
             ))
         })
     };
-    let current = backend.documents.get(uri)?;
-    if !Arc::ptr_eq(current.value(), document) {
-        return None;
-    }
-    Some(match analysis {
+    revision.with_current(backend, |_| match analysis {
         Ok(analysis) => {
             let diagnostics = analysis.diagnostics().to_vec();
             backend.analyses.insert(uri.clone(), analysis);
@@ -167,10 +156,10 @@ mod tests {
         .into();
         backend.documents.insert(
             uri.clone(),
-            Arc::new(OpenDocument {
+            crate::backend::documents::DocumentSession::Synchronized(Arc::new(OpenDocument {
                 source: Arc::clone(&source),
                 version: 1,
-            }),
+            })),
         );
         let original = document_diagnostics(backend, &uri).unwrap().unwrap();
         assert_eq!(
@@ -181,10 +170,10 @@ mod tests {
         assert!(original.with_current(backend, |_| ()).is_none());
         backend.documents.insert(
             uri.clone(),
-            Arc::new(OpenDocument {
+            crate::backend::documents::DocumentSession::Synchronized(Arc::new(OpenDocument {
                 source: Arc::clone(&source),
                 version: 1,
-            }),
+            })),
         );
         assert!(
             original.with_current(backend, |_| ()).is_none(),
@@ -195,14 +184,25 @@ mod tests {
             reopened.with_current(backend, |current| current.snapshot().version()),
             Some(1)
         );
-        backend
-            .documents
-            .insert(uri.clone(), Arc::new(OpenDocument { source, version: 2 }));
+        backend.documents.insert(
+            uri.clone(),
+            crate::backend::documents::DocumentSession::Synchronized(Arc::new(OpenDocument {
+                source,
+                version: 2,
+            })),
+        );
         assert!(reopened.with_current(backend, |_| ()).is_none());
         let updated = document_diagnostics(backend, &uri).unwrap().unwrap();
         assert_eq!(
             updated.with_current(backend, |current| current.snapshot().version()),
             Some(2)
         );
+        backend.documents.insert(
+            uri.clone(),
+            crate::backend::documents::DocumentSession::AwaitingReplacement { version: 3 },
+        );
+        assert!(updated.with_current(backend, |_| ()).is_none());
+        assert!(analyze_revision(backend, &updated.revision).is_none());
+        assert!(document_diagnostics(backend, &uri).is_err());
     }
 }

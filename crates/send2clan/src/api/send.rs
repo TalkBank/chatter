@@ -22,13 +22,20 @@ use crate::ffi;
 /// without synchronization. Do not overlap sends; a caller-local lock cannot
 /// coordinate other processes using that file. The combined formatted request
 /// can be truncated by the C implementation's fixed buffer.
+/// Oversized Windows message-file destinations are refused before file opening;
+/// the launch attempt may already have happened.
+/// Windows notification follows only a successful message-file write and close.
+/// Write/close failure is reported as send failure and may leave partial bytes.
 ///
 /// # Arguments
 ///
 /// * `timeout` - Seconds for selected platform waits, not an end-to-end deadline.
 ///   Nonpositive values select platform defaults. macOS launch does not use
-///   this limit; Windows launch and window lookup wait separately, and the
-///   subsequent `SendMessageA` call is not bounded by it.
+///   this limit. Windows launch waits separately; window lookup and notification
+///   share a post-publication budget (default 30 seconds). Positive values above
+///   4,294,967 seconds are refused before publication, possibly after launch.
+///   Windows ignores the notification timeout for a target on the calling
+///   thread's queue. Failure does not establish whether CLAN acted.
 ///
 /// * `file_path` - Path to the .cha file to open in CLAN. Must be non-empty.
 ///   Can be absolute or relative (relative to CLAN's working directory).

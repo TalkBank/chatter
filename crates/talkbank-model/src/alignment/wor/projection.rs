@@ -5,7 +5,7 @@ use super::{
     WorTimingBinding, WorTimingDrift,
 };
 use crate::alignment::helpers::{
-    TierDomain, WordItem, counts_for_tier, is_tag_marker_separator, walk_words,
+    TierDomain, WordItem, admit_text_for_tier, is_tag_marker_separator, walk_words,
 };
 use crate::model::dependent_tier::WorItem;
 use crate::model::{MainTier, Separator, UtteranceContent, WorTier, Word, WriteChat};
@@ -37,8 +37,14 @@ impl WorSlotMembershipPolicy {
     /// consumers no longer reconstruct membership beside an independent walk.
     /// A replaced word is admitted by its ORIGINAL, as the projection admits it.
     pub fn admits(self, word: &Word) -> bool {
+        self.admit_text(word).is_some()
+    }
+
+    fn admit_text(self, word: &Word) -> Option<crate::model::NonEmptyStr<'_>> {
         match self {
-            WorSlotMembershipPolicy::FilteredLexicalV1 => counts_for_tier(word, TierDomain::Wor),
+            WorSlotMembershipPolicy::FilteredLexicalV1 => {
+                admit_text_for_tier(word, TierDomain::Wor)
+            }
         }
     }
 }
@@ -132,10 +138,15 @@ impl<'main> WorSourceContent<'main> {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct ProjectedWorWord<'main> {
     word: &'main Word,
+    display_text: crate::model::NonEmptyStr<'main>,
     source_content: WorSourceContent<'main>,
 }
 
 impl<'main> ProjectedWorWord<'main> {
+    pub(super) fn display_text(self) -> crate::model::NonEmptyStr<'main> {
+        self.display_text
+    }
+
     pub(super) fn word(self) -> &'main Word {
         self.word
     }
@@ -162,17 +173,19 @@ impl<'main> WorMainTierProjection<'main> {
                 Some(TierDomain::Wor),
                 &mut |item| match item {
                     WordItem::Word(word) => {
-                        if policy.admits(word) {
+                        if let Some(display_text) = policy.admit_text(word) {
                             items.push(WorMainTierProjectionItem::Slot(ProjectedWorWord {
                                 word,
+                                display_text,
                                 source_content,
                             }));
                         }
                     }
                     WordItem::ReplacedWord(replaced) => {
-                        if policy.admits(&replaced.word) {
+                        if let Some(display_text) = policy.admit_text(&replaced.word) {
                             items.push(WorMainTierProjectionItem::Slot(ProjectedWorWord {
                                 word: &replaced.word,
+                                display_text,
                                 source_content,
                             }));
                         }
@@ -236,7 +249,7 @@ impl<'main> WorMainTierProjection<'main> {
             .iter()
             .map(|item| match item {
                 WorMainTierProjectionItem::Slot(word) => {
-                    WorItem::Word(Box::new(wor_display_word_from_main(word.word())))
+                    WorItem::Word(Box::new(wor_display_word_from_main(*word)))
                 }
                 WorMainTierProjectionItem::Separator(separator) => WorItem::Separator {
                     text: separator.to_chat_string(),
@@ -316,11 +329,15 @@ impl<'main> WorMainTierProjection<'main> {
     }
 }
 
-fn wor_display_word_from_main(word: &Word) -> Word {
-    let cleaned = canonical_wor_display_text(word);
+fn wor_display_word_from_main(projected: ProjectedWorWord<'_>) -> Word {
     // A display projection is generated, not read from source.
-    let mut display_word = Word::new_unchecked(crate::Location::Unlocated, cleaned);
-    display_word.inline_bullet.clone_from(&word.inline_bullet);
+    let mut display_word = Word::new(
+        crate::Location::Unlocated,
+        crate::model::WordText::from(projected.display_text.into_owned()),
+    );
+    display_word
+        .inline_bullet
+        .clone_from(&projected.word.inline_bullet);
     display_word
 }
 

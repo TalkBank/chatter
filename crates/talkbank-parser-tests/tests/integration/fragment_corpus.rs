@@ -25,8 +25,17 @@ mod overlap_onset_contracts;
 #[path = "gem_label_corpus.rs"]
 mod gem_label_contracts;
 
+#[path = "tim_corpus.rs"]
+mod tim_contracts;
+
 #[path = "pause_corpus.rs"]
 mod pause_contracts;
+
+#[path = "phonological_group_corpus.rs"]
+mod phonological_group_contracts;
+
+#[path = "gra_label_corpus.rs"]
+mod gra_label_contracts;
 
 #[path = "header_boundary_corpus.rs"]
 mod header_boundary_contracts;
@@ -42,6 +51,9 @@ mod metadata_header_contracts;
 
 #[path = "main_tier_recovery_corpus.rs"]
 mod main_tier_recovery_contracts;
+
+#[path = "separator_recovery_corpus.rs"]
+mod separator_recovery_contracts;
 
 #[path = "dependent_composition_corpus.rs"]
 mod dependent_composition_contracts;
@@ -821,7 +833,7 @@ fn file_fragments_preserve_models_and_snippet_relative_diagnostics() {
 
 #[test]
 fn reference_dependent_tier_fragments_preserve_source_models() {
-    use talkbank_model::model::{DependentTier, GraCompleteness, GraLowering, GraTier};
+    use talkbank_model::model::{DependentTier, GraLowering, GraTier};
     use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
     use talkbank_model::{RuleSelection, TranscriptName};
     use talkbank_parser::generated_traversal::{
@@ -920,6 +932,24 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                     .expect("tier content belongs to reference source");
                 // Only tier variants with a public content-only entry point
                 // participate here; the generic API above covers every variant.
+                macro_rules! source_admitted {
+                    (@fallible $actual:expr) => {
+                        $actual.into_option().expect("reference tier lowers completely")
+                    };
+                    (Gra, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Act, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Cod, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Com, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Exp, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Add, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Gpx, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Int, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Spa, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    (Sit, $actual:expr) => { source_admitted!(@fallible $actual) };
+                    ($variant:ident, $actual:expr) => {
+                        $actual
+                    };
+                }
                 macro_rules! compare_content {
                     ($variant:ident, $method:ident, $contextual:ident, $kind:ident) => {
                         compare_content!($variant, $method, $contextual);
@@ -949,7 +979,8 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                             let errors = ErrorCollector::new();
                             let actual = talkbank_parser::api::tiers::$method(typed, &errors)
                                 .expect("source-bound public tier API admits its native owner");
-                            let actual = DependentTier::$variant(actual);
+                            let actual =
+                                DependentTier::$variant(source_admitted!($variant, actual));
                             assert!(
                                 errors.is_empty(),
                                 "source-bound diagnostics: {} {input:?}: {:?}",
@@ -1073,17 +1104,16 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                         .iter()
                         .cloned()
                         .map(ParseOutcome::Parsed)
-                        .collect::<GraLowering>()
-                        .finish();
-                    assert!(!receipt.is_truncated());
-                    let actual = receipt.into_tier(expected.location);
+                        .collect::<GraLowering>();
+                    let actual = receipt
+                        .finish(expected.location)
+                        .into_option()
+                        .expect("all reference relations lowered");
                     assert!(actual.semantic_eq(expected));
-                    assert_eq!(actual.completeness(), GraCompleteness::Whole);
                     let json = serde_json::to_string(&actual).expect("public gra JSON");
                     let restored: GraTier =
                         serde_json::from_str(&json).expect("public gra readback");
                     assert!(restored.semantic_eq(&actual));
-                    assert_eq!(restored.completeness(), GraCompleteness::Unknown);
                 }
                 compare_content!(Pho, parse_pho_tier, parse_pho_tier_with_context);
                 compare_content!(
@@ -1172,8 +1202,8 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
     );
 
     // E709's authored line declares two relations: the zero index is rejected,
-    // and the following PUNCT survives. Exercise native and string public APIs
-    // with their actual source-bound nodes, not an invented rejection event.
+    // and the following PUNCT is independently valid. Tier construction must
+    // nevertheless reject; the file keeps raw source instead of a partial graph.
     let source = include_str!("../error_corpus/validation_errors/E709_1.cha");
     let parsed = parser
         .parse_source_incremental(source, None)
@@ -1186,10 +1216,11 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
         let node = node.expect("E709 source-bound descendant");
         if let Some(tier) = node.typed::<GraDependentTierNode>() {
             assert!(native.is_none(), "E709 supplies exactly one gra tier");
-            native = Some(
+            native = Some((
                 talkbank_parser::api::tiers::parse_gra_tier(tier, &native_errors)
-                    .expect("native gra admission is distinct from lexical index rejection"),
-            );
+                    .expect("native source admission is distinct from lexical rejection"),
+                talkbank_model::Span::new(tier.raw_node().start_byte(), tier.raw_node().end_byte()),
+            ));
         }
         if let Some(relation) = node.typed::<GraRelationNode>() {
             let errors = ErrorCollector::new();
@@ -1219,35 +1250,34 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
         [1, 1],
         "both actual E709 relation outcomes required"
     );
-    let native = native.expect("E709 retains a native gra tier");
-    assert_eq!(native.completeness(), GraCompleteness::Truncated);
+    let (native, span) = native.expect("E709 native GRA outcome");
+    assert!(matches!(native, ParseOutcome::Rejected));
     assert!(
         native_errors
             .to_vec()
             .iter()
-            .any(|error| { error.code == talkbank_model::ErrorCode::InvalidGrammarIndex })
+            .any(|error| error.code == talkbank_model::ErrorCode::InvalidGrammarIndex)
     );
-    let receipt = lowering.finish();
     assert!(
-        receipt.is_truncated(),
-        "a later success cannot undo rejection"
+        matches!(lowering.finish(span), ParseOutcome::Rejected),
+        "later success cannot undo rejection"
     );
-    let rebuilt = receipt.into_tier(native.location);
-    assert!(rebuilt.semantic_eq(&native));
-    assert_eq!(rebuilt.completeness(), GraCompleteness::Truncated);
     let streaming_errors = ErrorCollector::new();
     let file = parser.parse_chat_file_streaming(source, &streaming_errors);
-    let streamed = file
+    assert!(
+        file.utterances()
+            .all(|utterance| utterance.gra_tier().is_none())
+    );
+    let raw = file
         .utterances()
-        .find_map(|utterance| utterance.gra_tier())
-        .expect("E709 preserves the partial tier for downstream reporting");
-    assert!(native.semantic_eq(streamed));
-    assert_eq!(streamed.completeness(), GraCompleteness::Truncated);
+        .flat_map(|utterance| &utterance.dependent_tiers)
+        .find_map(|entry| match &entry.tier {
+            DependentTier::UnparsedGra(raw) => Some(raw),
+            _ => None,
+        })
+        .expect("file preserves unparsed GRA");
+    assert_eq!(raw.source(), &source[span.start()..span.end()]);
     assert_eq!(streaming_errors.to_vec(), native_errors.to_vec());
-    let json = serde_json::to_string(&rebuilt).expect("partial gra JSON");
-    let restored: GraTier = serde_json::from_str(&json).expect("partial gra readback");
-    assert!(restored.semantic_eq(&rebuilt));
-    assert_eq!(restored.completeness(), GraCompleteness::Unknown);
 }
 
 #[test]

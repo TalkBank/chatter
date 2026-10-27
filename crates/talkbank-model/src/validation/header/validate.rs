@@ -56,6 +56,37 @@ pub(crate) fn check_header(
         Header::Participants { entries } => {
             entries.validate(context, errors);
         }
+        Header::UnparsedID(raw) => {
+            errors.report(crate::ParseError::at_location(
+                crate::ErrorCode::UnparsableContent,
+                crate::Severity::Error,
+                raw.location().or(location),
+                "Unparsed @ID header",
+            ));
+        }
+        Header::UnparsedParticipants(raw) => {
+            errors.report(crate::ParseError::at_location(
+                crate::ErrorCode::UnparsableContent,
+                crate::Severity::Error,
+                raw.location().or(location),
+                "Unparsed @Participants declaration",
+            ));
+        }
+        Header::UnparsedLanguages(raw) => {
+            errors.report(crate::ParseError::at_location(
+                match raw.failure() {
+                    crate::model::LanguageHeaderFailure::Syntax => {
+                        crate::ErrorCode::UnparsableContent
+                    }
+                    crate::model::LanguageHeaderFailure::List => {
+                        crate::ErrorCode::EmptyLanguagesHeader
+                    }
+                },
+                crate::Severity::Error,
+                raw.location().or(location),
+                "Unparsed @Languages declaration",
+            ));
+        }
         Header::Languages { codes } => {
             codes.validate(context, errors);
         }
@@ -72,6 +103,7 @@ pub(crate) fn check_header(
         }
         Header::Comment { content } => {
             check_comment_warning(content, location, errors);
+            content.segments.validate(context, errors);
         }
         Header::Unknown {
             text,

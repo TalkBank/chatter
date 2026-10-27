@@ -385,7 +385,7 @@ impl<T> Annotated<T> {
 
 impl<T: WriteChat> WriteChat for Annotated<T> {
     /// Serializes `inner` followed by each scoped annotation separated by spaces.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         self.inner.write_chat(w)?;
         for ann in &self.scoped_annotations {
             w.write_char(' ')?;

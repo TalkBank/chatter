@@ -118,14 +118,14 @@ fn word_only_regeneration_carries_linkage_until_complete_validation() {
             .all(|u| u.wor_tier().is_none())
     );
     assert_eq!(
-        pending.document().media,
+        pending.document().media_header(),
         parser
             .admit_word_timing_plan(reference, TranscriptName::Anonymous, |_| {
                 WordTimingPlan::Preserve
             })
             .expect("timed reference is admitted")
             .document()
-            .media
+            .media_header()
     );
     assert!(
         !pending

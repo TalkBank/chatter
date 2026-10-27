@@ -116,10 +116,45 @@ interned_newtype! {
 /// References:
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier>
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Part_of_Speech>
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MorFeature {
-    key: Option<Arc<str>>,
-    value: Arc<str>,
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct MorFeature(FeatureShape);
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum FeatureShape {
+    Flat(FeaturePrefix),
+    Keyed { key: FeaturePrefix, value: Arc<str> },
+}
+
+/// Text preceding the first equals sign, or the whole text when there is none.
+/// Only `split` constructs this equals-free prefix; emptiness remains evidence.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct FeaturePrefix(Arc<str>);
+
+impl FeaturePrefix {
+    fn split(text: &str) -> (Self, Option<&str>) {
+        let (prefix, value) = match text.split_once('=') {
+            Some((prefix, value)) => (prefix, Some(value)),
+            None => (text, None),
+        };
+        (Self(crate::model::stem_interner().intern(prefix)), value)
+    }
+}
+
+/// Split-field construction must preserve the requested shape through JSON.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MorFeatureShapeError {
+    /// An equals sign would turn a purported flat value into a keyed feature.
+    #[error("flat feature contains '=' at byte {byte_offset}")]
+    EqualsInFlat {
+        /// The first equals sign's UTF-8 byte offset.
+        byte_offset: usize,
+    },
+    /// An equals sign would move part of the key into the value on readback.
+    #[error("feature key contains '=' at byte {byte_offset}")]
+    EqualsInKey {
+        /// The first equals sign's UTF-8 byte offset.
+        byte_offset: usize,
+    },
 }
 
 impl MorFeature {
@@ -128,41 +163,47 @@ impl MorFeature {
     /// If `s` contains `=`, splits on the first `=` into key and value.
     /// Otherwise, creates a flat (keyless) feature.
     pub fn new(s: impl AsRef<str>) -> Self {
-        let s = s.as_ref();
-        let interner = crate::model::stem_interner();
-        if let Some(eq_pos) = s.find('=') {
-            Self {
-                key: Some(interner.intern(&s[..eq_pos])),
-                value: interner.intern(&s[eq_pos + 1..]),
-            }
-        } else {
-            Self {
-                key: None,
-                value: interner.intern(s),
-            }
-        }
+        let (prefix, value) = FeaturePrefix::split(s.as_ref());
+        Self(match value {
+            Some(value) => FeatureShape::Keyed {
+                key: prefix,
+                value: crate::model::stem_interner().intern(value),
+            },
+            None => FeatureShape::Flat(prefix),
+        })
     }
 
     /// Create a flat (keyless) feature.
     ///
-    /// Use this when callers already know the feature is not keyed and want to
-    /// avoid extra parsing logic in `new`.
-    pub fn flat(value: impl AsRef<str>) -> Self {
-        Self {
-            key: None,
-            value: crate::model::stem_interner().intern(value.as_ref()),
+    /// Refuses `=` rather than changing the requested shape on wire readback.
+    pub fn flat(value: impl AsRef<str>) -> Result<Self, MorFeatureShapeError> {
+        let (prefix, remainder) = FeaturePrefix::split(value.as_ref());
+        match remainder {
+            None => Ok(Self(FeatureShape::Flat(prefix))),
+            Some(_) => Err(MorFeatureShapeError::EqualsInFlat {
+                byte_offset: prefix.0.len(),
+            }),
         }
     }
 
     /// Create a keyed feature (key=value).
     ///
     /// This constructor preserves both key and value verbatim and does not
-    /// normalize case or spelling.
-    pub fn with_key_value(key: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        let interner = crate::model::stem_interner();
-        Self {
-            key: Some(interner.intern(key.as_ref())),
-            value: interner.intern(value.as_ref()),
+    /// normalize case or spelling. A key containing `=` is refused; additional
+    /// equals signs in the value stay in the value, matching first-split parsing.
+    pub fn with_key_value(
+        key: impl AsRef<str>,
+        value: impl AsRef<str>,
+    ) -> Result<Self, MorFeatureShapeError> {
+        let (key, remainder) = FeaturePrefix::split(key.as_ref());
+        match remainder {
+            None => Ok(Self(FeatureShape::Keyed {
+                key,
+                value: crate::model::stem_interner().intern(value.as_ref()),
+            })),
+            Some(_) => Err(MorFeatureShapeError::EqualsInKey {
+                byte_offset: key.0.len(),
+            }),
         }
     }
 
@@ -171,7 +212,10 @@ impl MorFeature {
     /// Flat features such as `Plur` return `None` here and keep all content in
     /// [`Self::value`].
     pub fn key(&self) -> Option<&str> {
-        self.key.as_deref()
+        match &self.0 {
+            FeatureShape::Flat(_) => None,
+            FeatureShape::Keyed { key, .. } => Some(&key.0),
+        }
     }
 
     /// Returns the value (e.g., `"Plur"` for both `Plur` and `Number=Plur`).
@@ -179,14 +223,17 @@ impl MorFeature {
     /// This always returns the right-hand payload, regardless of whether the
     /// feature was keyed or flat.
     pub fn value(&self) -> &str {
-        &self.value
+        match &self.0 {
+            FeatureShape::Flat(value) => &value.0,
+            FeatureShape::Keyed { value, .. } => value,
+        }
     }
 
     /// Returns `true` if this is a flat feature (no key).
     ///
     /// Flat vs keyed status is lexical only; no UD schema lookup is performed.
     pub fn is_flat(&self) -> bool {
-        self.key.is_none()
+        matches!(&self.0, FeatureShape::Flat(_))
     }
 
     /// Returns `true` if the value is empty.
@@ -194,7 +241,7 @@ impl MorFeature {
     /// Empty values are representable at model level and are typically surfaced
     /// later by validation rules.
     pub fn is_empty(&self) -> bool {
-        self.value.is_empty()
+        self.value().is_empty()
     }
 }
 
@@ -203,12 +250,12 @@ impl MorFeature {
 impl serde::Serialize for MorFeature {
     /// Serializes as the canonical `%mor` surface form (`value` or `key=value`).
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match &self.key {
+        match self.key() {
             Some(k) => {
-                let full = format!("{}={}", k, self.value);
+                let full = format!("{}={}", k, self.value());
                 serializer.serialize_str(&full)
             }
-            None => serializer.serialize_str(&self.value),
+            None => serializer.serialize_str(self.value()),
         }
     }
 }
@@ -240,7 +287,7 @@ impl schemars::JsonSchema for MorFeature {
 impl SemanticEq for MorFeature {
     /// Semantic equivalence matches exact key/value lexical content.
     fn semantic_eq(&self, other: &Self) -> bool {
-        self.key.semantic_eq(&other.key) && self.value.semantic_eq(&other.value)
+        self == other
     }
 }
 
@@ -248,6 +295,12 @@ impl SpanShift for MorFeature {
     /// Shifts spans after.
     fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {
         // No span fields
+    }
+    fn try_map_spans<E>(
+        self,
+        _map: &mut impl FnMut(crate::Span) -> Result<crate::Span, E>,
+    ) -> Result<Self, E> {
+        Ok(self)
     }
 }
 
@@ -281,23 +334,32 @@ impl crate::model::WriteChat for MorFeature {
     ///
     /// Keyed features emit `key=value`; flat features emit only `value`.
     /// Serialization is lossless with respect to stored lexical content.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        if let Some(ref k) = self.key {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        if let Some(k) = self.key() {
             w.write_str(k)?;
             w.write_char('=')?;
         }
-        w.write_str(&self.value)
+        w.write_str(self.value())
     }
 }
 
 impl std::fmt::Display for MorFeature {
     /// Formats as `value` or `key=value`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(ref k) = self.key {
-            write!(f, "{}={}", k, self.value)
+        if let Some(k) = self.key() {
+            write!(f, "{}={}", k, self.value())
         } else {
-            f.write_str(&self.value)
+            f.write_str(self.value())
         }
+    }
+}
+
+impl std::fmt::Debug for MorFeature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MorFeature")
+            .field("key", &self.key())
+            .field("value", &self.value())
+            .finish()
     }
 }
 
@@ -411,6 +473,10 @@ mod tests {
         assert_eq!(f.key(), None);
         assert_eq!(f.value(), "Plur");
         assert!(!f.is_empty());
+        assert_eq!(
+            format!("{f:?}"),
+            "MorFeature { key: None, value: \"Plur\" }"
+        );
     }
 
     /// `key=value` text parses into keyed feature shape.
@@ -422,14 +488,18 @@ mod tests {
         assert!(!f.is_flat());
         assert_eq!(f.key(), Some("Number"));
         assert_eq!(f.value(), "Plur");
+        assert_eq!(
+            format!("{f:?}"),
+            "MorFeature { key: Some(\"Number\"), value: \"Plur\" }"
+        );
     }
 
-    /// `flat()` constructs keyless features without parsing heuristics.
+    /// `flat()` admits explicitly keyless features.
     ///
     /// This is useful for callers that already know feature shape.
     #[test]
     fn test_flat_constructor() {
-        let f = MorFeature::flat("Past");
+        let f = MorFeature::flat("Past").unwrap();
         assert!(f.is_flat());
         assert_eq!(f.value(), "Past");
     }
@@ -439,7 +509,7 @@ mod tests {
     /// The constructor should not rewrite or normalize either side.
     #[test]
     fn test_with_key_value_constructor() {
-        let f = MorFeature::with_key_value("Tense", "Past");
+        let f = MorFeature::with_key_value("Tense", "Past").unwrap();
         assert!(!f.is_flat());
         assert_eq!(f.key(), Some("Tense"));
         assert_eq!(f.value(), "Past");
@@ -536,6 +606,58 @@ mod tests {
         let f1 = MorFeature::new("Plur");
         let f2 = MorFeature::new("Plur");
         // Values should be interned (same Arc)
-        assert!(Arc::ptr_eq(&f1.value, &f2.value));
+        assert!(std::ptr::eq(f1.value(), f2.value()));
+    }
+
+    #[test]
+    fn split_feature_constructors_do_not_change_wire_meaning() {
+        assert_eq!(
+            MorFeature::flat("Number=Plur"),
+            Err(MorFeatureShapeError::EqualsInFlat { byte_offset: 6 })
+        );
+        assert_eq!(
+            MorFeature::with_key_value("Number=Gender", "Plur"),
+            Err(MorFeatureShapeError::EqualsInKey { byte_offset: 6 })
+        );
+        assert_eq!(
+            MorFeature::flat("é=x"),
+            Err(MorFeatureShapeError::EqualsInFlat { byte_offset: 2 })
+        );
+        for value in ["", "Nom", "é"] {
+            let feature = MorFeature::flat(value).unwrap();
+            let restored: MorFeature =
+                serde_json::from_value(serde_json::to_value(&feature).unwrap()).unwrap();
+            assert_eq!(feature, restored);
+        }
+        for (key, value) in [
+            ("", ""),
+            ("", "a=b"),
+            ("Case", ""),
+            ("Case", "x=y"),
+            ("Case", "é"),
+        ] {
+            let feature = MorFeature::with_key_value(key, value).unwrap();
+            let wire = serde_json::to_value(&feature).unwrap();
+            let restored: MorFeature = serde_json::from_value(wire).unwrap();
+            assert_eq!(
+                feature, restored,
+                "wire changed the feature's declared shape"
+            );
+        }
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn feature_wire_preserves_the_exact_structure(text in proptest::prelude::any::<String>()) {
+            let feature = MorFeature::new(&text);
+            let restored: MorFeature = serde_json::from_value(serde_json::to_value(&feature).unwrap()).unwrap();
+            proptest::prop_assert_eq!(&feature, &restored);
+            proptest::prop_assert_eq!(feature.to_string(), text);
+            let rebuilt = match feature.key() {
+                Some(key) => MorFeature::with_key_value(key, feature.value()),
+                None => MorFeature::flat(feature.value()),
+            }.unwrap();
+            proptest::prop_assert_eq!(feature, rebuilt);
+        }
     }
 }

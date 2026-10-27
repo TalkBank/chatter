@@ -33,13 +33,13 @@ build tools:
   chatter validate myfile.cha       # check one transcript
   chatter validate path/to/folder   # check an entire corpus
   chatter --help                    # list every command
-  chatter update                    # update to the newest release
+  chatter experimental update                    # update to the newest release
   ```
 
 The installer command downloads and executes a script. Review the official
 release and follow your organization's installation policy; see
 [Installation](book/src/chatter/user-guide/installation.md) for manual downloads,
-checksums and security prompts. `chatter update` requires an official installer
+checksums and security prompts. `chatter experimental update` requires an official installer
 receipt; source and package-manager installs use their original update method.
 
 New to chatter? The
@@ -71,8 +71,8 @@ and an LSP-backed editor experience.
 | Crate | Role |
 |---|---|
 | [`talkbank-model`](crates/talkbank-model/) | CHAT data model, validation rules, error codes, tier-alignment primitives |
-| [`talkbank-parser`](crates/talkbank-parser/) | Tree-sitter-backed primary parser (incremental, LSP-friendly), driven by a generated, exhaustive typed CST visitor |
-| [`talkbank-parser-re2c`](crates/talkbank-parser-re2c/) | Independent experimental parser with finite reference and error-spec comparisons; use tree-sitter for production validity decisions |
+| [`talkbank-parser`](crates/talkbank-parser/) | Tree-sitter backend (incremental, current CLI default), driven by a generated, exhaustive typed CST visitor |
+| [`talkbank-parser-re2c`](crates/talkbank-parser-re2c/) | Peer CHAT backend using a re2c lexer and native parser combinators, with finite reference and error-spec comparisons |
 | [`talkbank-parser-tests`](crates/talkbank-parser-tests/) | Internal test harness: parser equivalence, reference-corpus golden tests, CLAN CHECK parity fixtures |
 | [`talkbank-transform`](crates/talkbank-transform/) | CHAT to JSON, normalization, transcript merge, redaction, transform pipelines |
 | [`talkbank-derive`](crates/talkbank-derive/) | Derive macros for the data model |
@@ -94,7 +94,7 @@ and an LSP-backed editor experience.
 |---|---|
 | [`grammar/`](grammar/) | The `tree-sitter-talkbank` grammar, the source of truth for CHAT syntax. Generates the parser used by `talkbank-parser`. |
 | [`spec/`](spec/) | The CHAT format specification (constructs, errors, symbol registry); generates the test corpus that gates every grammar/parser change |
-| [`schema/`](schema/) | JSON Schema for the typed CHAT AST emitted by `chatter to-json` |
+| [`schema/`](schema/) | JSON Schema for the typed CHAT AST emitted by `chatter convert to-json` |
 | [`corpus/reference/`](corpus/reference/) | Finite reference transcripts for parser, validation and roundtrip regression contracts |
 | [`test-fixtures/`](test-fixtures/) | Minimal `.cha` fixtures used by integration tests |
 
@@ -178,7 +178,7 @@ flowchart TD
     spec["spec/\n(CHAT format specification,\nsource of truth)"]
     grammar["grammar/\n(tree-sitter-talkbank grammar)"]
     parser["talkbank-parser\n(tree-sitter parser,\ngenerated typed CST visitor)"]
-    re2c["talkbank-parser-re2c\n(experimental independent parser)"]
+    re2c["talkbank-parser-re2c\n(independent CHAT backend)"]
     model["talkbank-model + talkbank-derive\n(data model, validation rules,\nerror codes, alignment)"]
     transform["talkbank-transform + talkbank-cache\n(CHAT to JSON, normalize,\nmerge, redact, pipelines)"]
     cli["chatter\n(CLI)"]

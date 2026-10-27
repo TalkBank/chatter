@@ -22,6 +22,7 @@ function escapeRegexClassSymbol(value) {
     case '[':
     case ']':
     case '^':
+    case '-':
       return `\\${value}`;
     case '\t':
       return '\\t';
@@ -83,6 +84,7 @@ export const WORD_SEGMENT_FORBIDDEN_START_BASE = ${JSON.stringify(wordSegmentFor
 export const WORD_SEGMENT_FORBIDDEN_REST_BASE = ${JSON.stringify(wordSegmentForbiddenRestBase)};
 export const WORD_SEGMENT_FORBIDDEN_COMMON = ${JSON.stringify(wordSegmentForbiddenCommon)};
 
+export const SCOPED_MARKER_LABEL_SYMBOLS = ${JSON.stringify(categories.scoped_marker_label_symbols.map(escapeRegexClassSymbol).join(''))};
 export const EVENT_SEGMENT_FORBIDDEN_BASE = ${JSON.stringify(eventSegmentForbiddenBase)};
 export const EVENT_SEGMENT_FORBIDDEN_COMMON = ${JSON.stringify(eventSegmentForbiddenCommon)};
 `;

@@ -108,7 +108,7 @@ chat = '''
 title = 'A missing GRA index beside healthy MOR'
 level = 'tier'
 claim = { subsumed_by = 'E316' }
-notes = 'Delete the first grammatical index. Native traversal inserts a zero-width index token, not an individually reportable ERROR/MISSING node. The recovered tier still reports a source-local E316 summary and retains an Unknown empty placeholder with GRA parse taint. Native lowering rejects the declared malformed relation but retains PUNCT; document recovery does not claim that native retention receipt.'
+notes = 'Delete the first grammatical index. Native traversal inserts a zero-width index token, not an individually reportable ERROR/MISSING node. The recovered tier still reports a source-local E316 summary and retains its original source as UnparsedGra with GRA parse taint. Native lowering rejects the whole graph; document recovery preserves its full source as UnparsedGra.'
 chat = '''
 @UTF8
 @Begin
@@ -142,7 +142,7 @@ chat = '''
 title = 'A zero GRA index followed by an intact relation'
 level = 'tier'
 claim = { subsumed_by = 'E709' }
-notes = 'Change only the first index to zero. The native tier is structurally intact: rejecting one Present relation cannot be undone by the later retained PUNCT relation.'
+notes = 'Change only the first index to zero. The native tier is structurally intact: rejecting one Present relation rejects the graph and cannot be undone by the later valid PUNCT relation. File recovery retains the entire source as UnparsedGra.'
 chat = '''
 @UTF8
 @Begin
@@ -176,7 +176,7 @@ chat = '''
 title = 'An overflowing GRA index followed by an intact relation'
 level = 'tier'
 claim = { subsumed_by = 'E708' }
-notes = 'Replace the first index with a numeric value too large for the model. Grammar acceptance is distinct from numeric admission; retain the later relation and healthy MOR.'
+notes = 'Replace the first index with a numeric value too large for the model. Grammar acceptance is distinct from numeric admission; native lowering rejects the graph; file recovery preserves raw GRA and healthy MOR.'
 chat = '''
 @UTF8
 @Begin
@@ -210,7 +210,7 @@ chat = '''
 title = 'A comment body beginning with a bare bullet opener'
 level = 'tier'
 claim = 'violates'
-notes = 'Insert a bare U+0015 only at the start of the middle comment body. Reuse the E330 body-recovery rule, keeping the MOR/GRA and other text sentinels unchanged.'
+notes = 'Insert a bare U+0015 only at the start of the middle comment body. Reject the unreadable body without fabricating an empty comment or E756. Reuse the E330 body-recovery rule, keeping the MOR/GRA and other text sentinels unchanged.'
 chat = """
 @UTF8
 @Begin

@@ -8,13 +8,16 @@
 //! clean). User contract: `book/src/chatter/user-guide/rediarize.md`.
 
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use tracing::{Level, info, span, warn};
 
-use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
 use talkbank_model::ParseValidateOptions;
 use talkbank_transform::rediarize::{
     ContestedThreshold, RediarizeSummary, TurnsJsonError, parse_turns_json, rediarize_content,
+};
+use talkbank_transform::report_destination::{
+    PendingPublication, ReportDestinationError, StagedReportDestination,
 };
 
 /// Cap on individually-listed flagged utterances in the summary; a
@@ -23,6 +26,86 @@ use talkbank_transform::rediarize::{
 /// reported.
 const MAX_FLAGGED_DETAILS: usize = 20;
 
+enum ChatDestination {
+    Stdout,
+    File(StagedReportDestination),
+}
+
+enum ChatPublication {
+    Stdout(String),
+    File(PendingPublication),
+}
+
+/// Both destinations are admitted and regular-file bytes staged before publication.
+/// This is a publication preparation phase, not an atomic two-file transaction.
+struct PreparedRediarizePublication {
+    chat: ChatPublication,
+    summary: Option<PendingPublication>,
+}
+
+impl PreparedRediarizePublication {
+    fn prepare(
+        chat: String,
+        input: &Path,
+        turns: &Path,
+        output: Option<&Path>,
+        summary: Option<(&Path, String)>,
+    ) -> Result<Self, ReportDestinationError> {
+        let destination = match output {
+            Some(path) => {
+                ChatDestination::File(StagedReportDestination::admit(path, [input, turns])?)
+            }
+            None => ChatDestination::Stdout,
+        };
+        let summary = summary
+            .map(|(path, json)| {
+                let summary = StagedReportDestination::admit(path, [input, turns])?;
+                if let ChatDestination::File(chat) = &destination {
+                    chat.ensure_distinct(&summary)?;
+                }
+                Ok::<_, ReportDestinationError>((summary, json))
+            })
+            .transpose()?;
+        fn stage(
+            destination: StagedReportDestination,
+            bytes: &[u8],
+        ) -> io::Result<PendingPublication> {
+            let mut writer = destination.into_writer()?;
+            writer.write_all(bytes)?;
+            writer.finish()
+        }
+        let chat = match destination {
+            ChatDestination::Stdout => ChatPublication::Stdout(chat),
+            ChatDestination::File(destination) => {
+                ChatPublication::File(stage(destination, chat.as_bytes())?)
+            }
+        };
+        let summary = summary
+            .map(|(destination, json)| stage(destination, json.as_bytes()))
+            .transpose()?;
+        Ok(Self { chat, summary })
+    }
+
+    fn publish(self) -> crate::exit_codes::CommandResult {
+        fn publish(destination: PendingPublication) -> crate::exit_codes::CommandResult {
+            destination.publish().map_err(|error| {
+                eprintln!("Error writing rediarization output: {error}");
+                crate::exit_codes::ReportedFailure::Input.into()
+            })
+        }
+        match self.chat {
+            ChatPublication::Stdout(chat) => {
+                out!("{chat}");
+            }
+            ChatPublication::File(destination) => publish(destination)?,
+        }
+        if let Some(destination) = self.summary {
+            publish(destination)?;
+        }
+        Ok(())
+    }
+}
+
 /// Top-level entry for `chatter rediarize INPUT --turns TURNS.json [-o OUT]
 /// [--summary-json SUMMARY.json]`.
 ///
@@ -30,14 +113,15 @@ const MAX_FLAGGED_DETAILS: usize = 20;
 /// utterances do not fail the command), 1 invalid input (unreadable
 /// file, CHAT parse failure, malformed turns JSON), 2 precondition
 /// violation (turns JSON parsed but is semantically defective, e.g. an
-/// inverted span). No output file is written on any non-zero exit.
+/// inverted span). Destination admission preserves existing bytes on refusal;
+/// later write failures can leave partial output.
 pub fn run_rediarize(
     input: &Path,
     turns_path: &Path,
     output: Option<&PathBuf>,
     summary_json: Option<&Path>,
     contested_at: Option<f64>,
-) {
+) -> crate::exit_codes::CommandResult {
     // Validated HERE, before anything is read, so a bad share fails the
     // command rather than silently meaning "nothing is contested". A `NaN`
     // would satisfy no comparison and is exactly that silent case.
@@ -45,7 +129,7 @@ pub fn run_rediarize(
         Ok(threshold) => threshold,
         Err(e) => {
             eprintln!("Error: {e}");
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
     let _span = span!(
@@ -61,7 +145,7 @@ pub fn run_rediarize(
         Err(e) => {
             warn!("failed to read {}: {}", input.display(), e);
             eprintln!("Error reading {}: {}", input.display(), e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
     let turns_text = match fs::read_to_string(turns_path) {
@@ -69,7 +153,7 @@ pub fn run_rediarize(
         Err(e) => {
             warn!("failed to read {}: {}", turns_path.display(), e);
             eprintln!("Error reading {}: {}", turns_path.display(), e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -79,13 +163,15 @@ pub fn run_rediarize(
             warn!("turns JSON rejected: {}", e);
             eprintln!("Error in {}: {}", turns_path.display(), e);
             // Malformed JSON is unusable input (1); a well-formed file
-            // carrying an inverted span is a semantic precondition
+            // carrying an inverted span or invalid track is a semantic precondition
             // violation (2), per the exit-code contract.
             let code = match e {
-                TurnsJsonError::Json(_) => EXIT_INPUT_ERROR,
-                TurnsJsonError::InvertedTurn { .. } => EXIT_PRECONDITION,
+                TurnsJsonError::Json(_) => crate::exit_codes::ReportedFailure::Input,
+                TurnsJsonError::InvertedTurn { .. } | TurnsJsonError::InvalidTrack { .. } => {
+                    crate::exit_codes::ReportedFailure::Precondition
+                }
             };
-            std::process::exit(code);
+            return Err(code.into());
         }
     };
     if let Some(source) = turns_file.source() {
@@ -102,44 +188,38 @@ pub fn run_rediarize(
         Err(e) => {
             warn!("rediarize failed: {}", e);
             eprintln!("Error: {}", e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
-    match output {
-        Some(path) => {
-            if let Err(e) = fs::write(path, &rewritten) {
-                warn!("failed to write {}: {}", path.display(), e);
-                eprintln!("Error writing {}: {}", path.display(), e);
-                std::process::exit(EXIT_INPUT_ERROR);
-            }
-            info!("wrote rediarized file: {}", path.display());
+    // Serialize and admit the whole output set before any destination truncates.
+    let summary = summary_json
+        .map(|path| {
+            let summary = RediarizeSummary::new(turns_file.source(), &outcome);
+            serde_json::to_string_pretty(&summary).map(|json| (path, json + "\n"))
+        })
+        .transpose();
+    let summary = match summary {
+        Ok(summary) => summary,
+        Err(error) => {
+            eprintln!("Error serializing summary: {error}");
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
-        None => {
-            out!("{rewritten}");
+    };
+    let publication = match PreparedRediarizePublication::prepare(
+        rewritten,
+        input,
+        turns_path,
+        output.map(PathBuf::as_path),
+        summary,
+    ) {
+        Ok(publication) => publication,
+        Err(error) => {
+            eprintln!("Error preparing output: {error}");
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
-    }
-
-    // Machine-readable summary, the seam batch drivers consume instead
-    // of scraping the human-readable stderr text below. Written after
-    // the CHAT output so it, too, describes a completed operation.
-    if let Some(summary_path) = summary_json {
-        let summary = RediarizeSummary::new(turns_file.source(), &outcome);
-        let json = match serde_json::to_string_pretty(&summary) {
-            Ok(json) => json,
-            Err(e) => {
-                warn!("failed to serialize summary: {}", e);
-                eprintln!("Error serializing summary: {}", e);
-                std::process::exit(EXIT_INPUT_ERROR);
-            }
-        };
-        if let Err(e) = fs::write(summary_path, json + "\n") {
-            warn!("failed to write {}: {}", summary_path.display(), e);
-            eprintln!("Error writing {}: {}", summary_path.display(), e);
-            std::process::exit(EXIT_INPUT_ERROR);
-        }
-        info!("wrote summary JSON: {}", summary_path.display());
-    }
+    };
+    publication.publish()?;
 
     // Outcome summary AFTER the write so it describes a completed
     // operation. `unchanged` includes flagged utterances (they kept
@@ -164,4 +244,5 @@ pub fn run_rediarize(
             outcome.flagged.len() - MAX_FLAGGED_DETAILS
         );
     }
+    Ok(())
 }

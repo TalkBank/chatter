@@ -292,9 +292,9 @@ Contract notes:
 - A file with no diagnostic writes no record; the summary counts it.
 - A file that cannot be written whole fails the run (exit 1).
 
-## `chatter to-json`
+## `chatter convert to-json`
 
-`chatter to-json` emits the full `ChatFile` JSON model rather than a diagnostic
+`chatter convert to-json` emits the full `ChatFile` JSON model rather than a diagnostic
 summary. The authoritative contract for that output is the JSON Schema
 documented in [JSON Schema](json-schema.md).
 

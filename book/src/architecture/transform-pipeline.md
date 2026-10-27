@@ -240,7 +240,7 @@ The JSON follows the schema at `schema/chat-file.schema.json`, and is checked
 against it before it is returned.
 
 `JsonLayout` is `Pretty` (indented, the CLI's default) or `Compact` (one line,
-`chatter to-json --compact`, which chatter's clap parsing turns into the
+`chatter convert to-json --compact`, which chatter's clap parsing turns into the
 value). It was a `pretty: bool`, which every caller had to
 spell as a bare `true` or `false`. `chat_to_json_named` adds the transcript's
 name (so E531 can run), `chat_to_json_with_schema_policy` adds a
@@ -256,7 +256,7 @@ from the CHAT checks selected by its options. JSON can be deserialized into
 original parser evidence, formatting or byte sequence. Deserialization enforces
 the model's serde boundaries, not every CHAT validity rule.
 
-`chatter from-json` performs this deserialize/serialize path without a separate
+`chatter convert from-json` performs this deserialize/serialize path without a separate
 JSON Schema or CHAT-validation pass. Validate the resulting CHAT before treating
 it as accepted input. The [JSON Schema guide](../chatter/integrating/json-schema.md#roundtrip-expectations)
 states the roundtrip limits; the
@@ -478,9 +478,46 @@ Raw `apply_edits`, independent `verify_splice`, and plain-text
 `apply_edits_verified` remain available for numeric and external-byte contracts.
 Generic `admit_edits(model, edits)` likewise remains an intentional boundary.
 These raw routes cannot construct diagnosis-associated phases or CLI authority.
-Checked `u32` extents add no CHAT-size policy. These local phases do not prove
+Checked `usize` extents add no CHAT-size policy. These local phases do not prove
 semantic correctness, whole-document validity or filesystem
 race safety; report mode and explicit application retain their existing policy.
+
+## Splice assurance and a formal proof boundary
+
+The private fields of `MappedPlan` and `ByteVerifiedSplice` enforce ownership
+and construction order. They do not prove that mapping, assembly or verification
+implements the intended byte operation. Assembly and the byte verifier share a
+mapping, so agreement between those two alone cannot expose every mapping bug.
+The `splice_preservation` integration property compares them with reverse
+in-place edits using original coordinates, without the cumulative-delta map.
+It also checks replacement coordinates and rejection of altered untouched text,
+truncated output and an extra suffix. Generated cases are regression evidence,
+not exhaustive verification or a formal proof.
+
+A future proof must connect to the actual implementation and establish this
+contract. For source bytes `S` and ordered, disjoint edits `(start_i, end_i, R_i)`,
+the output is exactly the concatenation of each untouched source gap and `R_i`,
+followed by the final source suffix. Insertions have equal endpoints; replacements
+have nonempty ranges. Same-start edits are rejected by current policy.
+
+The proof obligations are:
+
+- Admission establishes in-bounds UTF-8 endpoints, strict start ordering,
+  disjoint ranges and representable output coordinates, or returns an error.
+- Mapping assigns each replacement its exact interval in that concatenation;
+  all subtraction and addition is safe at the platform's `usize` width.
+- Assembly produces that concatenation, preserving each untouched byte in order.
+- Candidate verification succeeds exactly when candidate bytes equal it.
+- The receipt retains the source and mapping that established those facts.
+
+The model must state allocation-failure assumptions. A theorem about an abstract
+sequence algorithm is useful only with an explicit correspondence to production
+Rust; translating the algorithm into a proof assistant does not itself verify
+the Rust implementation. A binary proof must identify its exact build and
+execution model. Neither route establishes that an edit is linguistically
+correct, that recovered CHAT is valid, or that filesystem publication is safe.
+Those remain separate admission and external-boundary contracts. No formal proof
+of this splice contract is currently claimed here.
 
 ## Validation + Roundtrip Cache Lifecycle
 
@@ -533,7 +570,7 @@ have their own callers and input lifecycles.
 ### The one worker pool and the one walk
 
 The shared pool helper is `talkbank_transform::worker_pool::fan_out`;
-`chatter to-json` uses it for directory conversions too. Each invocation owns
+`chatter convert to-json` uses it for directory conversions too. Each invocation owns
 its worker pool, not a process-wide singleton.
 
 ```mermaid

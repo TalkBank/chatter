@@ -58,7 +58,12 @@ fn characterization_rich_valid_main_tier() {
 
     // One postcode `[+ trn]` -> text "trn".
     assert_eq!(main_tier.content.postcodes.len(), 1);
-    assert_eq!(main_tier.content.postcodes[0].text.as_str(), "trn");
+    assert_eq!(
+        main_tier.content.postcodes[0]
+            .text()
+            .expect("admitted postcode"),
+        "trn"
+    );
 }
 
 /// Per-subtype coverage (Task 3d): one fixture per terminator subtype the grammar

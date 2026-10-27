@@ -99,7 +99,7 @@ impl LineColumn {
 
     /// The line and column of byte `offset` in `source`.
     ///
-    /// Performs an allocation-free scan up to the requested byte offset. There
+    /// Performs an allocation-free scan of physical lines. There
     /// is no address-keyed cache: a buffer can be edited or reused between calls.
     /// For repeated lookups, build one [`crate::SourceIndex`] and use its
     /// `line_col_of` method (zero-indexed), or enrich a batch of diagnostics.
@@ -108,11 +108,12 @@ impl LineColumn {
     pub fn of_offset(offset: usize, source: &str) -> Self {
         let mut line = NonZeroUsize::MIN;
         let mut line_start = 0;
-        for (index, byte) in source.bytes().take(offset).enumerate() {
-            if byte == b'\n' {
-                line = line.saturating_add(1);
-                line_start = index + 1;
-            }
+        for physical in super::physical_lines::PhysicalLines::new(source)
+            .skip(1)
+            .take_while(|physical| physical.start() <= offset)
+        {
+            line = line.saturating_add(1);
+            line_start = physical.start();
         }
         // `offset >= line_start` here, and adding one makes it nonzero.
         let column = NonZeroUsize::MIN.saturating_add(offset.saturating_sub(line_start));

@@ -9,8 +9,9 @@
 //! - `BracketedItem::OverlapPoint`, inside groups: `<⌈ word ⌉> [/]`
 //! - `WordContent::OverlapPoint`, intra-word: `butt⌈er⌉`
 //!
-//! This parallels the overlap collection in `validation/utterance/overlap.rs`
-//! but tracks word positions rather than collecting points for validation.
+//! This alignment view pairs boundaries and tracks word positions. Lexical
+//! index validation instead visits each original point through model validation;
+//! a paired region is not a substitute for either source marker.
 // Every match in this file (over the shared walker's `ContentItem`, and over
 // `WordContent` in `scan_word`) is exhaustive, so the lint costs nothing today
 // and makes it stay that way: a new content variant becomes a COMPILE ERROR
@@ -173,6 +174,7 @@ pub fn extract_overlap_info(content: &[UtteranceContent]) -> OverlapMarkerInfo {
         | ContentItem::Pause(_)
         | ContentItem::Action(_)
         | ContentItem::OtherSpokenEvent(_)
+        | ContentItem::OrphanAnnotation(_)
         | ContentItem::Freecode(_)
         | ContentItem::InternalBullet(_)
         | ContentItem::LongFeatureBegin(_)

@@ -390,8 +390,49 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
         &mut self,
         bound: crate::generated_traversal::SourceSlice<'_, '_>,
     ) {
-        // No parsed tier identity survives at this slot. Do not narrow taint
-        // by reparsing a percent prefix; any preceding alignment may be affected.
+        match crate::parser::tree_parsing::header::recover_languages_header(bound) {
+            Ok(Some(header)) => {
+                self.lines
+                    .push(Line::header(span_of(bound.raw_node()), header));
+                analyze_error_node(bound, self.errors);
+                return;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                crate::parser::typed_cst::report_cst_failure(
+                    bound.raw_node(),
+                    bound.source(),
+                    error,
+                    self.errors,
+                );
+                return;
+            }
+        }
+        match super::recovered_tier::read(bound) {
+            Ok(Some(tier)) => {
+                // The sink admits attachment only to the immediately preceding
+                // utterance. A header or nonadjacent region cannot donate ownership.
+                if let Ok(()) = self.lines.append_recovered_tier(tier) {
+                    self.lines.taint_previous_utterance();
+                    analyze_error_node(bound, self.errors);
+                    return;
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                crate::parser::typed_cst::report_cst_failure(
+                    bound.raw_node(),
+                    bound.source(),
+                    error,
+                    self.errors,
+                );
+                return;
+            }
+        }
+        // Recovery can include syntax beyond the recognized tier. Preserve the
+        // conservative alignment taint even when its raw tier was retained.
+        // Do not narrow taint by reparsing a percent prefix; any preceding
+        // alignment may be affected.
         self.lines.taint_previous_utterance();
         analyze_error_node(bound, self.errors);
     }

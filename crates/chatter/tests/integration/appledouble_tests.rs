@@ -40,7 +40,7 @@ fn to_json_skips_appledouble_sidecar() -> Result<(), TestError> {
     fs::write(dir.path().join("._good.cha"), VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(dir.path())
         .arg("--output-dir")
         .arg(out.path())

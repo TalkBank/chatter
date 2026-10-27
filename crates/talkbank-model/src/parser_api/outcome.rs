@@ -82,6 +82,14 @@ impl<T> ParseOutcome<T> {
         }
     }
 
+    /// Continue with a second consuming parser admission when a value exists.
+    pub fn and_then<U>(self, f: impl FnOnce(T) -> ParseOutcome<U>) -> ParseOutcome<U> {
+        match self {
+            Self::Parsed(value) => f(value),
+            Self::Rejected => ParseOutcome::Rejected,
+        }
+    }
+
     /// Convert to `Result`, using the provided error if rejected.
     #[inline]
     pub fn ok_or<E>(self, err: E) -> Result<T, E> {

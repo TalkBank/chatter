@@ -138,6 +138,9 @@ pub enum UtteranceContent {
     AnnotatedAction(Annotated<Action>),
     /// Freecode - free-form inline annotation (e.g., `[^ comment]`)
     Freecode(Freecode),
+    /// Annotation source with no preceding host; always invalid recovery.
+    #[serde(rename = "orphan_annotation")]
+    OrphanAnnotation(crate::model::OrphanAnnotation),
     /// CA separator (e.g., Comma, Semicolon, Colon, intonation markers)
     /// Can appear between content items or at end of utterance in CA mode
     /// Canonicalized output always has a space before the separator
@@ -151,7 +154,7 @@ pub enum UtteranceContent {
     /// Internal bullet/timestamp (media_url within content, not terminal)
     /// These mark timing for content segments, distinct from terminal bullets
     #[serde(rename = "internal_bullet")]
-    InternalBullet(super::super::Bullet),
+    InternalBullet(super::super::BulletState),
 
     /// Long feature begin marker (&{l=LABEL)
     #[serde(rename = "long_feature_begin")]

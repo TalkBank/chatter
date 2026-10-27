@@ -314,6 +314,12 @@ impl Default for OverrideFile {
 }
 
 impl OverrideFile {
+    /// Read a required decision source. Absence is an I/O failure, not an
+    /// empty set of decisions; append workflows use [`Self::read_or_default`].
+    pub fn read(path: &Path) -> Result<Self, OverrideFileError> {
+        Self::parse(&fs::read_to_string(path)?)
+    }
+
     /// Read an override file from disk, or return an empty default
     /// (with the current schema version) if the path does not exist.
     /// Used by `--write-override` so an operator can run a batch
@@ -326,8 +332,12 @@ impl OverrideFile {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
             Err(e) => return Err(OverrideFileError::Io(e)),
         };
+        Self::parse(&bytes)
+    }
+
+    fn parse(bytes: &str) -> Result<Self, OverrideFileError> {
         let file: OverrideFile =
-            toml::from_str(&bytes).map_err(|e| OverrideFileError::Toml(e.to_string()))?;
+            toml::from_str(bytes).map_err(|e| OverrideFileError::Toml(e.to_string()))?;
         if file.schema_version != CURRENT_SCHEMA_VERSION {
             return Err(OverrideFileError::UnsupportedSchemaVersion {
                 found: Some(file.schema_version),
@@ -337,15 +347,12 @@ impl OverrideFile {
         Ok(file)
     }
 
-    /// Serialize to TOML and write to disk via a `.tmp` + rename so
-    /// a crash mid-write leaves the prior file intact rather than
-    /// truncated.
+    /// Serialize completely into an exclusively owned sibling, then replace
+    /// the destination. Existing temporary siblings are never reused.
     pub fn write(&self, path: &Path) -> Result<(), OverrideFileError> {
         let serialized =
             toml::to_string_pretty(self).map_err(|e| OverrideFileError::Toml(e.to_string()))?;
-        let tmp = path.with_extension("toml.tmp");
-        fs::write(&tmp, serialized)?;
-        fs::rename(&tmp, path)?;
+        crate::atomic_file::PreparedFile::prepare(path, serialized.as_bytes())?.publish()?;
         Ok(())
     }
 

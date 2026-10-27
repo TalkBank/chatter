@@ -9,7 +9,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use super::pos::get_pos_description;
-use talkbank_model::model::{Mor, MorWord};
+use talkbank_model::model::{Mor, MorWord, WriteChat};
 
 /// Format one `%mor` item with human-readable breakdown.
 ///
@@ -71,7 +71,5 @@ fn format_mor_word_detailed(word: &MorWord) -> String {
 
 /// Format a `MorWord` in canonical CHAT `%mor` surface form.
 fn format_mor_word_simple(word: &MorWord) -> String {
-    let mut result = String::new();
-    let _ = word.write_chat(&mut result);
-    result
+    word.to_chat_string()
 }

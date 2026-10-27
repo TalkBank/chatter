@@ -21,49 +21,58 @@ fn age_spec_values_preserve_the_string_wire_contract() {
         &workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors"),
     )
     .expect("canonical error corpus");
-    let mut supported = 0;
-    let mut unsupported = 0;
-    for fixture in corpus.fixtures().iter().filter(|fixture| {
-        fixture
-            .path()
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("E517_"))
-    }) {
-        let file = talkbank_parser_tests::test_error::strict_parse(
-            parser.parse_chat_file(fixture.source()),
-        )
-        .expect("age specimen syntax");
-        for header in file.headers() {
-            let Header::ID(id) = header else {
-                continue;
-            };
-            let Some(age) = &id.age else {
-                continue;
-            };
-            match age {
-                AgeValue::Valid { .. } => supported += 1,
-                AgeValue::Unsupported(_) => unsupported += 1,
+    fn check(parser: &impl talkbank_model::ChatParser, corpus: &ChatCorpus) {
+        let mut supported = 0;
+        let mut unsupported = 0;
+        for fixture in corpus.fixtures().iter().filter(|fixture| {
+            fixture
+                .path()
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("E517_"))
+        }) {
+            let errors = ErrorCollector::new();
+            let file = parser
+                .parse_chat_file(fixture.source(), 0, &errors)
+                .into_option()
+                .expect("age specimen syntax");
+            assert!(
+                errors.into_vec().is_empty(),
+                "age syntax must survive for validation"
+            );
+            for header in file.headers() {
+                let Header::ID(id) = header else {
+                    continue;
+                };
+                let Some(age) = &id.age else {
+                    continue;
+                };
+                match age.components() {
+                    Some(_) => supported += 1,
+                    None => unsupported += 1,
+                }
+                assert_eq!(AgeValue::from(age.as_str()), *age);
+                assert_eq!(AgeValue::from(age.as_str().to_owned()), *age);
+                assert_eq!(age.to_string(), age.as_str());
+                assert_eq!(age.to_chat_string(), age.as_str());
+                let wire = serde_json::to_string(age).expect("age JSON");
+                assert_eq!(
+                    wire,
+                    serde_json::to_string(age.as_str()).expect("string JSON")
+                );
+                assert_eq!(
+                    serde_json::from_str::<AgeValue>(&wire).expect("age admission"),
+                    *age
+                );
             }
-            assert_eq!(AgeValue::from(age.as_str()), *age);
-            assert_eq!(AgeValue::from(age.as_str().to_owned()), *age);
-            assert_eq!(age.to_string(), age.as_str());
-            assert_eq!(age.to_chat_string(), age.as_str());
-            let wire = serde_json::to_string(age).expect("age JSON");
-            assert_eq!(
-                wire,
-                serde_json::to_string(age.as_str()).expect("string JSON")
-            );
-            assert_eq!(
-                serde_json::from_str::<AgeValue>(&wire).expect("age admission"),
-                *age
-            );
         }
+        assert!(
+            supported > 0 && unsupported > 0,
+            "both preserved states need canonical witnesses: {supported}/{unsupported}"
+        );
     }
-    assert!(
-        supported > 0 && unsupported > 0,
-        "both preserved states need canonical witnesses: {supported}/{unsupported}"
-    );
+    check(&parser, &corpus);
+    check(&talkbank_parser_re2c::Re2cParser::new(), &corpus);
     for wire in ["null", "0", "[]", "{}"] {
         assert!(serde_json::from_str::<AgeValue>(wire).is_err(), "{wire}");
     }
@@ -409,10 +418,16 @@ fn missing_id_spec_keeps_declared_speaker_visible_without_metadata() {
     assert_eq!(declared.len(), 2);
     assert_eq!(declared[0].code().as_str(), "CHI");
     assert_eq!(declared[0].name().map(|name| name.as_str()), Some("Ruth"));
-    assert_eq!(declared[0].role().as_str(), "Target_Child");
+    assert_eq!(
+        declared[0].role().expect("authored role").as_str(),
+        "Target_Child"
+    );
     assert!(declared[0].id_metadata().is_none());
     assert_eq!(declared[1].code().as_str(), "MOT");
-    assert_eq!(declared[1].role().as_str(), "Mother");
+    assert_eq!(
+        declared[1].role().expect("authored role").as_str(),
+        "Mother"
+    );
     assert!(declared[1].id_metadata().is_some());
     assert!(file.get_participant("CHI").is_none());
     assert!(file.get_participant("MOT").is_some());
@@ -710,16 +725,8 @@ fn clock_context_reference_keeps_start_and_timing_in_minutes_seconds() {
         for header in file.headers() {
             match header {
                 Header::TimeStart { start: time } => {
-                    let TimeStartValue::Parsed {
-                        hours,
-                        minutes,
-                        seconds,
-                        ..
-                    } = time
-                    else {
-                        panic!("structured start time");
-                    };
-                    assert_eq!((*hours, *minutes, *seconds), (0, 59, 59));
+                    let time = time.time().expect("structured start time");
+                    assert_eq!((time.hours, time.minutes, time.seconds), (0, 59, 59));
                     seen[0] += 1;
                 }
                 Header::TimeDuration { duration } => {
@@ -895,11 +902,11 @@ fn timed_pause_specs_preserve_unrepresentable_numeric_projections() {
         };
         assert_eq!(duration.total_millis(), millis);
         assert_eq!(
-            matches!(duration, PauseTimedDuration::Parsed(_)),
+            matches!(duration.projection(), PauseTimedDuration::Parsed(_)),
             millis.is_some()
         );
         let encoded = serde_json::to_string(duration).expect("pause JSON");
-        let decoded: PauseTimedDuration =
+        let decoded: talkbank_model::model::TimedPause =
             serde_json::from_str(&encoded).expect("pause JSON admission");
         assert_eq!(
             &decoded, duration,
@@ -1299,7 +1306,7 @@ fn postcode_specs_retain_opaque_labels_and_the_real_terminator() {
             .content
             .postcodes
             .iter()
-            .map(|postcode| postcode.text.as_str())
+            .map(|postcode| postcode.text().expect("admitted postcode"))
             .collect();
         assert_eq!(actual, labels);
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
@@ -1317,66 +1324,69 @@ fn reference_clan_coordinates_skip_and_refuse_hidden_headers() {
     let mut hidden_witnesses = [0; 5];
     let mut visible_witnesses = 0;
     for fixture in corpus.fixtures() {
-        let mut offset = 0;
-        let mut visible = 0;
-        for (index, line) in fixture.source().split_inclusive('\n').enumerate() {
-            let content = line.trim_end_matches(['\r', '\n']);
-            let name = content.split_once(':').map_or(content, |(name, _)| name);
-            let hidden = ["@UTF8", "@PID", "@Font", "@Color words", "@Window"]
-                .iter()
-                .position(|candidate| *candidate == name)
-                .filter(|kind| {
-                    *kind != 2
-                        || content
-                            .split_once(':')
-                            .is_some_and(|(_, value)| value.trim_start().starts_with("CAfont:"))
-                });
-            match hidden {
-                Some(kind) => hidden_witnesses[kind] += 1,
-                None => {
-                    visible += 1;
-                    visible_witnesses += 1;
+        for ending in ["\n", "\r\n", "\r"] {
+            let source = fixture.source().replace("\r\n", "\n").replace('\n', ending);
+            let mut offset = 0;
+            let mut visible = 0;
+            for (index, line) in source.split_inclusive(ending).enumerate() {
+                let content = line.trim_end_matches(['\r', '\n']);
+                let name = content.split_once(':').map_or(content, |(name, _)| name);
+                let hidden = ["@UTF8", "@PID", "@Font", "@Color words", "@Window"]
+                    .iter()
+                    .position(|candidate| *candidate == name)
+                    .filter(|kind| {
+                        *kind != 2
+                            || content
+                                .split_once(':')
+                                .is_some_and(|(_, value)| value.trim_start().starts_with("CAfont:"))
+                    });
+                match hidden {
+                    Some(kind) => hidden_witnesses[kind] += 1,
+                    None => {
+                        visible += 1;
+                        visible_witnesses += 1;
+                    }
                 }
-            }
-            for (cached_line, cached_column) in [
-                (None, None),
-                (Some(index + 1), Some(1)),
-                (Some(0), Some(1)),
-                (Some(index + 1), None),
-                (None, Some(1)),
-            ] {
-                // Only a complete one-based pair is a position; zero or
-                // partial cached coordinates leave the span to be measured.
-                let span = Span::new(offset, offset + content.len());
-                let location = match cached_line
-                    .zip(cached_column)
-                    .and_then(|(line, column)| talkbank_model::LineColumn::one_based(line, column))
-                {
-                    Some(position) => DiagnosticLocation::known_at(span, position),
-                    None => DiagnosticLocation::new(span),
-                };
-                let mapped = resolve_clan_location(&location, fixture.source());
-                if hidden.is_some() {
-                    let error = mapped.expect_err("hidden header has no editor location");
-                    assert_eq!(
-                        error,
-                        talkbank_model::ClanLocationError::HiddenLine {
-                            source_line: index + 1
-                        }
-                    );
-                    assert!(error.to_string().contains("hidden"));
-                } else {
-                    let mapped = mapped.expect("visible reference line");
-                    assert_eq!(
-                        (mapped.line, mapped.column),
-                        (visible, 1),
-                        "{} source line {}",
-                        fixture.path().display(),
-                        index + 1
-                    );
+                for (cached_line, cached_column) in [
+                    (None, None),
+                    (Some(index + 1), Some(1)),
+                    (Some(0), Some(1)),
+                    (Some(index + 1), None),
+                    (None, Some(1)),
+                ] {
+                    // Only a complete one-based pair is a position; zero or
+                    // partial cached coordinates leave the span to be measured.
+                    let span = Span::new(offset, offset + content.len());
+                    let location =
+                        match cached_line.zip(cached_column).and_then(|(line, column)| {
+                            talkbank_model::LineColumn::one_based(line, column)
+                        }) {
+                            Some(position) => DiagnosticLocation::known_at(span, position),
+                            None => DiagnosticLocation::new(span),
+                        };
+                    let mapped = resolve_clan_location(&location, &source);
+                    if hidden.is_some() {
+                        let error = mapped.expect_err("hidden header has no editor location");
+                        assert_eq!(
+                            error,
+                            talkbank_model::ClanLocationError::HiddenLine {
+                                source_line: index + 1
+                            }
+                        );
+                        assert!(error.to_string().contains("hidden"));
+                    } else {
+                        let mapped = mapped.expect("visible reference line");
+                        assert_eq!(
+                            (mapped.line, mapped.column),
+                            (visible, 1),
+                            "{} source line {}",
+                            fixture.path().display(),
+                            index + 1
+                        );
+                    }
                 }
+                offset += line.len();
             }
-            offset += line.len();
         }
     }
     assert!(hidden_witnesses.iter().all(|count| *count > 0));
@@ -2437,7 +2447,7 @@ fn comma_specs_keep_main_tier_semantics_separate_from_dependent_recovery() {
                 assert_eq!(parse_codes, [ErrorCode::UnparsableContent]);
                 assert_eq!(
                     all_codes,
-                    [ErrorCode::UnparsableContent, ErrorCode::TierValidationError]
+                    [ErrorCode::UnparsableContent, ErrorCode::UnparsableContent]
                 );
             }
         }
@@ -2487,25 +2497,46 @@ fn morphology_specs_distinguish_empty_pos_from_split_tails() {
     }
 }
 
+/// Namespace expectations stay distinct while sharing read-only tier projections.
+#[derive(Clone, Copy)]
+enum LabelNamespace {
+    Unsupported,
+    UserDefined,
+}
+
+impl LabelNamespace {
+    fn unsupported_diagnostic_count(self) -> usize {
+        match self {
+            Self::Unsupported => 1,
+            Self::UserDefined => 0,
+        }
+    }
+
+    fn content(self, tier: &talkbank_model::DependentTier) -> Option<&str> {
+        use talkbank_model::DependentTier;
+        match (self, tier) {
+            (Self::Unsupported, DependentTier::Unsupported(payload)) => payload.content.as_deref(),
+            (Self::UserDefined, DependentTier::UserDefined(payload)) => payload.content.as_deref(),
+            _ => panic!("wrong tier namespace: {tier:?}"),
+        }
+    }
+}
+
 /// The CHECK short-name exemption applies to the user-defined namespace,
 /// not arbitrary long labels. Preserve full labels and payloads at this boundary.
 #[test]
 fn tier_namespace_specs_preserve_complete_labels_and_diagnostics() {
-    use talkbank_model::{ErrorCode, model::DependentTier};
-    enum Namespace {
-        Unsupported,
-        UserDefined,
-    }
+    use talkbank_model::ErrorCode;
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
     for (example, label, namespace) in [
-        (1, "foo", Namespace::Unsupported),
-        (2, "xfoo", Namespace::UserDefined),
-        (3, "xabcdefg", Namespace::UserDefined),
-        (4, "xabcdefgh", Namespace::UserDefined),
-        (5, "xtrial2", Namespace::UserDefined),
-        (6, "zabcdefgh", Namespace::Unsupported),
+        (1, "foo", LabelNamespace::Unsupported),
+        (2, "xfoo", LabelNamespace::UserDefined),
+        (3, "xabcdefg", LabelNamespace::UserDefined),
+        (4, "xabcdefgh", LabelNamespace::UserDefined),
+        (5, "xtrial2", LabelNamespace::UserDefined),
+        (6, "zabcdefgh", LabelNamespace::Unsupported),
     ] {
         let source = std::fs::read_to_string(corpus.join(format!("E605_{example}.cha")))
             .expect("generated canonical tier-namespace spec");
@@ -2514,14 +2545,11 @@ fn tier_namespace_specs_preserve_complete_labels_and_diagnostics() {
         assert!(errors.to_vec().is_empty(), "clean syntax in E605_{example}");
         let utterance = file.utterances().next().expect("retained speech");
         assert_eq!(utterance.dependent_tiers.len(), 1);
-        let (payload, expected_count) = match (&utterance.dependent_tiers[0].tier, namespace) {
-            (DependentTier::Unsupported(payload), Namespace::Unsupported) => (payload, 1),
-            (DependentTier::UserDefined(payload), Namespace::UserDefined) => (payload, 0),
-            (tier, _) => panic!("wrong namespace in E605_{example}: {tier:?}"),
-        };
-        assert_eq!(payload.label.as_str(), label);
-        assert_eq!(payload.content.as_deref(), Some("unknown tier content"));
-        let span = payload.location;
+        let tier = &utterance.dependent_tiers[0].tier;
+        assert_eq!(tier.kind(), label);
+        assert_eq!(namespace.content(tier), Some("unknown tier content"));
+        let span = tier.location();
+        let expected_count = namespace.unsupported_diagnostic_count();
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let observed = errors.into_vec();
         assert_eq!(
@@ -2543,27 +2571,23 @@ fn tier_namespace_specs_preserve_complete_labels_and_diagnostics() {
 /// unsupported label with the intentional user-defined namespace.
 #[test]
 fn empty_tier_specs_preserve_namespace_and_content_presence() {
-    use talkbank_model::{ErrorCode, model::DependentTier};
-    enum Namespace {
-        Unsupported,
-        UserDefined,
-    }
+    use talkbank_model::ErrorCode;
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
     for (example, namespace, content, report_empty) in [
-        (7, Namespace::Unsupported, None, false),
-        (8, Namespace::Unsupported, None, false),
-        (9, Namespace::UserDefined, Some("\u{00a0}"), true),
+        (7, LabelNamespace::Unsupported, None, false),
+        (8, LabelNamespace::Unsupported, None, false),
+        (9, LabelNamespace::UserDefined, Some("\u{00a0}"), true),
         (
             10,
-            Namespace::Unsupported,
+            LabelNamespace::Unsupported,
             Some("unknown tier content"),
             false,
         ),
         (
             11,
-            Namespace::UserDefined,
+            LabelNamespace::UserDefined,
             Some("unknown tier content"),
             false,
         ),
@@ -2580,16 +2604,13 @@ fn empty_tier_specs_preserve_namespace_and_content_presence() {
             "retain E756_{example} tier"
         );
         let tier = &utterance.dependent_tiers[0].tier;
-        let (payload, label, unsupported) = match (tier, namespace) {
-            (DependentTier::Unsupported(payload), Namespace::Unsupported) => (payload, "foo", true),
-            (DependentTier::UserDefined(payload), Namespace::UserDefined) => {
-                (payload, "xfoo", false)
-            }
-            _ => panic!("wrong tier namespace in E756_{example}: {tier:?}"),
+        let label = match namespace {
+            LabelNamespace::Unsupported => "foo",
+            LabelNamespace::UserDefined => "xfoo",
         };
-        assert_eq!(payload.label.as_str(), label);
-        assert_eq!(payload.content.as_deref(), content);
-        let span = payload.location;
+        assert_eq!(tier.kind(), label);
+        assert_eq!(namespace.content(tier), content);
+        let span = tier.location();
         assert_eq!(tier.empty_content_location(), report_empty.then_some(span));
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let observed = errors.into_vec();
@@ -2610,7 +2631,7 @@ fn empty_tier_specs_preserve_namespace_and_content_presence() {
         }
         assert_eq!(
             observed.len(),
-            usize::from(report_empty) + usize::from(unsupported),
+            usize::from(report_empty) + namespace.unsupported_diagnostic_count(),
             "preserve label/content reporting policy in E756_{example}: {observed:?}"
         );
         assert_eq!(
@@ -2618,7 +2639,7 @@ fn empty_tier_specs_preserve_namespace_and_content_presence() {
                 .iter()
                 .filter(|error| error.code == ErrorCode::UnsupportedDependentTier)
                 .count(),
-            usize::from(unsupported)
+            namespace.unsupported_diagnostic_count()
         );
     }
 }
@@ -2745,6 +2766,25 @@ fn assert_document_rebasing(errors: &[talkbank_model::ParseError], source: &str)
     (checked, unlocated)
 }
 
+/// Independent byte oracle: CRLF ends at its LF, while a lone CR ends itself.
+/// Do not use the production physical-line iterator or indexed lookup here.
+fn expected_physical_position(source: &str, offset: usize) -> talkbank_model::LineColumn {
+    use std::num::NonZeroUsize;
+    let mut position = talkbank_model::LineColumn {
+        line: NonZeroUsize::MIN,
+        column: NonZeroUsize::MIN,
+    };
+    for (index, byte) in source.bytes().take(offset).enumerate() {
+        if byte == b'\n' || (byte == b'\r' && source.as_bytes().get(index + 1) != Some(&b'\n')) {
+            position.line = position.line.saturating_add(1);
+            position.column = NonZeroUsize::MIN;
+        } else {
+            position.column = position.column.saturating_add(1);
+        }
+    }
+    position
+}
+
 /// Project actual diagnostics to the source slice they identify. Snippets have
 /// their own coordinates and must not be guessed from relative text lengths.
 fn assert_fragment_projection(
@@ -2789,13 +2829,7 @@ fn assert_fragment_projection(
             assert_eq!(excerpt.span, Span::new(0, fragment.len()));
             assert_eq!(
                 excerpt.line_offset,
-                Some(
-                    source.as_bytes()[..origin]
-                        .iter()
-                        .filter(|byte| **byte == b'\n')
-                        .count()
-                        + 1
-                )
+                Some(expected_physical_position(source, origin).line)
             );
             assert_eq!(excerpt.found, original_context.found);
             assert_eq!(excerpt.expected, original_context.expected);
@@ -3053,14 +3087,9 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
                 .span()
                 .expect("located diagnostic")
                 .start();
-            let prefix = &fixture.source().as_bytes()[..offset];
-            let line = prefix.iter().filter(|byte| **byte == b'\n').count() + 1;
-            let column = offset
-                - prefix
-                    .iter()
-                    .rposition(|byte| *byte == b'\n')
-                    .map_or(0, |position| position + 1)
-                + 1;
+            let expected = expected_physical_position(fixture.source(), offset);
+            let line = expected.line.get();
+            let column = expected.column.get();
             assert_eq!(
                 presentation.position().line.get(),
                 line,

@@ -12,13 +12,13 @@ use talkbank_model::model::{
     AgeValue, ChatFile, CorpusName, CustomIdField, EducationDescription, GroupName, Header,
     IDHeader, LanguageCode, Line, ParticipantRole, SesValue, Sex, SpeakerCode,
 };
-use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::Url;
 
 use super::LspBackendError;
 use super::documents;
 use super::execute_commands::{DocumentUriRequest, IdLineFieldsRequest, ParticipantCommandRequest};
 use super::state::Backend;
+use super::utils::LineIndex;
 
 /// Feature-oriented execute-command service for participant commands.
 pub(crate) struct ParticipantCommandService;
@@ -29,26 +29,13 @@ impl ParticipantCommandService {
         &self,
         backend: &Backend,
         request: ParticipantCommandRequest,
-    ) -> LspResult<Option<Value>> {
+    ) -> Result<Value, LspBackendError> {
         match request {
-            ParticipantCommandRequest::GetParticipants(request) => command_response(
-                handle_get_participants(backend, &request),
-                "Participant error",
-            ),
-            ParticipantCommandRequest::FormatIdLine(request) => {
-                command_response(handle_format_id_line(&request), "Format error")
+            ParticipantCommandRequest::GetParticipants(request) => {
+                handle_get_participants(backend, &request)
             }
+            ParticipantCommandRequest::FormatIdLine(request) => handle_format_id_line(&request),
         }
-    }
-}
-
-fn command_response(
-    result: Result<Value, LspBackendError>,
-    prefix: &str,
-) -> LspResult<Option<Value>> {
-    match result {
-        Ok(json) => Ok(Some(json)),
-        Err(error) => Ok(Some(Value::String(format!("{prefix}: {error}")))),
     }
 }
 
@@ -237,31 +224,4 @@ fn get_chat_file(
     doc: &str,
 ) -> Result<Arc<ChatFile>, LspBackendError> {
     crate::backend::chat_file_cache::load_chat_file(backend, uri, doc)
-}
-
-/// Simple byte-offset to line-number index.
-struct LineIndex {
-    /// Byte offsets for the start of each line.
-    line_starts: Vec<usize>,
-}
-
-impl LineIndex {
-    /// Build a line index for one document string.
-    fn new(text: &str) -> Self {
-        let mut line_starts = vec![0];
-        for (i, byte) in text.bytes().enumerate() {
-            if byte == b'\n' {
-                line_starts.push(i + 1);
-            }
-        }
-        Self { line_starts }
-    }
-
-    /// Convert a byte offset into a zero-based line number.
-    fn byte_to_line(&self, offset: usize) -> usize {
-        match self.line_starts.binary_search(&offset) {
-            Ok(line) => line,
-            Err(line) => line.saturating_sub(1),
-        }
-    }
 }

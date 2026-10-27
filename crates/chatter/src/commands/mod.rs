@@ -34,6 +34,7 @@ pub mod list_checks;
 pub mod new_file;
 pub mod normalize;
 mod pseudonymize;
+mod publication;
 pub mod rediarize;
 pub mod sanity_scan;
 pub mod schema;
@@ -45,7 +46,7 @@ pub mod watch;
 
 pub use alignment::show_alignment;
 pub use clean::clean_file;
-pub use dispatch::{CommandContext, dispatch_command};
+pub use dispatch::dispatch_command;
 pub use fix::run_fix;
 pub use json::{chat_to_json, json_to_chat};
 pub use new_file::create_new_file;

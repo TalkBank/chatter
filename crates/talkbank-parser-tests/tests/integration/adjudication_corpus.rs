@@ -117,15 +117,10 @@ fn reference_scripted_choice_shapes_require_admission_before_replay() {
         std::fs::write(script.path(), format!(
             "schema_version = 2\n[[decisions]]\nsession_id = 'reference-control'\nkind = {kind}\nchoice = {}\n", case.choice
         )).expect("authored decision TOML");
-        let mut prompter = ScriptedPrompter::read_toml(script.path()).expect("script admission");
+        let prompter = ScriptedPrompter::read_toml(script.path()).expect("script admission");
         let mut overrides = OverrideFile::default();
-        let outcome = run_adjudication(
-            &mut pending,
-            &mut overrides,
-            &mut prompter,
-            "operator".into(),
-        )
-        .expect("compatible explicit choice");
+        let outcome = run_adjudication(&mut pending, &mut overrides, prompter, "operator".into())
+            .expect("compatible explicit choice");
         assert_eq!(outcome.resolved_count(), 1);
         assert!(pending.entries.is_empty());
         let accepted = overrides
@@ -134,7 +129,8 @@ fn reference_scripted_choice_shapes_require_admission_before_replay() {
         assert_eq!(accepted.adult_roles["MOT"].code, case.expected_code);
         assert_eq!(accepted.adult_roles["MOT"].tag, case.expected_role);
         let mapping = accepted.to_mapping_spec().expect("typed replay admission");
-        let output = apply_mapping_chat(&source, &mapping);
+        let output =
+            apply_mapping_chat(&source, &mapping).expect("admitted participant declaration");
         let replay = strict_parse(parser.parse_chat_file(&output)).expect("replayed CHAT");
         assert_eq!(replay.utterances().count(), source.utterances().count());
         for (actual, original) in replay.utterances().zip(source.utterances()) {
@@ -332,8 +328,8 @@ fn reference_sanity_scan_requires_operator_acceptance_before_mapping_replay() {
                 assert!(
                     matches!(pending.write(&invalid_destination),
                     Err(AdjudicationError::FileIo { path, .. })
-                    if path == invalid_destination.with_extension("toml.tmp")),
-                    "staging failure must identify the actual failed write path"
+                    if path == invalid_destination),
+                    "staging failure must identify the requested destination, not invent a temporary path"
                 );
                 assert_eq!(
                     std::fs::read(pending_file.path()).expect("saved queue survives"),
@@ -377,21 +373,22 @@ fn reference_sanity_scan_requires_operator_acceptance_before_mapping_replay() {
                 std::fs::write(decisions_file.path(), format!(
                     "schema_version = 2\n[[decisions]]\nsession_id = {fixture:?}\nkind = \"sanity-scan-misclassification\"\nchoice = {{ kind = \"accept-suggested\", note = \"Authored acceptance control, not an identity inference\" }}\n"
                 )).expect("authored operator wire input");
-                let mut prompter = ScriptedPrompter::read_toml(decisions_file.path())
+                let prompter = ScriptedPrompter::read_toml(decisions_file.path())
                     .expect("read explicit operator acceptance");
                 run_adjudication(
                     &mut pending,
                     &mut overrides,
-                    &mut prompter,
+                    prompter,
                     "operator".to_owned(),
                 )
                 .expect("explicit acceptance");
                 assert!(pending.entries.is_empty());
                 let accepted = overrides.get(fixture).expect("accepted decision");
                 let mapping = accepted.to_mapping_spec().expect("admitted replay mapping");
-                let replay =
-                    strict_parse(parser.parse_chat_file(&apply_mapping_chat(&file, &mapping)))
-                        .expect("replayed CHAT syntax");
+                let replay = strict_parse(parser.parse_chat_file(
+                    &apply_mapping_chat(&file, &mapping).expect("admitted participant declaration"),
+                ))
+                .expect("replayed CHAT syntax");
                 let retained: Vec<_> = file
                     .utterances()
                     .filter(|turn| turn.main.speaker.as_str() == "CHI")
@@ -461,9 +458,10 @@ fn reference_sanity_scan_requires_operator_acceptance_before_mapping_replay() {
             let mapping =
                 talkbank_transform::speaker_id::parse_mapping_spec(&format!("{removed}=drop"))
                     .expect("explicit speaker-removal control");
-            let remaining =
-                strict_parse(parser.parse_chat_file(&apply_mapping_chat(&file, &mapping)))
-                    .expect("speaker removal preserves CHAT syntax");
+            let remaining = strict_parse(parser.parse_chat_file(
+                &apply_mapping_chat(&file, &mapping).expect("admitted participant declaration"),
+            ))
+            .expect("speaker removal preserves CHAT syntax");
             let retained: Vec<_> = file
                 .utterances()
                 .filter(|turn| turn.main.speaker.as_str() != removed)
@@ -496,6 +494,7 @@ fn reference_adjudication_refusals_preserve_uncommitted_queue_and_resume() {
         Prompt,
         Kind,
         Mapping,
+        Trailing,
     }
     let parser = TreeSitterParser::new().expect("parser");
     let corpus = ChatCorpus::reference().expect("canonical corpus");
@@ -576,22 +575,30 @@ fn reference_adjudication_refusals_preserve_uncommitted_queue_and_resume() {
             1,
             Refusal::Mapping,
         ),
+        (
+            entries
+                .iter()
+                .map(|entry| (entry.session_id.clone(), choose_mother_role()))
+                .chain(std::iter::once(first()))
+                .collect(),
+            3,
+            Refusal::Trailing,
+        ),
     ] {
         let mut pending = PendingAdjudications {
             entries: entries.clone(),
             ..PendingAdjudications::default()
         };
         let mut overrides = OverrideFile::default();
-        let mut prompter = ScriptedPrompter::from_decisions(decisions);
-        let error = run_adjudication(
-            &mut pending,
-            &mut overrides,
-            &mut prompter,
-            "operator".into(),
-        )
-        .expect_err("scripted refusal");
+        let prompter = ScriptedPrompter::from_decisions(decisions);
+        let error = run_adjudication(&mut pending, &mut overrides, prompter, "operator".into())
+            .expect_err("scripted refusal");
         assert!(
             match (refusal, &error) {
+                (
+                    Refusal::Trailing,
+                    AdjudicationError::UnconsumedScriptedDecision { session_id },
+                ) => session_id == &entries[0].session_id,
                 (Refusal::Prompt, AdjudicationError::PrompterFailed { .. })
                 | (Refusal::Kind, AdjudicationError::DecisionKindMismatch { .. }) => true,
                 (
@@ -615,14 +622,14 @@ fn reference_adjudication_refusals_preserve_uncommitted_queue_and_resume() {
         );
         assert_eq!(overrides.entries.len(), committed);
         let accepted = serde_json::to_value(&overrides).expect("accepted prefix wire");
-        let mut retry = ScriptedPrompter::from_decisions(
+        let retry = ScriptedPrompter::from_decisions(
             pending
                 .entries
                 .iter()
                 .map(|entry| (entry.session_id.clone(), choose_mother_role()))
                 .collect(),
         );
-        let outcome = run_adjudication(&mut pending, &mut overrides, &mut retry, "operator".into())
+        let outcome = run_adjudication(&mut pending, &mut overrides, retry, "operator".into())
             .expect("resume remaining decisions");
         assert_eq!(outcome.resolved_count(), 3 - committed);
         assert!(pending.entries.is_empty());
@@ -651,7 +658,8 @@ fn reference_adjudication_refusals_preserve_uncommitted_queue_and_resume() {
                     .expect("authored identity mapping command");
                 assert_eq!(parsed, mapping, "wire and record admission must agree");
                 assert_eq!(
-                    talkbank_transform::speaker_id::apply_mapping_chat(file, &parsed),
+                    talkbank_transform::speaker_id::apply_mapping_chat(file, &parsed)
+                        .expect("admitted participant declaration"),
                     *source,
                     "operator mapping must preserve the original CHAT bytes"
                 );
@@ -676,7 +684,8 @@ fn reference_adjudication_refusals_preserve_uncommitted_queue_and_resume() {
             let drop_mapping = talkbank_transform::speaker_id::parse_mapping_spec(" MOT = drop ")
                 .expect("authored drop command");
             let dropped_source =
-                talkbank_transform::speaker_id::apply_mapping_chat(file, &drop_mapping);
+                talkbank_transform::speaker_id::apply_mapping_chat(file, &drop_mapping)
+                    .expect("admitted participant declaration");
             let dropped = strict_parse(parser.parse_chat_file(&dropped_source))
                 .expect("speaker removal retains parseable CHAT");
             let remaining: Vec<_> = file
@@ -691,7 +700,8 @@ fn reference_adjudication_refusals_preserve_uncommitted_queue_and_resume() {
                 );
             }
             assert_eq!(
-                talkbank_transform::speaker_id::apply_mapping_chat(file, &mapping),
+                talkbank_transform::speaker_id::apply_mapping_chat(file, &mapping)
+                    .expect("admitted participant declaration"),
                 *source,
                 "replaying the confirmed identity mapping preserves the source"
             );

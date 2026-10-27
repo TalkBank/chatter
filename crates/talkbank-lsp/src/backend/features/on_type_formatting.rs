@@ -5,43 +5,48 @@
 
 use tower_lsp::lsp_types::*;
 
-/// Generate on-type formatting edits when `:` is typed on a tier line.
+/// A tab insertion admitted against the current buffer and exact wire cursor.
+/// This is a typing convention, not admission of a valid CHAT tier.
+struct TierSeparatorInsertion(Position);
+
+impl TierSeparatorInsertion {
+    fn at(document: &str, position: Position, ch: &str) -> Option<Self> {
+        if ch != ":" {
+            return None;
+        }
+        let line = crate::backend::utils::protocol_lines(document)
+            .map(|line| line.text())
+            .nth(position.line as usize)?;
+        if line.encode_utf16().count() != position.character as usize {
+            return None;
+        }
+        let prefix = line.strip_suffix(':')?.strip_prefix(['*', '%'])?;
+        // A colon in content, an empty name or whitespace is not the unfinished
+        // prefix this convenience formats. An existing tab also prevents entry.
+        if prefix.is_empty() || prefix.chars().any(|ch| ch.is_whitespace() || ch == ':') {
+            return None;
+        }
+        Some(Self(position))
+    }
+
+    fn into_edit(self) -> TextEdit {
+        TextEdit {
+            range: Range {
+                start: self.0,
+                end: self.0,
+            },
+            new_text: "\t".to_owned(),
+        }
+    }
+}
+
+/// Insert a tab only immediately after the newly typed tier-prefix colon.
+/// Positions inconsistent with that prefix, including out-of-range and
+/// mid-character columns, do not authorize an edit.
 pub fn on_type_formatting(document: &str, position: Position, ch: &str) -> Option<Vec<TextEdit>> {
-    if ch != ":" {
-        return None;
-    }
-
-    let lines: Vec<&str> = document.lines().collect();
-    let line_idx = position.line as usize;
-    let line = lines.get(line_idx)?;
-
-    // Only trigger on main tier (*SPEAKER:) or dependent tier (%tier:) lines.
-    let is_main_tier = line.starts_with('*') && line.ends_with(':');
-    let is_dep_tier = line.starts_with('%') && line.ends_with(':');
-
-    if !is_main_tier && !is_dep_tier {
-        return None;
-    }
-
-    // Don't insert if there's already a tab after the colon.
-    let byte =
-        crate::backend::utils::position_to_offset(line, Position::new(0, position.character));
-    if line.as_bytes().get(byte) == Some(&b'\t') {
-        return None;
-    }
-
-    let insert_pos = Position {
-        line: position.line,
-        character: position.character,
-    };
-
-    Some(vec![TextEdit {
-        range: Range {
-            start: insert_pos,
-            end: insert_pos,
-        },
-        new_text: "\t".to_string(),
-    }])
+    Some(vec![
+        TierSeparatorInsertion::at(document, position, ch)?.into_edit(),
+    ])
 }
 
 #[cfg(test)]

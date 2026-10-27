@@ -57,7 +57,7 @@ impl WriteChat for GraTierType {
     ///
     /// Keeping this formatter on the enum keeps prefix logic co-located with
     /// tier-kind definitions.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             GraTierType::Gra => w.write_str("%gra"),
         }

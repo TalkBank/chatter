@@ -269,7 +269,7 @@ fn cache_housekeeping_notes_stay_off_stderr_in_json_mode() -> Result<(), TestErr
         .arg("validate")
         .arg("--format")
         .arg("json")
-        .arg("--force")
+        .arg("--refresh-cache")
         .arg(&file_path)
         .assert()
         .success()
@@ -377,7 +377,7 @@ fn test_validate_directory_ignores_appledouble_sidecars() -> Result<(), TestErro
     crate::common::chatter_cmd()
         .arg("validate")
         .arg(dir.path())
-        .arg("--force")
+        .arg("--refresh-cache")
         .arg("--tui-mode")
         .arg("disable")
         .assert()
@@ -418,7 +418,7 @@ fn test_normalize_to_stdout() -> Result<(), TestError> {
     fs::write(&file_path, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("normalize")
+        .arg("format")
         .arg(&file_path)
         .assert()
         .success()
@@ -437,7 +437,7 @@ fn test_normalize_to_file() -> Result<(), TestError> {
     fs::write(&input_path, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("normalize")
+        .arg("format")
         .arg(&input_path)
         .arg("--output")
         .arg(&output_path)
@@ -465,7 +465,7 @@ fn test_normalize_with_validation() -> Result<(), TestError> {
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
     crate::common::chatter_cmd()
-        .arg("normalize")
+        .arg("format")
         .arg(&file_path)
         .arg("--validate")
         .assert()
@@ -485,7 +485,7 @@ fn test_to_json_stdout() -> Result<(), TestError> {
     fs::write(&file_path, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&file_path)
         .assert()
         .success()
@@ -504,7 +504,7 @@ fn test_to_json_file() -> Result<(), TestError> {
     fs::write(&input_path, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_path)
         .arg("--output")
         .arg(&output_path)
@@ -530,7 +530,7 @@ fn test_to_json_pretty_vs_compact() -> Result<(), TestError> {
 
     // Pretty (default)
     let pretty_output = crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&file_path)
         .output()?;
 
@@ -539,7 +539,7 @@ fn test_to_json_pretty_vs_compact() -> Result<(), TestError> {
 
     // Compact
     let compact_output = crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&file_path)
         .arg("--compact")
         .output()?;
@@ -569,7 +569,7 @@ fn test_to_json_with_validation() -> Result<(), TestError> {
     fs::write(&file_path, INVALID_CHAT_MISSING_END)?;
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&file_path)
         .arg("--validate")
         .assert()
@@ -677,7 +677,7 @@ fn max_errors_counts_errors_not_warnings() -> Result<(), TestError> {
          @ID:\teng|corpus|CHI|||||Target_Child|||\n@Media:\tsession, audio\n\
          *CHI:\thello .\u{15}0_1500\u{15}\n@End\n",
     )?;
-    let (code, stops) = json_stop_records(dir.path(), &["--max-errors", "1", "--force"])?;
+    let (code, stops) = json_stop_records(dir.path(), &["--max-errors", "1", "--refresh-cache"])?;
     assert_eq!(
         stops,
         Vec::<serde_json::Value>::new(),
@@ -701,7 +701,7 @@ fn json_mode_gives_a_warnings_only_file_one_valid_record() -> Result<(), TestErr
     let output = crate::common::chatter_cmd()
         .arg("validate")
         .arg(dir.path())
-        .args(["--format", "json", "--force"])
+        .args(["--format", "json", "--refresh-cache"])
         .output()?;
     assert_eq!(
         output.status.code(),
@@ -733,7 +733,7 @@ fn json_mode_with_a_closed_stdout_fails_without_a_panic() -> Result<(), TestErro
         .env("TALKBANK_CHAT_CACHE_DIR", cache.path())
         .arg("validate")
         .arg(dir.path())
-        .args(["--format", "json", "--force"])
+        .args(["--format", "json", "--refresh-cache"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()?;
@@ -767,7 +767,7 @@ fn max_errors_reached_by_the_last_file_is_not_a_stop() -> Result<(), TestError> 
 }
 
 /// JSON mode keeps stderr empty by construction: notes about the run
-/// (`--suppress`, the deprecated `--check-xphon`) are `notice` records, and
+/// (`--suppress`) are `notice` records, and
 /// an input that cannot be read is a `read_error` record in the run's own
 /// results that fails it.
 #[test]
@@ -802,12 +802,11 @@ fn json_mode_says_everything_on_stdout() -> Result<(), TestError> {
         out.iter()
             .any(|r| r["type"] == "notice" && r["notice"] == "suppressing")
     );
-    let (code, out) = records(&[file.as_os_str(), "--check-xphon".as_ref()])?;
-    assert_eq!(code, Some(0));
-    assert!(
-        out.iter()
-            .any(|r| r["type"] == "notice" && r["flag"] == "--check-xphon")
-    );
+    crate::common::chatter_cmd()
+        .args(["validate", "--check-xphon"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("unexpected argument"));
     let (code, out) = records(&[missing.as_os_str()])?;
     assert_eq!(code, Some(1), "an unreadable input fails the run");
     assert!(
@@ -832,14 +831,14 @@ fn test_to_json_prints_parse_diagnostics_on_every_path() -> Result<(), TestError
 
     for checks in [&[][..], &["--skip-validation"][..]] {
         crate::common::chatter_cmd()
-            .arg("to-json")
+            .args(["convert", "to-json"])
             .arg(&file_path)
             .args(checks)
             .assert()
             .code(1)
             .stderr(predicate::str::contains("Errors found in"));
         crate::common::chatter_cmd()
-            .arg("to-json")
+            .args(["convert", "to-json"])
             .arg(&input_dir)
             .arg("--output-dir")
             .arg(&output_dir)
@@ -868,7 +867,7 @@ fn test_to_json_directory_mode() -> Result<(), TestError> {
     let output_dir = dir.path().join("json");
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -901,7 +900,7 @@ fn test_to_json_incremental() -> Result<(), TestError> {
 
     // First run: should convert
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -913,7 +912,7 @@ fn test_to_json_incremental() -> Result<(), TestError> {
 
     // Second run: should skip (up-to-date)
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -937,7 +936,7 @@ fn test_to_json_force() -> Result<(), TestError> {
 
     // First run
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -948,13 +947,13 @@ fn test_to_json_force() -> Result<(), TestError> {
 
     // Force run: should reconvert despite up-to-date
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
         .arg("--skip-validation")
         .arg("--skip-schema-validation")
-        .arg("--force")
+        .arg("--rebuild")
         .assert()
         .success()
         .stderr(predicate::str::contains("1 converted, 0 up-to-date"));
@@ -981,7 +980,7 @@ fn test_to_json_counts_every_file_once() -> Result<(), TestError> {
 
     let run = || {
         crate::common::chatter_cmd()
-            .arg("to-json")
+            .args(["convert", "to-json"])
             .arg(&input_dir)
             .arg("--output-dir")
             .arg(&output_dir)
@@ -1022,7 +1021,7 @@ fn test_to_json_reports_an_unreadable_directory() -> Result<(), TestError> {
     let readable_anyway = fs::read_dir(&locked).is_ok();
     let output_dir = dir.path().join("json");
     let output = crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -1055,7 +1054,7 @@ fn test_to_json_prune() -> Result<(), TestError> {
 
     // First run: convert
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -1070,7 +1069,7 @@ fn test_to_json_prune() -> Result<(), TestError> {
 
     // Run with --prune
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -1101,7 +1100,7 @@ fn test_to_json_prune_refuses_an_empty_input() -> Result<(), TestError> {
     fs::write(output_dir.join("corpus/a.json"), "{}")?;
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -1136,7 +1135,7 @@ fn test_to_json_prune_does_not_follow_links_out_of_the_output_tree() -> Result<(
     std::os::unix::fs::symlink(elsewhere.join("nested/x.json"), output_dir.join("y.json"))?;
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
@@ -1183,7 +1182,7 @@ fn test_to_json_prune_does_not_follow_a_linked_output_root() -> Result<(), TestE
         output_link.join("."),
     ] {
         crate::common::chatter_cmd()
-            .arg("to-json")
+            .args(["convert", "to-json"])
             .arg(&input_dir)
             .arg("--output-dir")
             .arg(&output_dir)
@@ -1210,7 +1209,7 @@ fn test_to_json_directory_requires_output_dir() -> Result<(), TestError> {
     fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&input_dir)
         .assert()
         .failure()
@@ -1234,7 +1233,7 @@ fn test_from_json_roundtrip() -> Result<(), TestError> {
 
     // CHAT → JSON
     crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&chat_path)
         .arg("--output")
         .arg(&json_path)
@@ -1243,7 +1242,7 @@ fn test_from_json_roundtrip() -> Result<(), TestError> {
 
     // JSON → CHAT
     crate::common::chatter_cmd()
-        .arg("from-json")
+        .args(["convert", "from-json"])
         .arg(&json_path)
         .arg("--output")
         .arg(&output_path)
@@ -1270,7 +1269,7 @@ fn test_from_json_invalid_json() -> Result<(), TestError> {
     fs::write(json_file.path(), "{ invalid json ")?;
 
     crate::common::chatter_cmd()
-        .arg("from-json")
+        .args(["convert", "from-json"])
         .arg(json_file.path())
         .assert()
         .failure();
@@ -1289,7 +1288,7 @@ fn test_show_alignment_basic() -> Result<(), TestError> {
     fs::write(&file_path, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("show-alignment")
+        .args(["inspect", "alignment"])
         .arg(&file_path)
         .assert()
         .success()
@@ -1305,7 +1304,7 @@ fn test_show_alignment_specific_tier() -> Result<(), TestError> {
     fs::write(&file_path, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("show-alignment")
+        .args(["inspect", "alignment"])
         .arg(&file_path)
         .arg("--tier")
         .arg("mor")
@@ -1322,12 +1321,12 @@ fn test_show_alignment_compact_mode() -> Result<(), TestError> {
     fs::write(&file_path, VALID_CHAT)?;
 
     let normal_output = crate::common::chatter_cmd()
-        .arg("show-alignment")
+        .args(["inspect", "alignment"])
         .arg(&file_path)
         .output()?;
 
     let compact_output = crate::common::chatter_cmd()
-        .arg("show-alignment")
+        .args(["inspect", "alignment"])
         .arg(&file_path)
         .arg("--compact")
         .output()?;
@@ -1353,8 +1352,8 @@ fn test_help_command() {
         .assert()
         .success()
         .stdout(predicate::str::contains("validate"))
-        .stdout(predicate::str::contains("normalize"))
-        .stdout(predicate::str::contains("to-json"));
+        .stdout(predicate::str::contains("format"))
+        .stdout(predicate::str::contains("convert"));
 }
 
 /// Tests validate help.
@@ -1366,7 +1365,7 @@ fn test_validate_help() {
         .assert()
         .success()
         .stdout(predicate::str::contains("--skip-alignment"))
-        .stdout(predicate::str::contains("--force"));
+        .stdout(predicate::str::contains("--refresh-cache"));
 }
 
 /// Tests no args shows help.
@@ -1374,8 +1373,8 @@ fn test_validate_help() {
 fn test_no_args_shows_help() {
     crate::common::chatter_cmd()
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("Usage"));
+        .success()
+        .stdout(predicate::str::contains("Usage"));
 }
 
 // ============================================================================
@@ -1675,14 +1674,14 @@ fn list_checks_reports_all_enforcement_states() -> Result<(), TestError> {
 
     for help in ["-h", "--help"] {
         crate::common::chatter_cmd()
-            .args(["validate", help])
+            .args(["checks", "list", help])
             .assert()
             .success()
-            .stdout(predicate::str::contains("Active/Opt-in/Planned"));
+            .stdout(predicate::str::contains("diagnostics"));
     }
 
     let output = crate::common::chatter_cmd()
-        .args(["validate", "--list-checks", "--tui-mode", "disable"])
+        .args(["checks", "list"])
         .output()?;
     assert!(output.status.success());
     let stdout = std::str::from_utf8(&output.stdout)
@@ -1729,16 +1728,15 @@ fn test_sanitize_stdout_strips_words() -> Result<(), TestError> {
     fs::write(&input, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("debug")
-        .arg("sanitize")
+        .args(["experimental", "transform", "redact"])
         .arg(&input)
         .assert()
         .success()
         .stdout(predicate::str::contains("hello").not())
         .stdout(predicate::str::contains("world").not())
         .stdout(predicate::str::contains("*CHI:"))
-        .stdout(predicate::str::contains("w1"))
-        .stdout(predicate::str::contains("w2"));
+        .stdout(predicate::str::contains("worda"))
+        .stdout(predicate::str::contains("wordb"));
     Ok(())
 }
 
@@ -1751,8 +1749,7 @@ fn test_sanitize_output_file() -> Result<(), TestError> {
     fs::write(&input, VALID_CHAT)?;
 
     crate::common::chatter_cmd()
-        .arg("debug")
-        .arg("sanitize")
+        .args(["experimental", "transform", "redact"])
         .arg(&input)
         .arg("--output")
         .arg(&output)
@@ -1769,7 +1766,7 @@ fn test_sanitize_output_file() -> Result<(), TestError> {
         "source word leaked into file:\n{body}"
     );
     assert!(body.contains("*CHI:"), "speaker code missing:\n{body}");
-    assert!(body.contains("w1"), "placeholder w1 missing:\n{body}");
+    assert!(body.contains("worda"), "placeholder worda missing:\n{body}");
     Ok(())
 }
 
@@ -1795,7 +1792,7 @@ fn test_to_json_types_u_form_content_as_phonetic() -> Result<(), TestError> {
         .success();
 
     let output = crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&file_path)
         .assert()
         .success()
@@ -1871,7 +1868,7 @@ fn test_mid_word_syllable_pause_chain_is_one_word_and_valid() -> Result<(), Test
         .success();
 
     let output = crate::common::chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(&file_path)
         .arg("--skip-validation")
         .assert()
@@ -1910,6 +1907,131 @@ fn test_mid_word_syllable_pause_chain_is_one_word_and_valid() -> Result<(), Test
         return Err(TestError::Failure(format!(
             "rhi^noceros did not survive as one word; words seen: {words:?}"
         )));
+    }
+    Ok(())
+}
+
+/// Conversion must refuse every supported alias without changing the input.
+#[test]
+fn test_json_conversion_refuses_source_aliases() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let chat = dir.path().join("example.cha");
+    let json = dir.path().join("example.json");
+    fs::write(&chat, VALID_CHAT)?;
+    crate::common::chatter_cmd()
+        .args(["convert", "to-json"])
+        .arg(&chat)
+        .arg("--output")
+        .arg(&json)
+        .assert()
+        .success();
+
+    for (command, input) in [("to-json", &chat), ("from-json", &json)] {
+        let original = fs::read(input)?;
+        let hard_link = dir.path().join(format!("{command}-hard-link"));
+        fs::hard_link(input, &hard_link)?;
+        let outputs = vec![input.clone(), hard_link];
+        #[cfg(unix)]
+        let outputs = {
+            let mut outputs = outputs;
+            let symlink = dir.path().join(format!("{command}-symlink"));
+            std::os::unix::fs::symlink(input, &symlink)?;
+            outputs.push(symlink);
+            outputs
+        };
+        for output in outputs {
+            crate::common::chatter_cmd()
+                .args(["convert", command])
+                .arg(input)
+                .arg("--output")
+                .arg(&output)
+                .assert()
+                .code(1)
+                .stderr(predicate::str::contains("output aliases input"));
+            assert_eq!(fs::read(input)?, original);
+            assert_eq!(fs::read(output)?, original);
+        }
+        // A separate existing destination remains replaceable.
+        let separate = dir.path().join(format!("{command}-separate"));
+        fs::write(&separate, "old output")?;
+        crate::common::chatter_cmd()
+            .args(["convert", command])
+            .arg(input)
+            .arg("--output")
+            .arg(&separate)
+            .assert()
+            .success();
+        assert_ne!(fs::read(separate)?, b"old output");
+        assert_eq!(fs::read(input)?, original);
+    }
+    Ok(())
+}
+
+/// An export must protect the entire input population, even an input whose own
+/// conversion runs in a different worker or whose timestamp permits skipping.
+#[test]
+fn test_to_json_directory_refuses_population_aliases() -> Result<(), TestError> {
+    #[derive(Clone, Copy)]
+    enum Alias {
+        HardLink,
+        #[cfg(unix)]
+        Symlink,
+    }
+    enum Refresh {
+        Incremental,
+        Force,
+    }
+    let aliases = [
+        Alias::HardLink,
+        #[cfg(unix)]
+        Alias::Symlink,
+    ];
+    for alias in aliases {
+        for target in ["a.cha", "b.cha"] {
+            for refresh in [Refresh::Incremental, Refresh::Force] {
+                let dir = tempdir()?;
+                let inputs = dir.path().join("corpus");
+                let outputs = dir.path().join("json");
+                fs::create_dir_all(&inputs)?;
+                fs::create_dir_all(&outputs)?;
+                let first = inputs.join("a.cha");
+                let second = inputs.join("b.cha");
+                fs::write(&first, VALID_CHAT)?;
+                fs::write(&second, VALID_CHAT)?;
+                let output = outputs.join("a.json");
+                match alias {
+                    Alias::HardLink => fs::hard_link(inputs.join(target), &output)?,
+                    #[cfg(unix)]
+                    Alias::Symlink => std::os::unix::fs::symlink(inputs.join(target), &output)?,
+                }
+                let mut command = crate::common::chatter_cmd();
+                command
+                    .args(["convert", "to-json"])
+                    .arg(&inputs)
+                    .arg("--output-dir")
+                    .arg(&outputs)
+                    .args(["--jobs", "2"]);
+                match refresh {
+                    Refresh::Incremental => {}
+                    Refresh::Force => {
+                        command.arg("--rebuild");
+                    }
+                }
+                command
+                    .assert()
+                    .code(1)
+                    .stderr(predicate::str::contains("output aliases input"))
+                    .stderr(predicate::str::contains(
+                        "1 converted, 0 up-to-date, 1 failed",
+                    ));
+                assert_eq!(fs::read_to_string(&first)?, VALID_CHAT);
+                assert_eq!(fs::read_to_string(&second)?, VALID_CHAT);
+                assert_eq!(fs::read_to_string(&output)?, VALID_CHAT);
+                let restored: serde_json::Value =
+                    serde_json::from_slice(&fs::read(outputs.join("b.json"))?)?;
+                assert!(restored.is_object());
+            }
+        }
     }
     Ok(())
 }

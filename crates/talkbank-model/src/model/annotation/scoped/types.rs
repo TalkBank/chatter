@@ -274,6 +274,14 @@ impl OverlapMarkerIndex {
         }
     }
 
+    /// Admit a single ASCII digit without exposing an unchecked numeric value.
+    pub fn from_ascii_digit(digit: u8) -> Option<Self> {
+        match digit {
+            b'1'..=b'9' => Some(Self(digit - b'0')),
+            _ => None,
+        }
+    }
+
     /// The digit payload.
     pub fn get(self) -> u8 {
         self.0
@@ -297,6 +305,19 @@ impl<'de> Deserialize<'de> for OverlapMarkerIndex {
 #[cfg(test)]
 mod overlap_index_boundaries {
     use super::OverlapMarkerIndex;
+
+    /// Every byte crosses lexical admission before becoming a numeric index.
+    #[test]
+    fn ascii_digit_admission() {
+        for byte in u8::MIN..=u8::MAX {
+            let admitted = OverlapMarkerIndex::from_ascii_digit(byte);
+            assert_eq!(admitted.is_some(), b"123456789".contains(&byte));
+            if let Some(index) = admitted {
+                assert_eq!(index.to_string().as_bytes(), &[byte]);
+                assert_eq!(OverlapMarkerIndex::new(index.get()), Ok(index));
+            }
+        }
+    }
 
     /// Numeric construction and untrusted wire input share exactly one range.
     #[test]

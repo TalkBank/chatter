@@ -17,7 +17,6 @@ talkbank-model = { workspace = true }
 
 # Error handling and diagnostics
 thiserror = { workspace = true }
-miette = { workspace = true }
 
 # Parsing and Lexing
 chumsky = "=1.0.0-alpha.8"
@@ -55,7 +54,8 @@ walkdir = { workspace = true }
 # Opt-in suite of trait-implementation tests for the ChatParser trait
 # surface. Off by default; enable with
 # `cargo test -p talkbank-parser-re2c --features trait_tests`.
-# Tests live in `tests/parser_fixtures.rs` under `#[cfg(feature = "trait_tests")]`.
+# Tests live in `tests/integration/trait_contracts.rs`, with low-level model
+# conversion controls in `tests/integration/parser_fixtures.rs`.
 trait_tests = []
 
 [[bench]]

@@ -1,9 +1,9 @@
-# Rediarize (`chatter rediarize`)
+# Rediarize (`chatter experimental speakers rediarize`)
 
 **Status:** Draft
 **Last updated:** {{git-dates:page}}
 
-`chatter rediarize` re-attributes utterance speakers in a CHAT file
+`chatter experimental speakers rediarize` re-attributes utterance speakers in a CHAT file
 from an external diarization. Given a transcript whose utterances
 carry media time bullets and a JSON file of timestamped speaker turns
 produced by a dedicated diarizer (for example pyannote), it reassigns
@@ -30,21 +30,21 @@ flowchart LR
     Diarizer --> Turns["turns.json\n(documented format below)"]
     Media --> Asr["ASR with bundled\ndiarization"]
     Asr --> AsrCha["asr.cha\ntimed transcript"]
-    AsrCha --> Rediarize["chatter rediarize\n(this page)"]
+    AsrCha --> Rediarize["chatter experimental speakers rediarize\n(this page)"]
     Turns --> Rediarize
     Rediarize --> Fixed["rediarized.cha\ntime-based track assignments"]
-    Fixed --> SpkId["Review identities and roles\nthen use chatter speaker-id"]
+    Fixed --> SpkId["Review identities and roles\nthen use chatter experimental speakers"]
 ```
 
 `rediarize` selects an anonymous track for each overlapping utterance; it does
 not establish who that track is. Review identity and role evidence separately;
-[`chatter speaker-id`](speaker-id.md) documents the available mapping and
+[`chatter experimental speakers`](speaker-id.md) documents the available mapping and
 review workflows, not a guarantee of correct real-world identity.
 
 ## Usage
 
 ```bash
-chatter rediarize INPUT.cha --turns TURNS.json -o OUTPUT.cha
+chatter experimental speakers rediarize INPUT.cha --turns TURNS.json -o OUTPUT.cha
 ```
 
 Omitting `-o` prints the rewritten CHAT to stdout.
@@ -69,7 +69,7 @@ stderr text. `--summary-json PATH` additionally writes the outcome as
 JSON:
 
 ```bash
-chatter rediarize INPUT.cha --turns TURNS.json \
+chatter experimental speakers rediarize INPUT.cha --turns TURNS.json \
     -o OUTPUT.cha --summary-json SUMMARY.json
 ```
 
@@ -116,7 +116,8 @@ chatter rediarize INPUT.cha --turns TURNS.json \
   55/45 split from 55/23/22 and the difference is the point.
 
 Field names and the `reason` strings are a stable output contract.
-The summary is attempted after the CHAT output. These are separate writes,
+The summary is serialized and both destinations are admitted before CHAT output.
+The summary is written after the CHAT output. These are separate writes,
 not a transaction; a later summary failure does not roll back the CHAT write.
 
 ## Contested utterances (`--contested-at`)
@@ -128,7 +129,7 @@ Equal durations are ordered by track-code text, with the lexically first code
 winning. A tie does not produce a declined-assignment flag.
 
 ```bash
-chatter rediarize INPUT.cha --turns TURNS.json --contested-at 0.25
+chatter experimental speakers rediarize INPUT.cha --turns TURNS.json --contested-at 0.25
 ```
 
 Reports an utterance as contested when the RUNNER-UP track holds at
@@ -185,10 +186,15 @@ the caller's concern; the format is:
     milliseconds, half-open `[start_ms, end_ms)`, with
     `end_ms >= start_ms`.
 
-The JSON reader accepts track strings as supplied; it does not check that each
-is a syntactically valid CHAT speaker code. Supply valid codes and validate the
-output. Negative or noninteger timestamps fail JSON admission. Zero-duration
+The JSON reader requires each track to be a valid CHAT speaker token: one to
+seven ASCII letters, digits, underscores, plus signs, hyphens or apostrophes.
+Invalid tracks are rejected with their zero-based turn index before output
+destinations are opened. Negative or noninteger timestamps fail JSON admission. Zero-duration
 turns are accepted but contribute no positive overlap.
+
+Rust callers construct `DiarizationTurn` through its checked `new(track, span)`
+constructor and read it through `track()` and `span()`. The fields are private,
+so a caller cannot replace an admitted track with an unchecked code.
 
 Turns MAY overlap each other (diarizers that permit overlapping speech
 produce such turns). Overlap between turns for the same track is unioned;
@@ -202,7 +208,7 @@ silently ignored.
 
 The Rust `rediarize` API requires an error sink. After reconciling headers it
 uses the canonical participant join, reporting inconsistencies before exposing
-the resulting participant map. The returned mutable model is not a full
+the resulting model. The returned mutable model is not a full
 validation certificate. The content-level wrapper refuses to serialize when
 that join reports errors; it does not silently discard them. It does not run a
 full validation pass on the rewritten model before serializing it.
@@ -233,9 +239,11 @@ full validation pass on the rewritten model before serializing it.
 |------|---------|
 | 0 | Rewrite completed and output written. Flagged utterances do not fail the command; check the summary. |
 | 1 | Input/admission failure (including unreadable input, malformed JSON or invalid threshold), or CHAT/summary output failure. |
-| 2 | Precondition violation: the turns JSON parsed but is semantically defective (for example a turn with `end_ms < start_ms`). |
+| 2 | Precondition violation: the turns JSON parsed but contains an invalid speaker track or a turn with `end_ms < start_ms`. |
 
-Input and transformation failures occur before output writing. Once writing
+Input, transformation, summary serialization and destination-admission failures
+occur before output writing. Admission may create an empty destination, but
+does not truncate existing files. Once writing
 begins, a nonzero exit can leave a complete CHAT output and a missing or partial
 summary, or a partial CHAT destination. Existing destinations are written with
 replacement/truncation semantics; this is not atomic publication.
@@ -243,10 +251,13 @@ replacement/truncation semantics; this is not atomic publication.
 ### Safe destinations and recovery
 
 Use distinct new destinations for CHAT and summary, separate from both input
-files. The command does not check path aliases: pointing the summary at the
-CHAT output can replace the transcript with JSON, and an output path can
-overwrite an input. Different spellings do not prove different files when
-symlinks or hard links are involved. Avoid in-place use and preserve originals.
+files. The command refuses either destination when it aliases the CHAT input or
+the turns file, and refuses CHAT and summary destinations that alias each other.
+The checks use opened filesystem identities, including hard links and symlinks,
+and writes consume those same handles. Both destinations must be admitted before
+either writes; summary admission failure also withholds stdout CHAT output.
+This does not protect against hostile concurrent replacement of input files.
+Avoid in-place use and preserve originals.
 
 After an output failure, inspect both destinations before retrying. Do not infer
 that neither changed from the exit code, or use an existing summary as proof
@@ -263,7 +274,7 @@ were merged into one track). A dedicated diarizer found three voices
 and produced `turns.json` with `PAR0`/`PAR1`/`PAR2`. Then:
 
 ```bash
-chatter rediarize session.cha --turns turns.json -o session-3spk.cha
+chatter experimental speakers rediarize session.cha --turns turns.json -o session-3spk.cha
 chatter validate session-3spk.cha
 ```
 

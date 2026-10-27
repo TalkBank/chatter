@@ -1,7 +1,7 @@
 //! Real CLI recovery of cache scopes learned from canonical CHAT sources.
 
 use crate::cache_tests::cache_hits;
-use crate::command_matrix_tests::{cache_stats_json, run_prefix_clear};
+use crate::command_matrix_tests::{CacheClearAction, cache_stats_json, run_prefix_clear};
 use crate::common::{CliHarness, assert_success, reference_fixture, stdout_string};
 use std::fs;
 use talkbank_parser_tests::test_error::TestError;
@@ -38,7 +38,7 @@ fn file_identity_recovery_deleted_directory_cli_preserves_preview_and_sibling()
     fs::remove_dir(&nested)?;
     fs::remove_dir(&removed)?;
     for _ in 0..2 {
-        let preview = run_prefix_clear(&harness, &removed, true)?;
+        let preview = run_prefix_clear(&harness, &removed, CacheClearAction::Preview)?;
         assert_success(&preview, "preview removed directory");
         assert!(stdout_string(&preview).contains("Would clear 2 cache entries matching prefix"));
         assert_eq!(
@@ -47,14 +47,14 @@ fn file_identity_recovery_deleted_directory_cli_preserves_preview_and_sibling()
         );
         assert!(!removed.exists(), "preview must not recreate inputs");
     }
-    let clear = run_prefix_clear(&harness, &removed, false)?;
+    let clear = run_prefix_clear(&harness, &removed, CacheClearAction::Apply)?;
     assert_success(&clear, "clear removed subtree");
     assert!(stdout_string(&clear).contains("Cleared 2 cache entries matching prefix"));
     assert_eq!(
         cache_stats_json(&harness)?["total_entries"].as_u64(),
         Some(1)
     );
-    let repeated = run_prefix_clear(&harness, &removed, false)?;
+    let repeated = run_prefix_clear(&harness, &removed, CacheClearAction::Apply)?;
     assert_success(&repeated, "repeat clear");
     assert!(stdout_string(&repeated).contains("Cleared 0 cache entries matching prefix"));
     let warm = harness.run_validate(&sibling, &[])?;
@@ -79,7 +79,7 @@ fn file_identity_recovery_cli_file_ancestor_refusal_preserves_cache() -> Result<
         cache_stats_json(&harness)?["total_entries"].as_u64(),
         Some(1)
     );
-    for preview in [true, false] {
+    for preview in [CacheClearAction::Preview, CacheClearAction::Apply] {
         let output = run_prefix_clear(&harness, &path.join("missing"), preview)?;
         assert!(!output.status.success(), "file ancestor must be refused");
         assert_eq!(

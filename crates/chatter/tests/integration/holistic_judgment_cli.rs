@@ -55,9 +55,9 @@ fn speaker_id_holistic_writes_llm_stamped_pending() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
         .args([
-            "speaker-id",
-            "--judgment",
-            "holistic",
+            "experimental",
+            "speakers",
+            "suggest",
             "--anchor",
             "CHI",
             "--llm-endpoint",
@@ -154,9 +154,9 @@ fn speaker_id_holistic_session_context_labels_reach_judgment_request() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
         .args([
-            "speaker-id",
-            "--judgment",
-            "holistic",
+            "experimental",
+            "speakers",
+            "suggest",
             "--anchor",
             "CHI",
             "--llm-endpoint",
@@ -213,9 +213,9 @@ fn speaker_id_holistic_llm_cache_flag_avoids_second_request() {
         let pending = tmp.path().join(pending_name);
         let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
             .args([
-                "speaker-id",
-                "--judgment",
-                "holistic",
+                "experimental",
+                "speakers",
+                "suggest",
                 "--anchor",
                 "CHI",
                 "--llm-endpoint",
@@ -271,9 +271,9 @@ fn speaker_id_holistic_llm_cache_env_fallback() {
         let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
             .env("CHATTER_LLM_CACHE", &cache_path)
             .args([
-                "speaker-id",
-                "--judgment",
-                "holistic",
+                "experimental",
+                "speakers",
+                "suggest",
                 "--anchor",
                 "CHI",
                 "--llm-endpoint",

@@ -17,11 +17,12 @@
 use talkbank_model::ErrorCollector;
 use talkbank_model::model::{ChatFile, Line, TranscriptName, Utterance};
 use talkbank_parser::{ParseProduct, TreeSitterParser};
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 use tree_sitter::Tree;
 
 /// Parse a CHAT source string into a `ChatFile`, panicking on failure.
 ///
-/// Callers get a sharp panic (`ParseProduct::expect_built`) when no model
+/// Callers get a sharp panic (`ParseProductTestExt::expect_built`) when no model
 /// could be built, because a test that can't parse its own fixture has
 /// nothing useful to say.
 pub(crate) fn parse_chat(content: &str) -> ChatFile {
@@ -131,4 +132,17 @@ pub(crate) fn parse_tree(input: &str) -> Tree {
 pub(crate) fn parse_tree_incremental(input: &str) -> Tree {
     let parser = TreeSitterParser::new().unwrap();
     parser.parse_tree_incremental(input, None).unwrap()
+}
+
+/// Build the source-owned analysis consumed by features that need exact ranges.
+pub(crate) fn document_analysis(
+    uri: &tower_lsp::lsp_types::Url,
+    source: &str,
+) -> crate::backend::diagnostics::DocumentAnalysis {
+    crate::backend::diagnostics::DocumentAnalysis::parse(
+        &TreeSitterParser::new().unwrap(),
+        uri,
+        std::sync::Arc::from(source),
+        None,
+    )
 }

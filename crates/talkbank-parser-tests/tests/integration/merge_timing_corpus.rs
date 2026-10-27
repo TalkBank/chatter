@@ -47,7 +47,15 @@ fn reference_merge_timing_edits_preserve_original_and_latest_evidence() {
     let before = source.to_chat_string();
     let originals: Vec<_> = source
         .utterances()
-        .map(|u| u.main.content.bullet.clone().expect("timed reference turn"))
+        .map(|u| {
+            u.main
+                .content
+                .bullet
+                .clone()
+                .expect("timed reference turn")
+                .into_parsed()
+                .expect("valid reference timing")
+        })
         .collect();
     assert_eq!(originals.len(), 2);
     let mut edited = draft(&source);
@@ -150,7 +158,9 @@ fn reference_merge_timing_refusal_preserves_untimed_speech() {
         .content
         .bullet
         .clone()
-        .expect("recorded bullet");
+        .expect("recorded bullet")
+        .into_parsed()
+        .expect("valid reference timing");
     let mut edited = draft(&source);
     let assembled = edited.file().clone();
     let before = edited.file().to_chat_string();

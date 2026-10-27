@@ -10,35 +10,9 @@
     clippy::unimplemented
 )]
 
-//! PERMANENT regression tests, not migration scaffolding.
-//!
-//! The visitor-driven parser migration these were written during is COMPLETE
-//! (shipped 0.3.x). What they pin is the parser's CURRENT observable contract
-//! at the real boundary, and every expected value here was captured by RUNNING
-//! the parser rather than guessed. Historical "migration" wording below refers
-//! to that finished work; these files are not leftovers and must not be deleted
-//! as such.
-//!
-//! Characterization tests for the `%mor` dependent tier migrated onto the
-//! generated `extract_mor_dependent_tier` / `extract_mor_contents` /
-//! `extract_mor_content` / `extract_mor_word` / `extract_mor_feature` /
-//! `extract_mor_post_clitic` typed visitor (Task C, resuming paused sub-task
-//! 4g).
-//!
-//! These tests pin the OBSERVABLE behaviour of the `%mor` tier at the real
-//! parser boundary (`parse_chat_file_streaming` -> `ChatFile` + collected
-//! diagnostics). The migration replaces the hand-walk across
-//! `tier_parsers/mor/{tier,item,word}.rs`: the positional `expect_child_at`
-//! get of `mor_contents` plus the flat `while mor_contents.child(idx)` /
-//! `while node.child(idx)` scans that dispatched by `node.kind()`, with
-//! exhaustive typed `NodeSlot` matching at every position.
-//!
-//! The migration is BEHAVIOUR-PRESERVING: the parsed tier content and the
-//! recovery diagnostics must not change. Values here are derived by tracing
-//! the removed hand-walk and the model's own round-trip serialization
-//! (`MorTier::to_content()`), not guessed; the round-trip check is exactly as
-//! strong a pin as re-deriving the typed `Mor`/`MorWord` structures by hand,
-//! and is robust to any incidental internal representation detail.
+//! Parsed MOR content and malformed-tier refusal at the public parser boundary.
+//! Valid content round-trips; missing terminators retain raw source rather than
+//! inventing an empty successful tier. Diagnostics keep their original location.
 //!
 //! # Reachability note (why the malformed case looks the way it does)
 //!
@@ -57,6 +31,7 @@
 use talkbank_model::ErrorCollector;
 use talkbank_model::model::{DependentTier, Line};
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 
 /// One diagnostic: (code, span start, span end, message).
 type Diag = (String, usize, usize, String);
@@ -157,28 +132,19 @@ fn valid_post_clitic_with_features_round_trips_with_zero_diagnostics() {
     );
 }
 
-/// MALFORMED (reachable): a structurally valid `%mor` line with items but no
-/// terminator. `parse_mor_tier_inner` rejects the whole tier with
-/// `MissingTerminator` (E305) at the `mor_contents` node's exact span
-/// (35..48); the dispatch (`dependent_tier_dispatch/parsed.rs`, untouched by
-/// this migration) still attaches an EMPTY placeholder mor tier on
-/// `Rejected` (`empty_mor_placeholder()`, zero items + a synthetic Period
-/// terminator), so `saw_mor_tier` stays true but the two real items are
-/// dropped, never silently recovered as if they had parsed.
+/// A grammar-admitted tier without a required terminator reports E305 while
+/// preserving its original source as explicitly unparsed morphology.
 #[test]
-fn missing_terminator_rejects_the_whole_tier_leaving_the_empty_placeholder() {
+fn missing_terminator_preserves_unparsed_source_without_a_fabricated_period() {
     let (tiers, saw_mor_tier, diags) = parse_mor(NO_TERMINATOR);
-
-    assert!(
-        saw_mor_tier,
-        "the mor tier must remain attached (as the empty placeholder) for downstream diagnostics"
-    );
-    assert_eq!(
-        tiers,
-        vec![".".to_string()],
-        "a rejected tier falls back to the empty placeholder (zero items, \
-         synthetic Period terminator), never the two real items"
-    );
+    assert!(!saw_mor_tier, "raw recovery is not parsed morphology");
+    assert!(tiers.is_empty());
+    let parser = TreeSitterParser::new().expect("grammar loads");
+    let file = parser.parse_chat_file(NO_TERMINATOR).expect_built();
+    let utterance = file.utterances().next().expect("retained utterance");
+    assert!(matches!(&utterance.dependent_tiers[0].tier,
+        DependentTier::UnparsedMor(raw) if raw.source() == "%mor:\tv|pick prt|up\n"));
+    assert!(!utterance.parse_health().can_align_main_to_mor());
 
     let e305: Vec<&(String, usize, usize, String)> =
         diags.iter().filter(|(c, _, _, _)| c == "E305").collect();

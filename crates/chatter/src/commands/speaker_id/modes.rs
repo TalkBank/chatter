@@ -3,13 +3,12 @@
 //! replay, and holistic-LLM (`--judgment holistic`). The first three
 //! produce relabeled CHAT text; the holistic mode produces a
 //! review-gated pending entry instead. Each returns its result or
-//! `std::process::exit`s with the contract exit code.
+//! a typed failure to the program boundary.
 
 use std::fs;
 use std::path::Path;
 use tracing::{info, warn};
 
-use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
 use talkbank_model::{ParseValidateOptions, ParticipantRole, SpeakerCode};
 use talkbank_transform::speaker_id::{CURRENT_PROMPT_VERSION, JudgmentProvider, PromptVersion};
 use talkbank_transform::speaker_id::{
@@ -27,8 +26,7 @@ use talkbank_llm::{
 };
 
 use super::support::{
-    derive_session_id, exit_with_override_file_error, exit_with_speaker_id_error,
-    parse_inserted_role,
+    derive_session_id, parse_inserted_role, report_override_file_error, report_speaker_id_error,
 };
 use super::writes::{append_pending_entry, write_match_report, write_pending_entry};
 
@@ -48,19 +46,16 @@ pub(super) fn run_explicit_mode(
     content: &str,
     spec: &str,
     options: ParseValidateOptions,
-) -> String {
+) -> crate::exit_codes::CommandResult<String> {
     let mapping = match parse_mapping_spec(spec) {
         Ok(m) => m,
         Err(e) => {
             warn!("mapping parse failed: {}", e);
             eprintln!("Error: {}", e);
-            std::process::exit(crate::exit_codes::EXIT_PRECONDITION);
+            return Err(crate::exit_codes::ReportedFailure::Precondition.into());
         }
     };
-    match apply_mapping(content, &mapping, options) {
-        Ok(s) => s,
-        Err(e) => exit_with_speaker_id_error(e),
-    }
+    apply_mapping(content, &mapping, options).map_err(report_speaker_id_error)
 }
 
 /// Reference mode: identify the donor speaker matching the reference
@@ -100,7 +95,9 @@ pub(crate) struct ReferenceModeArgs<'a> {
     pub options: ParseValidateOptions,
 }
 
-pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOutcome {
+pub(crate) fn run_reference_mode(
+    args: ReferenceModeArgs<'_>,
+) -> crate::exit_codes::CommandResult<ReferenceModeOutcome> {
     let ReferenceModeArgs {
         donor_content,
         reference_path,
@@ -124,11 +121,11 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
                         RecordedSpeakerIdentificationInput::Reference,
                         &error,
                     ),
-                );
+                )?;
             }
             warn!("failed to read {}: {}", reference_path.display(), message);
             eprintln!("Error reading {}: {}", reference_path.display(), message);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -142,11 +139,11 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
                         RecordedSpeakerIdentificationInput::Donor,
                         &e,
                     ),
-                );
+                )?;
             }
             warn!("donor parse failed: {}", e);
             eprintln!("Error parsing donor: {}", e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
     let reference_chat = match parse_and_validate(&reference_content, options.clone()) {
@@ -159,11 +156,11 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
                         RecordedSpeakerIdentificationInput::Reference,
                         &e,
                     ),
-                );
+                )?;
             }
             warn!("reference parse failed: {}", e);
             eprintln!("Error parsing reference: {}", e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -174,7 +171,7 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
         Ok(pair) => pair,
         Err(e) => {
             eprintln!("Error: {e}");
-            std::process::exit(crate::exit_codes::EXIT_PRECONDITION);
+            return Err(crate::exit_codes::ReportedFailure::Precondition.into());
         }
     };
 
@@ -185,7 +182,7 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
                 write_match_report(
                     path,
                     &RecordedSpeakerIdentificationAttempt::accepted(&report, threshold),
-                );
+                )?;
             }
             report
         }
@@ -194,7 +191,7 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
                 write_match_report(
                     path,
                     &RecordedSpeakerIdentificationAttempt::low_confidence(&report, threshold),
-                );
+                )?;
             }
             if let Some(pending_path) = write_pending_path {
                 write_pending_entry(
@@ -205,29 +202,36 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
                     &donor_chat,
                     &inserted_code,
                     &inserted_role,
-                );
+                )?;
             }
-            exit_with_speaker_id_error(SpeakerIdError::LowConfidence { report, threshold })
+            return Err(report_speaker_id_error(SpeakerIdError::LowConfidence {
+                report,
+                threshold,
+            }));
         }
         Err(SpeakerIdError::ReferenceMissingAnchor { anchor }) => {
             if let Some(path) = write_match_report_path {
                 write_match_report(
                     path,
                     &RecordedSpeakerIdentificationAttempt::reference_missing_anchor(&anchor),
-                );
+                )?;
             }
-            exit_with_speaker_id_error(SpeakerIdError::ReferenceMissingAnchor { anchor })
+            return Err(report_speaker_id_error(
+                SpeakerIdError::ReferenceMissingAnchor { anchor },
+            ));
         }
         Err(SpeakerIdError::DonorTooFewSpeakers { speakers }) => {
             if let Some(path) = write_match_report_path {
                 write_match_report(
                     path,
                     &RecordedSpeakerIdentificationAttempt::donor_too_few_speakers(&speakers),
-                );
+                )?;
             }
-            exit_with_speaker_id_error(SpeakerIdError::DonorTooFewSpeakers { speakers })
+            return Err(report_speaker_id_error(
+                SpeakerIdError::DonorTooFewSpeakers { speakers },
+            ));
         }
-        Err(error) => exit_with_speaker_id_error(error),
+        Err(error) => return Err(report_speaker_id_error(error)),
     };
 
     let mut mapping = MappingSpec::new();
@@ -248,15 +252,18 @@ pub(crate) fn run_reference_mode(args: ReferenceModeArgs<'_>) -> ReferenceModeOu
     // Reuse the already-parsed donor AST, `apply_mapping_chat`
     // skips the redundant second `parse_and_validate` that the
     // string-entry `apply_mapping` would otherwise do.
-    let relabeled = apply_mapping_chat(&donor_chat, &mapping);
+    let relabeled = match apply_mapping_chat(&donor_chat, &mapping) {
+        Ok(output) => output,
+        Err(reason) => return Err(report_speaker_id_error(reason)),
+    };
 
-    ReferenceModeOutcome {
+    Ok(ReferenceModeOutcome {
         relabeled,
         report,
         mapping,
         inserted_code,
         inserted_role_tag: inserted_role,
-    }
+    })
 }
 
 /// Override-file replay mode: load the file, look up the recorded
@@ -266,19 +273,19 @@ pub(crate) fn run_override_file_mode(
     override_path: &Path,
     session_id: &str,
     options: ParseValidateOptions,
-) -> String {
-    let file = match OverrideFile::read_or_default(override_path) {
+) -> crate::exit_codes::CommandResult<String> {
+    let file = match OverrideFile::read(override_path) {
         Ok(f) => f,
-        Err(e) => exit_with_override_file_error(override_path, e),
+        Err(e) => return Err(report_override_file_error(override_path, e)),
     };
     let entry = match file.get(session_id) {
         Some(e) => e,
         None => {
             let available: Vec<String> = file.session_ids().map(str::to_string).collect();
-            exit_with_speaker_id_error(SpeakerIdError::SessionIdNotFound {
+            return Err(report_speaker_id_error(SpeakerIdError::SessionIdNotFound {
                 session_id: session_id.to_string(),
                 available,
-            })
+            }));
         }
     };
     apply_override_entry(input_content, entry, options)
@@ -291,15 +298,12 @@ pub(crate) fn apply_override_entry(
     input_content: &str,
     entry: &MergeOverride,
     options: ParseValidateOptions,
-) -> String {
+) -> crate::exit_codes::CommandResult<String> {
     let mapping = match entry.to_mapping_spec() {
         Ok(m) => m,
-        Err(e) => exit_with_speaker_id_error(e),
+        Err(e) => return Err(report_speaker_id_error(e)),
     };
-    match apply_mapping(input_content, &mapping, options) {
-        Ok(s) => s,
-        Err(e) => exit_with_speaker_id_error(e),
-    }
+    apply_mapping(input_content, &mapping, options).map_err(report_speaker_id_error)
 }
 
 // ---------------------------------------------------------------------------
@@ -351,43 +355,27 @@ fn resolve_session_context(
     }
 }
 
-/// Warn on stderr when a session-context file is configured (flag or
-/// env fallback) but the current judgment mode never consults it.
-/// Deliberately a warning, not an error: deterministic runs must keep
-/// working, but an operator-supplied input must never be ignored
-/// silently. Called by the deterministic paths of `chatter speaker-id`.
-pub(crate) fn warn_session_context_ignored_if_configured(flag_path: Option<&Path>) {
-    if let Some((path, source)) = resolve_session_context(flag_path) {
-        warn!(
-            "session context {} configured but judgment is not holistic; ignored",
-            path.display()
-        );
-        eprintln!(
-            "Warning: {} ({}) is ignored: session context is only consulted by \
-             --judgment holistic",
-            source.operator_name(),
-            path.display()
-        );
-    }
-}
-
 /// Resolve and load the session-context JSON file if one is configured
 /// (see [`resolve_session_context`] for the flag-then-env resolution).
 ///
 /// A configured-but-unreadable or malformed file is a hard error
-/// (exit [`EXIT_INPUT_ERROR`]) naming the surface the path came from:
+/// (exit input failure) naming the surface the path came from:
 /// the operator named a file they intended to use, so silently falling
 /// back to all-unknown context would silently corrupt the judgment.
-fn load_session_context(flag_path: Option<&Path>) -> Option<SessionContextFile> {
-    let (resolved, source) = resolve_session_context(flag_path)?;
+fn load_session_context(
+    flag_path: Option<&Path>,
+) -> crate::exit_codes::CommandResult<Option<SessionContextFile>> {
+    let Some((resolved, source)) = resolve_session_context(flag_path) else {
+        return Ok(None);
+    };
     match SessionContextFile::read_json(&resolved) {
-        Ok(file) => Some(file),
+        Ok(file) => Ok(Some(file)),
         Err(e) => {
             eprintln!(
                 "Error reading session context from {}: {e}",
                 source.operator_name()
             );
-            std::process::exit(EXIT_INPUT_ERROR);
+            Err(crate::exit_codes::ReportedFailure::Input.into())
         }
     }
 }
@@ -452,21 +440,21 @@ pub(crate) struct HolisticModeArgs<'a> {
 /// result to `--write-pending` as an `engine = "llm"` review-gated entry.
 ///
 /// Fail-loud contract (no silent fallback to the deterministic path):
-/// - missing `--write-pending`: exit [`EXIT_PRECONDITION`] (2).
-/// - missing `--anchor`: exit [`EXIT_PRECONDITION`] (2).
+/// - missing `--write-pending`: exit precondition failure (2).
+/// - missing `--anchor`: exit precondition failure (2).
 /// - missing endpoint or model after the `CHATTER_LLM_*` fallback: exit
-///   [`EXIT_PRECONDITION`] (2).
-/// - donor parse/validate failure: exit [`EXIT_INPUT_ERROR`] (1).
-/// - LLM/provider runtime failure: exit [`EXIT_INPUT_ERROR`] (1).
+///   precondition failure (2).
+/// - donor parse/validate failure: exit input failure (1).
+/// - LLM/provider runtime failure: exit input failure (1).
 /// - judgment-to-pending consume failure (multiple adults, missing adult
-///   role, self-contradictory merge): exit [`EXIT_INPUT_ERROR`] (1), failing
+///   role, self-contradictory merge): exit input failure (1), failing
 ///   closed rather than writing a misleading entry.
 ///
 /// On success the suggestion is appended and the process exits 0 via a normal
 /// return.
 ///
 /// Invoked by the `speaker-id` handler for `--judgment holistic`.
-pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
+pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) -> crate::exit_codes::CommandResult {
     let HolisticModeArgs {
         input,
         input_content,
@@ -490,7 +478,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
                 "Error: --judgment holistic requires --write-pending FILE (the holistic \
                  suggestion is review-gated and written there, not to --output)"
             );
-            std::process::exit(EXIT_PRECONDITION);
+            return Err(crate::exit_codes::ReportedFailure::Precondition.into());
         }
     };
 
@@ -500,7 +488,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
         Some(a) => a,
         None => {
             eprintln!("Error: --judgment holistic requires --anchor CODE (e.g. --anchor CHI)");
-            std::process::exit(EXIT_PRECONDITION);
+            return Err(crate::exit_codes::ReportedFailure::Precondition.into());
         }
     };
     let anchor_code = SpeakerCode::new(anchor);
@@ -517,7 +505,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
                 "Error: holistic mode requires --llm-endpoint and --llm-model (or \
                  CHATTER_LLM_ENDPOINT / CHATTER_LLM_MODEL)"
             );
-            std::process::exit(EXIT_PRECONDITION);
+            return Err(crate::exit_codes::ReportedFailure::Precondition.into());
         }
     };
     let api_key = llm_api_key
@@ -527,7 +515,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
     // 3b. Load the session-context file (flag, else CHATTER_SESSION_CONTEXT
     //     env var). A configured-but-malformed file exits here; no file at
     //     all means every context field resolves to @ID-age or unknown.
-    let context_file = load_session_context(session_context_path);
+    let context_file = load_session_context(session_context_path)?;
 
     // 4. Parse + validate the donor, mirroring reference mode's donor handling.
     let options = ParseValidateOptions::default();
@@ -536,7 +524,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
         Err(e) => {
             warn!("donor parse failed: {}", e);
             eprintln!("Error parsing donor: {}", e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -580,7 +568,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
                     "Error: LLM response cache {} is unusable: {e}",
                     cache_path.display()
                 );
-                std::process::exit(EXIT_INPUT_ERROR);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         },
         None => HttpJudgmentProvider::new(config),
@@ -593,7 +581,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
         Err(e) => {
             warn!("holistic judgment failed: {}", e);
             eprintln!("Error: holistic judgment failed: {}", e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -620,12 +608,12 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
                 "Error: could not build a pending entry from the judgment: {}",
                 e
             );
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
     // 11. Append the review-gated suggestion to the pending file and report.
-    append_pending_entry(pending_path, entry);
+    append_pending_entry(pending_path, entry)?;
     info!(
         "holistic suggestion for session {} written to {}",
         session_id,
@@ -636,6 +624,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
         session_id,
         pending_path.display()
     );
+    Ok(())
 }
 
 /// Resolve a required LLM config value: the flag value if present, else the

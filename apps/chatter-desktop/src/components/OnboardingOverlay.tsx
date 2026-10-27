@@ -1,25 +1,14 @@
-import { useCallback, useState } from "react";
+interface OnboardingOverlayProps {
+  onDismiss: () => void;
+}
 
-const STORAGE_KEY = "chatter-onboarding-dismissed";
-
-export default function OnboardingOverlay() {
-  const [dismissed, setDismissed] = useState(
-    () => localStorage.getItem(STORAGE_KEY) === "1",
-  );
-
-  const handleDismiss = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, "1");
-    setDismissed(true);
-  }, []);
-
-  if (dismissed) return null;
-
+export default function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
   const isMac =
     typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
   const mod = isMac ? "\u2318" : "Ctrl+";
 
   return (
-    <div className="onboarding-backdrop" onClick={handleDismiss}>
+    <div className="onboarding-backdrop" onClick={onDismiss}>
       <div className="onboarding-card" onClick={(e) => e.stopPropagation()}>
         <h2>Welcome to Chatter</h2>
         <div className="onboarding-callouts">
@@ -52,7 +41,7 @@ export default function OnboardingOverlay() {
             </p>
           </div>
         </div>
-        <button className="primary dismiss-btn" onClick={handleDismiss}>
+        <button className="primary dismiss-btn" onClick={onDismiss}>
           Got it
         </button>
       </div>

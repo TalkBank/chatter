@@ -8,19 +8,17 @@
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsChildren,
-    GroupWithAnnotationsNode, KindAdmitted, NodeSlot, SourceBound, SourceSlotView,
+    GroupWithAnnotationsNode, KindAdmitted, NodeSlot, SlotView, SourceBound,
 };
 use crate::model::{BracketedContent, Group, UtteranceContent};
 use talkbank_model::{ParseOutcome, Span};
 use tree_sitter::Node;
 
 use super::super::super::annotations::parse_scoped_annotations;
-use super::super::marker_chain::fold_marker_chain;
+use super::super::marker_chain::{MarkerSeed, fold_marker_chain};
 use super::super::recovery::surface_main_tier_sink;
-use super::super::report_tree_shape;
 use super::contents::{contents_of, parse_group_contents};
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::parser_helpers::expect_delimiter;
 
 /// Which group delimiter the offending whitespace touches; drives the
 /// E750 message wording only.
@@ -92,7 +90,8 @@ pub(crate) fn parse_group_content<'tree>(
     let node = typed.raw_node();
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_inner(typed),
+        crate::parser::typed_cst::extract_inner(typed)
+            .and_then(|children| children.admit_ranges().map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -101,84 +100,48 @@ pub(crate) fn parse_group_content<'tree>(
     };
     let children = associated.children();
 
-    expect_delimiter(children.child_0.slot(), |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected '<' at start of group_with_annotations, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    });
-
-    let group_items = match contents_of(associated.field_content_2().slot(), errors) {
+    let SlotView::Present(contents) = children.content_2.slot.view();
+    let group_items = match contents_of(*contents, errors) {
         Some(contents) => {
             report_edge_whitespace(contents.children(), source, errors);
             parse_group_contents(&contents, errors)
         }
-        None => Vec::new(),
+        None => ParseOutcome::Rejected,
     };
 
-    expect_delimiter(children.child_2.slot(), |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected '>' in group_with_annotations, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    });
-
     // Presence proves the wrapper, not the annotation payload's validity.
-    let markers = match associated.field_annotations().slot().view() {
-        SourceSlotView::Present(annotations) => {
-            match crate::parser::typed_cst::read_source_field(annotations, errors) {
-                Some(annotations) => parse_scoped_annotations(annotations, errors),
-                None => Vec::new(),
-            }
-        }
+    let markers = match children.annotations.slot.view() {
+        SlotView::Present(annotations) => parse_scoped_annotations(*annotations, errors),
     };
     // Group contents belong to the main-tier body even when recovery places
     // their ERROR beside the contents slot. The sealed carrier retains that
     // ownership instead of sending the same word fault to a generic reporter.
     surface_main_tier_sink(children, source, errors);
 
+    let ParseOutcome::Parsed(group_items) = group_items else {
+        return ParseOutcome::Rejected;
+    };
+    let Ok(markers) = markers else {
+        return ParseOutcome::Rejected;
+    };
     if group_items.is_empty() {
         return ParseOutcome::rejected();
     }
 
     let span = span_of(node);
-    // The group is placed at its brackets, `<` through `>`; the annotations
-    // after it belong to the wrapper the fold builds. A MISSING delimiter is
-    // a zero-width placeholder where recovery decided the bracket was, which
-    // is still a position; only an ERROR or absent slot has none, and then
-    // the node's own extent is what recovery produced.
-    let open = children
-        .child_0
-        .slot()
-        .known_or_placeholder()
-        .present_or_placeholder()
-        .map(|open| span_of(open.raw_node()).start());
-    let close = children
-        .child_2
-        .slot()
-        .known_or_placeholder()
-        .present_or_placeholder()
-        .map(|close| span_of(close.raw_node()).end());
-    let brackets = match (open, close) {
-        (Some(open), Some(close)) => Span::new(open, close),
-        _ => span,
+    // Required presence excludes delimiter ERROR/absence, but lexical
+    // MISSING delimiters retain their real zero-width recovery positions.
+    let open = match children.child_0.slot.view() {
+        SlotView::Present(open) => span_of(open.raw_node()).start(),
+        SlotView::Missing(open) => span_of(open.raw_node()).start(),
     };
+    let close = match children.child_2.slot.view() {
+        SlotView::Present(close) => span_of(close.raw_node()).end(),
+        SlotView::Missing(close) => span_of(close.raw_node()).end(),
+    };
+    let brackets = Span::new(open, close);
     let bracketed = BracketedContent::new(group_items);
     let group = Group::new(brackets, bracketed);
 
-    ParseOutcome::parsed(fold_marker_chain(
-        UtteranceContent::Group(group),
-        markers,
-        span,
-    ))
+    ParseOutcome::parsed(fold_marker_chain(MarkerSeed::Group(group), markers, span))
 }

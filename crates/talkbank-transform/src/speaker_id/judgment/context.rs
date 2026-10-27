@@ -63,16 +63,16 @@ pub fn session_context(
 /// it is not a substitute for age syntax/range validation or anchor selection.
 fn id_header_age_months(chat: &ChatFile) -> Option<AgeMonths> {
     for participant in chat.all_participants() {
-        let Some(AgeValue::Valid {
-            years,
-            months: Some(months),
-            ..
-        }) = participant.id.age.as_ref()
-        else {
+        let Some(components) = participant.id().age.as_ref().and_then(AgeValue::components) else {
+            continue;
+        };
+        let Some(months) = components.months() else {
             continue;
         };
         // u16 years and u8 months cannot overflow their widened u32 total.
-        return Some(AgeMonths(u32::from(*years) * 12 + u32::from(*months)));
+        return Some(AgeMonths(
+            u32::from(components.years()) * 12 + u32::from(months),
+        ));
     }
     None
 }

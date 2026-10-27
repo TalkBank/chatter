@@ -5,5 +5,8 @@ pub mod ca_symbols;
 
 pub mod form_markers;
 
+/// Structured Phon tier labels from the shared specification registry.
+pub mod phon_tier_labels;
+
 #[allow(missing_docs)]
 pub mod symbol_sets;

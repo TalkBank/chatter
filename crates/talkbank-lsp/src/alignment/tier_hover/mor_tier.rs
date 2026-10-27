@@ -5,12 +5,13 @@
 //! to give a complete word-level picture.
 
 use super::helpers::{
-    find_mor_item_index_at_offset, find_source_index_for_target, find_target_index_for_source,
-    format_gra_alignment_text, position_to_offset,
+    find_mor_item_index_at_offset, find_source_index_for_target, format_gra_alignment_text,
+    gra_relation_for_mor_item, position_to_offset,
 };
 use crate::alignment::finders::get_alignable_content_by_index;
 use crate::alignment::formatters::{format_content_item, format_mor_item};
 use crate::alignment::types::AlignmentHoverInfo;
+use talkbank_model::alignment::MorItemIndex;
 use talkbank_model::model::Utterance;
 use tower_lsp::lsp_types::Position;
 
@@ -29,17 +30,22 @@ pub fn find_mor_tier_hover_info(
         .and_then(|alignments| alignments.mor.as_ref());
 
     let offset = position_to_offset(document, position);
-    let mor_idx = find_mor_item_index_at_offset(tree, mor_tier.location.span()?, offset)?;
+    let mor_idx = MorItemIndex::new(find_mor_item_index_at_offset(
+        tree,
+        mor_tier.location.span()?,
+        offset,
+    )?);
 
     // Get the mor item
-    let mor_item = mor_tier.items().get(mor_idx)?;
+    let mor_item = mor_tier.items().get(mor_idx.as_usize())?;
 
     // Build hover info
     let mut info = AlignmentHoverInfo::new("Morphology Element", format_mor_item(mor_item));
 
     // Backward lookup to main tier via AlignmentSet.
     if let Some(mor_alignment) = mor_alignment
-        && let Some(main_idx) = find_source_index_for_target(&mor_alignment.pairs, mor_idx)
+        && let Some(main_idx) =
+            find_source_index_for_target(&mor_alignment.pairs, mor_idx.as_usize())
         && let Some(main_content) =
             get_alignable_content_by_index(&utterance.main.content.content, main_idx)
     {
@@ -47,12 +53,7 @@ pub fn find_mor_tier_hover_info(
     }
 
     // Forward lookup to %gra via AlignmentSet.
-    if let Some(alignments) = &utterance.alignments
-        && let Some(gra_alignment) = alignments.gra.as_ref()
-        && let Some(gra_idx) = find_target_index_for_source(&gra_alignment.pairs, mor_idx)
-        && let Some(gra_tier) = utterance.gra_tier()
-        && let Some(gra_relation) = gra_tier.relations().get(gra_idx)
-    {
+    if let Some(gra_relation) = gra_relation_for_mor_item(utterance, mor_idx) {
         info.aligned_to_gra = Some(format_gra_alignment_text(mor_tier, gra_relation));
     }
 

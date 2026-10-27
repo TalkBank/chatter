@@ -23,65 +23,34 @@
 //! normalizes files to canonical form, and provides a continuous watch mode
 //! for iterative editing.
 //!
-//! # Command overview
+//! # Command discovery and dispatch
 //!
-//! All commands are implemented as clap derive subcommands. Run
-//! `chatter --help` for the full listing; the highlights are:
+//! `chatter --help` lists the command families; `chatter commands list
+//! --format json` describes each executable leaf's syntax and effects. Stable
+//! validation, repair, conversion and inspection commands are separate from
+//! experimental speaker workflows, review and transforms.
 //!
-//! | Command            | Purpose                                                    |
-//! |--------------------|------------------------------------------------------------|
-//! | `validate`         | Parse and validate one file or an entire directory tree     |
-//! | `normalize`        | Re-serialize a CHAT file in canonical formatting            |
-//! | `to-json`          | Convert CHAT to JSON (conforming to the CHAT JSON Schema)  |
-//! | `from-json`        | Convert JSON back to CHAT                                  |
-//! | `show-alignment`   | Visualize main-tier / dependent-tier alignment              |
-//! | `watch`            | Re-validate on every file save (uses `notify` file watcher)|
-//! | `clean`            | Show cleaned text for each word (debugging aid)            |
-//! | `new-file`         | Scaffold a minimal valid CHAT file                          |
-//! | `cache`            | Manage the on-disk validation cache (stats, clear)          |
-//! | `schema`           | Print the CHAT JSON Schema or its canonical URL             |
-//! | `debug <cmd>`      | Developer/debugging tools and corpus inspection            |
+//! `main` starts the 16 MiB program thread. That thread constructs clap's
+//! command tree, parses OS-native arguments and passes the request through
+//! [`cli::run`] to [`commands::dispatch_command`]. Every handler returns
+//! [`exit_codes::CommandResult`]. The joined result reaches the single exit
+//! boundary, after command-owned stages and terminal guards have been dropped.
+//! Help and version requests are successful output operations; usage failures
+//! return status 2. Neither path starts transcript work.
 //!
-//! # Dispatch architecture
+//! # Presentation and parsers
 //!
-//! ```text
-//! main()
-//!  ├─ clap::Parser::parse()          ← cli::Cli, cli::Commands (clap derive)
-//!  ├─ cli::init_tracing(verbose, ..) ← tracing-subscriber w/ env-filter
-//!  └─ cli::run(cli)                  ← composition root, then family-based dispatch
-//!       └─ commands::dispatch_command
-//!            ├─ ValidationCommandService
-//!            ├─ UtilityCommandService
-//!            ├─ CacheCommandService
-//!            └─ DebugCommandService
-//! ```
+//! Validation admits one presentation from text, JSON, audit and terminal UI
+//! options. Machine output never enters the TUI. Both tree-sitter and re2c use
+//! the same validation runner and model; select them with `--parser`.
 //!
-//! Argument definitions live in [`cli::args`](cli/args.rs) (the `Cli` struct
-//! and `Commands` enum). The dispatch switch is in [`cli::run`](cli/run.rs).
-//! Each command handler is a function in the [`commands`] module, which in turn
-//! calls into the core library crates (`talkbank-transform`, `talkbank-model`).
+//! # Failed output and interruption
 //!
-//! # TUI / interactive mode
-//!
-//! When stdout is a TTY (or `--tui-mode force` is passed), validation commands
-//! render a ratatui-based terminal UI with live progress, color-coded
-//! diagnostics, and a theme system (`--theme`). The TUI can be disabled with
-//! `--tui-mode disable` for piping output to files or other tools. Tracing
-//! output is automatically suppressed in TUI mode to avoid interleaving.
-//!
-//! # Parser selection
-//!
-//! The `--parser` flag on `validate` selects between the canonical tree-sitter
-//! parser (`tree-sitter`, default) and the experimental direct parser
-//! (removed). The tree-sitter parser is the sole parser.
-//! `talkbank_model::ChatFile` AST.
-//!
-//! # A closed standard output
-//!
-//! Every text writer writes through the `outln!` and `out!` macros
-//! (`stdout.rs`), never `println!`: when a consumer such as `head` closes
-//! the pipe, the command ends with exit status 1, the status
-//! `validate --format json` gives, instead of panicking.
+//! Text writers use `outln!` and `out!`, which propagate failed writes instead
+//! of panicking or continuing into later mutations. JSON records likewise stop
+//! the stream at the first failed write. A closed pipe returns status 1; machine
+//! output keeps stderr empty. Forced validation interruption returns status 130
+//! through the owning event loop, allowing terminal and staged-output cleanup.
 //!
 //! # Module map
 //!
@@ -90,12 +59,12 @@
 //! ├── main.rs          ← entry point (this file)
 //! ├── cli/
 //! │   ├── args.rs      ← Cli struct, Commands enum (clap derive)
-//! │   ├── run.rs       ← composition root (TUI detection, theme loading)
+//! │   ├── run.rs       ← composition root and tracing initialization
 //! │   └── logging.rs   ← tracing-subscriber initialization
 //! ├── commands/
 //! │   ├── dispatch.rs  ← feature-oriented top-level command-family routing
 //! │   ├── validate/    ← single-file and directory validation
-//! │   ├── validate_parallel.rs ← parallel directory validation with progress
+//! │   ├── validate_parallel/  ← streaming validation runtime and renderers
 //! │   ├── json.rs      ← to-json / from-json conversion
 //! │   ├── normalize.rs ← canonical re-serialization
 //! │   ├── watch.rs     ← file-watcher continuous validation
@@ -151,44 +120,57 @@ const PROGRAM_STACK_BYTES: usize = talkbank_transform::worker_pool::CHAT_THREAD_
 ///
 /// Immediately hands off to [`program_main`] on a thread with an
 /// explicit stack size (see [`PROGRAM_STACK_BYTES`]); the OS main
-/// thread only waits and propagates panics so exit behavior is
-/// unchanged.
-fn main() {
+/// thread joins the typed result, chooses the exit status and propagates
+/// unexpected panics.
+fn main() -> std::process::ExitCode {
     let spawned = std::thread::Builder::new()
         .name("chatter-program".to_owned())
         .stack_size(PROGRAM_STACK_BYTES)
         .spawn(program_main);
-    match spawned {
-        Ok(handle) => {
-            if let Err(payload) = handle.join() {
-                // The program thread panicked; re-raise on the main
-                // thread so the process exits exactly as an unwound
-                // panic in `main` would (code 101, hook already ran).
-                resume_unwind(payload);
-            }
-        }
+    let result = match spawned {
+        Ok(handle) => match handle.join() {
+            Ok(result) => result,
+            Err(payload) => resume_unwind(payload),
+        },
         Err(err) => {
-            // Thread creation failing is an OS-resource failure that
-            // precedes all program logic; report and exit nonzero.
             eprintln!("chatter: failed to start program thread: {err}");
-            std::process::exit(1);
+            Err(exit_codes::ReportedFailure::Internal.into())
         }
+    };
+    match result {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(stop) => stop.finish(),
     }
 }
 
 /// The real program body; runs on the explicitly sized program thread.
-fn program_main() {
-    let raw_args: Vec<String> = std::env::args().collect();
-
-    // Build the clap Command and parse.
-    let cmd = cli::Cli::command();
-    let matches = cmd.get_matches_from(raw_args);
-    // clap-validation invariant: `cmd.get_matches_from(...)` above
-    // exits the process on any validation failure, so reaching
-    // `from_arg_matches` guarantees the matches are well-formed.
-    #[allow(clippy::expect_used)]
-    let cli =
-        cli::Cli::from_arg_matches(&matches).expect("clap should have validated all arguments");
-
-    cli::run(cli);
+fn program_main() -> exit_codes::CommandResult {
+    let raw_args: Vec<_> = std::env::args_os().collect();
+    let mut cmd = cli::Cli::command();
+    if raw_args.len() == 1 {
+        outln!("{}", cmd.render_help());
+        return Ok(());
+    }
+    let matches = match cmd.try_get_matches_from(raw_args) {
+        Ok(matches) => matches,
+        Err(error)
+            if matches!(
+                error.kind(),
+                clap::error::ErrorKind::DisplayHelp
+                    | clap::error::ErrorKind::DisplayVersion
+                    | clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+            ) =>
+        {
+            out!("{error}");
+            return Ok(());
+        }
+        Err(error) => {
+            if let Some(hint) = cli::migration_hint(&error) {
+                eprintln!("Migration: {hint}");
+            }
+            return Err(exit_codes::CommandStop::Usage(error));
+        }
+    };
+    let cli = cli::Cli::from_arg_matches(&matches).map_err(exit_codes::CommandStop::Usage)?;
+    cli::run(cli)
 }

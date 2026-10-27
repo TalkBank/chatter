@@ -149,41 +149,49 @@ fn missing_end_spec_proposals_preserve_document_boundary_with_or_without_final_n
     let parser = TreeSitterParser::new().expect("parser");
     let fixture = include_str!("../error_corpus/validation_errors/E502_1.cha");
     let unterminated = fixture.strip_suffix('\n').expect("spec ends with newline");
-    for (source, replacement) in [(fixture, "@End\n"), (unterminated, "\n@End\n")] {
-        let observed = DiagnosedSource::observe(&parser, source);
-        let findings: Vec<_> = observed.findings().collect();
-        let [diagnostic] = findings.as_slice() else {
-            panic!(
-                "missing end is the sole defect: {:?}",
-                observed.diagnostics()
-            );
-        };
-        assert_eq!(diagnostic.code.as_str(), "E502");
-        let proposal = diagnostic
-            .catalog()
-            .into_offer()
-            .expect("document end repair");
-        assert!(matches!(proposal.safety(), BatchSafety::Mechanical));
-        let (FixKind::Mechanical(edits) | FixKind::Semantic(edits)) = proposal.into_kind() else {
-            panic!("document end repair needs no semantic choice");
-        };
-        let [edit] = edits.as_slice() else {
-            panic!("one document-end insertion");
-        };
-        assert_eq!(edit.target(), &EditTarget::InsertAt(source.len()));
-        assert_eq!(edit.replacement().as_str(), replacement);
-        // Catalog policy does not grant automatic document-level admission.
-        // Preserve the existing utterance-boundary refusal rather than
-        // bypassing it merely because the proposal is mechanical.
-        let admission = admit_edits(observed.document(), edits);
-        assert!(admission.admitted().is_empty());
-        let [skipped] = admission.skipped() else {
-            panic!("the document-level proposal must be explicitly refused");
-        };
-        assert_eq!(skipped.reason, SkipReason::OutsideAnyUtterance);
-        let output = apply_edits_verified(source, admission.admitted())
-            .expect("refused proposal leaves source untouched");
-        assert_eq!(output, source);
+    for ending in ["\n", "\r\n", "\r"] {
+        for (text, replacement) in [
+            (fixture, format!("@End{ending}")),
+            (unterminated, format!("{ending}@End{ending}")),
+        ] {
+            let transported = text.replace('\n', ending);
+            let source = transported.as_str();
+            let observed = DiagnosedSource::observe(&parser, source);
+            let findings: Vec<_> = observed.findings().collect();
+            let [diagnostic] = findings.as_slice() else {
+                panic!(
+                    "missing end is the sole defect: {:?}",
+                    observed.diagnostics()
+                );
+            };
+            assert_eq!(diagnostic.code.as_str(), "E502");
+            let proposal = diagnostic
+                .catalog()
+                .into_offer()
+                .expect("document end repair");
+            assert!(matches!(proposal.safety(), BatchSafety::Mechanical));
+            let (FixKind::Mechanical(edits) | FixKind::Semantic(edits)) = proposal.into_kind()
+            else {
+                panic!("document end repair needs no semantic choice");
+            };
+            let [edit] = edits.as_slice() else {
+                panic!("one document-end insertion");
+            };
+            assert_eq!(edit.target(), &EditTarget::InsertAt(source.len()));
+            assert_eq!(edit.replacement().as_str(), replacement);
+            // Catalog policy does not grant automatic document-level admission.
+            // Preserve the existing utterance-boundary refusal rather than
+            // bypassing it merely because the proposal is mechanical.
+            let admission = admit_edits(observed.document(), edits);
+            assert!(admission.admitted().is_empty());
+            let [skipped] = admission.skipped() else {
+                panic!("the document-level proposal must be explicitly refused");
+            };
+            assert_eq!(skipped.reason, SkipReason::OutsideAnyUtterance);
+            let output = apply_edits_verified(source, admission.admitted())
+                .expect("refused proposal leaves source untouched");
+            assert_eq!(output, source);
+        }
     }
 }
 

@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	  eng
+@Participants:	  CHI Target_Child
+@Options:	  CA
+@ID:	  eng|corpus|CHI|||||Target_Child|||
+@Birth of CHI:	  01-JAN-2020
+@Birthplace of CHI:	  Pittsburgh
+@L1 of CHI:	  eng
+@Comment:	  Authored from the E758 CA separator example; header order normalized.
+@Comment:	  Padding belongs to separators; CA permits it and serialization removes it.
+*CHI:	  dog .
+%mor:	  n|dog .
+%com:	  tier text
+@End

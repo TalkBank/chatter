@@ -17,6 +17,7 @@ mod types;
 
 pub(crate) use id_languages::parse_id_languages;
 pub use languages::parse_languages_header;
+pub(crate) use languages::recover_languages_header;
 pub use media::parse_media_header;
 pub use pid::parse_pid_header;
 pub use situation::parse_situation_header;

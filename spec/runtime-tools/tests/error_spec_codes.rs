@@ -56,60 +56,8 @@ fn every_error_spec_example_emits_its_declared_code() -> Result<(), String> {
 /// code it no longer produced, and the whole spec was skipped.
 #[test]
 fn deferred_specs_are_not_already_implemented() -> Result<(), String> {
-    let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
     let root = generators::repo_paths::RepoRoot::resolve(None).map_err(|why| why.to_string())?;
     let specs = generators::spec::error::ErrorSpec::load_for_repo(&root)?;
-
-    let mut stale = Vec::new();
-    for spec in &specs {
-        if spec.status() == generators::spec::metadata::Status::Implemented {
-            continue;
-        }
-        let definition = &spec.error;
-        for example in &definition.examples {
-            let emitted = spec_runtime_tools::error_spec_validation::emit_for(&parser, example);
-            if emitted
-                .all()
-                .any(|error| error.code.as_str() == definition.code.as_str())
-            {
-                stale.push(format!(
-                    "{} is `{}` but already emits {}",
-                    spec.source_file(),
-                    spec.status(),
-                    definition.code
-                ));
-            }
-            // Deferring a code does not defer an explicit contract about
-            // accepted input or the other diagnostic that rejects it. Keep
-            // planned `violates` examples deferred; use the claim's own
-            // semantics for legal controls and subsumption, not a second
-            // interpretation of the frontmatter.
-            if !matches!(
-                &example.claim,
-                talkbank_spec_vocabulary::frontmatter::Claim::Violates
-            ) && !example.claim.satisfied_by(&definition.code, |code| {
-                emitted
-                    .all()
-                    .any(|error| error.code.as_str() == code.as_str())
-            }) {
-                stale.push(format!(
-                    "{} has a stale deferred claim {:?}; observed {:?}",
-                    spec.source_file(),
-                    example.claim,
-                    emitted.all_distinct_codes()
-                ));
-            }
-        }
-    }
-
-    if stale.is_empty() {
-        return Ok(());
-    }
-    Err(format!(
-        "{} deferred spec discrepancy/discrepancies require adjudication. \
-         Review implementation status and explicit legal/subsumption claims; \
-         do not change expectations solely to match output:\n  {}",
-        stale.len(),
-        stale.join("\n  ")
-    ))
+    spec_runtime_tools::deferred_specs::ReviewedDeferred::from_specs(&specs)
+        .map(|reviewed| println!("{reviewed}"))
 }

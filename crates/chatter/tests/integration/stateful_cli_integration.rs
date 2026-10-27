@@ -177,6 +177,89 @@ fn audit_mode_overwrites_existing_output_file() -> Result<(), TestError> {
     Ok(())
 }
 
+enum AuditAlias {
+    SamePath,
+    HardLink,
+    #[cfg(unix)]
+    SymbolicLink,
+}
+
+#[test]
+fn audit_mode_reports_unreadable_input_on_stderr() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let directory = tempdir()?;
+    let missing = directory.path().join("missing-input.cha");
+    let report = directory.path().join("audit.jsonl");
+    let output = harness
+        .chatter_cmd()
+        .arg("validate")
+        .arg(&missing)
+        .arg("--audit")
+        .arg(&report)
+        .output()?;
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = stderr_string(&output);
+    assert!(stderr.contains("missing-input.cha"), "{stderr}");
+    assert!(stderr.contains("read error"), "{stderr}");
+    assert!(fs::read(&report)?.is_empty());
+    assert!(stdout_string(&output).contains("Files that failed: 1"));
+    Ok(())
+}
+
+fn audit_alias_preserves_input(alias: AuditAlias) -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let directory = tempdir()?;
+    let corpus = directory.path().join("corpus");
+    fs::create_dir(&corpus)?;
+    let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+    let input = write_fixture(&corpus, "source.cha", source)?;
+    let (argument, report) = match alias {
+        AuditAlias::SamePath => (input.clone(), input.clone()),
+        AuditAlias::HardLink => {
+            let report = directory.path().join("alias.jsonl");
+            fs::hard_link(&input, &report)?;
+            // Directory discovery must protect every transcript it found.
+            (corpus, report)
+        }
+        #[cfg(unix)]
+        AuditAlias::SymbolicLink => {
+            let report = directory.path().join("alias.jsonl");
+            std::os::unix::fs::symlink(&input, &report)?;
+            (input.clone(), report)
+        }
+    };
+    let output = harness
+        .chatter_cmd()
+        .arg("validate")
+        .arg(argument)
+        .arg("--audit")
+        .arg(&report)
+        .output()?;
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr_string(&output).contains("audit output aliases input"));
+    assert_eq!(fs::read(&input)?, source.as_bytes());
+    assert_eq!(fs::read(&report)?, source.as_bytes());
+    assert!(!stdout_string(&output).contains("Found 1 files to validate"));
+    Ok(())
+}
+
+#[test]
+fn audit_mode_refuses_input_as_report_before_truncation() -> Result<(), TestError> {
+    audit_alias_preserves_input(AuditAlias::SamePath)
+}
+
+#[test]
+fn audit_mode_refuses_hard_link_to_directory_discovered_input() -> Result<(), TestError> {
+    audit_alias_preserves_input(AuditAlias::HardLink)
+}
+
+#[cfg(unix)]
+#[test]
+fn audit_mode_refuses_symlink_to_input() -> Result<(), TestError> {
+    audit_alias_preserves_input(AuditAlias::SymbolicLink)
+}
+
 /// Cache initialization failure must preserve validation and JSON diagnostics.
 #[test]
 fn unavailable_cache_preserves_json_validation_results() -> Result<(), TestError> {
@@ -250,7 +333,7 @@ fn validate_force_respects_directory_boundaries_for_cache_clears() -> Result<(),
     force_cmd
         .arg("validate")
         .arg(&corpus)
-        .arg("--force")
+        .arg("--refresh-cache")
         .arg("--format")
         .arg("json");
     let forced = force_cmd.output()?;

@@ -114,11 +114,17 @@ impl crate::validation::Validate for Word {
             let LanguageResolutionOutcome {
                 resolution,
                 diagnostics,
-            } = GoverningMarker::of(self, context.enclosing_code_switch.as_ref()).resolve(
-                self,
-                tier_language,
-                &context.shared.declared_languages,
-            );
+            } = GoverningMarker::of(self, context.enclosing_code_switch.as_ref())
+                .resolve_with_declaration(
+                    self,
+                    tier_language,
+                    context
+                        .shared
+                        .declared_languages
+                        .as_ref()
+                        .map(crate::model::DeclaredLanguages::as_ref)
+                        .map_err(|error| *error),
+                );
             errors.report_all(diagnostics);
 
             language::check_word_digits_multi(self, &resolution, errors);

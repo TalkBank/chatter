@@ -357,11 +357,11 @@ fn reference_participant_imports_reject_empty_required_fields_without_repair() {
 
     let wire = serde_json::to_value(participant).expect("participant wire payload");
     for (field, code) in [
-        ("speaker_code", ErrorCode::EmptyParticipantCode),
-        ("role", ErrorCode::EmptyParticipantRole),
+        ("/speaker_code", ErrorCode::EmptyParticipantCode),
+        ("/details/role", ErrorCode::EmptyParticipantRole),
     ] {
         let mut mutated = wire.clone();
-        *mutated.get_mut(field).expect("required wire field") =
+        *mutated.pointer_mut(field).expect("required wire field") =
             serde_json::Value::String(String::new());
         let imported: ParticipantEntry = serde_json::from_value(mutated.clone())
             .expect("lexical import retains unsupported strings for validation");
@@ -389,7 +389,7 @@ fn reference_participant_imports_reject_empty_required_fields_without_repair() {
 #[test]
 fn reference_lexical_text_imports_require_nonempty_validation() {
     use talkbank_model::alignment::helpers::{WordItem, walk_words};
-    use talkbank_model::model::{NonEmptyString, WordContents};
+    use talkbank_model::model::{RecoveryText, WordContents};
     use talkbank_model::validation::{Validate, ValidationContext};
     use talkbank_model::{DiagnosticLocation, ErrorCode, ErrorCollector};
 
@@ -449,8 +449,7 @@ fn reference_lexical_text_imports_require_nonempty_validation() {
             content_wire
         );
     }
-    let admitted =
-        NonEmptyString::try_from(word.raw_text().as_str()).expect("nonempty derived text");
+    let admitted = RecoveryText::try_from(word.raw_text().as_str()).expect("nonempty derived text");
     assert_eq!(AsRef::<str>::as_ref(&admitted), word.raw_text());
     assert_eq!(admitted.clone().into_inner(), word.raw_text());
     let errors = ErrorCollector::new();
@@ -463,11 +462,12 @@ fn reference_lexical_text_imports_require_nonempty_validation() {
     };
     text.clear();
     assert!(
-        NonEmptyString::try_from(text.as_str()).is_err(),
+        RecoveryText::try_from(text.as_str()).is_err(),
         "constructor admission refuses deletion"
     );
-    let imported: NonEmptyString = serde_json::from_value(wire.clone())
-        .expect("current wire policy retains emptiness for validation");
+    let imported: RecoveryText =
+        serde_json::from_value(wire.clone()).expect("wire policy retains emptiness for validation");
+    assert_eq!(imported, RecoveryText::Empty);
     for (context, location) in [
         (ValidationContext::default(), DiagnosticLocation::Unlocated),
         (
@@ -683,6 +683,7 @@ fn underline_specs_keep_semantics_without_fabricating_wire_locations() {
                         | ContentItem::Action(_)
                         | ContentItem::OverlapPoint(_)
                         | ContentItem::OtherSpokenEvent(_)
+                        | ContentItem::OrphanAnnotation(_)
                         | ContentItem::Freecode(_)
                         | ContentItem::InternalBullet(_)
                         | ContentItem::LongFeatureBegin(_)

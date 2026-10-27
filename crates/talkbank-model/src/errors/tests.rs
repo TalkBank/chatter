@@ -3,6 +3,7 @@
 
 use super::*;
 use miette::Diagnostic;
+use std::num::NonZeroUsize;
 
 #[test]
 fn mutable_error_context_is_the_raw_render_source() {
@@ -10,7 +11,8 @@ fn mutable_error_context_is_the_raw_render_source() {
         ErrorCode::MissingNode,
         Severity::Error,
         DiagnosticLocation::from_offsets(0, 3),
-        ErrorContext::new("old\n", crate::Span::new(0, 3), "old").with_line_offset(2),
+        ErrorContext::new("old\n", crate::Span::new(0, 3), "old")
+            .with_line_offset(NonZeroUsize::new(2).expect("positive line")),
         "context boundary",
     );
     let span = miette::SourceSpan::from((0, 3));
@@ -22,7 +24,7 @@ fn mutable_error_context_is_the_raw_render_source() {
     }
     let context = error.context.as_mut().expect("mutable context");
     context.source_text = "new\n".to_owned();
-    context.line_offset = Some(17);
+    context.line_offset = NonZeroUsize::new(17);
     {
         let source = error.source_code().expect("updated context");
         let contents = source.read_span(&span, 0, 0).expect("updated span");
@@ -44,7 +46,8 @@ fn raw_context_line_offset_overflow_is_refused() {
         ErrorCode::MissingNode,
         Severity::Error,
         DiagnosticLocation::from_offsets(4, 5),
-        ErrorContext::new("a\nb\nc\n", crate::Span::new(4, 5), "c").with_line_offset(usize::MAX),
+        ErrorContext::new("a\nb\nc\n", crate::Span::new(4, 5), "c")
+            .with_line_offset(NonZeroUsize::MAX),
         "line offset boundary",
     );
     assert!(
@@ -63,7 +66,8 @@ fn raw_context_render_line_extent_is_checked() {
             ErrorCode::MissingNode,
             Severity::Error,
             DiagnosticLocation::from_offsets(0, 1),
-            ErrorContext::new(source, crate::Span::new(0, 1), "a").with_line_offset(usize::MAX),
+            ErrorContext::new(source, crate::Span::new(0, 1), "a")
+                .with_line_offset(NonZeroUsize::MAX),
             "render extent boundary",
         );
         let mut rendered = String::new();
@@ -78,7 +82,8 @@ fn raw_context_render_line_extent_is_checked() {
             ErrorCode::MissingNode,
             Severity::Error,
             DiagnosticLocation::from_offsets(0, 1),
-            ErrorContext::new(source, crate::Span::new(0, 1), "a").with_line_offset(usize::MAX),
+            ErrorContext::new(source, crate::Span::new(0, 1), "a")
+                .with_line_offset(NonZeroUsize::MAX),
             "last representable line",
         );
         let mut rendered = String::new();
@@ -366,8 +371,8 @@ fn test_line_offset_adjustment_in_labels() -> Result<(), String> {
     );
 
     // Create context with line_offset
-    let context =
-        ErrorContext::new(context_text, span_in_context, "<").with_line_offset(line_number);
+    let context = ErrorContext::new(context_text, span_in_context, "<")
+        .with_line_offset(NonZeroUsize::new(line_number).expect("positive line"));
 
     let error = ParseError::new(
         ErrorCode::MissingNode,
@@ -404,7 +409,8 @@ fn test_line_offset_no_adjustment_for_line_1() -> Result<(), String> {
         crate::Span::new(6, 11),
         crate::LineColumn::one_based(1, 7).expect("one-based position"),
     );
-    let context = ErrorContext::new(context_text, span_in_context, "hello").with_line_offset(1);
+    let context = ErrorContext::new(context_text, span_in_context, "hello")
+        .with_line_offset(NonZeroUsize::MIN);
 
     let error = ParseError::new(
         ErrorCode::InternalError,
@@ -459,4 +465,33 @@ fn test_miette_output_uses_line_offset() -> Result<(), String> {
         output
     );
     Ok(())
+}
+
+#[test]
+fn error_context_line_offset_wire_admission() {
+    let context = ErrorContext::new("x", Span::new(0, 1), "x");
+    let absent = serde_json::to_value(&context).expect("context wire");
+    assert!(absent.get("line_offset").is_none());
+    assert_eq!(
+        serde_json::from_value::<ErrorContext>(absent.clone()).expect("absent offset"),
+        context
+    );
+    for line in [1, 17, usize::MAX] {
+        let mut wire = absent.clone();
+        wire["line_offset"] = serde_json::json!(line);
+        let admitted: ErrorContext = serde_json::from_value(wire.clone()).expect("positive offset");
+        assert_eq!(admitted.line_offset.map(NonZeroUsize::get), Some(line));
+        assert_eq!(serde_json::to_value(admitted).expect("roundtrip"), wire);
+    }
+    for invalid in [
+        serde_json::json!(0),
+        serde_json::json!(-1),
+        serde_json::json!(1.5),
+    ] {
+        let mut wire = absent.clone();
+        wire["line_offset"] = invalid;
+        assert!(serde_json::from_value::<ErrorContext>(wire).is_err());
+    }
+    let schema = serde_json::to_value(schemars::schema_for!(ErrorContext)).expect("schema");
+    assert_eq!(schema["properties"]["line_offset"]["minimum"], 1);
 }

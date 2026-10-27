@@ -6,7 +6,7 @@
 //! generated `UtteranceChild1Choice` variant and calls the matching helper
 //! here, so the concrete tier wrapper (`MorDependentTierNode`, ...) arrives
 //! already typed, with no `node.kind()` string dispatch. The gating and
-//! placeholder policy preserves the source slot. Every admitted recovery
+//! recovery policy preserves the source slot. Every admitted recovery
 //! carrier reports an error, even when the native walk exposes no individually
 //! reportable ERROR/MISSING node.
 //!
@@ -24,22 +24,16 @@ use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::admission::{TierAdmission, TierRecovery};
-use crate::parser::tier_parsers::gra::{
-    parse_gra_tier_with_separator, recover_gra_tier_with_separator,
-};
+use crate::parser::tier_parsers::gra::{gra_recovery_separator, parse_gra_tier_with_separator};
 use crate::parser::tier_parsers::mor::parse_mor_tier;
 use crate::parser::tier_parsers::pho::{parse_mod_tier, parse_pho_tier};
-use crate::parser::tier_parsers::sin::parse_sin_tier_with_separator;
+use crate::parser::tier_parsers::sin::parse_sin_tier;
 use crate::parser::tier_parsers::wor::parse_wor_tier;
-use talkbank_model::model::Terminator;
 use talkbank_model::model::TierSeparator;
-use talkbank_model::model::dependent_tier::{MorTier, WorTier};
+use talkbank_model::model::dependent_tier::{UnparsedTier, WorTier};
 
-/// Attach a `%mor` tier. On a tier with a tree-sitter error, report one summary
-/// diagnostic and push an EMPTY placeholder (so downstream regeneration can
-/// mutate the `%mor` slot in place without reordering against later tiers such
-/// as `%wor`, per the parser-recovery rule); otherwise parse it, pushing the
-/// same empty placeholder on a `Rejected` outcome.
+/// Attach parsed morphology or retain the original unparsed source in place.
+/// Recovery is never represented by an empty tier or an invented terminator.
 pub(super) fn attach_mor<'tree>(
     n: SourceBound<'tree, '_, MorDependentTierNode<'tree>>,
     utterance: &mut Utterance,
@@ -63,13 +57,23 @@ pub(super) fn attach_mor<'tree>(
         return;
     };
     let tier_span = span_of(tier_node);
+    let talkbank_model::ParseOutcome::Parsed(source) =
+        crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+            tier_node,
+            n.source(),
+            errors,
+            "unparsed MOR source",
+        )
+    else {
+        return;
+    };
     match TierAdmission::admit(n) {
         TierAdmission::Recovery(recovery) => {
             report_tier_parse_error(recovery, "mor", errors);
             utterance
                 .dependent_tiers
                 .push(DependentTierEntry::with_separator(
-                    DependentTier::Mor(empty_mor_placeholder(tier_span)),
+                    DependentTier::UnparsedMor(UnparsedTier::new(tier_span, source)),
                     separator,
                 ));
         }
@@ -86,7 +90,7 @@ pub(super) fn attach_mor<'tree>(
                 utterance
                     .dependent_tiers
                     .push(DependentTierEntry::with_separator(
-                        DependentTier::Mor(empty_mor_placeholder(tier_span)),
+                        DependentTier::UnparsedMor(UnparsedTier::new(tier_span, source)),
                         separator,
                     ));
             }
@@ -94,8 +98,7 @@ pub(super) fn attach_mor<'tree>(
     }
 }
 
-/// Attach a `%gra` tier. On a tier with a tree-sitter error, report one summary
-/// diagnostic and push an EMPTY placeholder; otherwise parse and push it.
+/// Attach a complete graph or retain the rejected tier's exact source.
 pub(super) fn attach_gra<'tree>(
     n: SourceBound<'tree, '_, GraDependentTierNode<'tree>>,
     utterance: &mut Utterance,
@@ -103,25 +106,39 @@ pub(super) fn attach_gra<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    let parsed = match TierAdmission::admit(n) {
-        TierAdmission::Recovery(recovery) => recover_gra_tier_with_separator(n)
-            .inspect(|_| report_tier_parse_error(recovery, "gra", errors)),
-        TierAdmission::Healthy(healthy) => parse_gra_tier_with_separator(healthy.node(), errors),
+    let talkbank_model::ParseOutcome::Parsed(source) =
+        crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+            tier_node,
+            input,
+            errors,
+            "unparsed GRA source",
+        )
+    else {
+        return;
     };
-    let tier = match parsed {
-        Ok(tier) => tier,
+    let raw = || DependentTier::UnparsedGra(UnparsedTier::new(span_of(tier_node), source));
+    let parsed = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => gra_recovery_separator(n).map(|separator| {
+            report_tier_parse_error(recovery, "gra", errors);
+            DependentTierEntry::with_separator(raw(), separator)
+        }),
+        TierAdmission::Healthy(healthy) => parse_gra_tier_with_separator(healthy.node(), errors)
+            .map(|tier| {
+                tier.into_entry(|gra| match gra {
+                    talkbank_model::ParseOutcome::Parsed(gra) => DependentTier::Gra(gra),
+                    talkbank_model::ParseOutcome::Rejected => raw(),
+                })
+            }),
+    };
+    match parsed {
+        Ok(tier) => utterance.dependent_tiers.push(tier),
         Err(failure) => {
             crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
-            return;
         }
-    };
-    utterance
-        .dependent_tiers
-        .push(tier.into_entry(DependentTier::Gra));
+    }
 }
 
-/// Attach a `%pho` tier. On a tier with a tree-sitter error, report one summary
-/// diagnostic and DROP the tier (no placeholder); otherwise parse and push it.
+/// Attach parsed %pho or retain the original rejected tier in its source slot.
 pub(super) fn attach_pho<'tree>(
     n: SourceBound<'tree, '_, PhoDependentTierNode<'tree>>,
     utterance: &mut Utterance,
@@ -129,46 +146,52 @@ pub(super) fn attach_pho<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    let healthy = match TierAdmission::admit(n) {
-        TierAdmission::Recovery(recovery) => {
-            report_tier_parse_error(recovery, "pho", errors);
-            return;
-        }
-        TierAdmission::Healthy(healthy) => healthy,
-    };
-    let n = healthy.node();
     let Ok(children) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::extract_envelope(n),
         tier_node,
-        n.source(),
+        input,
         errors,
     ) else {
         return;
     };
     let Ok(separator) = crate::parser::typed_cst::report_admission(
         super::helpers::dependent_tier_separator(children.children().child_1.slot()),
-        n.raw_node(),
-        n.source(),
+        tier_node,
+        input,
         errors,
     ) else {
         return;
     };
-    let tier = match parse_pho_tier(n, errors) {
-        Ok(tier) => tier,
-        Err(failure) => {
-            crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
-            return;
+    let talkbank_model::ParseOutcome::Parsed(source) =
+        crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+            tier_node,
+            input,
+            errors,
+            "unparsed PHO source",
+        )
+    else {
+        return;
+    };
+    let raw = || DependentTier::UnparsedPho(UnparsedTier::new(span_of(tier_node), source));
+    let tier = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => {
+            report_tier_parse_error(recovery, "pho", errors);
+            raw()
         }
+        TierAdmission::Healthy(healthy) => match parse_pho_tier(healthy.node(), errors) {
+            Ok(tier) => DependentTier::Pho(tier),
+            Err(failure) => {
+                crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
+                raw()
+            }
+        },
     };
     utterance
         .dependent_tiers
-        .push(DependentTierEntry::with_separator(
-            DependentTier::Pho(tier),
-            separator,
-        ));
+        .push(DependentTierEntry::with_separator(tier, separator));
 }
 
-/// Attach a `%mod` tier. Same error handling as [`attach_pho`].
+/// Attach parsed %mod or retain the original rejected tier in its source slot.
 pub(super) fn attach_mod<'tree>(
     n: SourceBound<'tree, '_, ModDependentTierNode<'tree>>,
     utterance: &mut Utterance,
@@ -176,46 +199,52 @@ pub(super) fn attach_mod<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    let healthy = match TierAdmission::admit(n) {
-        TierAdmission::Recovery(recovery) => {
-            report_tier_parse_error(recovery, "mod", errors);
-            return;
-        }
-        TierAdmission::Healthy(healthy) => healthy,
-    };
-    let n = healthy.node();
     let Ok(children) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::extract_envelope(n),
         tier_node,
-        n.source(),
+        input,
         errors,
     ) else {
         return;
     };
     let Ok(separator) = crate::parser::typed_cst::report_admission(
         super::helpers::dependent_tier_separator(children.children().child_1.slot()),
-        n.raw_node(),
-        n.source(),
+        tier_node,
+        input,
         errors,
     ) else {
         return;
     };
-    let tier = match parse_mod_tier(n, errors) {
-        Ok(tier) => tier,
-        Err(failure) => {
-            crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
-            return;
+    let talkbank_model::ParseOutcome::Parsed(source) =
+        crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+            tier_node,
+            input,
+            errors,
+            "unparsed MOD source",
+        )
+    else {
+        return;
+    };
+    let raw = || DependentTier::UnparsedMod(UnparsedTier::new(span_of(tier_node), source));
+    let tier = match TierAdmission::admit(n) {
+        TierAdmission::Recovery(recovery) => {
+            report_tier_parse_error(recovery, "mod", errors);
+            raw()
         }
+        TierAdmission::Healthy(healthy) => match parse_mod_tier(healthy.node(), errors) {
+            Ok(tier) => DependentTier::Mod(tier),
+            Err(failure) => {
+                crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
+                raw()
+            }
+        },
     };
     utterance
         .dependent_tiers
-        .push(DependentTierEntry::with_separator(
-            DependentTier::Mod(tier),
-            separator,
-        ));
+        .push(DependentTierEntry::with_separator(tier, separator));
 }
 
-/// Attach a `%sin` tier. Same error handling as [`attach_pho`].
+/// Attach parsed %sin or retain the original rejected tier in its source slot.
 pub(super) fn attach_sin<'tree>(
     n: SourceBound<'tree, '_, SinDependentTierNode<'tree>>,
     utterance: &mut Utterance,
@@ -223,37 +252,168 @@ pub(super) fn attach_sin<'tree>(
 ) {
     let input = n.source();
     let tier_node = n.raw_node();
-    let healthy = match TierAdmission::admit(n) {
+    let Ok(children) = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::extract_envelope(n),
+        tier_node,
+        input,
+        errors,
+    ) else {
+        return;
+    };
+    let Ok(separator) = crate::parser::typed_cst::report_admission(
+        super::helpers::dependent_tier_separator(children.children().child_1.slot()),
+        tier_node,
+        input,
+        errors,
+    ) else {
+        return;
+    };
+    let talkbank_model::ParseOutcome::Parsed(source) =
+        crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+            tier_node,
+            input,
+            errors,
+            "unparsed SIN source",
+        )
+    else {
+        return;
+    };
+    let raw = || DependentTier::UnparsedSin(UnparsedTier::new(span_of(tier_node), source));
+    let tier = match TierAdmission::admit(n) {
         TierAdmission::Recovery(recovery) => {
             report_tier_parse_error(recovery, "sin", errors);
-            return;
+            raw()
         }
-        TierAdmission::Healthy(healthy) => healthy,
-    };
-    let n = healthy.node();
-    let tier = match parse_sin_tier_with_separator(n, errors) {
-        Ok(tier) => tier,
-        Err(failure) => {
-            crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
-            return;
-        }
+        TierAdmission::Healthy(healthy) => match parse_sin_tier(healthy.node(), errors) {
+            Ok(tier) => DependentTier::Sin(tier),
+            Err(failure) => {
+                crate::parser::typed_cst::report_cst_failure(tier_node, input, failure, errors);
+                raw()
+            }
+        },
     };
     utterance
         .dependent_tiers
-        .push(tier.into_entry(DependentTier::Sin));
+        .push(DependentTierEntry::with_separator(tier, separator));
 }
 
-/// Attach a `%wor` tier. `%wor` is a generated tier; on a tier with a
-/// tree-sitter error (e.g. legacy CLAN groups/retraces) report one summary
-/// diagnostic and DROP the tier (the validator still flags it; align
-/// regenerates `%wor`); otherwise parse and push it.
+/// Attach parsed WOR or retain rejected source without inventing word timings.
 pub(super) fn attach_wor<'tree>(
     n: SourceBound<'tree, '_, WorDependentTierNode<'tree>>,
     utterance: &mut Utterance,
     errors: &impl ErrorSink,
 ) {
-    if let Some(tier) = parse_wor_entry(n, errors) {
-        utterance.dependent_tiers.push(tier.into_entry());
+    let Some(source) = WorSource::admit(n, errors) else {
+        return;
+    };
+    match source.lower(errors) {
+        Ok(tier) => utterance.dependent_tiers.push(tier.into_entry()),
+        Err(source) => {
+            if let Some(entry) = source.into_recovery(errors) {
+                utterance.dependent_tiers.push(entry);
+            }
+        }
+    }
+}
+
+/// Source evidence survives semantic rejection. Only admission can construct it;
+/// lowering returns the same owner when it cannot construct a word tier.
+struct WorSource<'tree, 'source> {
+    node: SourceBound<'tree, 'source, WorDependentTierNode<'tree>>,
+    metadata: WorSourceMetadata,
+}
+
+struct WorSourceMetadata {
+    separator: TierSeparator,
+    content_range: Option<talkbank_model::model::dependent_tier::DependentTierContentSpan>,
+}
+
+impl WorSourceMetadata {
+    fn into_entry(self, tier: DependentTier) -> DependentTierEntry {
+        let mut entry = DependentTierEntry::with_separator(tier, self.separator);
+        if let Some(body) = self.content_range {
+            entry.record_content_span(body);
+        }
+        entry
+    }
+}
+
+impl<'tree, 'source> WorSource<'tree, 'source> {
+    fn admit(
+        node: SourceBound<'tree, 'source, WorDependentTierNode<'tree>>,
+        errors: &impl ErrorSink,
+    ) -> Option<Self> {
+        let raw = node.raw_node();
+        let input = node.source();
+        let children = crate::parser::typed_cst::report_admission(
+            crate::parser::typed_cst::extract_envelope(node),
+            raw,
+            input,
+            errors,
+        )
+        .ok()?;
+        let separator = crate::parser::typed_cst::report_admission(
+            super::helpers::dependent_tier_separator(children.children().child_1.slot()),
+            raw,
+            input,
+            errors,
+        )
+        .ok()?;
+        let content_range = crate::parser::typed_cst::report_admission(
+            super::content_range::wor(node),
+            raw,
+            input,
+            errors,
+        )
+        .ok()?;
+        Some(Self {
+            node,
+            metadata: WorSourceMetadata {
+                separator,
+                content_range,
+            },
+        })
+    }
+
+    fn lower(self, errors: &impl ErrorSink) -> Result<LoweredWorTier, Self> {
+        let healthy = match TierAdmission::admit(self.node) {
+            TierAdmission::Recovery(recovery) => {
+                report_tier_parse_error(recovery, "wor", errors);
+                return Err(self);
+            }
+            TierAdmission::Healthy(healthy) => healthy,
+        };
+        let node = healthy.node();
+        match crate::parser::typed_cst::report_admission(
+            parse_wor_tier(node, errors),
+            node.raw_node(),
+            node.source(),
+            errors,
+        ) {
+            Ok(talkbank_model::ParseOutcome::Parsed(tier)) => Ok(LoweredWorTier {
+                tier,
+                metadata: self.metadata,
+            }),
+            Ok(talkbank_model::ParseOutcome::Rejected) | Err(_) => Err(self),
+        }
+    }
+
+    fn into_recovery(self, errors: &impl ErrorSink) -> Option<DependentTierEntry> {
+        let raw = self.node.raw_node();
+        let source = crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+            raw,
+            self.node.source(),
+            errors,
+            "unparsed WOR source",
+        )
+        .into_option()?;
+        Some(
+            self.metadata
+                .into_entry(DependentTier::UnparsedWor(UnparsedTier::new(
+                    span_of(raw),
+                    source,
+                ))),
+        )
     }
 }
 
@@ -261,8 +421,7 @@ pub(super) fn attach_wor<'tree>(
 /// type until it is placed among an utterance's dependent tiers.
 pub(crate) struct LoweredWorTier {
     tier: WorTier,
-    separator: TierSeparator,
-    content_range: Option<talkbank_model::model::dependent_tier::DependentTierContentSpan>,
+    metadata: WorSourceMetadata,
 }
 
 impl LoweredWorTier {
@@ -273,12 +432,7 @@ impl LoweredWorTier {
 
     /// Move into a dependent-tier entry, keeping the source separator.
     pub(crate) fn into_entry(self) -> DependentTierEntry {
-        let mut entry =
-            DependentTierEntry::with_separator(DependentTier::Wor(self.tier), self.separator);
-        if let Some(body) = self.content_range {
-            entry.record_content_span(body);
-        }
-        entry
+        self.metadata.into_entry(DependentTier::Wor(self.tier))
     }
 }
 
@@ -288,51 +442,7 @@ pub(crate) fn parse_wor_entry<'tree>(
     n: SourceBound<'tree, '_, WorDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Option<LoweredWorTier> {
-    let input = n.source();
-    let tier_node = n.node().raw_node();
-    let healthy = match TierAdmission::admit(n) {
-        TierAdmission::Recovery(recovery) => {
-            report_tier_parse_error(recovery, "wor", errors);
-            return None;
-        }
-        TierAdmission::Healthy(healthy) => healthy,
-    };
-    let n = healthy.node();
-    let children = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(n),
-        tier_node,
-        input,
-        errors,
-    )
-    .ok()?;
-    let separator = crate::parser::typed_cst::report_admission(
-        super::helpers::dependent_tier_separator(children.children().child_1.slot()),
-        tier_node,
-        input,
-        errors,
-    )
-    .ok()?;
-    let Ok(tier) = crate::parser::typed_cst::report_admission(
-        parse_wor_tier(n, errors),
-        tier_node,
-        input,
-        errors,
-    ) else {
-        return None;
-    };
-    let Ok(content_range) = crate::parser::typed_cst::report_admission(
-        super::content_range::wor(n),
-        tier_node,
-        input,
-        errors,
-    ) else {
-        return None;
-    };
-    Some(LoweredWorTier {
-        tier,
-        separator,
-        content_range,
-    })
+    WorSource::admit(n, errors)?.lower(errors).ok()
 }
 
 /// Consume native recovery evidence. A summary fallback describes the actual
@@ -361,24 +471,4 @@ fn report_tier_parse_error(
         ));
     }
     errors.report_all(found);
-}
-
-/// Empty `%mor` standing in for a tier that failed to parse.
-///
-/// The span is the REAL tier span, not `Span::DUMMY`. A placeholder is still a
-/// tier that exists at a place in the file, and everything downstream reads its
-/// span: a diagnostic's reported location, an LSP position, `SpanShift` during
-/// an edit. `DUMMY` is `0..0`, so all of those pointed at the start of the file
-/// instead of at the offending tier.
-///
-/// This is design rule 7: lenient recovery preserves malformed tier slots IN
-/// PLACE and never fabricates dummy model values.
-fn empty_mor_placeholder(span: talkbank_model::Span) -> MorTier {
-    MorTier::new_mor(
-        span,
-        Vec::new(),
-        Terminator::Period {
-            location: span.into(),
-        },
-    )
 }

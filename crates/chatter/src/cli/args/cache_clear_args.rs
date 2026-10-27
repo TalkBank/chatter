@@ -89,13 +89,13 @@ impl Args for ClearScope {
 }
 
 impl super::flag_modes::FlagMode for ClearMode {
-    const LONG: &'static str = "dry-run";
-    const HELP: &'static str = "Show what would be cleared without actually clearing";
+    const LONG: &'static str = "apply";
+    const HELP: &'static str = "Remove the selected entries (default: count without removing)";
     fn absent() -> Self {
-        Self::Apply
+        Self::DryRun
     }
     fn present() -> Self {
-        Self::DryRun
+        Self::Apply
     }
 }
 
@@ -122,9 +122,9 @@ mod tests {
     fn the_flags_select_one_scope_and_mode() {
         assert_eq!(
             parse(&["--all"]).expect("--all"),
-            (ClearScope(CacheScope::All), ClearMode::Apply)
+            (ClearScope(CacheScope::All), ClearMode::DryRun)
         );
-        let (scope, mode) = parse(&["--prefix", "corpus", "--dry-run"]).expect("--prefix");
+        let (scope, mode) = parse(&["--prefix", "corpus"]).expect("--prefix");
         assert_eq!(mode, ClearMode::DryRun);
         assert_eq!(
             scope,

@@ -289,7 +289,8 @@ fn reference_speaker_removal_reports_sequence_tail_and_bounded_prefix() {
     let original = strict_parse(parser.parse_chat_file(&source)).expect("reference parses");
     for mapping in ["CHI=drop", "MOT=drop"] {
         let mapping = parse_mapping_spec(mapping).expect("authored removal control");
-        let changed_text = apply_mapping_chat(&original, &mapping);
+        let changed_text =
+            apply_mapping_chat(&original, &mapping).expect("admitted participant declaration");
         let changed =
             strict_parse(parser.parse_chat_file(&changed_text)).expect("transformed CHAT parses");
         assert!(changed.lines.len() < original.lines.len());
@@ -345,30 +346,36 @@ fn reference_participant_reports_preserve_order_keys_and_truncation() {
     let parse = |path: &str| {
         let source = std::fs::read_to_string(workspace_root().join("corpus/reference").join(path))
             .expect("canonical reference transcript");
-        strict_parse(parser.parse_chat_file(&source)).expect("reference parses")
+        let file = strict_parse(parser.parse_chat_file(&source)).expect("reference parses");
+        let errors = talkbank_model::ErrorCollector::new();
+        let participants =
+            talkbank_model::model::participant::join::build_participants_from_lines(&file.lines)
+                .report_into(&errors);
+        assert!(!errors.has_errors());
+        participants
     };
     let basic = parse("core/basic-conversation.cha");
     let overlap = parse("ca/overlaps.cha");
     let extended = parse("core/headers-speaker-info.cha");
-    let equal = report(&basic.participants, &basic.participants, 0);
+    let equal = report(&basic, &basic, 0);
     assert!(equal.is_empty() && !equal.is_truncated());
-    assert!(basic.participants.semantic_eq(&basic.participants));
+    assert!(basic.semantic_eq(&basic));
 
     // Keep the speaker key and map order, changing only its observed metadata.
     // This comparison projection is not admission of a modified CHAT document.
-    let (speaker, participant) = basic.participants.get_index(0).expect("first speaker");
-    let replacement = extended.participants.get(speaker).expect("same speaker");
+    let (speaker, participant) = basic.get_index(0).expect("first speaker");
+    let replacement = extended.get(speaker).expect("same speaker");
     assert!(!participant.semantic_eq(replacement));
-    let mut changed_value = basic.participants.clone();
+    let mut changed_value = basic.clone();
     changed_value.insert(speaker.clone(), replacement.clone());
     assert!(
-        basic.participants.keys().eq(changed_value.keys()),
+        basic.keys().eq(changed_value.keys()),
         "metadata replacement must preserve keys and insertion order"
     );
 
     // An authored speaker change must identify the first declared key, not
     // reorder maps or skip the key when the report budget is exhausted.
-    let first = report(&basic.participants, &overlap.participants, 1);
+    let first = report(&basic, &overlap, 1);
     assert!(first.is_truncated());
     assert_eq!(first.differences().len(), 1);
     let difference = &first.differences()[0];
@@ -382,7 +389,7 @@ fn reference_participant_reports_preserve_order_keys_and_truncation() {
         "speaker keys do not carry source spans"
     );
 
-    let length = report(&basic.participants, &extended.participants, 1);
+    let length = report(&basic, &extended, 1);
     assert!(length.is_truncated());
     assert_eq!(length.differences().len(), 1);
     assert_eq!(length.differences()[0].path, "/");
@@ -394,12 +401,12 @@ fn reference_participant_reports_preserve_order_keys_and_truncation() {
     assert_eq!(length.differences()[0].right, "len=3");
 
     for (left, right) in [
-        (&basic.participants, &overlap.participants),
-        (&overlap.participants, &basic.participants),
-        (&basic.participants, &extended.participants),
-        (&extended.participants, &basic.participants),
-        (&basic.participants, &changed_value),
-        (&changed_value, &basic.participants),
+        (&basic, &overlap),
+        (&overlap, &basic),
+        (&basic, &extended),
+        (&extended, &basic),
+        (&basic, &changed_value),
+        (&changed_value, &basic),
     ] {
         let full = report(left, right, usize::MAX);
         assert!(!full.is_empty() && !full.is_truncated());
@@ -634,9 +641,10 @@ fn reference_semantic_reports_agree_with_equality_and_preserve_bounded_prefixes(
         content_mismatches.iter().all(|count| *count > 0),
         "word, pause, replacement and annotated-group payload differences need real witnesses: {content_mismatches:?}"
     );
+    // ChatFile contains ordered lines, not a redundant metadata map. Map
+    // length mismatches are witnessed separately by reference_participant_reports.
     for kind in [
         "value_mismatch",
-        "length_mismatch",
         "variant_mismatch",
         "missing_key",
         "extra_key",

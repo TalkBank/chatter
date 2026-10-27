@@ -7,8 +7,8 @@
 
 use crate::backend::utils;
 use talkbank_model::Span;
-use talkbank_model::alignment::{GraHeadRef, IndexPair};
-use talkbank_model::model::{GrammaticalRelation, MorTier};
+use talkbank_model::alignment::{GraHeadRef, IndexPair, MorItemIndex};
+use talkbank_model::model::{GrammaticalRelation, MorTier, Utterance};
 use talkbank_parser::node_types::{GRA_RELATION, MOR_CONTENT, PHO_GROUP, SIN_GROUP};
 use tower_lsp::lsp_types::Position;
 use tree_sitter::{Node, Tree};
@@ -29,6 +29,25 @@ pub fn format_mor_word_label(mor_tier: Option<&MorTier>, word_index: usize) -> S
         .and_then(|(mor, chunk_idx)| mor.chunk_at(chunk_idx))
         .and_then(|chunk| chunk.lemma().map(str::to_owned))
         .unwrap_or_else(|| format!("word {word_index}"))
+}
+
+/// Resolve a MOR item's first chunk through the model-owned index bridge and
+/// computed GRA alignment. An item index cannot be used directly as a chunk.
+pub(super) fn gra_relation_for_mor_item(
+    utterance: &Utterance,
+    item: MorItemIndex,
+) -> Option<&GrammaticalRelation> {
+    let chunk = utterance
+        .mor_tier()?
+        .semantic_index_of_item_start(item)?
+        .to_chunk_index();
+    let alignment = utterance.alignments.as_ref()?.gra.as_ref()?;
+    let relation = alignment
+        .pairs
+        .iter()
+        .find(|pair| pair.mor_chunk_index == Some(chunk))?
+        .gra_index?;
+    utterance.gra_tier()?.relations().get(relation.as_usize())
 }
 
 /// Format the `%gra` summary shown alongside aligned `%mor`/main-tier hover info.

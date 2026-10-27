@@ -415,3 +415,206 @@ fn metadata_headers_types_mutations_detect_faults_through_isolated_headers() {
         assert_eq!(mutations, 4);
     }
 }
+
+#[test]
+fn rejected_headers_preserve_original_source_through_model_and_json() {
+    use talkbank_model::model::{ChatFile, Header, Line, WriteChat};
+    const TYPES: &str = include_str!(
+        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_3.cha"
+    );
+    const MEDIA: &str =
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E509_4.cha");
+    const L1: &str =
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E519_2.cha");
+    const PARTIAL_MEDIA: &str =
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E342_7.cha");
+    const PARTIAL_TYPES: &str = include_str!(
+        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_6.cha"
+    );
+    let empty_l1 = L1.replace("@L1 of CHI:\tqzz", "@L1 of CHI:\t");
+    for (original, prefix) in [
+        (TYPES, "@Types:"),
+        (MEDIA, "@Media:"),
+        (PARTIAL_MEDIA, "@Media:"),
+        (PARTIAL_TYPES, "@Types:"),
+        (&empty_l1, "@L1 of"),
+    ] {
+        for newline in ["\n", "\r\n", "\r"] {
+            let input = original.replace('\n', newline);
+            let expected = original
+                .lines()
+                .find(|line| line.starts_with(prefix))
+                .unwrap();
+            for offset in [0, 200] {
+                let fragment_errors = ErrorCollector::new();
+                let fragment = crate::Re2cParser::new()
+                    .parse_header(expected, offset, &fragment_errors)
+                    .into_option()
+                    .expect("retained header fragment");
+                assert_eq!(fragment.to_chat_string(), expected);
+                let errors = ErrorCollector::new();
+                let file = crate::Re2cParser::new()
+                    .parse_chat_file(&input, offset, &errors)
+                    .into_option()
+                    .expect("retained document");
+                let restored: ChatFile =
+                    serde_json::from_str(&serde_json::to_string(&file).unwrap()).unwrap();
+                for model in [&file, &restored] {
+                    let recovered = model
+                        .lines
+                        .iter()
+                        .find_map(|line| match line {
+                            Line::Header { header, .. }
+                                if matches!(header.as_ref(), Header::Unknown { .. }) =>
+                            {
+                                Some(header)
+                            }
+                            _ => None,
+                        })
+                        .expect("explicit rejected header");
+                    assert_eq!(recovered.to_chat_string(), expected, "{prefix}");
+                    let validation = ErrorCollector::new();
+                    model.validate(&validation, TranscriptName::Anonymous);
+                    assert!(
+                        validation
+                            .into_vec()
+                            .iter()
+                            .any(|error| error.code == ErrorCode::UnknownHeader
+                                && error.severity == talkbank_model::Severity::Error)
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Unknown names cannot inherit a known header's payload or parser policy.
+#[test]
+fn header_name_prefixes_preserve_unknown_source_and_refuse_validation() {
+    fn check(parser: &impl ChatParser, original: &str, name: &str) {
+        for newline in ["\n", "\r\n", "\r"] {
+            let input = original.replace('\n', newline);
+            for origin in [0, 200] {
+                let errors = ErrorCollector::new();
+                let file = parser
+                    .parse_chat_file(&input, origin, &errors)
+                    .into_option()
+                    .unwrap();
+                let expected = original
+                    .lines()
+                    .find(|line| line.starts_with(name))
+                    .unwrap();
+                let unknown: Vec<_> = file
+                    .lines
+                    .iter()
+                    .filter_map(|line| match line {
+                        talkbank_model::model::Line::Header { header, .. } => match header.as_ref()
+                        {
+                            talkbank_model::Header::Unknown { text, .. } => {
+                                Some(text.as_str().trim_end_matches(['\r', '\n']))
+                            }
+                            _ => None,
+                        },
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(unknown, [expected], "{}: {name}", parser.parser_name());
+                assert_eq!(file.utterances().count(), 1);
+                file.validate(&errors, TranscriptName::Anonymous);
+                assert!(
+                    errors
+                        .into_vec()
+                        .iter()
+                        .any(|error| error.code == ErrorCode::UnknownHeader),
+                    "{}: {name} must remain unsupported",
+                    parser.parser_name()
+                );
+            }
+        }
+    }
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let native = crate::Re2cParser::new();
+    for (source, name) in [
+        (
+            include_str!(
+                "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E525_5.cha"
+            ),
+            "@Commentary:",
+        ),
+        (
+            include_str!(
+                "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E525_6.cha"
+            ),
+            "@DateExtra:",
+        ),
+        (
+            include_str!(
+                "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E525_7.cha"
+            ),
+            "@OptionsExtra:",
+        ),
+        (
+            include_str!(
+                "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E525_8.cha"
+            ),
+            "@BgExtra:",
+        ),
+    ] {
+        check(&tree, source, name);
+        check(&native, source, name);
+    }
+}
+
+#[test]
+fn types_header_requires_one_complete_triple() {
+    fn check(parser: &impl ChatParser, source: &str, fragment: &str, origin: usize) {
+        #[derive(Debug, Clone, Copy)]
+        enum Input<'a> {
+            File(&'a str),
+            Fragment(&'a str),
+        }
+        for input in [Input::File(source), Input::Fragment(fragment)] {
+            let errors = ErrorCollector::new();
+            match input {
+                Input::Fragment(text) => {
+                    let _ = parser.parse_header(text, origin, &errors);
+                }
+                Input::File(text) => {
+                    let _ = parser.parse_chat_file(text, origin, &errors);
+                }
+            }
+            let completed = talkbank_model::CompletedDiagnostics::admit(errors.into_vec()).unwrap();
+            assert!(
+                completed
+                    .diagnostics()
+                    .iter()
+                    .any(|error| { error.severity == talkbank_model::Severity::Error }),
+                "extra Types triple must be rejected ({input:?}, origin={origin})"
+            );
+        }
+    }
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let native = crate::Re2cParser::new();
+    let authored = include_str!(
+        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_7.cha"
+    );
+    for newline in ["\n", "\r\n"] {
+        let source = authored.replace('\n', newline);
+        let start = source.find("@Types:").unwrap();
+        let end = source.find("@Situation:").unwrap();
+        let fragment = &source[start..end];
+        for origin in [0, 37] {
+            check(&tree, &source, fragment, origin);
+            check(&native, &source, fragment, origin);
+            let errors = ErrorCollector::new();
+            let header = native
+                .parse_header(fragment, origin, &errors)
+                .into_option()
+                .unwrap();
+            let talkbank_model::Header::Unknown { text, .. } = header else {
+                panic!("a rejected Types body must not become a valid triple")
+            };
+            assert_eq!(text.as_str(), fragment.trim_end_matches(['\r', '\n']));
+        }
+    }
+}

@@ -21,6 +21,7 @@
 //! is stable and specs are now manually curated.
 
 pub mod artifacts;
+pub mod deferred_specs;
 pub mod description;
 pub mod error_spec_validation;
 pub mod mutation;

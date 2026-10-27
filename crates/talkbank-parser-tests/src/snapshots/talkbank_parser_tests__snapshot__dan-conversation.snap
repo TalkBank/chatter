@@ -3,10 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "dan",
-    "tur"
-  ],
   "lines": [
     {
       "header": {
@@ -34,13 +30,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Teacher",
+            "details": {
+              "name": null,
+              "role": "Teacher",
+              "state": "complete"
+            },
             "speaker_code": "LAR"
           },
           {
-            "name": null,
-            "role": "Student",
+            "details": {
+              "name": null,
+              "role": "Student",
+              "state": "complete"
+            },
             "speaker_code": "STU"
           }
         ],
@@ -2136,36 +2138,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "LAR": {
-      "birth_date": null,
-      "code": "LAR",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "dan"
-        ],
-        "role": "Teacher",
-        "speaker": "LAR"
-      },
-      "name": null,
-      "role": "Teacher"
-    },
-    "STU": {
-      "birth_date": null,
-      "code": "STU",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "dan"
-        ],
-        "role": "Student",
-        "speaker": "STU"
-      },
-      "name": null,
-      "role": "Student"
-    }
-  }
+  ]
 }

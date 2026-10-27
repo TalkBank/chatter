@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "est"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Child",
+            "details": {
+              "name": null,
+              "role": "Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Investigator",
+            "details": {
+              "name": null,
+              "role": "Investigator",
+              "state": "complete"
+            },
             "speaker_code": "OBS"
           }
         ],
@@ -1415,39 +1418,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "corpus": "corpus",
-        "custom_field": "körg linn Tallinn",
-        "language": [
-          "est"
-        ],
-        "role": "Child",
-        "sex": "male",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Child"
-    },
-    "OBS": {
-      "birth_date": null,
-      "code": "OBS",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "est"
-        ],
-        "role": "Investigator",
-        "sex": "female",
-        "speaker": "OBS"
-      },
-      "name": null,
-      "role": "Investigator"
-    }
-  }
+  ]
 }

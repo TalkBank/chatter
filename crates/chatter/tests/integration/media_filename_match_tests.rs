@@ -51,7 +51,7 @@ fn w109_fix_preserves_stored_name_and_unrelated_bytes() -> Result<(), TestError>
             .map(|entry| entry.map(|e| e.file_name()))
             .collect::<Result<_, _>>()?;
         assert_eq!(names, [std::ffi::OsString::from(stored_name)]);
-        let after = combined_output(&harness.run_validate(&path, &["--force"])?);
+        let after = combined_output(&harness.run_validate(&path, &["--refresh-cache"])?);
         assert!(!after.contains("E531"), "{after}");
         assert!(!after.contains("The @Media name uses"), "{after}");
         assert_eq!(
@@ -83,7 +83,7 @@ fn w109_uses_stored_name_for_nfc_nfd_and_directory_arguments() -> Result<(), Tes
         return Ok(());
     }
     for input in [&nfc, &nfd, &dir.path().to_path_buf()] {
-        let text = combined_output(&harness.run_validate(input, &["--force"])?);
+        let text = combined_output(&harness.run_validate(input, &["--refresh-cache"])?);
         assert!(text.contains("W109"), "{text}");
         assert!(text.contains("The @Media name uses"), "{text}");
         assert!(text.contains("The file name"), "{text}");
@@ -133,7 +133,7 @@ fn media_filename_mismatch_is_rejected_via_cli() -> Result<(), TestError> {
         "session.cha",
         &fixture_with_media("differentname"),
     )?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         text.contains("E531"),
@@ -153,7 +153,7 @@ fn media_url_is_exempt_from_filename_match() -> Result<(), TestError> {
         "session.cha",
         &fixture_with_media("\"https://media.talkbank.org/x.mp3\""),
     )?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         !text.contains("E531"),
@@ -168,7 +168,7 @@ fn matching_media_filename_is_accepted() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "session.cha", &fixture_with_media("session"))?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         !text.contains("E531"),
@@ -199,7 +199,7 @@ fn media_filename_mismatch_is_rejected_via_to_json() -> Result<(), TestError> {
 
     for skip_schema in [false, true] {
         let mut cmd = harness.chatter_cmd();
-        cmd.arg("to-json").arg(&path);
+        cmd.args(["convert", "to-json"]).arg(&path);
         if skip_schema {
             cmd.arg("--skip-schema-validation");
         }
@@ -226,7 +226,7 @@ fn matching_media_filename_is_accepted_via_to_json() -> Result<(), TestError> {
 
     for skip_schema in [false, true] {
         let mut cmd = harness.chatter_cmd();
-        cmd.arg("to-json").arg(&path);
+        cmd.args(["convert", "to-json"]).arg(&path);
         if skip_schema {
             cmd.arg("--skip-schema-validation");
         }
@@ -263,7 +263,7 @@ fn nfd_media_name_matching_an_nfc_datafile_name_is_not_a_mismatch() -> Result<()
         &format!("{nfc_name}.cha"),
         &fixture_with_media(nfd_name),
     )?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         !text.contains("E531"),
@@ -284,7 +284,7 @@ fn case_only_media_name_difference_is_w110_not_a_mismatch() -> Result<(), TestEr
     let harness = CliHarness::new()?;
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "Session.cha", &fixture_with_media("session"))?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         !text.contains("E531"),
@@ -308,7 +308,7 @@ fn case_and_unicode_differences_are_reported_independently() -> Result<(), TestE
         "Schl\u{fc}ssel4.cha",
         &fixture_with_media("schlu\u{308}ssel4"),
     )?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(!text.contains("E531"), "{text}");
     assert!(text.contains("W110"), "{text}");
@@ -328,7 +328,7 @@ fn matching_nfc_media_filename_has_no_canonicalization_warning() -> Result<(), T
         &format!("{nfc_name}.cha"),
         &fixture_with_media(nfc_name),
     )?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(!text.contains("E531"), "identical NFC names: {text}");
     assert!(
@@ -354,7 +354,7 @@ fn directory_to_json_preserves_filename_checks_when_schema_is_skipped() -> Resul
     for skip_schema in [false, true] {
         let output = dir.path().join(format!("output-{skip_schema}"));
         let mut cmd = harness.chatter_cmd();
-        cmd.arg("to-json")
+        cmd.args(["convert", "to-json"])
             .arg(&input)
             .arg("--output-dir")
             .arg(&output);

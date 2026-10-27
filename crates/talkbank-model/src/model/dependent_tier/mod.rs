@@ -97,6 +97,8 @@ pub mod sin;
 mod text;
 mod tim;
 mod types;
+mod unparsed;
+mod user_defined_label;
 pub mod wor;
 
 pub use act::*;
@@ -104,13 +106,16 @@ pub use bullet_content::*;
 pub use cod::*;
 pub use entry::{DependentTierContentSpan, DependentTierEntry, InvalidDependentTierContentSpan};
 pub use gra::*;
+pub use kind::DependentTierKey;
 pub use mor::*;
 pub use pho::*;
 pub use phon::*;
 pub use sin::*;
 pub use text::*;
 pub use tim::{TimSegment, TimTier};
-pub use types::{DependentTier, TextTier, UserDefinedDependentTier};
+pub use types::{DependentTier, TextTier, UnsupportedDependentTier, UserDefinedDependentTier};
+pub use unparsed::{UnparsedTextTier, UnparsedTier};
+pub use user_defined_label::{InvalidUserDefinedDependentTierLabel, UserDefinedDependentTierLabel};
 pub use wor::*;
 
 // Re-export for submodules via super::

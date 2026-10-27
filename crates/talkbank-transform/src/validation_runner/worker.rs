@@ -37,6 +37,9 @@ pub(super) enum ParserDispatch {
     /// Inject a producer failure without inventing a malformed-CHAT fixture.
     #[cfg(test)]
     InternalFailure,
+    /// Inject rejection, including producers that report no error.
+    #[cfg(test)]
+    Rejected(Vec<talkbank_model::ParseError>),
     /// Consume one real parse, then inject a fault at the roundtrip boundary.
     #[cfg(test)]
     FailAfterInitial(std::cell::Cell<Option<TreeSitterParser>>),
@@ -58,16 +61,21 @@ impl ParserDispatch {
 
     /// Parse a complete CHAT file with streaming error reporting.
     ///
-    /// Both backends always return a ChatFile (best-effort recovery).
+    /// Both backends preserve explicit rejection; no replacement model is made.
     pub(super) fn parse_chat_file_streaming(
         &self,
         input: &str,
         errors: &impl ErrorSink,
-    ) -> ChatFile {
+    ) -> ParseOutcome<ChatFile> {
         match self {
             #[cfg(test)]
+            Self::Rejected(diagnostics) => {
+                errors.report_all(diagnostics.clone());
+                ParseOutcome::Rejected
+            }
+            #[cfg(test)]
             Self::FailAfterInitial(first) => match first.take() {
-                Some(parser) => parser.parse_chat_file_streaming(input, errors),
+                Some(parser) => ChatParser::parse_chat_file(&parser, input, 0, errors),
                 None => Self::InternalFailure.parse_chat_file_streaming(input, errors),
             },
             #[cfg(test)]
@@ -78,13 +86,10 @@ impl ParserDispatch {
                     talkbank_model::Span::new(0, 1),
                     "injected producer fault",
                 ));
-                ChatFile::new(vec![])
+                ParseOutcome::Rejected
             }
-            Self::TreeSitter(p) => p.parse_chat_file_streaming(input, errors),
-            Self::Re2c(p) => match p.parse_chat_file(input, 0, errors) {
-                ParseOutcome::Parsed(cf) => cf,
-                ParseOutcome::Rejected => ChatFile::new(vec![]),
-            },
+            Self::TreeSitter(p) => ChatParser::parse_chat_file(p, input, 0, errors),
+            Self::Re2c(p) => p.parse_chat_file(input, 0, errors),
         }
     }
 }
@@ -265,6 +270,21 @@ fn process_file(
                 );
             }
         };
+    let chat_file = match chat_file {
+        ParseOutcome::Parsed(file) => file,
+        ParseOutcome::Rejected => {
+            // Rejection is structural, not a suppressible presentation finding.
+            // No model validation, roundtrip or cache admission was completed.
+            return complete(
+                FileStatus::Invalid {
+                    diagnostics: super::types::InvalidDiagnostics::parser_rejected(
+                        completed, content,
+                    ),
+                },
+                cache_use,
+            );
+        }
+    };
     let complete_diagnostics = completed.into_diagnostics();
 
     // THE CACHED FACT, derived from the COMPLETE diagnostic set and
@@ -504,13 +524,20 @@ fn validate_single_file_streaming(
     policy: talkbank_model::validation::ValidationPolicy,
     parser: &ParserDispatch,
     content: &str,
-) -> Result<(talkbank_model::CompletedDiagnostics, ChatFile), talkbank_model::InternalFailure> {
+) -> Result<
+    (talkbank_model::CompletedDiagnostics, ParseOutcome<ChatFile>),
+    talkbank_model::InternalFailure,
+> {
     // Collect all diagnostics during validation (no streaming).
     let collector = talkbank_model::ErrorCollector::new();
 
     // Parse with error collection.
-    let mut chat_file = parser.parse_chat_file_streaming(content, &collector);
+    let outcome = parser.parse_chat_file_streaming(content, &collector);
     let parsed = talkbank_model::CompletedDiagnostics::admit(collector.into_vec())?;
+    let mut chat_file = match outcome {
+        ParseOutcome::Parsed(file) => file,
+        ParseOutcome::Rejected => return Ok((parsed, ParseOutcome::Rejected)),
+    };
     let collector = talkbank_model::ErrorCollector::new();
     collector.report_all(parsed.into_diagnostics());
 
@@ -523,6 +550,6 @@ fn validate_single_file_streaming(
 
     Ok((
         talkbank_model::CompletedDiagnostics::admit(collector.into_vec())?,
-        chat_file,
+        ParseOutcome::Parsed(chat_file),
     ))
 }

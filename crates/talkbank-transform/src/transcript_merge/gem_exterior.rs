@@ -64,7 +64,13 @@ impl TimedGem {
         for line in &reference.lines[opening + 1..closing] {
             match line {
                 Line::Utterance(row) => {
-                    let Some(bullet) = row.main.content.bullet.as_ref() else {
+                    let Some(bullet) = row
+                        .main
+                        .content
+                        .bullet
+                        .as_ref()
+                        .and_then(talkbank_model::BulletState::as_parsed)
+                    else {
                         return Err(MergeError::InvalidGemExterior);
                     };
                     let (start, end) = (bullet.timing.start_ms, bullet.timing.end_ms);

@@ -4,33 +4,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Codes>
 
-use crate::model::LanguageCode;
-use crate::validation::context::ShortcutLanguage;
 use crate::validation::context::{language_allows_numbers, language_allows_prefix_marker};
-
-/// Resolve the alternate language for `@s` shortcut handling.
-///
-/// This helper only supports primary/secondary toggling from `@Languages`; it
-/// intentionally returns `None` for tertiary or undeclared contexts.
-pub(super) fn get_other_language(
-    current_lang: &LanguageCode,
-    declared_languages: &[LanguageCode],
-) -> Option<LanguageCode> {
-    ShortcutLanguage::classify(current_lang, declared_languages).alternate()
-}
-
-/// Return whether `lang` is tertiary (index >= 2) in declared languages.
-///
-/// Tertiary languages require explicit markers instead of `@s` shortcut usage.
-pub(super) fn is_tertiary_language(
-    lang: &LanguageCode,
-    declared_languages: &[LanguageCode],
-) -> bool {
-    matches!(
-        ShortcutLanguage::classify(lang, declared_languages),
-        ShortcutLanguage::Tertiary
-    )
-}
 
 /// Return whether a composite language code contains any digit-allowing member.
 ///

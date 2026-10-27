@@ -79,3 +79,73 @@ fn header_fragment_diagnostic_keeps_source_and_document_coordinates() {
     check(&talkbank_parser::TreeSitterParser::new().unwrap());
     check(&crate::Re2cParser::new());
 }
+
+#[test]
+fn media_shared_construction_preserves_fields_and_comma_provenance() {
+    use talkbank_model::{
+        SemanticEq, Span,
+        model::{Header, WriteChat},
+    };
+    let parser = crate::Re2cParser::new();
+    for fixture in [
+        include_str!("../../../corpus/reference/core/headers-media.cha"),
+        include_str!("../../../corpus/reference/core/headers-media-notrans.cha"),
+        include_str!("../../../corpus/reference/core/headers-media-url.cha"),
+        include_str!("../../../corpus/reference/core/headers-media-http-url.cha"),
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E767_1.cha"),
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E767_2.cha"),
+    ] {
+        let authored = fixture
+            .lines()
+            .find(|line| line.starts_with("@Media:"))
+            .unwrap();
+        let normalized = authored.replace("  ,", ",").replace(" ,", ",");
+        for newline in ["\n", "\r\n", "\r"] {
+            let source = fixture.replace('\n', newline);
+            let errors = ErrorCollector::new();
+            let file = parser
+                .parse_chat_file(&source, 200, &errors)
+                .into_option()
+                .unwrap();
+            let whole = file
+                .headers()
+                .find(|header| matches!(header, Header::Media(_)))
+                .unwrap();
+            let fragment = parser
+                .parse_header(&format!("{authored}{newline}"), 200, &errors)
+                .into_option()
+                .unwrap();
+            assert!(errors.is_empty(), "{:?}", errors.to_vec());
+            assert!(whole.semantic_eq(&fragment));
+            assert_eq!(fragment.to_chat_string(), normalized);
+            let decoded: Header =
+                serde_json::from_str(&serde_json::to_string(&fragment).unwrap()).unwrap();
+            assert!(decoded.semantic_eq(&fragment));
+            let Header::Media(media) = fragment else {
+                panic!("media fragment")
+            };
+            let Header::Media(whole_media) = whole else {
+                panic!("media file")
+            };
+            if let Some(comma) = authored.find(" ,") {
+                let gap_start = authored[..=comma].trim_end().len();
+                let gap_end = comma + 1;
+                assert_eq!(
+                    media.whitespace_before_comma.unwrap().span(),
+                    Some(Span::new(200 + gap_start, 200 + gap_end))
+                );
+                let line_start = source.find(authored).unwrap();
+                assert_eq!(
+                    whole_media.whitespace_before_comma.unwrap().span(),
+                    Some(Span::new(
+                        200 + line_start + gap_start,
+                        200 + line_start + gap_end
+                    ))
+                );
+            } else {
+                assert!(media.whitespace_before_comma.is_none());
+                assert!(whole_media.whitespace_before_comma.is_none());
+            }
+        }
+    }
+}

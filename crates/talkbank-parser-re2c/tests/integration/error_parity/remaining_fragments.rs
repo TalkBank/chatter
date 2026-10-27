@@ -209,3 +209,92 @@ fn remaining_apis_preserve_input_shape_and_error_detection() -> Result<(), Strin
         Err(failures.join("\n"))
     }
 }
+
+/// Single-utterance entry points must not silently discard additional main tiers.
+/// All source comes from the public reference; mutations change API cardinality.
+#[test]
+fn utterance_api_requires_exactly_one_utterance() -> Result<(), String> {
+    let reference = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../corpus/reference/core/basic-conversation.cha"
+    ));
+    let mains: Vec<_> = reference
+        .split_inclusive('\n')
+        .filter(|line| line.starts_with('*'))
+        .collect();
+    assert!(mains.len() >= 2);
+    let one_document = reference
+        .split_inclusive('\n')
+        .filter(|line| !line.starts_with('*') || *line == mains[0])
+        .collect::<String>();
+    let two = format!("{}{}", mains[0], mains[1]);
+    let repeated = format!("{}{}", mains[0], mains[0]);
+    let ts = talkbank_parser::TreeSitterParser::new().map_err(|error| error.to_string())?;
+    let native = talkbank_parser_re2c::Re2cParser::new();
+    let mut failures = Vec::new();
+    #[derive(Clone, Copy, Debug)]
+    enum Cardinality {
+        One,
+        Multiple,
+    }
+    fn check(
+        parser: &impl ChatParser,
+        input: &str,
+        cardinality: Cardinality,
+        failures: &mut Vec<String>,
+    ) {
+        for offset in [0, 200] {
+            for invocation in [Invocation::Implicit, Invocation::Explicit] {
+                let sink = ErrorCollector::new();
+                let result = match invocation {
+                    Invocation::Implicit => parser.parse_utterance(input, offset, &sink),
+                    Invocation::Explicit => parser.parse_utterance_with_context(
+                        input,
+                        offset,
+                        &FragmentSemanticContext::new(),
+                        &sink,
+                    ),
+                };
+                let errors = sink.into_vec();
+                let has_error = errors.iter().any(|error| error.severity == Severity::Error);
+                let admitted = match cardinality {
+                    Cardinality::One => result.is_parsed() && !has_error,
+                    Cardinality::Multiple => result.is_rejected() && has_error,
+                };
+                if !admitted {
+                    failures.push(format!("{} {invocation:?} at {offset}: {cardinality:?}, got parsed={} and diagnostics={errors:?}", parser.parser_name(), result.is_parsed()));
+                }
+                for error in errors {
+                    if error.code == talkbank_model::ErrorCode::InternalError {
+                        failures.push(format!("{}: internal failure", parser.parser_name()));
+                    }
+                    if let Some(span) = error.location.span() {
+                        assert!(span.start() >= offset && span.end() <= offset + input.len());
+                    } else {
+                        failures.push(format!(
+                            "{}: unlocated cardinality diagnostic",
+                            parser.parser_name()
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    for newline in ["\n", "\r\n"] {
+        for control in [mains[0], one_document.as_str()] {
+            let input = control.replace('\n', newline);
+            check(&ts, &input, Cardinality::One, &mut failures);
+            check(&native, &input, Cardinality::One, &mut failures);
+        }
+        for rejected in [two.as_str(), repeated.as_str(), reference] {
+            let input = rejected.replace('\n', newline);
+            check(&ts, &input, Cardinality::Multiple, &mut failures);
+            check(&native, &input, Cardinality::Multiple, &mut failures);
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
+}

@@ -3,7 +3,7 @@
 //! This module provides pipeline functions that compose parsing and validation.
 //! Most callers should use `parse_and_validate()` or `parse_and_validate_streaming()`.
 //! For batch workflows where parser construction overhead matters, use the
-//! `_with_parser` variants that accept a caller-provided `TreeSitterParser`.
+//! `_with_parser` variants that accept a caller-provided `ChatParser`.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -12,13 +12,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use talkbank_model::ChatFile;
-use talkbank_model::ParseOutcome;
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::validation::ValidationPolicy;
-use talkbank_model::{
-    ErrorCollector, ErrorSink, FragmentRangeError, FragmentSource, NullErrorSink, ParseErrors,
-    Severity,
-};
+use talkbank_model::{ChatParser, CompletedDiagnostics, ParseOutcome, ParseProduct};
+use talkbank_model::{ErrorSink, FragmentRangeError, FragmentSource, NullErrorSink, ParseErrors};
 use talkbank_parser::TreeSitterParser;
 
 use super::error::PipelineError;
@@ -65,11 +62,11 @@ pub fn parse_and_validate(
     parse_and_validate_with_parser(&parser, content, options)
 }
 
-/// Parse CHAT content and optionally validate using a caller-provided TreeSitterParser.
+/// Parse CHAT content and optionally validate using a caller-provided ChatParser.
 ///
 /// This avoids per-call parser construction, which is useful for batch workflows.
 pub fn parse_and_validate_with_parser(
-    parser: &TreeSitterParser,
+    parser: &impl ChatParser,
     content: &str,
     options: ParseValidateOptions,
 ) -> Result<ChatFile, PipelineError> {
@@ -89,7 +86,7 @@ pub fn parse_and_validate_with_parser(
 /// other pipeline consumer. The comment stood in place of the fix for as long
 /// as it existed, which is the failure mode a hazard note always has.
 pub fn parse_and_validate_named(
-    parser: &TreeSitterParser,
+    parser: &impl ChatParser,
     content: &str,
     options: ParseValidateOptions,
     name: TranscriptName<'_>,
@@ -97,44 +94,16 @@ pub fn parse_and_validate_named(
     if let Some(policy) = options.validation_policy() {
         return required_validation(parser, content, policy, name, &NullErrorSink);
     }
-    let parse_errors = ErrorCollector::new();
-
-    let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, &parse_errors);
-
-    let parse_error_vec = talkbank_model::CompletedDiagnostics::admit(parse_errors.into_vec())
-        .map_err(PipelineError::InternalFailure)?
-        .into_diagnostics();
-    let actual_errors: Vec<_> = parse_error_vec
-        .iter()
-        .filter(|e| e.severity == Severity::Error)
-        .cloned()
-        .collect();
-
-    if !actual_errors.is_empty() {
-        return Err(PipelineError::Parse(ParseErrors {
-            errors: parse_error_vec,
-        }));
-    }
-
-    let chat_file = match chat_file_outcome {
-        ParseOutcome::Parsed(chat_file) => chat_file,
-        ParseOutcome::Rejected => {
-            return Err(PipelineError::ParserCreation(
-                "Parser rejected input without reporting errors".to_string(),
-            ));
-        }
-    };
-
-    Ok(chat_file)
+    CompletedParse::try_from(ParseProduct::parse(parser, content))?.into_error_free()
 }
 
 /// Parse CHAT content and optionally validate with streaming error reporting.
 ///
-/// This is the streaming variant that accepts an ErrorSink for real-time error reporting.
-/// Errors are reported immediately as they're discovered, enabling:
-/// - Real-time error display in interactive environments
-/// - Early cancellation (user can Ctrl+C after seeing first errors)
-/// - Memory efficiency (no need to accumulate all errors)
+/// Parse-only recovery forwards diagnostics as the parser emits them, while
+/// retaining a copy to detect internal failures even if the sink discards them.
+/// Required-validation calls collect parse diagnostics before admission and
+/// then report validation findings. This API does not provide cancellation or
+/// a bounded-memory guarantee.
 ///
 /// # Arguments
 ///
@@ -172,7 +141,7 @@ pub fn parse_and_validate_streaming(
 
 /// Streaming variant that reuses a caller-provided parser instance.
 pub fn parse_and_validate_streaming_with_parser(
-    parser: &TreeSitterParser,
+    parser: &impl ChatParser,
     content: &str,
     options: ParseValidateOptions,
     errors: &impl ErrorSink,
@@ -201,7 +170,7 @@ pub fn parse_and_validate_streaming_for_path(
 /// See [`parse_and_validate_named`] for why the name is a parameter rather
 /// than an `Option` filled in with `None`.
 pub fn parse_and_validate_streaming_named(
-    parser: &TreeSitterParser,
+    parser: &impl ChatParser,
     content: &str,
     options: ParseValidateOptions,
     errors: &impl ErrorSink,
@@ -212,12 +181,64 @@ pub fn parse_and_validate_streaming_named(
     }
     let source =
         FragmentSource::new(content, 0).map_err(|error| report_source_rejection(error, errors))?;
-    let collected = ErrorCollector::new();
-    let recording = talkbank_model::TeeErrorSink::new(errors, &collected);
-    let file = parser.parse_chat_file_streaming(source.input(), &recording);
-    talkbank_model::CompletedDiagnostics::admit(collected.into_vec())
-        .map_err(PipelineError::InternalFailure)?;
-    Ok(file)
+    CompletedParse::try_from(ParseProduct::parse_streaming(
+        parser,
+        source.input(),
+        errors,
+    ))?
+    .into_recovered()
+}
+
+/// A complete producer attempt, with internal failures excluded at its only
+/// construction edge. Recovery and error-free parsing consume different policy
+/// transitions; neither transition claims model validity.
+struct CompletedParse {
+    outcome: ParseOutcome<ChatFile>,
+    diagnostics: CompletedDiagnostics,
+}
+
+impl TryFrom<ParseProduct> for CompletedParse {
+    type Error = PipelineError;
+
+    fn try_from(product: ParseProduct) -> Result<Self, Self::Error> {
+        match product {
+            ParseProduct::Built { file, diagnostics } => Ok(Self {
+                outcome: ParseOutcome::Parsed(file),
+                diagnostics: CompletedDiagnostics::admit(diagnostics)
+                    .map_err(PipelineError::InternalFailure)?,
+            }),
+            ParseProduct::Unbuildable { diagnostics } => Ok(Self {
+                outcome: ParseOutcome::Rejected,
+                diagnostics: CompletedDiagnostics::admit(diagnostics)
+                    .map_err(PipelineError::InternalFailure)?,
+            }),
+        }
+    }
+}
+
+impl CompletedParse {
+    fn into_error_free(self) -> Result<ChatFile, PipelineError> {
+        let diagnostics = self.diagnostics.into_diagnostics();
+        if diagnostics
+            .iter()
+            .any(|error| error.severity == talkbank_model::Severity::Error)
+        {
+            return Err(PipelineError::Parse(ParseErrors::from(diagnostics)));
+        }
+        match self.outcome {
+            ParseOutcome::Parsed(file) => Ok(file),
+            ParseOutcome::Rejected => Err(PipelineError::Parse(ParseErrors::from(diagnostics))),
+        }
+    }
+
+    fn into_recovered(self) -> Result<ChatFile, PipelineError> {
+        match self.outcome {
+            ParseOutcome::Parsed(file) => Ok(file),
+            ParseOutcome::Rejected => Err(PipelineError::Parse(ParseErrors::from(
+                self.diagnostics.into_diagnostics(),
+            ))),
+        }
+    }
 }
 
 /// Preserve the admission owner's diagnostic in both the stream and return value.
@@ -230,7 +251,7 @@ fn report_source_rejection(error: FragmentRangeError, errors: &impl ErrorSink) -
 /// Compatibility APIs explicitly discard the accepted phase before returning a
 /// mutable model. Required parsing and validation still have one proof producer.
 fn required_validation(
-    parser: &TreeSitterParser,
+    parser: &impl ChatParser,
     content: &str,
     policy: ValidationPolicy,
     name: TranscriptName<'_>,
@@ -247,6 +268,48 @@ mod tests {
     use talkbank_model::ErrorCode;
     use talkbank_model::ParseValidateOptions;
     use talkbank_parser::TreeSitterParser;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
+
+    #[test]
+    fn optional_completion_refuses_internal_failure_in_either_product_shape() {
+        use talkbank_model::{
+            DiagnosticLocation, ErrorContext, ParseError, ParseProduct, Severity, Span,
+        };
+        let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+        let file = TreeSitterParser::new()
+            .expect("grammar")
+            .parse_chat_file(source)
+            .expect_built();
+        let failure = ParseError::new(
+            ErrorCode::InternalError,
+            Severity::Warning,
+            DiagnosticLocation::from_offsets(0, 1),
+            ErrorContext::new(source, Span::new(0, 1), source),
+            "injected producer fault",
+        );
+        for product in [
+            ParseProduct::Built {
+                file,
+                diagnostics: vec![failure.clone()],
+            },
+            ParseProduct::Unbuildable {
+                diagnostics: vec![failure],
+            },
+        ] {
+            assert!(matches!(
+                super::CompletedParse::try_from(product),
+                Err(PipelineError::InternalFailure(_))
+            ));
+        }
+        assert!(matches!(
+            super::CompletedParse::try_from(ParseProduct::Unbuildable {
+                diagnostics: vec![]
+            })
+            .expect("no internal failure")
+            .into_recovered(),
+            Err(PipelineError::Parse(_))
+        ));
+    }
 
     #[test]
     fn source_rejection_is_reported_once_as_a_parse_failure() {

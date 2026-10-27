@@ -19,7 +19,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
-use crate::generated_traversal::{AsRawNode, BulletNode, NoChild, SourceBound, SourceSlotView};
+use crate::generated_traversal::{AsRawNode, BulletNode, NoChild, SlotView, SourceBound};
 use crate::parser::node_span::span_of;
 use talkbank_model::model::Bullet;
 use tree_sitter::Node;
@@ -198,25 +198,24 @@ fn parse_bullet_node_timestamps<'tree>(
         source,
         errors,
     );
+    let admitted = children
+        .admit_ranges()
+        .map_err(|fault| BulletRejection::Producer(fault.into()))?;
+    let children = admitted.children();
     // Keep the role and the generated field together at the admission point.
     // The producer retains recovery slots; kind admission alone is not validity.
     let text = |which: BulletTime| -> Result<&str, BulletRejection> {
         let slot = match which {
-            BulletTime::Start => children.field_start_time().slot(),
-            BulletTime::End => children.field_end_time().slot(),
+            BulletTime::Start => &children.start_time.slot,
+            BulletTime::End => &children.end_time.slot,
         };
         let timestamp = match slot.view() {
-            SourceSlotView::Present(timestamp) => timestamp,
-            SourceSlotView::Missing(_)
-            | SourceSlotView::Error(_)
-            | SourceSlotView::Absent(NoChild) => {
+            SlotView::Present(timestamp) => timestamp,
+            SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
                 return Err(BulletRejection::TimeFieldAbsent { which });
             }
         };
-        Ok(timestamp
-            .read()
-            .map_err(|fault| BulletRejection::Producer(fault.into()))?
-            .text())
+        Ok(timestamp.text())
     };
     let start_text = text(BulletTime::Start)?;
     let end_text = text(BulletTime::End)?;

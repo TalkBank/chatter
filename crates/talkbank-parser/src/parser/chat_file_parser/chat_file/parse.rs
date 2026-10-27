@@ -25,7 +25,6 @@ use crate::generated_traversal::ParsedSource;
 use crate::model::{ChatFile, Header, Line};
 use crate::parser::TreeSitterParser;
 use talkbank_model::LineMap;
-use talkbank_model::ParseOutcome;
 use talkbank_model::model::participant::join::build_participants_from_lines;
 use tracing::{debug, info, warn};
 use tree_sitter::Tree;
@@ -129,30 +128,7 @@ impl TreeSitterParser {
     /// always returns a `ChatFile` and is unaffected by this one.
     #[tracing::instrument(skip(self, input), fields(input_size = input.len()))]
     pub fn parse_chat_file(&self, input: &str) -> ParseProduct {
-        let errors = ErrorCollector::new();
-        let outcome = self.parse_chat_file_fragment(input, 0, &errors);
-
-        let diagnostics = errors.into_vec();
-        match outcome {
-            ParseOutcome::Parsed(chat_file) => ParseProduct::Built {
-                file: chat_file,
-                diagnostics,
-            },
-            ParseOutcome::Rejected => {
-                let diagnostics = if diagnostics.is_empty() {
-                    vec![ParseError::new(
-                        ErrorCode::ParseFailed,
-                        Severity::Error,
-                        DiagnosticLocation::from_offsets(0, input.len()),
-                        ErrorContext::new(input, talkbank_model::Span::new(0, input.len()), input),
-                        "Parser returned no result and emitted no diagnostics",
-                    )]
-                } else {
-                    diagnostics
-                };
-                ParseProduct::Unbuildable { diagnostics }
-            }
-        }
+        ParseProduct::parse(self, input)
     }
 
     /// Parse a CHAT file in strict mode with optional incremental reuse.
@@ -180,10 +156,10 @@ impl TreeSitterParser {
         let errors = ErrorCollector::new();
         let (mut lines, new_tree) = parse_lines_with_old_tree(self, input, old_tree, &errors);
 
-        // Build participant map from headers
+        // Inspect headers and report the canonical participant join.
         let all_headers = collect_headers(&lines);
 
-        let participants = build_participants_from_lines(&lines).report_into(&errors);
+        build_participants_from_lines(&lines).report_diagnostics(&errors);
 
         let ca_mode = headers_enable_ca_mode(&all_headers);
         if ca_mode {
@@ -202,17 +178,9 @@ impl TreeSitterParser {
             if !error_vec.is_empty() {
                 warn!("Parse completed with {} warnings", error_vec.len());
             } else {
-                info!(
-                    "Parse completed successfully: {} lines, {} participants",
-                    lines.len(),
-                    participants.len()
-                );
+                info!("Parse completed successfully: {} lines", lines.len());
             }
-            Ok(ChatFile::with_line_map(
-                lines,
-                participants,
-                LineMap::new(input),
-            ))
+            Ok(ChatFile::with_line_map(lines, LineMap::new(input)))
         };
 
         (result, new_tree)
@@ -289,7 +257,7 @@ impl TreeSitterParser {
 
         let all_headers = collect_headers(&lines);
 
-        let participants = build_participants_from_lines(&lines).report_into(errors);
+        build_participants_from_lines(&lines).report_diagnostics(errors);
 
         let ca_mode = headers_enable_ca_mode(&all_headers);
         if ca_mode {
@@ -297,13 +265,12 @@ impl TreeSitterParser {
         }
 
         info!(
-            "Streaming-incremental parse completed: {} lines, {} participants",
-            lines.len(),
-            participants.len()
+            "Streaming-incremental parse completed: {} lines",
+            lines.len()
         );
 
         (
-            ChatFile::with_line_map(lines, participants, LineMap::new(input)),
+            ChatFile::with_line_map(lines, LineMap::new(input)),
             new_tree,
         )
     }

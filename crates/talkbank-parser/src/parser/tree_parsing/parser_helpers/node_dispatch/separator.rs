@@ -6,13 +6,12 @@
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, Extract, KindAdmitted, KindPlaceholder, NoChild, NodeSlot, NonColonSeparatorChoice,
-    NonColonSeparatorMissing, NonColonSeparatorNode, SeparatorChoice, SeparatorMissing,
-    SeparatorNode, SourceBound, extract_non_colon_separator,
+    AsRawNode, Extract, NoChild, NodeSlot, NonColonSeparatorChoice, NonColonSeparatorNode,
+    SeparatorChoice, SeparatorNode, SourceBound, extract_non_colon_separator,
 };
 use crate::model::Separator;
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -101,25 +100,11 @@ fn parse_non_colon_separator_node(
     surface_displaced(&children.unexpected, "non_colon_separator", source, errors);
     match children.content.slot() {
         NodeSlot::Present(choice) => ParseOutcome::parsed(separator_for(choice)),
-        // A MISSING head is read as the separator its kind names, LIKE A
-        // PRESENT ONE, and it is the same call `main_tier/structure/contents.rs`
-        // records for its own migration: the pre-migration `node.child(0)` never
-        // checked `is_missing`, and a MISSING node still carries its kind, so it
-        // went down the ordinary path. Recovery is not silently dropped by doing
-        // this; the whole-tree recovery backstop still sees the node, and that
-        // is the layer that owns "this document needed recovery".
-        //
-        // Measured: `*CHI:\t.` parses to a zero-width `separator` holding a
-        // zero-width MISSING `ca_no_break`. Rejecting here instead moved that
-        // fixture from E253/E306 to E330/E342, which the CHECK-parity manifest
-        // caught. A migration that changes diagnostics is a behaviour change
-        // wearing a refactor's clothes.
-        //
-        // Since 2026-10-20 the generator types the head by kind, so the
-        // "unclassified placeholder" refusal that followed is gone: a MISSING
-        // node of another kind is not this choice's to hold.
+        // Missing-kind evidence must never be promoted to a present choice:
+        // doing so rendered an unauthored CA marker for a terminator-only tier.
         NodeSlot::Missing(missing) => {
-            ParseOutcome::parsed(separator_for(&non_colon_placeholder(missing)))
+            check_not_missing(missing.raw_node(), source, errors, "non_colon_separator");
+            ParseOutcome::rejected()
         }
         // A CHILDLESS `non_colon_separator`. This used to try to classify the
         // node ITSELF, carried over from the pre-migration
@@ -137,32 +122,6 @@ fn parse_non_colon_separator_node(
             "non_colon_separator contains an ERROR node",
         ),
         NodeSlot::Unexpected(never) => match *never {},
-    }
-}
-
-/// A MISSING `non_colon_separator` head, read as the alternative its kind
-/// names. Exhaustive over the generated missing enum, whose variants are
-/// exactly the fourteen separator tokens.
-fn non_colon_placeholder<'tree>(
-    missing: &NonColonSeparatorMissing<'tree>,
-) -> NonColonSeparatorChoice<'tree> {
-    use NonColonSeparatorChoice as Choice;
-    use NonColonSeparatorMissing as Missing;
-    match missing {
-        Missing::Comma(m) => Choice::Comma(*m.placeholder()),
-        Missing::Semicolon(m) => Choice::Semicolon(*m.placeholder()),
-        Missing::TagMarker(m) => Choice::TagMarker(*m.placeholder()),
-        Missing::VocativeMarker(m) => Choice::VocativeMarker(*m.placeholder()),
-        Missing::CaContinuationMarker(m) => Choice::CaContinuationMarker(*m.placeholder()),
-        Missing::UnmarkedEnding(m) => Choice::UnmarkedEnding(*m.placeholder()),
-        Missing::UptakeSymbol(m) => Choice::UptakeSymbol(*m.placeholder()),
-        Missing::CaNoBreak(m) => Choice::CaNoBreak(*m.placeholder()),
-        Missing::CaTechnicalBreak(m) => Choice::CaTechnicalBreak(*m.placeholder()),
-        Missing::RisingToHigh(m) => Choice::RisingToHigh(*m.placeholder()),
-        Missing::RisingToMid(m) => Choice::RisingToMid(*m.placeholder()),
-        Missing::LevelPitch(m) => Choice::LevelPitch(*m.placeholder()),
-        Missing::FallingToMid(m) => Choice::FallingToMid(*m.placeholder()),
-        Missing::FallingToLow(m) => Choice::FallingToLow(*m.placeholder()),
     }
 }
 
@@ -193,11 +152,8 @@ fn reject(
 /// in prose ("Expected 'non_colon_separator' or 'colon' in separator, found
 /// ..."). That message was a third owner of a fact the grammar states.
 ///
-/// The five slot states replace three hand-rolled outcomes, and say more than
-/// they did. `Missing` is classified LIKE `Present`, the same call this file
-/// already documents for `non_colon_separator`: a MISSING node carries the kind
-/// the parser expected, and rejecting it instead moved `*CHI:\t.` from E253/E306
-/// to E330/E342 once before.
+/// Only a present choice can produce a model separator. Missing tokens remain
+/// recovery evidence, even when their expected punctuation kind is known.
 fn parse_separator_contents(
     typed: SeparatorNode<'_>,
     source: &str,
@@ -217,11 +173,12 @@ fn parse_separator_contents(
     };
     surface_displaced(&children.unexpected, "separator", source, errors);
 
-    // A MISSING `colon` head is read as the colon its kind names, as for
-    // `non_colon_separator` above (the same measured fixture and policy).
     let choice = match children.content.slot() {
         NodeSlot::Present(choice) => *choice,
-        NodeSlot::Missing(missing) => separator_placeholder(missing),
+        NodeSlot::Missing(missing) => {
+            check_not_missing(missing.raw_node(), source, errors, "separator");
+            return ParseOutcome::rejected();
+        }
         NodeSlot::Error(error) => {
             return reject(*error, source, errors, "separator contains an ERROR node");
         }
@@ -242,18 +199,6 @@ fn parse_separator_contents(
         SeparatorChoice::Colon(colon) => ParseOutcome::parsed(Separator::Colon {
             location: span_of(colon.raw_node()).into(),
         }),
-    }
-}
-
-/// A MISSING `separator` head, read as the alternative its kind names.
-/// `non_colon_separator` is a rule, so under the admitted proof its variant
-/// holds the uninhabited `Never`.
-fn separator_placeholder<'tree>(
-    missing: &SeparatorMissing<'tree, KindAdmitted>,
-) -> SeparatorChoice<'tree> {
-    match missing {
-        SeparatorMissing::NonColonSeparator(m) => match m.0 {},
-        SeparatorMissing::Colon(m) => SeparatorChoice::Colon(*m.placeholder()),
     }
 }
 

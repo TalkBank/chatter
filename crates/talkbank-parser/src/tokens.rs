@@ -155,9 +155,9 @@ fn extract_overlap_index(inner: &str) -> Result<Option<OverlapMarkerIndex>, ()> 
     let inner = inner.strip_suffix(' ').unwrap_or(inner);
     match inner.as_bytes() {
         [] => Ok(None),
-        [digit @ b'1'..=b'9'] => OverlapMarkerIndex::new(digit - b'0')
+        [digit] => OverlapMarkerIndex::from_ascii_digit(*digit)
             .map(Some)
-            .map_err(|_| ()),
+            .ok_or(()),
         _ => Err(()),
     }
 }

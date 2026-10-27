@@ -12,7 +12,7 @@ tier_body:
         zero: "0"
         annotations: []
   terminator:
-    Period: "."
+    type: period
   postcodes: []
   media_bullet:
     raw_text: "\u00156600_8130\u0015"

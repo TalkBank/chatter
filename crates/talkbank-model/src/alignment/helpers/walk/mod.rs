@@ -25,7 +25,7 @@
 use crate::ContentStructure;
 use crate::alignment::helpers::domain::TierDomain;
 use crate::model::{
-    Action, Bullet, CodeSwitchSpan, ContentAnnotation, Event, Freecode, LongFeatureBegin,
+    Action, BulletState, CodeSwitchSpan, ContentAnnotation, Event, Freecode, LongFeatureBegin,
     LongFeatureEnd, NonvocalBegin, NonvocalEnd, NonvocalSimple, OtherSpokenEvent, OverlapPoint,
     Pause, ReplacedWord, Separator, UnderlineMarker, UtteranceContent, Word,
 };
@@ -67,8 +67,10 @@ pub enum ContentItem<'a> {
     OtherSpokenEvent(&'a OtherSpokenEvent),
     /// Freecode inline annotation (`[^ comment]`).
     Freecode(&'a Freecode),
+    /// Rejected annotation without a host.
+    OrphanAnnotation(&'a crate::model::OrphanAnnotation),
     /// Internal timing bullet (mid-utterance media timestamp).
-    InternalBullet(&'a Bullet),
+    InternalBullet(&'a BulletState),
     /// Long feature scope begin (`&{l=LABEL`).
     LongFeatureBegin(&'a LongFeatureBegin),
     /// Long feature scope end (`&}l=LABEL`).
@@ -122,6 +124,7 @@ impl ContentItem<'_> {
             | Self::Action(_)
             | Self::OverlapPoint(_)
             | Self::OtherSpokenEvent(_)
+            | Self::OrphanAnnotation(_)
             | Self::Freecode(_)
             | Self::InternalBullet(_)
             | Self::LongFeatureBegin(_)
@@ -155,8 +158,10 @@ pub enum ContentItemMut<'a> {
     OtherSpokenEvent(&'a mut OtherSpokenEvent),
     /// Mutable freecode reference.
     Freecode(&'a mut Freecode),
+    /// Rejected annotation without a host.
+    OrphanAnnotation(&'a mut crate::model::OrphanAnnotation),
     /// Mutable internal bullet reference.
-    InternalBullet(&'a mut Bullet),
+    InternalBullet(&'a mut BulletState),
     /// Mutable long feature begin reference.
     LongFeatureBegin(&'a mut LongFeatureBegin),
     /// Mutable long feature end reference.
@@ -252,6 +257,7 @@ pub fn walk_content<'a>(
             UtteranceContent::AnnotatedAction(annotated) => {
                 f(ContentItem::Action(&annotated.inner));
             }
+            UtteranceContent::OrphanAnnotation(raw) => f(ContentItem::OrphanAnnotation(raw)),
             UtteranceContent::Freecode(fc) => {
                 f(ContentItem::Freecode(fc));
             }
@@ -341,6 +347,7 @@ pub fn walk_content_mut<'a>(
             UtteranceContent::AnnotatedAction(annotated) => {
                 f(ContentItemMut::Action(&mut annotated.inner));
             }
+            UtteranceContent::OrphanAnnotation(raw) => f(ContentItemMut::OrphanAnnotation(raw)),
             UtteranceContent::Freecode(fc) => {
                 f(ContentItemMut::Freecode(fc));
             }
@@ -650,6 +657,7 @@ fn walk_words_in_scope<'a>(
             | UtteranceContent::Pause(_)
             | UtteranceContent::Action(_)
             | UtteranceContent::AnnotatedAction(_)
+            | UtteranceContent::OrphanAnnotation(_)
             | UtteranceContent::Freecode(_)
             | UtteranceContent::OverlapPoint(_)
             | UtteranceContent::InternalBullet(_)
@@ -710,6 +718,7 @@ pub fn walk_words_mut<'a>(
             | UtteranceContent::Pause(_)
             | UtteranceContent::Action(_)
             | UtteranceContent::AnnotatedAction(_)
+            | UtteranceContent::OrphanAnnotation(_)
             | UtteranceContent::Freecode(_)
             | UtteranceContent::OverlapPoint(_)
             | UtteranceContent::InternalBullet(_)

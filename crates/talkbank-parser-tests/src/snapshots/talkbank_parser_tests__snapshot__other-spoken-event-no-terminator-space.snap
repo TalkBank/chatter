@@ -1,11 +1,9 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
+assertion_line: 98
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +30,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Participant",
+            "details": {
+              "name": null,
+              "role": "Participant",
+              "state": "complete"
+            },
             "speaker_code": "PAR"
           },
           {
-            "name": null,
-            "role": "Investigator",
+            "details": {
+              "name": null,
+              "role": "Investigator",
+              "state": "complete"
+            },
             "speaker_code": "INV"
           }
         ],
@@ -352,8 +356,17 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "oh_hm",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "oh_hm",
+                "content": [
+                  {
+                    "content": "oh_hm",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "oh_hm"
+              }
             }
           ],
           "terminator": {
@@ -392,8 +405,17 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "ah",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "ah",
+                "content": [
+                  {
+                    "content": "ah",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "ah"
+              }
             }
           ],
           "terminator": {
@@ -421,8 +443,17 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "yeah_mhm",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "yeah_mhm",
+                "content": [
+                  {
+                    "content": "yeah_mhm",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "yeah_mhm"
+              }
             }
           ],
           "terminator": {
@@ -450,8 +481,17 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "mhm",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "mhm",
+                "content": [
+                  {
+                    "content": "mhm",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "mhm"
+              }
             }
           ],
           "terminator": {
@@ -479,8 +519,17 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "oh",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "oh",
+                "content": [
+                  {
+                    "content": "oh",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "oh"
+              }
             }
           ],
           "terminator": {
@@ -508,8 +557,21 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "ah:",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "ah",
+                "content": [
+                  {
+                    "content": "ah",
+                    "type": "text"
+                  },
+                  {
+                    "content": {},
+                    "type": "lengthening"
+                  }
+                ],
+                "raw_text": "ah:"
+              }
             },
             {
               "cleaned_text": "I",
@@ -559,8 +621,25 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "a:h",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "ah",
+                "content": [
+                  {
+                    "content": "a",
+                    "type": "text"
+                  },
+                  {
+                    "content": {},
+                    "type": "lengthening"
+                  },
+                  {
+                    "content": "h",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "a:h"
+              }
             },
             {
               "cleaned_text": "yeah",
@@ -599,8 +678,21 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "hm:",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "hm",
+                "content": [
+                  {
+                    "content": "hm",
+                    "type": "text"
+                  },
+                  {
+                    "content": {},
+                    "type": "lengthening"
+                  }
+                ],
+                "raw_text": "hm:"
+              }
             },
             {
               "cleaned_text": "indeed",
@@ -661,8 +753,18 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "anda@i",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "anda",
+                "content": [
+                  {
+                    "content": "anda",
+                    "type": "text"
+                  }
+                ],
+                "form_type": "i",
+                "raw_text": "anda@i"
+              }
             }
           ],
           "terminator": {
@@ -701,8 +803,26 @@ expression: snapshot
             },
             {
               "speaker": "INV",
-              "text": "a:nda@i",
-              "type": "other_spoken_event"
+              "type": "other_spoken_event",
+              "word": {
+                "cleaned_text": "anda",
+                "content": [
+                  {
+                    "content": "a",
+                    "type": "text"
+                  },
+                  {
+                    "content": {},
+                    "type": "lengthening"
+                  },
+                  {
+                    "content": "nda",
+                    "type": "text"
+                  }
+                ],
+                "form_type": "i",
+                "raw_text": "a:nda@i"
+              }
             },
             {
               "cleaned_text": "quietly",
@@ -729,36 +849,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "INV": {
-      "birth_date": null,
-      "code": "INV",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Investigator",
-        "speaker": "INV"
-      },
-      "name": null,
-      "role": "Investigator"
-    },
-    "PAR": {
-      "birth_date": null,
-      "code": "PAR",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Participant",
-        "speaker": "PAR"
-      },
-      "name": null,
-      "role": "Participant"
-    }
-  }
+  ]
 }

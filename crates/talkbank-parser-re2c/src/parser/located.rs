@@ -5,6 +5,12 @@ use std::ops::Range;
 use crate::lexer::{Lexer, LexerSpan};
 use crate::token::Token;
 
+mod cursor;
+pub(crate) use cursor::TokenCursor;
+mod region;
+use region::RegionFault;
+pub(crate) use region::{NonEmptyRegion, ReportedRegionFailure};
+
 /// A whitespace-delimited item borrowed and located by its source owner.
 pub(crate) struct LocatedItem<'source> {
     text: &'source str,
@@ -20,6 +26,31 @@ impl<'source> LocatedItem<'source> {
     }
 }
 
+/// A token selection admitted by its immutable lexer owner. Empty selections
+/// are legitimate; tokens, spans and diagnostic source cannot be substituted
+/// independently by consumers.
+pub(crate) struct LocatedTokens<'tokens, 'source> {
+    source: &'source str,
+    tokens: &'tokens [Token<'source>],
+    spans: &'tokens [LexerSpan],
+}
+
+impl<'tokens, 'source> LocatedTokens<'tokens, 'source> {
+    pub(crate) fn source(&self) -> &'source str {
+        self.source
+    }
+
+    pub(crate) fn tokens(&self) -> &'tokens [Token<'source>] {
+        self.tokens
+    }
+
+    pub(crate) fn into_located(
+        self,
+    ) -> impl DoubleEndedIterator<Item = (&'tokens Token<'source>, LexerSpan)> {
+        self.tokens.iter().zip(self.spans.iter().cloned())
+    }
+}
+
 /// Only lexing constructs this immutable owner of parallel token/span storage.
 pub(crate) struct LexedSource<'source> {
     source: &'source str,
@@ -28,7 +59,7 @@ pub(crate) struct LexedSource<'source> {
 }
 
 impl<'source> LexedSource<'source> {
-    pub(crate) fn new(source: &'source str, condition: usize) -> Self {
+    pub(crate) fn new(source: &'source str, condition: crate::lexer::StartCondition) -> Self {
         let (tokens, spans) = Lexer::new(source, condition).unzip();
         Self {
             source,
@@ -52,114 +83,39 @@ impl<'source> LexedSource<'source> {
         &self.tokens
     }
 
-    /// Diagnose a nonempty region selected from this lexer run. Never derive
-    /// locations or previews by concatenating delimiter-stripped payloads.
-    pub(crate) fn report_error(
+    /// Admit one nonempty cursor region from this immutable lexer run.
+    /// Invalid producer indices report an internal failure, never bad CHAT.
+    pub(crate) fn admit_region(
         &self,
         range: Range<usize>,
-        code: talkbank_model::ErrorCode,
-        message: &str,
         errors: &impl talkbank_model::ErrorSink,
-    ) {
-        let start = self.spans[range.start].start;
-        let end = self.spans[range.end - 1].end;
-        errors.report(talkbank_model::ParseError::new(
-            code,
-            talkbank_model::Severity::Error,
-            talkbank_model::DiagnosticLocation::from_offsets(start, end),
-            talkbank_model::ErrorContext::new(
-                self.source,
-                talkbank_model::Span::new(start, end),
-                "native_region",
-            ),
-            message,
-        ));
+    ) -> Result<NonEmptyRegion<'_, 'source>, ReportedRegionFailure> {
+        NonEmptyRegion::from_range(self, range).map_err(|fault| fault.report(errors))
     }
 
-    /// The source extent of a nonempty token range selected by the file
-    /// cursor: from the first token's start to the last token's end.
-    pub(crate) fn extent(&self, range: Range<usize>) -> talkbank_model::Span {
-        talkbank_model::Span::new(self.spans[range.start].start, self.spans[range.end - 1].end)
+    /// All lexer tokens when there are any. Empty fragment input is an
+    /// ordinary absence, not an invalid nonempty cursor selection.
+    pub(crate) fn whole_region(&self) -> Result<Option<NonEmptyRegion<'_, 'source>>, RegionFault> {
+        NonEmptyRegion::whole(self)
     }
 
-    /// The locations of a main tier whose line the cursor selected, including
-    /// its line ending: the line, the speaker token and the content region,
-    /// which runs from the end of the separator's colon (so the tab is
-    /// content, as in the tree-sitter grammar) to the end of the line.
-    ///
-    /// `None` when the line does not begin `*`, speaker, separator. The
-    /// main-tier grammar refuses such a line before this is asked, so a
-    /// caller that still gets `None` has paired a parse with the wrong range
-    /// and must report that rather than lower an unlocated tier.
-    pub(crate) fn main_tier_locations(
+    fn optional_region(
         &self,
-        line: Range<usize>,
-    ) -> Option<talkbank_model::MainTierLocations> {
-        use talkbank_model::{Location, MainTierLocations, Span};
-        /// Every `TierSep` lexeme begins with the colon; content starts after it.
-        const COLON: &str = ":";
-        let extent = self.extent(line.clone());
-        match &self.tokens[line.clone()] {
-            [Token::Star(_), Token::Speaker(_), Token::TierSep(_), ..] => {
-                let speaker = &self.spans[line.start + 1];
-                let separator = &self.spans[line.start + 2];
-                Some(MainTierLocations {
-                    line: Location::Located(extent),
-                    speaker: Location::Located(Span::new(speaker.start, speaker.end)),
-                    content: Location::Located(Span::new(
-                        separator.start + COLON.len(),
-                        extent.end(),
-                    )),
-                })
+        range: Range<usize>,
+        errors: &impl talkbank_model::ErrorSink,
+    ) -> Result<Option<NonEmptyRegion<'_, 'source>>, ReportedRegionFailure> {
+        match NonEmptyRegion::from_range(self, range) {
+            Ok(region) => Ok(Some(region)),
+            Err(RegionFault::Empty { .. }) => Ok(None),
+            Err(fault @ (RegionFault::Outside { .. } | RegionFault::Source(_))) => {
+                Err(fault.report(errors))
             }
-            _ => None,
         }
     }
 
-    /// A token selected by the file cursor and its original lexer location.
-    pub(crate) fn token_at(&self, index: usize) -> (&Token<'source>, LexerSpan) {
-        (&self.tokens[index], self.spans[index].clone())
-    }
-
-    /// The cursor selected one dependent prefix, its body and its optional
-    /// ending from this lexer run. Rich payload slices are not range proxies.
-    pub(crate) fn dependent_content_span(
-        &self,
-        line: Range<usize>,
-        ending: usize,
-    ) -> Result<
-        Option<talkbank_model::model::dependent_tier::DependentTierContentSpan>,
-        talkbank_model::model::dependent_tier::InvalidDependentTierContentSpan,
-    > {
-        use talkbank_model::Span;
-        use talkbank_model::model::dependent_tier::DependentTierContentSpan;
-        let line_end = self.spans[line.end - 1].end;
-        let body_end = match self.spans.get(ending) {
-            Some(newline) => newline.start,
-            None if line_end == self.source.len() => line_end,
-            // Token exhaustion can mean an embedded NUL stopped the lexer.
-            // Neither that stop nor an unconsumed buffer tail proves EOF.
-            None => return Ok(None),
-        };
-        DependentTierContentSpan::try_new(
-            Span::new(self.spans[line.start].start, line_end),
-            self.spans[line.start].end,
-            body_end,
-        )
-        .map(Some)
-    }
-
-    /// The file cursor has consumed a nonempty logical header, including its
-    /// newline when present. Derive the extent from the same lexer storage.
-    pub(crate) fn header_provenance(
-        &self,
-        range: Range<usize>,
-        separator: talkbank_model::model::TierSeparator,
-    ) -> crate::ast::HeaderProvenance {
-        crate::ast::HeaderProvenance::from_lexed(
-            talkbank_model::Span::new(self.spans[range.start].start, self.spans[range.end - 1].end),
-            separator,
-        )
+    /// Start a cursor whose iterator and source have this single owner.
+    pub(crate) fn cursor(&self) -> TokenCursor<'_, 'source> {
+        TokenCursor::new(self)
     }
 
     /// Preserve exact source bytes and locations while inspecting a token range.
@@ -168,54 +124,162 @@ impl<'source> LexedSource<'source> {
     pub(crate) fn whitespace_items(
         &self,
         range: Range<usize>,
-    ) -> impl Iterator<Item = LocatedItem<'source>> {
-        let (text, start) = if range.is_empty() {
-            ("", 0)
-        } else {
-            let start = self.spans[range.start].start;
-            let end = self.spans[range.end - 1].end;
-            (&self.source[start..end], start)
-        };
-        text.split_inclusive(char::is_whitespace)
-            .scan(start, |cursor, chunk| {
-                let start = *cursor;
-                *cursor += chunk.len();
-                let text = chunk.trim_end_matches(char::is_whitespace);
-                Some(LocatedItem {
-                    text,
-                    span: talkbank_model::Span::new(start, start + text.len()),
-                })
-            })
-            .filter(|item| !item.text.is_empty())
+        errors: &impl talkbank_model::ErrorSink,
+    ) -> Result<impl Iterator<Item = LocatedItem<'source>>, ReportedRegionFailure> {
+        Ok(self
+            .optional_region(range, errors)?
+            .into_iter()
+            .flat_map(NonEmptyRegion::whitespace_items))
     }
 
-    /// Diagnose a standalone newline selected by the file dispatcher. A
-    /// newline left behind after recovery on a nonempty line is not blank.
-    pub(crate) fn report_blank_line(&self, index: usize, errors: &impl talkbank_model::ErrorSink) {
-        let span = &self.spans[index];
-        if span.start == 0
-            || matches!(
-                self.source.as_bytes().get(span.start - 1),
-                Some(b'\r' | b'\n')
-            )
-        {
-            errors.report(talkbank_model::ParseError::new(
-                talkbank_model::ErrorCode::BlankLineNotAllowed,
-                talkbank_model::Severity::Error,
-                talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
-                None,
-                "Blank lines are not allowed",
-            ));
+    /// Whole-stream inspection has no caller-supplied range to validate.
+    pub(crate) fn located(&self) -> impl DoubleEndedIterator<Item = (&Token<'source>, LexerSpan)> {
+        self.whole_tokens().into_located()
+    }
+
+    pub(crate) fn whole_tokens(&self) -> LocatedTokens<'_, 'source> {
+        LocatedTokens {
+            source: self.source,
+            tokens: &self.tokens,
+            spans: &self.spans,
         }
     }
 
-    /// A range selected by the file parser's token cursor retains its locations.
-    pub(crate) fn located(
+    /// Select tokens once at their owner, before source-aware consumers run.
+    pub(crate) fn admit_tokens(
         &self,
         range: Range<usize>,
-    ) -> impl Iterator<Item = (&Token<'source>, LexerSpan)> {
-        self.tokens[range.clone()]
-            .iter()
-            .zip(self.spans[range].iter().cloned())
+        errors: &impl talkbank_model::ErrorSink,
+    ) -> Result<LocatedTokens<'_, 'source>, ReportedRegionFailure> {
+        self.select_range(range)
+            .map_err(|fault| fault.report(errors))
+    }
+
+    fn select_range(&self, range: Range<usize>) -> Result<LocatedTokens<'_, 'source>, RegionFault> {
+        let fault = || RegionFault::Outside {
+            start: range.start,
+            end: range.end,
+            tokens: self.tokens.len(),
+        };
+        let tokens = self.tokens.get(range.clone()).ok_or_else(fault)?;
+        let spans = self.spans.get(range.clone()).ok_or_else(fault)?;
+        Ok(LocatedTokens {
+            source: self.source,
+            tokens,
+            spans,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use talkbank_model::{ErrorCode, ErrorCollector, Severity};
+
+    fn reference_source() -> String {
+        std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../corpus/reference/annotation/retrace.cha"),
+        )
+        .expect("existing public reference")
+    }
+
+    #[test]
+    fn region_admission_refuses_empty_and_outside_producer_ranges_as_internal_faults() {
+        let input = reference_source();
+        let lexed = LexedSource::new(&input, crate::lexer::COND_INITIAL);
+        let sink = ErrorCollector::new();
+        assert!(lexed.admit_region(0..0, &sink).is_err());
+        assert!(
+            lexed
+                .admit_region(0..lexed.tokens().len() + 1, &sink)
+                .is_err()
+        );
+        let findings = sink.into_vec();
+        assert_eq!(findings.len(), 2);
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.code == ErrorCode::InternalError
+                    && finding.severity == Severity::Error
+                    && finding.location.span().is_none())
+        );
+    }
+
+    #[test]
+    fn admitted_region_retains_original_bytes_and_diagnostic_extent() {
+        let input = reference_source();
+        let lexed = LexedSource::new(&input, crate::lexer::COND_INITIAL);
+        let sink = ErrorCollector::new();
+        let region = lexed
+            .admit_region(0..lexed.tokens().len(), &sink)
+            .expect("real tokens");
+        assert_eq!(region.extent(), talkbank_model::Span::new(0, input.len()));
+        assert_eq!(region.tokens().len(), lexed.tokens().len());
+        region.report_error(
+            ErrorCode::UnparsableContent,
+            "region boundary control",
+            &sink,
+        );
+        let findings = sink.into_vec();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].location.span(), Some(region.extent()));
+    }
+
+    #[test]
+    fn whitespace_selection_distinguishes_empty_input_from_invalid_indices() {
+        let input = reference_source();
+        let lexed = LexedSource::new(&input, crate::lexer::COND_INITIAL);
+        let sink = ErrorCollector::new();
+        assert_eq!(lexed.whitespace_items(0..0, &sink).unwrap().count(), 0);
+        assert!(sink.into_vec().is_empty());
+
+        let sink = ErrorCollector::new();
+        let outside = lexed.tokens().len() + 1;
+        assert!(lexed.whitespace_items(outside..outside, &sink).is_err());
+        let findings = sink.into_vec();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, ErrorCode::InternalError);
+        assert!(findings[0].location.span().is_none());
+    }
+
+    #[test]
+    fn region_admission_reports_invalid_source_bounds_as_internal_faults() {
+        let input = reference_source();
+        let mut lexed = LexedSource::new(&input, crate::lexer::COND_INITIAL);
+        let count = lexed.tokens.len();
+        // Fault injection at the lexer-storage boundary, not malformed CHAT.
+        lexed.spans.last_mut().unwrap().end = input.len() + 1;
+        let sink = ErrorCollector::new();
+        assert!(lexed.admit_region(0..count, &sink).is_err());
+        assert!(matches!(lexed.whole_region(), Err(RegionFault::Source(_))));
+        let findings = sink.into_vec();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, ErrorCode::InternalError);
+        assert_eq!(findings[0].severity, Severity::Error);
+    }
+
+    /// An empty body is admitted; invalid producer coordinates report an
+    /// internal fault rather than panicking or becoming an empty body.
+    #[test]
+    fn token_selection_distinguishes_empty_bodies_from_invalid_ranges() {
+        let input = reference_source();
+        let lexed = LexedSource::new(&input, crate::lexer::COND_INITIAL);
+        let count = lexed.tokens().len();
+        let sink = ErrorCollector::new();
+        for at in [0, count] {
+            let selected = lexed.admit_tokens(at..at, &sink).unwrap();
+            assert!(std::ptr::eq(selected.source(), input.as_str()));
+            assert_eq!(selected.into_located().count(), 0);
+        }
+        assert!(sink.is_empty());
+        for (start, end) in [(count + 1, count + 1), (1, 0), (0, count + 1)] {
+            let errors = ErrorCollector::new();
+            assert!(lexed.admit_tokens(start..end, &errors).is_err());
+            let findings = errors.into_vec();
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].code, ErrorCode::InternalError);
+            assert_eq!(findings[0].severity, Severity::Error);
+        }
     }
 }

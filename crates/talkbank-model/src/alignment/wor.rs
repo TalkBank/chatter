@@ -204,6 +204,17 @@ impl<'main> CountMatchedWorTimings<'main> {
             .zip(self.wor_slots.iter().copied())
     }
 
+    /// Admitted main-tier display text in this count-matched pairing's order.
+    ///
+    /// Retains nonempty evidence from the membership projection instead of
+    /// asking a rewriting consumer to admit the same text again. This proves
+    /// neither lexical corroboration nor the validity of the original word.
+    pub fn main_display_texts(
+        &self,
+    ) -> impl Iterator<Item = crate::model::NonEmptyStr<'main>> + '_ {
+        self.main_slots.iter().map(|slot| slot.display_text())
+    }
+
     /// Shared slot count proved by the count-matching transition.
     pub fn slot_count(&self) -> MainWorSlotCount {
         MainWorSlotCount(self.main_slots.len())

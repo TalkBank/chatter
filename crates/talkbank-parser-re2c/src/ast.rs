@@ -1,20 +1,51 @@
-//! AST types, mirrors talkbank-model structure.
+//! Native parsing carriers and remaining intermediate semantic types.
 //!
-//! Focused on main tier for now. Will expand to full ChatFile.
+//! MOR and text bodies use shared model values; other families remain under
+//! review for direct construction or justified source-bound parsing mechanics.
 
 use crate::token::Token;
 use serde::Serialize;
+use talkbank_model::model::OverlapPointKind;
 
+pub(crate) mod chain;
+mod content_ref;
 mod file;
-mod rejected_tier;
-pub use rejected_tier::RejectedMorTier;
+pub use chain::Chain;
+pub use content_ref::{ContentChildren, ContentRef};
 
 mod word;
 pub use word::{
-    CaDelimiterKind, CaElementKind, LengtheningRun, OverlapKind, ParsedAnnotation,
-    ParsedLangSuffix, ReplacementParsed, ScopedAnnotationParsed, ScopedOverlapIndex, StressKind,
-    WordBodyItem, WordCategory, WordWithAnnotations,
+    LengtheningRun, ParsedAnnotation, ReplacementParsed, ScopedAnnotationParsed,
+    ScopedOverlapIndex, WordBodyItem, WordWithAnnotations,
 };
+
+/// Observed nonempty label of a text-backed dependent tier.
+/// Only the native prefix-admission edge constructs this carrier; lowering
+/// cannot receive an arbitrary token or an empty label in its place.
+///
+/// ```compile_fail,E0308
+/// use talkbank_parser_re2c::{ast::DependentTierParsed, token::Token};
+/// let tier = DependentTierParsed::RejectedText { label: Token::Period(".") };
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct TextTierLabel(talkbank_model::NonEmptyString);
+
+impl TextTierLabel {
+    pub(crate) fn from_prefix_text(prefix: &str) -> Result<Self, talkbank_model::EmptyText> {
+        let label = prefix.trim_start_matches('%').trim_end_matches(":\t");
+        talkbank_model::NonEmptyString::new(label).map(Self)
+    }
+
+    /// The admitted label, without the prefix or separator.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub(crate) fn nonempty(&self) -> &talkbank_model::NonEmptyString {
+        &self.0
+    }
+}
 
 /// A parsed main tier: *SPEAKER:\t tier_body
 /// grammar.js: main_tier = seq(star, speaker, colon, tab, tier_body)
@@ -34,174 +65,28 @@ pub struct MainTier<'a> {
 /// )
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TierBody<'a> {
-    pub linkers: Vec<Token<'a>>,
-    pub langcode: Option<crate::token::Extracted<'a>>,
+    /// Linkers already admitted and located by the grammar, never arbitrary tokens.
+    ///
+    /// ```compile_fail,E0308
+    /// use talkbank_parser_re2c::{ast::TierBody, token::Token};
+    /// fn insert_non_linker(body: &mut TierBody<'_>) {
+    ///     body.linkers.push(Token::Period("."));
+    /// }
+    /// ```
+    pub linkers: Vec<talkbank_model::Linker>,
+    /// Shared precode admitted by the grammar, never unchecked extracted text.
+    ///
+    /// ```compile_fail,E0308
+    /// use talkbank_parser_re2c::{ast::TierBody, token::Extracted};
+    /// fn insert_unchecked_precode(body: &mut TierBody<'_>, raw: Extracted<'_>) {
+    ///     body.langcode = Some(raw);
+    /// }
+    /// ```
+    pub langcode: Option<talkbank_model::LanguagePrecode>,
     pub contents: Vec<ContentItem<'a>>,
-    pub terminator: Option<Token<'a>>,
+    pub terminator: Option<talkbank_model::Terminator>,
     pub postcodes: Vec<crate::token::PostcodeToken<'a>>,
     pub media_bullet: Option<crate::token::MediaBulletToken<'a>>,
-}
-
-/// Which terminator a tier ends with.
-///
-/// One owner for the thirteen terminator tokens, keyed on the DISCRIMINANT
-/// because one consumer (the line-phase machine in `parser/file.rs`) has only
-/// that. Before this, `classify::is_terminator` and the converter's
-/// `token_to_terminator` each carried the same thirteen with nothing binding
-/// them, which is the duplication the separator work had just removed one
-/// function over.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum TerminatorKindParsed {
-    Period,
-    Question,
-    Exclamation,
-    TrailingOff,
-    Interruption,
-    SelfInterruption,
-    InterruptedQuestion,
-    BrokenQuestion,
-    QuotedNewLine,
-    QuotedPeriodSimple,
-    SelfInterruptedQuestion,
-    TrailingOffQuestion,
-    BreakForCoding,
-}
-
-impl TerminatorKindParsed {
-    /// THE list. Every other terminator question is derived from this.
-    pub fn from_discriminant(d: crate::token::TokenDiscriminants) -> Option<Self> {
-        use crate::token::TokenDiscriminants as D;
-        Some(match d {
-            D::Period => Self::Period,
-            D::Question => Self::Question,
-            D::Exclamation => Self::Exclamation,
-            D::TrailingOff => Self::TrailingOff,
-            D::Interruption => Self::Interruption,
-            D::SelfInterruption => Self::SelfInterruption,
-            D::InterruptedQuestion => Self::InterruptedQuestion,
-            D::BrokenQuestion => Self::BrokenQuestion,
-            D::QuotedNewLine => Self::QuotedNewLine,
-            D::QuotedPeriodSimple => Self::QuotedPeriodSimple,
-            D::SelfInterruptedQuestion => Self::SelfInterruptedQuestion,
-            D::TrailingOffQuestion => Self::TrailingOffQuestion,
-            D::BreakForCoding => Self::BreakForCoding,
-            _ => return None,
-        })
-    }
-
-    /// The same question asked of a token.
-    pub fn from_token(tok: &Token<'_>) -> Option<Self> {
-        Self::from_discriminant(crate::token::TokenDiscriminants::from(tok))
-    }
-}
-
-/// Which pause a `(.)`, `(..)`, `(...)` or timed pause is.
-///
-/// The AST used to store the raw `Token` here, which meant both converters had
-/// to re-derive the kind from a ~180-variant enum and end in
-/// `_ => PauseDuration::Short`. That arm was not `unreachable!()`, it was a
-/// SILENT WRONG ANSWER: any token arriving unexpectedly became a short pause,
-/// in two places, and looked like a reasonable default while doing it.
-///
-/// The parser already knows the kind at construction (`main_tier.rs` matches
-/// `Token::PauseShort` and friends one by one), so recording it here costs
-/// nothing and makes both conversions exhaustive.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum PauseKindParsed<'a> {
-    /// `(.)`, retaining its complete lexical extent.
-    Short(crate::token::PauseLexeme<'a>),
-    /// `(..)`, retaining its complete lexical extent.
-    Medium(crate::token::PauseLexeme<'a>),
-    /// `(...)`, retaining its complete lexical extent.
-    Long(crate::token::PauseLexeme<'a>),
-    /// Numeric payload and full parenthesized extent from one lexer match.
-    Timed(crate::token::PauseLexeme<'a>),
-}
-
-/// Which separator a `ContentItem::Separator` is.
-///
-/// The converter used to re-derive this from a raw `Token` and end in
-/// `_ => Separator::Comma`, which is the pause bug with worse consequences:
-/// commas are load-bearing for validation (`ContentItem::comma_span` feeds
-/// E258), so an unexpected token became a FABRICATED comma that a rule could
-/// then report on. The parser knows which separator it matched, so it records
-/// it and the conversion becomes exhaustive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum SeparatorKindParsed {
-    Comma,
-    Semicolon,
-    Colon,
-    CaContinuation,
-    Tag,
-    Vocative,
-    UnmarkedEnding,
-    Uptake,
-    CaNoBreak,
-    CaTechnicalBreak,
-    RisingToHigh,
-    RisingToMid,
-    Level,
-    FallingToMid,
-    FallingToLow,
-}
-
-impl SeparatorKindParsed {
-    /// THE list of which token is which separator.
-    ///
-    /// One owner, because there were briefly FOUR: this enum, the parser's
-    /// `select!`, the converter's kind-to-model map, and `classify::is_separator`.
-    /// Only one of those pairs was compiler-checked, and the drift they allowed
-    /// is not benign: a separator token added to the lexer but missed here makes
-    /// the `%wor` item parser stop matching, which surfaces as E316 "unparsable
-    /// tier content" on valid CHAT. That is precisely the failure the `%wor`
-    /// language-precode bug caused three lines from the same call site, 510
-    /// times over a 2% corpus sample.
-    pub fn from_token(tok: &Token<'_>) -> Option<Self> {
-        Some(match tok {
-            Token::Comma(_) => Self::Comma,
-            Token::Semicolon(_) => Self::Semicolon,
-            Token::Colon(_) => Self::Colon,
-            Token::CaContinuationMarker(_) => Self::CaContinuation,
-            Token::TagMarker(_) => Self::Tag,
-            Token::VocativeMarker(_) => Self::Vocative,
-            Token::UnmarkedEnding(_) => Self::UnmarkedEnding,
-            Token::UptakeSymbol(_) => Self::Uptake,
-            Token::CaNoBreak(_) => Self::CaNoBreak,
-            Token::CaTechnicalBreak(_) => Self::CaTechnicalBreak,
-            Token::RisingToHigh(_) => Self::RisingToHigh,
-            Token::RisingToMid(_) => Self::RisingToMid,
-            Token::LevelPitch(_) => Self::Level,
-            Token::FallingToMid(_) => Self::FallingToMid,
-            Token::FallingToLow(_) => Self::FallingToLow,
-            _ => return None,
-        })
-    }
-
-    /// The CHAT symbol this separator is written as.
-    ///
-    /// Exact rather than approximate: every one of the fifteen lexer rules
-    /// matches a fixed literal (verified in `lexer.re`), so there is no
-    /// source variation for this to lose. It lets the `%wor` tier carry a
-    /// resolved kind instead of a raw token.
-    pub fn chat_text(self) -> &'static str {
-        match self {
-            Self::Comma => ",",
-            Self::Semicolon => ";",
-            Self::Colon => ":",
-            Self::CaContinuation => "[^c]",
-            Self::Tag => "\u{201E}",
-            Self::Vocative => "\u{2021}",
-            Self::UnmarkedEnding => "\u{221E}",
-            Self::Uptake => "\u{2261}",
-            Self::CaNoBreak => "\u{2248}",
-            Self::CaTechnicalBreak => "\u{224B}",
-            Self::RisingToHigh => "\u{21D7}",
-            Self::RisingToMid => "\u{2197}",
-            Self::Level => "\u{2192}",
-            Self::FallingToMid => "\u{2198}",
-            Self::FallingToLow => "\u{21D8}",
-        }
-    }
 }
 
 /// grammar.js: contents = repeat1(choice(whitespaces, content_item, separator, overlap_point))
@@ -211,7 +96,7 @@ pub enum ContentItem<'a> {
     /// A word with optional trailing annotations.
     Word(WordWithAnnotations<'a>),
     /// grammar.js: pause_token
-    Pause(PauseKindParsed<'a>),
+    Pause(talkbank_model::model::Pause),
     /// Freecode (`[^ text]`), a first-class content item. Its payload is the
     /// tag-extracted text, its lexeme the whole `[^ text]`.
     Freecode(crate::token::Extracted<'a>),
@@ -227,33 +112,20 @@ pub enum ContentItem<'a> {
     /// "E759 quotes the marker as written". That was false, and the lexer said
     /// so: three of the seven trigger tokens are tag-extracted, so re2c
     /// reported `Annotation '1'` where tree-sitter reported `Annotation '[<1]'`.
-    /// A typed annotation plus [`ParsedAnnotation::chat_text`] reconstructs the
-    /// written form and makes the two backends agree.
+    /// A typed annotation retains the exact written form, exposed through
+    /// [`ParsedAnnotation::chat_text`].
     OrphanAnnotation(ParsedAnnotation<'a>),
-    /// Separator: comma, semicolon, intonation contours, etc.
-    ///
-    /// Carries the source `text` as well as the kind, because the converter
-    /// needs the POSITION and this is the only thing that still knows it. The
-    /// variant held a bare kind until 2026-08-27, so `separator_from_kind`
-    /// opened with `let s = Span::DUMMY;` and every separator reached the
-    /// model at offset zero, which silently disabled every validation rule
-    /// that reads a separator span (E258 among them).
-    Separator {
-        /// Which separator this is.
-        kind: SeparatorKindParsed,
-        /// The separator's own text, borrowed from the source, so
-        /// [`crate::source_text::SourceText::span_of`] can place it.
-        text: &'a str,
-    },
+    /// Separator admitted directly to the shared model with its source location.
+    Separator(talkbank_model::model::Separator),
     /// grammar.js: overlap_point, with its kind and index already resolved.
     ///
-    /// Typed for the reason [`PauseKindParsed`] was: the parser selects the
+    /// The parser selects the
     /// four overlap tokens one by one, so it knows the kind at construction,
     /// and storing a raw `Token` forced the converter to re-derive it and
     /// invent a fallback for a shape that cannot arrive. Both call sites then
     /// turned an overlap marker into a WORD on that dead branch.
     OverlapPoint {
-        kind: OverlapKind,
+        kind: OverlapPointKind,
         /// `⌈2` and friends; the digit written after the marker.
         index: Option<u32>,
         /// The marker as written, borrowed from the source, so the converter
@@ -267,23 +139,9 @@ pub enum ContentItem<'a> {
     Group(Group<'a>),
     /// grammar.js: quotation = seq(left_double_quote, contents, right_double_quote)
     Quotation(Quotation<'a>),
-    /// Bare event (`&=description`) with no annotations.
-    ///
-    /// One token, not a `Vec`. The only constructor ever built `vec![event]`,
-    /// so the container could not hold anything else, and both converters read
-    /// it as `.first().map(..).unwrap_or("")`: an empty-string sentinel for a
-    /// state the parser cannot produce. A `Vec` that is always length one is a
-    /// dead axis, and its emptiness case is a wrong answer waiting for a
-    /// reader who does not know that.
-    Event(crate::token::Extracted<'a>),
-    /// Event with annotations: `&=description [annotation1] [annotation2] ...`
-    /// grammar.js: nonword_with_optional_annotations wraps events.
-    /// Retrace markers are dropped (not applicable to events).
-    AnnotatedEvent {
-        /// The event, with its description as the lexer tag-extracted it.
-        event: crate::token::Extracted<'a>,
-        annotations: Vec<ParsedAnnotation<'a>>,
-    },
+    /// A source-located event with its ordered, scoped annotations.
+    /// Lowering chooses the shared bare or annotated shape once.
+    Event(talkbank_model::Event, Vec<ScopedAnnotationParsed<'a>>),
     /// Media bullet with lexer-owned numeric admission and original spelling.
     /// Rejected timing remains present until lowering, never a zero sentinel.
     MediaBullet {
@@ -302,32 +160,22 @@ pub enum ContentItem<'a> {
     UnderlineBegin(&'a str),
     /// Underline end marker (`␂␂`). See [`ContentItem::UnderlineBegin`].
     UnderlineEnd(&'a str),
-    /// Other spoken event (`&*SPK:word`), with its two fields separated.
-    ///
-    /// Replaces a raw `Token` whose only purpose was to be re-destructured in
-    /// the converter behind an `unreachable!()`, i.e. a panic in a parser that
-    /// existed solely because the variant could hold a token the parser never
-    /// puts there.
-    OtherSpokenEvent {
-        speaker: &'a str,
-        text: &'a str,
-        /// The whole `&*SPK:word`, for placement.
-        lexeme: &'a str,
-    },
+    /// Interposed speech admitted through the ordinary word grammar.
+    OtherSpokenEvent(talkbank_model::OtherSpokenEvent),
     /// Phonological group: ‹ contents ›
-    PhoGroup(Vec<ContentItem<'a>>),
+    PhoGroup(EnclosedGroup<'a>),
     /// Sign group: 〔 contents 〕
-    SinGroup(Vec<ContentItem<'a>>),
+    SinGroup(EnclosedGroup<'a>),
     /// Long feature begin (`&{l=LABEL`); its payload is the label alone.
-    LongFeatureBegin(crate::token::Extracted<'a>),
+    LongFeatureBegin(talkbank_model::LongFeatureBegin),
     /// Long feature end (`&}l=LABEL`); its payload is the label alone.
-    LongFeatureEnd(crate::token::Extracted<'a>),
+    LongFeatureEnd(talkbank_model::LongFeatureEnd),
     /// Nonvocal begin (`&{n=LABEL`); its payload is the label alone.
-    NonvocalBegin(crate::token::Extracted<'a>),
+    NonvocalBegin(talkbank_model::NonvocalBegin),
     /// Nonvocal end (`&}n=LABEL`); its payload is the label alone.
-    NonvocalEnd(crate::token::Extracted<'a>),
+    NonvocalEnd(talkbank_model::NonvocalEnd),
     /// Nonvocal simple, self-closing (`&{n=LABEL}`); its payload is the label alone.
-    NonvocalSimple(crate::token::Extracted<'a>),
+    NonvocalSimple(talkbank_model::NonvocalSimple),
     /// Standalone zero (0), action without speech.
     /// grammar.js: nonword = choice(event, zero)
     /// With annotations: annotated_action; without: bare action.
@@ -335,7 +183,7 @@ pub enum ContentItem<'a> {
         /// The omission marker as written; always `0` today, kept as text
         /// because `%wor` reconstructs `raw_text` from it.
         zero: &'a str,
-        annotations: Vec<ParsedAnnotation<'a>>,
+        annotations: Vec<ScopedAnnotationParsed<'a>>,
     },
 }
 
@@ -368,30 +216,31 @@ impl<'a> ContentItem<'a> {
     /// `model::content::structure::ContentStructure`; this is that idea for
     /// re2c's separate AST, which cannot share the type.
     #[inline]
-    pub fn children(&self) -> &[ContentItem<'a>] {
+    pub fn children(&self) -> ContentChildren<'_, 'a> {
         match self {
             Self::Retrace(retrace) => retrace.body.items(),
-            Self::Group(group) => &group.contents,
-            Self::Quotation(quotation) => &quotation.contents,
-            Self::PhoGroup(items) | Self::SinGroup(items) => items,
+            Self::Group(group) => ContentChildren::items(&group.contents),
+            Self::Quotation(quotation) => ContentChildren::items(&quotation.contents),
+            Self::PhoGroup(group) | Self::SinGroup(group) => {
+                ContentChildren::items(&group.contents)
+            }
             Self::Word(_)
             | Self::Pause(_)
             | Self::Freecode(_)
             | Self::OrphanAnnotation(_)
             | Self::Separator { .. }
             | Self::OverlapPoint { .. }
-            | Self::Event(_)
-            | Self::AnnotatedEvent { .. }
+            | Self::Event(..)
             | Self::MediaBullet { .. }
             | Self::UnderlineBegin(_)
             | Self::UnderlineEnd(_)
-            | Self::OtherSpokenEvent { .. }
+            | Self::OtherSpokenEvent(_)
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)
             | Self::NonvocalBegin(_)
             | Self::NonvocalEnd(_)
             | Self::NonvocalSimple(_)
-            | Self::Action { .. } => &[],
+            | Self::Action { .. } => ContentChildren::items(&[]),
         }
     }
 }
@@ -403,6 +252,15 @@ impl<'a> ContentItem<'a> {
 pub struct Enclosure<'a> {
     pub open: &'a str,
     pub close: &'a str,
+}
+
+/// An unannotated group retains its delimiters through model lowering.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct EnclosedGroup<'a> {
+    #[serde(skip)]
+    pub enclosure: Enclosure<'a>,
+    pub contents: Vec<ContentItem<'a>>,
 }
 
 impl Enclosure<'_> {
@@ -429,16 +287,17 @@ pub enum RetraceBody<'a> {
     /// model's `is_group`); the extent runs from the opening bracket.
     Enclosed(Enclosure<'a>, Vec<ContentItem<'a>>),
     /// `word [/]`, `<a b> [?] [/]`, `“a” [/]`: the one item the marker
-    /// scopes over, whose own extent starts the retrace's.
-    Single(Box<ContentItem<'a>>),
+    /// scopes over, whose own extent starts the retrace's. Only admitted
+    /// marker-chain content can occupy this position.
+    Single(Box<Chain<'a>>),
 }
 
 impl<'a> RetraceBody<'a> {
     /// The retraced items, in order.
-    pub fn items(&self) -> &[ContentItem<'a>] {
+    pub fn items(&self) -> ContentChildren<'_, 'a> {
         match self {
-            Self::Enclosed(_, items) => items,
-            Self::Single(item) => std::slice::from_ref(item),
+            Self::Enclosed(_, items) => ContentChildren::items(items),
+            Self::Single(item) => ContentChildren::Single(Some(item.as_ref()).into_iter()),
         }
     }
 
@@ -446,7 +305,7 @@ impl<'a> RetraceBody<'a> {
     pub fn into_items(self) -> Vec<ContentItem<'a>> {
         match self {
             Self::Enclosed(_, items) => items,
-            Self::Single(item) => vec![*item],
+            Self::Single(item) => vec![item.into_content_item()],
         }
     }
 }
@@ -463,7 +322,7 @@ pub struct Retrace<'a> {
     /// Non-retrace annotations that followed the retrace marker (e.g., `[?]` after `[/]`).
     /// In grammar.js, annotations attach to `word_with_optional_annotations`, so
     /// they belong to the retrace, not the word inside it.
-    pub annotations: Vec<ParsedAnnotation<'a>>,
+    pub annotations: Vec<ScopedAnnotationParsed<'a>>,
 }
 
 impl Retrace<'_> {
@@ -492,7 +351,7 @@ pub struct Group<'a> {
     /// The `<` and `>` as written.
     pub enclosure: Enclosure<'a>,
     pub contents: Vec<ContentItem<'a>>,
-    pub annotations: Vec<ParsedAnnotation<'a>>,
+    pub annotations: Vec<ScopedAnnotationParsed<'a>>,
 }
 
 /// grammar.js: quotation
@@ -502,70 +361,24 @@ pub struct Quotation<'a> {
     pub enclosure: Enclosure<'a>,
     pub contents: Vec<ContentItem<'a>>,
     /// Markers attached to the quotation, retained by the ordered chain fold.
-    pub annotations: Vec<ParsedAnnotation<'a>>,
+    pub annotations: Vec<ScopedAnnotationParsed<'a>>,
 }
 
 // ═══════════════════════════════════════════════════════════════
 // Header ASTs
 // ═══════════════════════════════════════════════════════════════
 
-/// Parsed @ID header fields.
-/// Mirrors talkbank_model::IDHeader.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct IdHeaderParsed<'a> {
-    pub language: &'a str,
-    pub corpus: &'a str,
-    pub speaker: &'a str,
-    pub age: &'a str,
-    pub sex: &'a str,
-    pub group: &'a str,
-    pub ses: &'a str,
-    pub role: &'a str,
-    pub education: &'a str,
-    pub custom_field: &'a str,
-}
-
-/// Parsed @Languages header.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct LanguagesHeaderParsed<'a> {
-    pub codes: Vec<&'a str>,
-}
-
-/// Parsed @Participants header.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct ParticipantsHeaderParsed<'a> {
-    pub entries: Vec<ParticipantEntryParsed<'a>>,
-}
-
-/// A single participant entry: SPK Name Role
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct ParticipantEntryParsed<'a> {
-    pub words: Vec<&'a str>,
-}
-
-/// Parsed @Media header.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct MediaHeaderParsed<'a> {
-    pub fields: Vec<&'a str>,
-}
-
-/// Parsed @Types header.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct TypesHeaderParsed<'a> {
-    pub raw: &'a str,
-    pub design: &'a str,
-    pub activity: &'a str,
-    pub group: &'a str,
-}
-
 /// A parsed participant header or another header's preserved lexer tokens.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum HeaderParsed<'a> {
-    /// Participant syntax has already been parsed and diagnosed; lowering must
-    /// consume these entries rather than run a second token-splitting parser.
-    Participants(ParticipantsHeaderParsed<'a>),
+    /// Header already admitted to the shared model, including explicit recovery.
+    Shared(talkbank_model::model::Header),
     /// Other header families retain their lexer representation for lowering.
     Other {
+        /// Original header bytes, excluding the terminal line ending. Recovery
+        /// must use this source slice rather than reconstructing lexical payloads.
+        #[serde(skip)]
+        source: &'a str,
         /// Header discriminator produced by the lexer.
         prefix: Token<'a>,
         /// Content tokens, including whitespace and continuation newlines.
@@ -578,167 +391,40 @@ pub enum HeaderParsed<'a> {
 // ═══════════════════════════════════════════════════════════════
 
 pub use file::{
-    ChatFile, DependentTierEntryParsed, HeaderProvenance, Line, LocatedMainTier, Utterance,
+    ChatFile, DependentTierEntryParsed, Line, LocatedHeader, LocatedMainTier, Utterance,
 };
 
 /// A parsed dependent tier.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum DependentTierParsed<'a> {
-    /// Rejected morphological syntax, retained only for raw AST inspection.
-    RejectedMor(RejectedMorTier<'a>),
-    Mor(MorTier<'a>),
-    Gra(GraTier<'a>),
-    Pho(PhoTier<'a>),
-    Mod(PhoTier<'a>),
-    Sin(SinTierParsed),
+    /// Rejected morphology source, retained in the shared recovery model.
+    RejectedMor(talkbank_model::UnparsedTier),
+    /// Rejected grammar source, retained in the shared recovery model.
+    RejectedGra(talkbank_model::UnparsedTier),
+    /// Rejected actual phonology source.
+    RejectedPho(talkbank_model::UnparsedTier),
+    /// Rejected model phonology source.
+    RejectedMod(talkbank_model::UnparsedTier),
+    /// Rejected gesture/sign source.
+    RejectedSin(talkbank_model::UnparsedTier),
+    /// Rejected word-timing source.
+    RejectedWor(talkbank_model::UnparsedTier),
+    Mor(talkbank_model::MorTier),
+    Gra(talkbank_model::GraTier),
+    Pho(talkbank_model::PhoTier),
+    Mod(talkbank_model::PhoTier),
+    Sin(talkbank_model::SinTier),
     /// %wor tier: words with optional inline timing bullets.
-    Wor(WorTierParsed<'a>),
+    Wor(talkbank_model::WorTier),
+    /// Text body rejected before any shortened content can be constructed.
+    RejectedText {
+        label: TextTierLabel,
+    },
     /// Generic text tier (content is raw text segments + bullets).
     Text {
-        prefix: Token<'a>,
+        label: TextTierLabel,
         content: Vec<Token<'a>>,
     },
-}
-
-/// A parsed `%wor` tier: an optional language precode, the timed items, and an
-/// optional terminator.
-///
-/// A named struct rather than a tuple because adding the language precode made
-/// it a three-slot return, and a bare tuple that wide is a seam nobody can read
-/// at the call site. It is also how the precode came to be DROPPED: `WorTier`
-/// has carried `language_code: Option<LanguageCode>` all along, documented with
-/// the `[- spa]` form, and this parser simply had nowhere to put one.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct WorTierParsed<'a> {
-    /// `[- zho]` and friends, written before the first timed word.
-    pub langcode: Option<crate::token::Extracted<'a>>,
-    pub items: Vec<WorItemParsed<'a>>,
-    pub terminator: Option<Token<'a>>,
-}
-
-/// A parsed %wor item: word with optional timing bullet.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum WorItemParsed<'a> {
-    /// A word with optional timing bullet. The whole token is kept, not only
-    /// its numeric admission, so the bullet can be placed at its own bytes.
-    Word {
-        word: Box<WordWithAnnotations<'a>>,
-        bullet: Option<crate::token::MediaBulletToken<'a>>,
-    },
-    /// Separator (comma, tag marker, vocative marker), with its text so the
-    /// converter can place it.
-    Separator {
-        kind: SeparatorKindParsed,
-        text: &'a str,
-    },
-}
-
-// ═══════════════════════════════════════════════════════════════
-// %pho tier AST
-// ═══════════════════════════════════════════════════════════════
-
-/// Parsed %pho tier.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct PhoTier<'a> {
-    pub items: Vec<PhoItemParsed<'a>>,
-    pub terminator: Option<Token<'a>>,
-}
-
-/// A parsed %pho item: either a single word or a ‹group› of words.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum PhoItemParsed<'a> {
-    /// Single word (possibly compound with +)
-    Word(PhoWordParsed<'a>),
-    /// ‹grouped words›
-    Group(Vec<PhoWordParsed<'a>>),
-}
-
-/// A phonological word (possibly compound with +).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct PhoWordParsed<'a> {
-    pub segments: Vec<&'a str>,
-}
-
-/// A parsed %sin tier, gesture/sign words with optional 〔groups〕.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct SinTierParsed {
-    pub items: Vec<SinItemParsed>,
-}
-
-/// A single %sin item: either a token or a 〔group〕.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum SinItemParsed {
-    Token(talkbank_model::model::SinToken),
-    Group(Vec<talkbank_model::model::SinToken>),
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Text tier AST (for %com, %act, %cod, %exp, etc.)
-// ═══════════════════════════════════════════════════════════════
-
-/// Parsed text tier content (text_with_bullets).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct TextTierParsed<'a> {
-    pub segments: Vec<TextTierSegment<'a>>,
-}
-
-/// A segment in a text tier.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum TextTierSegment<'a> {
-    Text(&'a str),
-    Bullet(crate::token::MediaBulletToken<'a>),
-    Pic(Token<'a>),
-}
-
-// ═══════════════════════════════════════════════════════════════
-// %mor tier AST, mirrors talkbank_model::MorTier/Mor/MorWord
-// ═══════════════════════════════════════════════════════════════
-
-/// Parsed %mor tier.
-/// grammar.js: mor_contents = seq(mor_content+, optional(terminator))
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct MorTier<'a> {
-    pub items: Vec<MorItem<'a>>,
-    pub terminator: Option<Token<'a>>,
-}
-
-/// A single %mor item: main word + optional post-clitics.
-/// grammar.js: mor_content = seq(mor_word, repeat(seq(tilde, mor_word)))
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct MorItem<'a> {
-    pub main: MorWordParsed<'a>,
-    pub post_clitics: Vec<MorWordParsed<'a>>,
-}
-
-/// A parsed %mor word: POS, lemma, features.
-/// Extracted from a single MorWord rich token.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct MorWordParsed<'a> {
-    /// Part-of-speech tag (e.g., "verb", "pro:sub")
-    pub pos: &'a str,
-    /// Lemma/stem (e.g., "want", "I")
-    pub lemma: &'a str,
-    /// Feature values (e.g., ["Fin", "Ind", "Pres"])
-    pub features: Vec<&'a str>,
-}
-
-// ═══════════════════════════════════════════════════════════════
-// %gra tier AST, mirrors talkbank_model::GraTier/GrammaticalRelation
-// ═══════════════════════════════════════════════════════════════
-
-/// Parsed %gra tier.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct GraTier<'a> {
-    pub relations: Vec<GraRelationParsed<'a>>,
-}
-
-/// A parsed %gra relation: index, head, relation name.
-/// Extracted from a single GraRelation rich token.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct GraRelationParsed<'a> {
-    pub index: &'a str,
-    pub head: &'a str,
-    pub relation: &'a str,
 }
 
 #[cfg(test)]
@@ -747,7 +433,10 @@ mod children_tests {
 
     /// A distinguishable leaf to look for on the far side of a container.
     fn marker<'a>() -> ContentItem<'a> {
-        ContentItem::PhoGroup(vec![])
+        ContentItem::Pause(talkbank_model::model::Pause::new(
+            talkbank_model::Location::Unlocated,
+            talkbank_model::model::PauseDuration::Short,
+        ))
     }
 
     fn retrace<'a>(content: Vec<ContentItem<'a>>) -> ContentItem<'a> {
@@ -808,8 +497,26 @@ mod children_tests {
                     annotations: vec![],
                 }),
             ),
-            ("PhoGroup", ContentItem::PhoGroup(vec![marker()])),
-            ("SinGroup", ContentItem::SinGroup(vec![marker()])),
+            (
+                "PhoGroup",
+                ContentItem::PhoGroup(EnclosedGroup {
+                    enclosure: Enclosure {
+                        open: "‹",
+                        close: "›",
+                    },
+                    contents: vec![marker()],
+                }),
+            ),
+            (
+                "SinGroup",
+                ContentItem::SinGroup(EnclosedGroup {
+                    enclosure: Enclosure {
+                        open: "〔",
+                        close: "〕",
+                    },
+                    contents: vec![marker()],
+                }),
+            ),
         ];
 
         for (name, item) in cases {
@@ -822,15 +529,62 @@ mod children_tests {
         }
     }
 
+    /// Every restricted container remains visible through a single retrace.
+    #[test]
+    fn single_retrace_descent_preserves_each_chain_container() {
+        let enclosure = Enclosure {
+            open: "<",
+            close: ">",
+        };
+        let cases = [
+            Chain::Group(enclosure, vec![marker()], vec![]),
+            Chain::Quotation(Quotation {
+                enclosure,
+                contents: vec![marker()],
+                annotations: vec![],
+            }),
+            Chain::Wrapped(Retrace {
+                body: RetraceBody::Enclosed(enclosure, vec![marker()]),
+                kind: RetraceKindParsed::Complete,
+                marker: "[//]",
+                annotations: vec![],
+            }),
+        ];
+        for chain in cases {
+            let outer = ContentItem::Retrace(Retrace {
+                body: RetraceBody::Single(Box::new(chain)),
+                kind: RetraceKindParsed::Partial,
+                marker: "[/]",
+                annotations: vec![],
+            });
+            let mut children = outer.children();
+            assert_eq!(children.len(), 1);
+            let child = children.next().expect("single retrace child");
+            assert_eq!(children.len(), 0);
+            assert!(
+                child
+                    .children()
+                    .any(|item| { matches!(item, ContentRef::Item(ContentItem::Pause(_))) })
+            );
+        }
+    }
+
     /// SURVIVES: policy. That a leaf yields nothing is the other half of the
     /// same fact, and a `children()` that returned its own item would loop
     /// forever rather than answer wrong.
     #[test]
     fn a_leaf_yields_nothing() {
         assert!(
-            ContentItem::Event(crate::token::Extracted::from_lexed("laughs", "&=laughs"))
-                .children()
-                .is_empty()
+            ContentItem::Event(
+                talkbank_model::Event::new(
+                    talkbank_model::Span::new(0, 8),
+                    talkbank_model::EventType::new("laughs").unwrap(),
+                ),
+                Vec::new()
+            )
+            .children()
+            .next()
+            .is_none()
         );
     }
 
@@ -839,11 +593,39 @@ mod children_tests {
     /// the missing-annotation check used to miss.
     #[test]
     fn descent_reaches_content_inside_a_pho_group() {
-        let nested = ContentItem::PhoGroup(vec![retrace(vec![])]);
+        let nested = ContentItem::PhoGroup(EnclosedGroup {
+            enclosure: Enclosure {
+                open: "‹",
+                close: "›",
+            },
+            contents: vec![retrace(vec![])],
+        });
         let found = nested
             .children()
-            .iter()
-            .any(|item| matches!(item, ContentItem::Retrace(_)));
+            .any(|item| matches!(item, ContentRef::Item(ContentItem::Retrace(_))));
         assert!(found, "a retrace inside a pho group must be reachable");
+    }
+}
+
+#[cfg(test)]
+mod text_tier_label_tests {
+    use super::TextTierLabel;
+
+    #[test]
+    fn prefix_admission_preserves_labels_and_refuses_absence() {
+        for (prefix, expected) in [
+            ("%com:\t", "com"),
+            ("%com", "com"),
+            ("%xnote:\t", "xnote"),
+            ("%phoaln:\t", "phoaln"),
+        ] {
+            assert_eq!(
+                TextTierLabel::from_prefix_text(prefix).unwrap().as_str(),
+                expected
+            );
+        }
+        for prefix in ["", "%", "%:\t"] {
+            assert!(TextTierLabel::from_prefix_text(prefix).is_err());
+        }
     }
 }

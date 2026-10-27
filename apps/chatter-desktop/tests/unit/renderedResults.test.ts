@@ -4,11 +4,13 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ErrorPanel from "../../src/components/ErrorPanel";
 import FileTree from "../../src/components/FileTree";
+import ProgressBar from "../../src/components/ProgressBar";
 import {
   applyValidationEvent,
   createInitialValidationState,
   relativeDisplayName,
   type ValidationState,
+  type RunPhase,
 } from "../../src/hooks/validationState";
 import type {
   FileStatus,
@@ -20,6 +22,29 @@ import type {
 // Typed transport controls, not parsed CHAT or native-interaction evidence.
 const root = "/inputs";
 const path = `${root}/sample.cha`;
+
+test("pending validation phases expose cancellation in the rendered actions", () => {
+  const phases: RunPhase[] = [
+    { kind: "invoked" },
+    { kind: "discovering" },
+    { kind: "running", totalFiles: 1 },
+  ];
+  for (const run of phases) {
+    const html = renderToStaticMarkup(createElement(ProgressBar, {
+      run,
+      backendSilent: false,
+      processedFiles: 0,
+      totalErrors: 0,
+      cacheUnavailable: null,
+      startTime: null,
+      onRevalidate: () => assert.fail("static rendering must not revalidate"),
+      onCancel: () => assert.fail("static rendering must not cancel"),
+      onExport: () => assert.fail("static rendering must not export"),
+    }));
+    assert.match(html, /<button[^>]*>Cancel<\/button>/, run.kind);
+    assert.doesNotMatch(html, /<button[^>]*>(Export|Re-validate)<\/button>/, run.kind);
+  }
+});
 
 function stats(overrides: Partial<ValidationStats> = {}): ValidationStats {
   return {

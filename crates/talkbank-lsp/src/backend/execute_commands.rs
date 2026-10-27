@@ -288,6 +288,35 @@ pub(crate) enum ChatOpsCommandRequest {
 }
 
 impl ExecuteCommandRequest {
+    /// Retain the admitted command identity while its request is consumed.
+    pub(crate) fn name(&self) -> ExecuteCommandName {
+        match self {
+            Self::Documents(DocumentCommandRequest::ShowDependencyGraph(_)) => {
+                ExecuteCommandName::ShowDependencyGraph
+            }
+            Self::Documents(DocumentCommandRequest::GetAlignmentSidecar(_)) => {
+                ExecuteCommandName::GetAlignmentSidecar
+            }
+            Self::Participants(ParticipantCommandRequest::GetParticipants(_)) => {
+                ExecuteCommandName::GetParticipants
+            }
+            Self::Participants(ParticipantCommandRequest::FormatIdLine(_)) => {
+                ExecuteCommandName::FormatIdLine
+            }
+            Self::ChatOps(ChatOpsCommandRequest::GetSpeakers(_)) => ExecuteCommandName::GetSpeakers,
+            Self::ChatOps(ChatOpsCommandRequest::FilterDocument(_)) => {
+                ExecuteCommandName::FilterDocument
+            }
+            Self::ChatOps(ChatOpsCommandRequest::GetUtterances(_)) => {
+                ExecuteCommandName::GetUtterances
+            }
+            Self::ChatOps(ChatOpsCommandRequest::FormatBulletLine(_)) => {
+                ExecuteCommandName::FormatBulletLine
+            }
+            Self::ChatOps(ChatOpsCommandRequest::ScopedFind(_)) => ExecuteCommandName::ScopedFind,
+        }
+    }
+
     /// Decode `ExecuteCommandParams` into a typed request enum.
     pub(crate) fn parse(params: ExecuteCommandParams) -> Result<Self, LspBackendError> {
         let command = ExecuteCommandName::parse(params.command.as_str())?;

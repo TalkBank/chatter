@@ -28,4 +28,3 @@ mod parse;
 mod tests;
 
 pub use parse::parse_sin_tier;
-pub(crate) use parse::parse_sin_tier_with_separator;

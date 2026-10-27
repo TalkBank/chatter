@@ -155,7 +155,13 @@ pub(crate) fn build_alignment_sidecar(
                     .location
                     .span()
                     .map(|span| span_to_range(span, &index)),
-                timing: utterance.main.content.bullet.as_ref().map(bullet_to_timing),
+                timing: utterance
+                    .main
+                    .content
+                    .bullet
+                    .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed)
+                    .map(bullet_to_timing),
                 main_units,
                 alignments: links,
             }
@@ -245,6 +251,37 @@ fn content_word_metadata(content: &UtteranceContent) -> (Option<String>, Option<
 mod tests {
     use super::*;
     use crate::test_fixtures::{parse_chat, parse_chat_with_alignments};
+
+    #[test]
+    fn rejected_bullet_has_no_sidecar_timing() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E360_3.cha"
+        ));
+        let parser = talkbank_parser::TreeSitterParser::new().expect("grammar");
+        let errors = talkbank_model::ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(source, &errors);
+        assert!(
+            errors
+                .to_vec()
+                .iter()
+                .any(|e| e.code == talkbank_model::ErrorCode::InvalidMediaBullet)
+        );
+        assert!(
+            file.utterances()
+                .next()
+                .expect("utterance")
+                .main
+                .content
+                .has_unparsed_bullets()
+        );
+        let uri = Url::parse("file:///tmp/rejected-timing.cha").expect("URI");
+        let sidecar = build_alignment_sidecar(&uri, source, &file);
+        assert!(sidecar.utterances[0].timing.is_none());
+        assert_eq!(sidecar.utterances[0].main_units.len(), 2);
+        let wire = serde_json::to_value(sidecar).expect("wire");
+        assert!(wire["utterances"][0]["timing"].is_null());
+    }
 
     #[test]
     fn test_build_alignment_sidecar_with_alignments() {

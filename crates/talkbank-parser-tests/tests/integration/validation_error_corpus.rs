@@ -47,6 +47,27 @@ use talkbank_spec_vocabulary::paths::RepoRelativePath;
 use talkbank_spec_vocabulary::validation_manifest::FixtureTranscriptName;
 use talkbank_spec_vocabulary::validation_manifest::ValidationManifest as Manifest;
 
+#[path = "nested_group_recovery_corpus.rs"]
+mod nested_group_recovery_contracts;
+
+#[path = "word_body_recovery_corpus.rs"]
+mod word_body_recovery_contracts;
+
+#[path = "retained_recovery_corpus.rs"]
+mod retained_recovery_contracts;
+
+#[path = "language_declaration_corpus.rs"]
+mod language_declaration_contracts;
+
+#[path = "participant_recovery_corpus.rs"]
+mod participant_recovery_contracts;
+
+#[path = "id_recovery_corpus.rs"]
+mod id_recovery_contracts;
+
+#[path = "interposed_word_corpus.rs"]
+mod interposed_word_contracts;
+
 /// The validation corpus dir under this crate (where the generator writes).
 fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/error_corpus/validation_errors")
@@ -470,7 +491,7 @@ fn free_text_recovery_specs_preserve_unaffected_sibling_tiers() {
             5,
             Admission::Recovered {
                 label: "%com:",
-                retained: &["eng", "com", "xnote"],
+                retained: &["eng", "xnote"],
             },
         ),
         (
@@ -518,6 +539,17 @@ fn free_text_recovery_specs_preserve_unaffected_sibling_tiers() {
                         && error.location.span().expect("located diagnostic").end() <= end),
                     "{diagnostics:?}"
                 );
+                // A malformed body is rejected, not rewritten as an empty
+                // dependent tier that would acquire a fabricated E756.
+                let validation = ErrorCollector::new();
+                let mut recovered = file.clone();
+                recovered.validate_with_alignment(&validation, TranscriptName::Anonymous);
+                assert!(
+                    !validation
+                        .into_vec()
+                        .iter()
+                        .any(|error| error.code == ErrorCode::EmptyDependentTier)
+                );
                 for sibling in utterance
                     .dependent_tiers
                     .iter()
@@ -531,6 +563,48 @@ fn free_text_recovery_specs_preserve_unaffected_sibling_tiers() {
             }
         }
     }
+}
+
+/// Missing bullet-text syntax must not become a serialized continuation.
+#[test]
+fn comment_recovery_does_not_invent_continuations() {
+    use talkbank_model::model::WriteChat;
+    use talkbank_model::{ErrorCode, Header};
+
+    let parser = TreeSitterParser::new().expect("parser");
+    let source = fs::read_to_string(corpus_dir().join("E342_9.cha")).expect("empty comment spec");
+    let errors = ErrorCollector::new();
+    let mut file = parser.parse_chat_file_streaming(&source, &errors);
+    let diagnostics = errors.into_vec();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|error| error.code == ErrorCode::MissingRequiredElement)
+    );
+    assert!(
+        file.headers()
+            .all(|header| !matches!(header, Header::Comment { .. })),
+        "a MISSING continuation cannot supply a comment body: {}",
+        file.to_chat_string()
+    );
+    let utterance = file.utterances().next().expect("healthy sibling utterance");
+    assert_eq!(utterance.dependent_tiers.len(), 1);
+    assert_eq!(utterance.dependent_tiers[0].kind(), "com");
+    let errors = ErrorCollector::new();
+    file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+    assert!(
+        errors
+            .into_vec()
+            .iter()
+            .any(|error| error.code == ErrorCode::EmptyDependentTier)
+    );
+
+    let source =
+        fs::read_to_string(corpus_dir().join("E342_10.cha")).expect("written continuation control");
+    let errors = ErrorCollector::new();
+    let file = parser.parse_chat_file_streaming(&source, &errors);
+    assert!(errors.into_vec().is_empty());
+    assert_eq!(file.to_chat_string(), source);
 }
 
 /// Verify each implemented fixture SATISFIES ITS CLAIM, absences included.

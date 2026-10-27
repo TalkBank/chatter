@@ -15,4 +15,4 @@ mod tier;
 mod tests;
 
 pub use tier::parse_gra_tier;
-pub(crate) use tier::{parse_gra_tier_with_separator, recover_gra_tier_with_separator};
+pub(crate) use tier::{gra_recovery_separator, parse_gra_tier_with_separator};

@@ -2,6 +2,9 @@
 
 use super::RetraceKindParsed;
 use serde::Serialize;
+use talkbank_model::model::{
+    CADelimiterType, CAElementType, OverlapPointKind, WordStressMarkerType,
+};
 
 /// Lexer payload admitted once, retaining the token (its index digit as the
 /// payload, the whole `[<1]` as the lexeme) and its valid index.
@@ -15,9 +18,9 @@ impl<'a> ScopedOverlapIndex<'a> {
     pub(crate) fn from_lexer(source: crate::token::Extracted<'a>) -> Option<Self> {
         let index = match source.text().as_bytes() {
             [] => None,
-            [digit @ b'1'..=b'9'] => {
-                Some(talkbank_model::model::OverlapMarkerIndex::new(digit - b'0').ok()?)
-            }
+            [digit] => Some(talkbank_model::model::OverlapMarkerIndex::from_ascii_digit(
+                *digit,
+            )?),
             _ => return None,
         };
         Some(Self { source, index })
@@ -35,36 +38,94 @@ impl<'a> ScopedOverlapIndex<'a> {
 
 /// grammar.js: standalone_word = seq(optional(prefix|zero), word_body, optional(form_marker),
 ///   optional(word_lang_suffix), optional(pos_tag))
-/// word_with_optional_annotations = seq(standalone_word, repeat(annotation))
+/// word_with_optional_annotations = seq(standalone_word, optional(replacement), base_annotations?)
 ///
 /// Mirrors the model Word structure: category prefix, body content, suffix markers.
-#[derive(Default, Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WordWithAnnotations<'a> {
     /// Category prefix: Zero (0), PrefixFiller (&-), PrefixNonword (&~), PrefixFragment (&+).
-    pub category: Option<WordCategory>,
+    pub(crate) category: Option<talkbank_model::model::WordCategory>,
     /// Word body content, mirrors model WordContent.
-    pub body: Vec<WordBodyItem<'a>>,
+    pub(crate) body: Vec<WordBodyItem<'a>>,
     /// Declared form marker, admitted by the shared registry before lowering.
-    pub form_marker: Option<talkbank_model::model::FormType>,
+    pub(crate) form_marker: Option<talkbank_model::model::FormType>,
     /// Language suffix. None if absent.
-    pub lang: Option<ParsedLangSuffix<'a>>,
+    pub(crate) lang: Option<talkbank_model::model::WordLanguageMarker>,
     /// POS tag: tag-extracted content (e.g., "n", "adj"). None if absent.
-    pub pos_tag: Option<&'a str>,
-    /// Trailing scoped annotations: `[*]`, `[= text]`, `[/]`, `[!]`, etc.
-    pub annotations: Vec<ParsedAnnotation<'a>>,
+    pub(crate) pos_tag: Option<&'a str>,
+    /// At most one replacement, admitted before the base-annotation run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) replacement: Option<ReplacementParsed<'a>>,
+    /// Scoped annotations remaining on this word after marker-chain folding.
+    pub(crate) annotations: Vec<ScopedAnnotationParsed<'a>>,
     /// The word as written: its slice of the source, whether the lexer read
     /// it as one rich token or the parser assembled it from subtokens (then
     /// the slice runs from the first token's lexeme through the last's, and
     /// includes a curly quote the file parser stripped and reported between
     /// them, which `body` does not). Always borrowed, so every word can be
     /// placed.
-    pub raw_text: &'a str,
+    #[serde(rename = "raw_text", serialize_with = "serialize_word_source")]
+    pub(crate) source: crate::source_text::SourceSlice<'a>,
+}
+
+fn serialize_word_source<S: serde::Serializer>(
+    source: &crate::source_text::SourceSlice<'_>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(source.text())
+}
+
+impl<'a> WordWithAnnotations<'a> {
+    /// Original word bytes and their admitted position in the full parser source.
+    pub fn source(&self) -> crate::source_text::SourceSlice<'a> {
+        self.source
+    }
+
+    /// Original word spelling, including its prefix and suffixes.
+    pub fn raw_text(&self) -> &'a str {
+        self.source.text()
+    }
+
+    /// Admitted word category, absent for ordinary lexical words.
+    pub fn category(&self) -> Option<&talkbank_model::model::WordCategory> {
+        self.category.as_ref()
+    }
+
+    /// Parsed body items in their authored order.
+    pub fn body(&self) -> &[WordBodyItem<'a>] {
+        &self.body
+    }
+
+    /// Form admitted by the shared registry.
+    pub fn form_marker(&self) -> Option<&talkbank_model::model::FormType> {
+        self.form_marker.as_ref()
+    }
+
+    /// Admitted language suffix.
+    pub fn lang(&self) -> Option<&talkbank_model::model::WordLanguageMarker> {
+        self.lang.as_ref()
+    }
+
+    /// Lexed part-of-speech suffix payload.
+    pub fn pos_tag(&self) -> Option<&'a str> {
+        self.pos_tag
+    }
+
+    /// The word's optional replacement, admitted before scoped annotations.
+    pub fn replacement(&self) -> Option<&ReplacementParsed<'a>> {
+        self.replacement.as_ref()
+    }
+
+    /// Trailing annotations admitted by the grammar.
+    pub fn annotations(&self) -> &[ScopedAnnotationParsed<'a>] {
+        &self.annotations
+    }
 }
 
 /// A bracketed construct, classified once by the token-to-AST producer.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum ParsedAnnotation<'a> {
-    /// A scoped annotation; conversion to ContentAnnotation is total.
+    /// A shared scoped annotation plus its original source lexeme.
     Scoped(ScopedAnnotationParsed<'a>),
     /// Retrace markers change the preceding content structure. The marker is
     /// kept as written (`[/]`, `[//]`, ...), for placement.
@@ -78,38 +139,49 @@ pub enum ParsedAnnotation<'a> {
 }
 
 /// A replacement admitted by the word grammar, nonempty by construction. Its
-/// opening `[:` and closing `]` are kept as written, so the construct can be
-/// placed from the first delimiter to the last.
+/// complete source lexeme is retained at admission, including delimiters and
+/// whitespace; later consumers never reconstruct its spelling.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ReplacementParsed<'a> {
     first: Box<WordWithAnnotations<'a>>,
     rest: Vec<WordWithAnnotations<'a>>,
-    begin: &'a str,
-    end: &'a str,
+    lexeme: &'a str,
 }
+
+/// Delimiters must belong to the parser source in authored order.
+#[derive(Debug)]
+pub(crate) struct RefusedReplacementSource;
 
 impl<'a> ReplacementParsed<'a> {
     pub(crate) fn new(
+        source: crate::source_text::SourceText<'a>,
         begin: &'a str,
         first: WordWithAnnotations<'a>,
         rest: Vec<WordWithAnnotations<'a>>,
         end: &'a str,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, RefusedReplacementSource> {
+        let begin = source.span_of(begin).ok_or(RefusedReplacementSource)?;
+        let end = source.span_of(end).ok_or(RefusedReplacementSource)?;
+        if begin.end() > end.start() {
+            return Err(RefusedReplacementSource);
+        }
+        Ok(Self {
             first: Box::new(first),
             rest,
-            begin,
-            end,
-        }
+            lexeme: source
+                .slice(begin.start()..end.end())
+                .map_err(|_| RefusedReplacementSource)?
+                .text(),
+        })
     }
 
     /// The construct's extent in `source`, from `[:` through `]`; `None` when
-    /// either delimiter is not a slice of `source`.
+    /// its retained lexeme is not a slice of `source`.
     pub fn span_in(
         &self,
         source: crate::source_text::SourceText<'_>,
     ) -> Option<talkbank_model::Span> {
-        Some(source.span_of(self.begin)?.merge(source.span_of(self.end)?))
+        source.span_of(self.lexeme)
     }
 
     /// The required first word, admitted by the replacement grammar.
@@ -122,75 +194,49 @@ impl<'a> ReplacementParsed<'a> {
         &self.rest
     }
 
-    fn chat_text(&self) -> String {
-        let mut text = format!("[: {}", self.first.raw_text);
-        for word in &self.rest {
-            text.push(' ');
-            text.push_str(word.raw_text);
-        }
-        text.push(']');
-        text
+    /// Exact source bytes retained when the replacement was admitted.
+    pub fn lexeme(&self) -> &'a str {
+        self.lexeme
     }
 }
 
-/// A parsed scoped annotation. Every variant keeps the marker as written, so
-/// the annotation can be placed; a payload-bearing marker keeps its payload
-/// beside the lexeme (`Extracted`), a bare marker keeps the lexeme alone.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum ScopedAnnotationParsed<'a> {
-    /// `[!]`, stressing
-    Stressing(&'a str),
-    /// `[!!]`, contrastive stressing
-    ContrastiveStressing(&'a str),
-    /// `[?]`, uncertain
-    Uncertain(&'a str),
-    /// `[e]`, exclude
-    Exclude(&'a str),
-    /// `[@s]`, code-switch span resolving the way a bare `word@s` does.
-    CodeSwitchShortcut(&'a str),
-    /// `[@s:code]`, code-switch span naming its language. Payload is the code.
-    CodeSwitchExplicit(crate::token::Extracted<'a>),
-    /// `[* code]`, error marker. Payload is the code (may be empty).
-    Error(crate::token::Extracted<'a>),
-    /// `[<]` or `[<1]`, overlap precedes. Content is the optional index digit.
-    OverlapPrecedes(ScopedOverlapIndex<'a>),
-    /// `[>]` or `[>1]`, overlap follows
-    OverlapFollows(ScopedOverlapIndex<'a>),
-    /// `[= text]`, explanation
-    Explanation(crate::token::Extracted<'a>),
-    /// `[=! text]`, paralinguistic
-    Paralinguistic(crate::token::Extracted<'a>),
-    /// `[=? text]`, alternative
-    Alternative(crate::token::Extracted<'a>),
-    /// `[% text]`, percent comment
-    PercentComment(crate::token::Extracted<'a>),
-    /// A bracketed annotation whose marker no rule recognises. The payload is
-    /// the text BETWEEN the brackets, so `[@ xyz]` carries `"@ xyz"`.
-    ///
-    /// Reaching the model as `ContentAnnotation::Unknown` is the point: the
-    /// validator then reports E207, which is a statement about the FILE, where
-    /// a parse failure (E321) is a statement about the parser.
-    Unknown(crate::token::Extracted<'a>),
+/// A shared semantic annotation with its original lexeme for parser placement.
+/// The native parser owns source evidence, not a second annotation vocabulary.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScopedAnnotationParsed<'a> {
+    annotation: talkbank_model::ContentAnnotation,
+    #[serde(serialize_with = "serialize_word_source")]
+    lexeme: crate::source_text::SourceSlice<'a>,
+}
+
+// Preserve semantic-and-spelling equality; source coordinates are evidence,
+// not part of the annotation's existing equality contract.
+impl PartialEq for ScopedAnnotationParsed<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.annotation == other.annotation && self.lexeme() == other.lexeme()
+    }
 }
 
 impl<'a> ParsedAnnotation<'a> {
-    /// The annotation as written: its lexeme, or for a replacement (whose
-    /// words are parsed structurally) the spelling rebuilt from them.
+    /// The annotation as written, preserving delimiters and whitespace.
     pub fn chat_text(&self) -> String {
         match self {
             Self::Scoped(scoped) => scoped.lexeme().to_owned(),
             Self::Retrace(_, marker) => (*marker).to_owned(),
-            Self::Replacement(replacement) => replacement.chat_text(),
+            Self::Replacement(replacement) => replacement.lexeme().to_owned(),
             Self::Langcode(code) => code.lexeme().to_owned(),
             Self::Postcode(postcode) => postcode.lexeme().to_owned(),
         }
     }
 
     /// The annotation as written in `source`, delimiters included; `None`
-    /// when its slices are not from `source`. Unlike [`Self::chat_text`],
-    /// this is the exact bytes, spacing and all.
+    /// when its slices are not from `source`. This borrows the same exact
+    /// bytes that [`Self::chat_text`] returns as an owned string.
     pub fn source_text(&self, source: crate::source_text::SourceText<'a>) -> Option<&'a str> {
-        self.span_in(source).map(|span| source.text_at(span))
+        match source.slice(self.span_in(source)?.to_range()) {
+            Ok(slice) => Some(slice.text()),
+            Err(_) => None,
+        }
     }
 
     /// Where the annotation is in `source`: its lexeme, or for a replacement
@@ -209,7 +255,7 @@ impl<'a> ParsedAnnotation<'a> {
         }
     }
 
-    /// Scoped annotations have a total model conversion, unlike structural codes.
+    /// Shared scoped annotations, distinct from structural parser constructs.
     pub fn scoped(&self) -> Option<&ScopedAnnotationParsed<'a>> {
         match self {
             Self::Scoped(scoped) => Some(scoped),
@@ -229,36 +275,39 @@ impl<'a> ParsedAnnotation<'a> {
 
     /// Postfix constructs cannot start an utterance (E759).
     pub fn is_postfix(&self) -> bool {
-        matches!(
-            self,
-            Self::Retrace(..)
-                | Self::Replacement(_)
-                | Self::Scoped(
-                    ScopedAnnotationParsed::OverlapPrecedes(_)
-                        | ScopedAnnotationParsed::OverlapFollows(_)
-                )
-        )
+        match self {
+            Self::Retrace(..) | Self::Replacement(_) => true,
+            Self::Scoped(scoped) => matches!(
+                scoped.annotation(),
+                talkbank_model::ContentAnnotation::OverlapBegin(_)
+                    | talkbank_model::ContentAnnotation::OverlapEnd(_)
+            ),
+            Self::Langcode(_) | Self::Postcode(_) => false,
+        }
     }
 }
 
 impl<'a> ScopedAnnotationParsed<'a> {
+    pub(crate) fn new(
+        annotation: talkbank_model::ContentAnnotation,
+        lexeme: crate::source_text::SourceSlice<'a>,
+    ) -> Self {
+        Self { annotation, lexeme }
+    }
+
+    /// Shared semantic payload, already constructed by token admission.
+    pub fn annotation(&self) -> &talkbank_model::ContentAnnotation {
+        &self.annotation
+    }
+
     /// The marker as written, including its delimiters.
     pub fn lexeme(&self) -> &'a str {
-        match self {
-            Self::Stressing(lexeme)
-            | Self::ContrastiveStressing(lexeme)
-            | Self::Uncertain(lexeme)
-            | Self::Exclude(lexeme)
-            | Self::CodeSwitchShortcut(lexeme) => lexeme,
-            Self::Unknown(token)
-            | Self::CodeSwitchExplicit(token)
-            | Self::Error(token)
-            | Self::Explanation(token)
-            | Self::Paralinguistic(token)
-            | Self::Alternative(token)
-            | Self::PercentComment(token) => token.lexeme(),
-            Self::OverlapPrecedes(index) | Self::OverlapFollows(index) => index.lexeme(),
-        }
+        self.lexeme.text()
+    }
+
+    /// Coordinates retained when the annotation was admitted by the parser.
+    pub fn span(&self) -> talkbank_model::Span {
+        self.lexeme.span()
     }
 }
 
@@ -277,28 +326,6 @@ impl<'a> ParsedAnnotation<'a> {
     }
 }
 
-/// Category of a word, determined by its prefix token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum WordCategory {
-    /// `0word`, omitted word
-    Omission,
-    /// `&~word`, babbling/nonword
-    Nonword,
-    /// `&-word`, filler
-    Filler,
-    /// `&+word`, phonological fragment
-    Fragment,
-}
-
-/// Parsed language suffix from `@s` tokens.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub enum ParsedLangSuffix<'a> {
-    /// Bare `@s`, toggle shortcut
-    Shortcut,
-    /// `@s:eng` or `@s:eng+zho` or `@s:eng&spa`, carries the code(s)
-    Explicit(&'a str),
-}
-
 /// A single item inside a word body. Mirrors model `WordContent`.
 ///
 /// Every marker carries its lexeme, the slice of the word it was read from,
@@ -307,25 +334,25 @@ pub enum ParsedLangSuffix<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum WordBodyItem<'a> {
     /// Plain text segment (e.g., "hello", "want")
-    Text(&'a str),
+    Text(talkbank_model::model::WordText),
     /// Shortened syllable, tag-extracted content (e.g., "be" from "(be)")
-    Shortening(&'a str),
+    Shortening(talkbank_model::model::WordShortening),
     /// Syllable lengthening (:, ::, :::): the run of colons as written.
     Lengthening(LengtheningRun<'a>),
     /// Compound marker (+), as written.
     CompoundMarker(&'a str),
     /// Stress marker (primary ˈ or secondary ˌ), as written.
-    Stress(StressKind, &'a str),
+    Stress(WordStressMarkerType, &'a str),
     /// Overlap point (⌈, ⌉, ⌊, ⌋ with optional index)
-    OverlapPoint(OverlapKind, &'a str),
+    OverlapPoint(OverlapPointKind, &'a str),
     /// Syllable pause (^), as written.
     SyllablePause(&'a str),
     /// Clitic boundary (~), as written.
     CliticBoundary(&'a str),
     /// CA element (single symbol like ↑, ↓, ≠, etc.), as written.
-    CaElement(CaElementKind, &'a str),
+    CaElement(CAElementType, &'a str),
     /// CA delimiter (paired like °softer°, ∆faster∆, etc.), as written.
-    CaDelimiter(CaDelimiterKind, &'a str),
+    CaDelimiter(CADelimiterType, &'a str),
     /// Word-internal underline begin (`␂␁`), as in `j␂␁a`.
     ///
     /// Underline markers glue to letters inside a word in CA transcripts, and
@@ -343,9 +370,9 @@ pub enum WordBodyItem<'a> {
 /// A nonempty run of lengthening colons, as written in the word.
 ///
 /// The one owner of the proof the model's `WordLengthening` needs (a count of
-/// at least one): both producers, the character scanner and the subtoken
-/// word builder, admit their run through [`Self::new`] instead of each
-/// checking a count. The count is proven once, at admission, and stored, so
+/// at least one): the character scanner takes an admitted prefix, while the
+/// subtoken builder requires whole-token admission through [`Self::new`].
+/// The count is proven once, at admission, and stored, so
 /// reading it has no fallible arm; it is the run's byte length (one byte per
 /// colon), so it cannot drift from the text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -357,10 +384,21 @@ pub struct LengtheningRun<'a> {
 impl<'a> LengtheningRun<'a> {
     /// `None` unless `run` is one or more colons and nothing else.
     pub fn new(run: &'a str) -> Option<Self> {
-        let count = std::num::NonZeroUsize::new(run.len())?;
-        run.bytes()
-            .all(|b| b == b':')
-            .then_some(Self { text: run, count })
+        let (run, remainder) = Self::take_prefix(run)?;
+        remainder.is_empty().then_some(run)
+    }
+
+    /// Admit the maximal leading colon run and retain the untouched remainder.
+    /// `None` means the source does not start with a colon, including empty input.
+    /// The source slice and nonzero count come from the same scan; consumers
+    /// never reconstruct a run or turn failed admission into ordinary text.
+    pub(crate) fn take_prefix(source: &'a str) -> Option<(Self, &'a str)> {
+        let count =
+            std::num::NonZeroUsize::new(source.bytes().take_while(|&byte| byte == b':').count())?;
+        // Every consumed byte is ASCII ':', so this is a UTF-8 boundary in
+        // the same source, including when the remainder starts with Unicode.
+        let (text, remainder) = source.split_at(count.get());
+        Some((Self { text, count }, remainder))
     }
 
     /// The colons as written, for placement.
@@ -401,55 +439,94 @@ mod lengthening_run_tests {
             1
         );
     }
+
+    #[test]
+    fn prefix_admission_retains_the_unconsumed_source() {
+        for source in ["", "a:", "😀::"] {
+            assert!(LengtheningRun::take_prefix(source).is_none());
+        }
+        for (source, expected_run, expected_remainder) in [
+            (":", ":", ""),
+            (":::é", ":::", "é"),
+            ("::😀a", "::", "😀a"),
+            (": a:", ":", " a:"),
+        ] {
+            let (run, remainder) = LengtheningRun::take_prefix(source).expect("leading colons");
+            assert_eq!(run.text(), expected_run);
+            assert_eq!(run.count().get(), expected_run.len());
+            assert_eq!(remainder, expected_remainder);
+            assert_eq!(run.text().as_ptr(), source.as_ptr());
+            assert_eq!(remainder.as_ptr(), source[expected_run.len()..].as_ptr());
+            assert_eq!(LengtheningRun::new(source).is_some(), remainder.is_empty());
+        }
+    }
 }
 
-/// Primary vs secondary stress.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum StressKind {
-    Primary,
-    Secondary,
-}
+#[cfg(test)]
+mod replacement_source_tests {
+    use super::*;
+    use crate::source_text::SourceText;
 
-/// Overlap point direction and position.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum OverlapKind {
-    TopBegin,
-    TopEnd,
-    BottomBegin,
-    BottomEnd,
-}
+    #[test]
+    fn replacement_admission_retains_bytes_and_refuses_foreign_or_reversed_delimiters() {
+        let reference = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/annotation/errors-and-replacements.cha"
+        ));
+        // Whitespace variation of the reference's existing multiword replacement.
+        let source = reference.replace("[: a+er b]", "[:  a+er  b ]");
+        let line = source
+            .split_inclusive('\n')
+            .find(|line| line.contains("[:  a+er"))
+            .unwrap();
+        let parsed = crate::parser::parse_main_tier_with_source(line).unwrap();
+        let replacement = parsed
+            .main_tier
+            .tier()
+            .tier_body
+            .contents
+            .iter()
+            .find_map(|item| {
+                let crate::ast::ContentItem::Word(word) = item else {
+                    return None;
+                };
+                word.replacement()
+            })
+            .unwrap();
+        let annotation = ParsedAnnotation::Replacement(replacement.clone());
+        let expected = "[:  a+er  b ]";
+        assert_eq!(annotation.chat_text(), expected);
+        assert_eq!(annotation.source_text(parsed.source()), Some(expected));
+        assert_eq!(replacement.lexeme(), expected);
 
-/// CA element types, one per symbol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum CaElementKind {
-    BlockedSegments, // ≠
-    Constriction,    // ∾
-    Hardening,       // ☇
-    HurriedStart,    // ⇗
-    Inhalation,      // ∙
-    LaughInWord,     // ꓸ
-    PitchDown,       // ↓
-    PitchReset,      // ↕
-    PitchUp,         // ↑
-    SuddenStop,      // ≋
-}
+        let foreign = line.to_owned();
+        assert_eq!(annotation.source_text(SourceText::new(&foreign)), None);
+        let orphan = crate::ast::ContentItem::OrphanAnnotation(annotation.clone());
+        let talkbank_model::UtteranceContent::OrphanAnnotation(raw) =
+            crate::convert::content_item_to_model(&orphan, SourceText::new(&foreign))
+        else {
+            panic!("orphan must remain explicit recovery content")
+        };
+        assert_eq!(raw.source(), expected);
+        assert!(raw.location().span().is_none());
 
-/// CA delimiter types, paired markers that scope content.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum CaDelimiterKind {
-    Unsure,            // ⁇
-    Precise,           // §
-    Creaky,            // ⁎
-    Softer,            // °
-    SegmentRepetition, // ↫
-    Faster,            // ∆
-    Slower,            // ∇
-    Whisper,           // ∬
-    Singing,           // ∮
-    LowPitch,          // ▁
-    HighPitch,         // ▔
-    Louder,            // ◉
-    SmileVoice,        // ☺
-    BreathyVoice,      // ♋
-    Yawn,              // Ϋ
+        let lexeme = replacement.lexeme();
+        let begin = &lexeme[..2];
+        let end = &lexeme[lexeme.len() - 1..];
+        for (source, begin, end) in [
+            (SourceText::new(&foreign), begin, end),
+            (parsed.source(), end, begin),
+        ] {
+            assert!(
+                ReplacementParsed::new(
+                    source,
+                    begin,
+                    replacement.first().clone(),
+                    replacement.rest().to_vec(),
+                    end,
+                )
+                .is_err()
+            );
+        }
+    }
 }

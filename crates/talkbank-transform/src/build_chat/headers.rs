@@ -126,10 +126,12 @@ pub(super) fn build_header_lines(context: &BuildChatContext<'_>) -> Vec<Line> {
 fn build_participant_entries(desc: &TranscriptDescription) -> Vec<ParticipantEntry> {
     desc.participants
         .iter()
-        .map(|participant| ParticipantEntry {
-            speaker_code: SpeakerCode::new(participant.id.as_str()),
-            name: participant.name.as_ref().map(ParticipantName::new),
-            role: ParticipantRole::new(participant.role.as_str()),
+        .map(|participant| {
+            ParticipantEntry::new(
+                SpeakerCode::new(participant.id.as_str()),
+                participant.name.as_ref().map(ParticipantName::new),
+                ParticipantRole::new(participant.role.as_str()),
+            )
         })
         .collect()
 }

@@ -45,6 +45,8 @@ pub enum BulletContentSegment {
     Text(BulletContentText),
     /// Media timing bullet: \u0015START_END\u0015
     Bullet(BulletContentBullet),
+    /// Rejected media source, retained without numeric timing.
+    UnparsedBullet(crate::model::UnparsedBullet),
     /// Picture reference: \u0015%pic:\"filename\"\u0015
     /// Only valid in @Comment and %com
     Picture(BulletContentPicture),

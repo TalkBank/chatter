@@ -37,8 +37,38 @@ impl MismatchCounts {
     }
 }
 
-/// Produce one inlay hint per utterance whose dependent-tier alignment is not
-/// error-free, using the canonical `talkbank-model` alignment result as the
+/// Only positions inside the requested half-open range may become wire hints.
+struct ScopedHintPosition(Position);
+
+/// The immutable source, its index and the requested viewport travel together.
+struct HintScope<'source> {
+    source: &'source str,
+    index: LineIndex<'source>,
+    range: Range,
+}
+
+impl<'source> HintScope<'source> {
+    fn new(source: &'source str, range: Range) -> Self {
+        Self {
+            source,
+            index: LineIndex::new(source),
+            range,
+        }
+    }
+
+    fn tier_end(&self, span: talkbank_model::Span) -> Option<ScopedHintPosition> {
+        let tier = self.source.get(span.to_range())?;
+        // Tier locations may include a physical line ending. The annotation
+        // belongs beside that tier's text, not at the next line's column zero.
+        let end = span.start() + tier.trim_end_matches(['\r', '\n']).len();
+        let (position, _) = self.index.exact_position_and_line(end)?;
+        (self.range.start <= position && position < self.range.end)
+            .then_some(ScopedHintPosition(position))
+    }
+}
+
+/// Produce a hint for each visible MOR or GRA alignment mismatch, using the
+/// canonical `talkbank-model` alignment result as the
 /// single source of truth for what counts as a mismatch.
 ///
 /// The LSP never does its own tier counting: the canonical validator already
@@ -53,28 +83,21 @@ pub fn generate_alignment_hints(
     range: Range,
 ) -> Vec<InlayHint> {
     let mut hints = Vec::new();
-    let index = LineIndex::new(text);
+    let scope = HintScope::new(text, range);
 
     for utterance in chat_file.utterances() {
-        // An utterance with no source location has no line to hint on.
-        let Some(main_span) = utterance.main.location.span() else {
-            continue;
-        };
-        let main_line = index.offset_to_position(main_span.start()).line;
-        if main_line < range.start.line || main_line > range.end.line {
-            continue;
-        }
-
         let Some(alignments) = utterance.alignments.as_ref() else {
             continue;
         };
 
         if let Some(mor_result) = alignments.mor.as_ref()
             && !mor_result.is_error_free()
+            && let Some(main_span) = utterance.main.location.span()
+            && let Some(position) = scope.tier_end(main_span)
         {
             let counts = MismatchCounts::from_pairs(mor_result.pairs());
             hints.push(alignment_hint(
-                index.offset_to_position(main_span.end()),
+                position,
                 format!(
                     " [alignment: {} main ↔ {} mor]",
                     counts.source, counts.target
@@ -87,14 +110,11 @@ pub fn generate_alignment_hints(
             && !gra_result.is_error_free()
             && let Some(gra_tier) = utterance.gra_tier()
             && let Some(gra_span) = gra_tier.location.span()
+            && let Some(position) = scope.tier_end(gra_span)
         {
-            let gra_line = index.offset_to_position(gra_span.start()).line;
-            if gra_line < range.start.line || gra_line > range.end.line {
-                continue;
-            }
             let counts = MismatchCounts::from_pairs(gra_result.pairs());
             hints.push(alignment_hint(
-                index.offset_to_position(gra_span.end()),
+                position,
                 format!(
                     " [alignment: {} gra ↔ {} mor]",
                     counts.target, counts.source
@@ -110,9 +130,9 @@ pub fn generate_alignment_hints(
 /// Build an inlay hint at `position` with the given inline label and tooltip.
 /// Centralised so both the `%mor` and `%gra` branches emit visually identical
 /// hints.
-fn alignment_hint(position: Position, label: String, tooltip: &str) -> InlayHint {
+fn alignment_hint(position: ScopedHintPosition, label: String, tooltip: &str) -> InlayHint {
     InlayHint {
-        position,
+        position: position.0,
         label: InlayHintLabel::String(label),
         kind: Some(InlayHintKind::PARAMETER),
         text_edits: None,
@@ -128,6 +148,7 @@ mod tests {
     use super::*;
     use talkbank_model::model::Line;
     use talkbank_parser::TreeSitterParser;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
 
     fn parse_and_align(input: &str) -> talkbank_model::model::ChatFile {
         let parser = TreeSitterParser::new().unwrap();

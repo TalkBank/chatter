@@ -105,11 +105,11 @@ fn authored_split_metadata_keeps_scope_and_source_bound_tier_policies() {
     assert_eq!(tier_kinds, [vec!["com", "xtra", "act", "wor"], vec!["wor"]]);
     assert_eq!(
         children[0].main.content.bullet,
-        Some(Bullet::new(talkbank_model::Location::Unlocated, 100, 300))
+        Some(Bullet::new(talkbank_model::Location::Unlocated, 100, 300).into())
     );
     assert_eq!(
         children[1].main.content.bullet,
-        Some(Bullet::new(talkbank_model::Location::Unlocated, 300, 600))
+        Some(Bullet::new(talkbank_model::Location::Unlocated, 300, 600).into())
     );
     let leading_wor = children[0].wor_tier().expect("first child's timing");
     assert!(matches!(
@@ -172,6 +172,7 @@ fn authored_split_stale_word_timing_has_an_explicit_invalidation_receipt() {
         .content
         .bullet
         .as_ref()
+        .and_then(talkbank_model::BulletState::as_parsed)
         .expect("parent interval");
     assert_eq!(parent_bullet.timing.start_ms, 100);
     assert_eq!(parent_bullet.timing.end_ms, 600);

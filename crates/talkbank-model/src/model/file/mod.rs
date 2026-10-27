@@ -16,8 +16,9 @@ mod line;
 mod utterance;
 
 pub use chat_file::{
-    ChatFile, ChatFileLines, FileStem, FileStemError, OwnedFileStem, OwnedTranscriptName,
-    RecordedTranscriptTiming, TranscriptName, TranscriptTimingEvidence,
+    ChatFile, ChatFileLines, DeclaredLanguages, DeclaredLanguagesRef, FileStem, FileStemError,
+    LanguageDeclarationError, OwnedFileStem, OwnedTranscriptName, RecordedTranscriptTiming,
+    TranscriptName, TranscriptTimingEvidence,
 };
 pub use line::Line;
 pub use utterance::{

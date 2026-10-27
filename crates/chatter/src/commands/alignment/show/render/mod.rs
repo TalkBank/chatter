@@ -32,8 +32,8 @@ pub(super) fn render_alignments(
     tier_filter: Option<AlignmentTier>,
     view: AlignmentView,
     had_validation_errors: bool,
-) {
-    header::render_intro(input);
+) -> crate::exit_codes::CommandResult {
+    header::render_intro(input)?;
 
     let mut totals = RenderTotals::default();
 
@@ -53,34 +53,34 @@ pub(super) fn render_alignments(
                 utt_idx,
                 utterance.main.speaker.as_str(),
                 &main_content,
-            );
+            )?;
         }
 
         let mut shown_alignments = 0;
 
         if should_render_tier(tier_filter, AlignmentTier::Mor) {
-            let (shown, errors) = tiers::render_main_to_mor(utterance, utt_idx, alignments, view);
+            let (shown, errors) = tiers::render_main_to_mor(utterance, utt_idx, alignments, view)?;
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
         }
 
         if should_render_tier(tier_filter, AlignmentTier::Gra) {
-            let (shown, errors) = tiers::render_mor_to_gra(utterance, utt_idx, alignments, view);
+            let (shown, errors) = tiers::render_mor_to_gra(utterance, utt_idx, alignments, view)?;
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
         }
 
         if should_render_tier(tier_filter, AlignmentTier::Pho) {
-            let (shown, errors) = tiers::render_main_to_pho(utterance, utt_idx, alignments, view);
+            let (shown, errors) = tiers::render_main_to_pho(utterance, utt_idx, alignments, view)?;
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
         }
 
         if should_render_tier(tier_filter, AlignmentTier::Sin) {
-            let (shown, errors) = tiers::render_main_to_sin(utterance, utt_idx, alignments, view);
+            let (shown, errors) = tiers::render_main_to_sin(utterance, utt_idx, alignments, view)?;
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
@@ -91,7 +91,8 @@ pub(super) fn render_alignments(
         }
     }
 
-    summary::render_summary(input, tier_filter, &totals, had_validation_errors);
+    summary::render_summary(input, tier_filter, &totals, had_validation_errors)?;
+    Ok(())
 }
 
 /// Aggregate counters accumulated during rendering.

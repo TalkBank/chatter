@@ -30,18 +30,16 @@ pub use count::{
 /// Render any [`WriteChat`](crate::model::WriteChat) value into owned text
 /// for alignment diagnostic messages.
 ///
-/// Best-effort: write failures are silently ignored because diagnostic
-/// formatting must never panic the alignment path.
+/// Uses the shared infallible owned-string sink; no write error is discarded.
 pub fn to_chat_display_string<T: crate::model::WriteChat>(item: &T) -> String {
-    let mut s = String::new();
-    item.write_chat(&mut s).ok();
-    s
+    item.to_chat_string()
 }
 pub use domain::{NotPositional, PositionalDomain, TierDomain};
 pub use overlap::{OverlapMarkerInfo, OverlapRegion, OverlapRegionKind, extract_overlap_info};
 pub use overlap_groups::{
     FileOverlapAnalysis, OverlapAnchor, OverlapGroup, PerUtteranceOverlap, analyze_file_overlaps,
 };
+pub(crate) use rules::admit_text_for_tier;
 pub use rules::should_align_replaced_word_in_pho_sin;
 pub use rules::{annotations_have_alignment_ignore, counts_for_tier, is_tag_marker_separator};
 pub use walk::{

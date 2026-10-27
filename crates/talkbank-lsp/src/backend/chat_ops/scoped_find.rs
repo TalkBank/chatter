@@ -2,25 +2,23 @@
 
 use std::collections::HashSet;
 
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use talkbank_model::model::{ChatFile, Line};
+use tower_lsp::lsp_types::Range;
 
+use crate::backend::LspBackendError;
 use crate::backend::execute_commands::ScopedFindRequest;
 use crate::backend::state::Backend;
 
-use super::line_index::LineIndex;
 use super::shared::get_document_and_chat_file;
+use crate::backend::utils::LineIndex;
 
 /// One scoped-find match returned to the extension.
 #[derive(Serialize)]
 struct ScopedFindMatch {
-    /// Zero-based line number of the match.
-    line: usize,
-    /// Zero-based character offset on the line.
-    character: usize,
-    /// Match length in characters.
-    length: usize,
+    /// Exact UTF-16 source range, including both lines for a multiline match.
+    range: Range,
     /// Tier label such as `main` or `mor`.
     tier: String,
     /// Speaker code for the containing utterance.
@@ -41,87 +39,148 @@ pub(crate) fn handle_scoped_find(
         .iter()
         .map(|speaker| speaker.as_str())
         .collect();
-    let line_index = LineIndex::new(&text);
-    let lines: Vec<&str> = text.lines().collect();
+    let document = SearchDocument::new(&text);
 
     let matches = find_in_scoped_tiers(
         &chat_file,
-        &text,
-        &lines,
-        &line_index,
+        &document,
         &request.scope,
         &speaker_filter,
         &matcher,
-    );
+    )?;
 
     serde_json::to_value(&matches).map_err(Into::into)
 }
 
-/// One matching strategy for scoped-find.
+/// Plain queries overlap; explicit regex queries use regex iteration semantics.
 pub(super) enum Matcher {
-    /// Case-insensitive plain substring search.
-    Plain(String),
-    /// Regex-based search.
+    Empty,
+    Plain(Regex),
     Regex(Regex),
 }
 
-/// Build a plain-text or regex matcher from user input.
 fn build_matcher(query: &str, is_regex: bool) -> Result<Matcher, crate::backend::LspBackendError> {
-    if is_regex {
-        Regex::new(query).map(Matcher::Regex).map_err(|e| {
-            crate::backend::LspBackendError::InvalidRegex {
-                reason: e.to_string(),
-            }
-        })
+    if query.is_empty() && !is_regex {
+        return Ok(Matcher::Empty);
+    }
+    let compiled = if is_regex {
+        Regex::new(query).map(Matcher::Regex)
     } else {
-        Ok(Matcher::Plain(query.to_lowercase()))
+        RegexBuilder::new(&regex::escape(query))
+            .case_insensitive(true)
+            .build()
+            .map(Matcher::Plain)
+    };
+    compiled.map_err(|e| crate::backend::LspBackendError::InvalidRegex {
+        reason: e.to_string(),
+    })
+}
+
+/// The source and coordinate index are created together, never supplied as
+/// independent arguments to match projection.
+struct SearchDocument<'a> {
+    text: &'a str,
+    index: LineIndex<'a>,
+}
+
+/// A regex-issued match borrowing the admitted original source span.
+struct SourceHit<'a> {
+    origin: usize,
+    matched: regex::Match<'a>,
+}
+
+impl SourceHit<'_> {
+    fn offset(&self) -> usize {
+        self.origin + self.matched.start()
     }
 }
 
-/// Find all matching spans inside one byte range.
-fn find_matches_in_span(
-    text: &str,
-    start: usize,
-    end: usize,
-    matcher: &Matcher,
-) -> Vec<(usize, usize)> {
-    let end = end.min(text.len());
-    if start >= end {
-        return vec![];
-    }
-    let slice = &text[start..end];
-    let mut hits: Vec<(usize, usize)> = Vec::new();
-
-    match matcher {
-        Matcher::Plain(query_lower) => {
-            let slice_lower = slice.to_lowercase();
-            let mut search_from = 0;
-            while let Some(pos) = slice_lower[search_from..].find(query_lower.as_str()) {
-                let abs = start + search_from + pos;
-                hits.push((abs, query_lower.len()));
-                search_from += pos + 1;
-            }
-        }
-        Matcher::Regex(re) => {
-            for m in re.find_iter(slice) {
-                hits.push((start + m.start(), m.len()));
-            }
+impl<'a> SearchDocument<'a> {
+    fn new(text: &'a str) -> Self {
+        Self {
+            text,
+            index: LineIndex::new(text),
         }
     }
 
-    hits
+    fn find(
+        &self,
+        start: usize,
+        end: usize,
+        matcher: &Matcher,
+    ) -> Result<Vec<SourceHit<'a>>, LspBackendError> {
+        let slice = self
+            .text
+            .get(start..end)
+            .ok_or(LspBackendError::InvalidSourceSpan {
+                start,
+                end,
+                source_len: self.text.len(),
+            })?;
+        if slice.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut hits = Vec::new();
+        match matcher {
+            Matcher::Empty => {}
+            Matcher::Plain(re) => {
+                let mut cursor = 0;
+                while let Some(matched) = re.find_at(slice, cursor) {
+                    // A plain query is nonempty. Advance by the first matched
+                    // scalar to retain overlapping hits without splitting UTF-8.
+                    let Some(first) = matched.as_str().chars().next() else {
+                        break;
+                    };
+                    cursor = matched.start() + first.len_utf8();
+                    hits.push(SourceHit {
+                        origin: start,
+                        matched,
+                    });
+                }
+            }
+            Matcher::Regex(re) => {
+                hits.extend(re.find_iter(slice).map(|matched| SourceHit {
+                    origin: start,
+                    matched,
+                }));
+            }
+        }
+        Ok(hits)
+    }
+
+    fn project(
+        &self,
+        hit: SourceHit<'a>,
+        tier: &str,
+        speaker: &str,
+    ) -> Result<ScopedFindMatch, LspBackendError> {
+        let start_offset = hit.offset();
+        let end_offset = hit.origin + hit.matched.end();
+        let ((start, line_text), (end, _)) = self
+            .index
+            .exact_position_and_line(start_offset)
+            .zip(self.index.exact_position_and_line(end_offset))
+            .ok_or(LspBackendError::UnrepresentableSearchMatch {
+                start: start_offset,
+                end: end_offset,
+            })?;
+        Ok(ScopedFindMatch {
+            range: Range { start, end },
+            tier: tier.to_owned(),
+            speaker: speaker.to_owned(),
+            line_text: line_text.to_owned(),
+        })
+    }
 }
 
 /// Collect all tier matches for the requested scope and speaker filter.
 fn find_in_scoped_tiers(
     chat_file: &ChatFile,
-    text: &str,
-    lines: &[&str],
-    line_index: &LineIndex,
+    document: &SearchDocument<'_>,
     scope: &str,
     speaker_filter: &HashSet<&str>,
     matcher: &Matcher,
-) -> Vec<ScopedFindMatch> {
+) -> Result<Vec<ScopedFindMatch>, LspBackendError> {
     let mut results = Vec::new();
     let search_main = scope == "main" || scope == "all";
     let search_dependent = scope != "main";
@@ -139,19 +198,8 @@ fn find_in_scoped_tiers(
         if search_main {
             // Only a located main tier has text to search.
             if let Some(span) = utterance.main.location.span() {
-                let hits = find_matches_in_span(text, span.start(), span.end(), matcher);
-                for (byte_offset, match_len) in hits {
-                    if let Some(m) = make_match(
-                        byte_offset,
-                        match_len,
-                        "main",
-                        speaker,
-                        line_index,
-                        lines,
-                        text,
-                    ) {
-                        results.push(m);
-                    }
+                for hit in document.find(span.start(), span.end(), matcher)? {
+                    results.push(document.project(hit, "main", speaker)?);
                 }
             }
         }
@@ -168,51 +216,14 @@ fn find_in_scoped_tiers(
                     continue;
                 };
 
-                let hits = find_matches_in_span(text, span.start(), span.end(), matcher);
-                for (byte_offset, match_len) in hits {
-                    if let Some(m) = make_match(
-                        byte_offset,
-                        match_len,
-                        tier_label,
-                        speaker,
-                        line_index,
-                        lines,
-                        text,
-                    ) {
-                        results.push(m);
-                    }
+                for hit in document.find(span.start(), span.end(), matcher)? {
+                    results.push(document.project(hit, tier_label, speaker)?);
                 }
             }
         }
     }
 
-    results
-}
-
-/// Convert one byte-span hit into the response payload expected by the UI.
-fn make_match(
-    byte_offset: usize,
-    match_len: usize,
-    tier: &str,
-    speaker: &str,
-    line_index: &LineIndex,
-    lines: &[&str],
-    text: &str,
-) -> Option<ScopedFindMatch> {
-    let line = line_index.byte_to_line(byte_offset);
-    let line_start = line_index.line_start(line)?;
-    let char_offset = text[line_start..byte_offset].chars().count();
-    let char_len = text[byte_offset..byte_offset + match_len].chars().count();
-    let line_text = lines.get(line).unwrap_or(&"").to_string();
-
-    Some(ScopedFindMatch {
-        line,
-        character: char_offset,
-        length: char_len,
-        tier: tier.to_string(),
-        speaker: speaker.to_string(),
-        line_text,
-    })
+    Ok(results)
 }
 
 #[cfg(test)]
@@ -232,28 +243,49 @@ pub(super) fn test_find_matches_in_span(
     end: usize,
     matcher: &Matcher,
 ) -> Vec<(usize, usize)> {
-    find_matches_in_span(text, start, end, matcher)
+    SearchDocument::new(text)
+        .find(start, end, matcher)
+        .expect("valid source span")
+        .into_iter()
+        .map(|hit| (hit.offset(), hit.matched.len()))
+        .collect()
 }
 
 #[cfg(test)]
-/// Test helper that exposes match materialization without the full handler path.
+/// Exercise source projection using an actual literal regex match.
 pub(super) fn test_make_match(
     byte_offset: usize,
     match_len: usize,
     tier: &str,
     speaker: &str,
-    line_index: &LineIndex,
-    lines: &[&str],
     text: &str,
-) -> Option<(usize, usize, usize, String, String)> {
-    make_match(
-        byte_offset,
-        match_len,
-        tier,
-        speaker,
-        line_index,
-        lines,
-        text,
-    )
-    .map(|m| (m.line, m.character, m.length, m.tier, m.speaker))
+) -> Option<(Range, String, String)> {
+    let selected = text.get(byte_offset..byte_offset.checked_add(match_len)?)?;
+    let matcher = Matcher::Regex(Regex::new(&regex::escape(selected)).ok()?);
+    let document = SearchDocument::new(text);
+    let hit = document
+        .find(byte_offset, byte_offset + match_len, &matcher)
+        .ok()?
+        .into_iter()
+        .next()?;
+    let m = document.project(hit, tier, speaker).ok()?;
+    Some((m.range, m.tier, m.speaker))
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+
+    #[test]
+    fn malformed_source_spans_are_errors_not_empty_searches() {
+        let document = SearchDocument::new("a😀z");
+        let matcher = build_matcher("z", false).unwrap();
+        for (start, end) in [(2, 6), (0, 2), (5, 4), (0, 7)] {
+            assert!(matches!(
+                document.find(start, end, &matcher),
+                Err(LspBackendError::InvalidSourceSpan { .. })
+            ));
+        }
+        assert!(document.find(5, 5, &matcher).unwrap().is_empty());
+    }
 }

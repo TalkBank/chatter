@@ -1,11 +1,10 @@
 //! Standard streamed validation runtime with text, JSON, and TUI frontends.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::commands::validate::cache::{CacheInit, initialize_validation_cache};
 use crate::commands::validate_parallel::renderer::{
-    AuditFileError, RenderedRun, create_presentation_renderer, render_run,
+    RenderedRun, create_presentation_renderer, render_run,
 };
 use crate::commands::validate_parallel::shared::{
     InteractiveEnd, InterruptReport, RunNotice, ValidationOutcome,
@@ -27,7 +26,7 @@ pub fn run_validation_runtime(
     paths: Vec<PathBuf>,
     summary_label: PathBuf,
     options: ValidateDirectoryOptions,
-) -> ValidationOutcome {
+) -> crate::exit_codes::CommandResult<ValidationOutcome> {
     let ValidateDirectoryOptions {
         rules,
         execution,
@@ -106,31 +105,39 @@ pub fn run_validation_runtime(
     // this function is shared, which is what keeps `--suppress`, `--parser`,
     // `--strict-linkers`, `--roundtrip`, `--jobs` and `--max-errors` working
     // identically in both modes.
-    let mut renderer = match create_presentation_renderer(&presentation) {
-        Ok(renderer) => renderer,
-        Err(AuditFileError { path, error }) => {
-            return ValidationOutcome::AuditFileUnwritable { path, error };
-        }
-    };
+    let mut renderer = create_presentation_renderer(&presentation, &input)?;
     for notice in &notices {
-        renderer.handle_notice(notice);
+        renderer.handle_notice(notice)?;
     }
     for event in &cache_events {
-        renderer.handle_cache_event(event);
+        renderer.handle_cache_event(event)?;
     }
 
     let (events_rx, canceller) = validate_arguments_streaming(input, &run);
-    if let Err(error) = install_ctrlc_handler(&canceller, renderer.interrupt_report()) {
-        renderer.handle_notice(&RunNotice::InterruptUnavailable(error.to_string()));
-    }
-
-    let RenderedRun { ending, output } = render_run(
-        events_rx,
-        renderer.as_mut(),
-        &summary_label,
-        rules.roundtrip,
-    );
-    ValidationOutcome::Streamed { ending, output }
+    let force_quit = match install_ctrlc_handler(&canceller, renderer.interrupt_report()) {
+        Ok(force_quit) => force_quit,
+        Err(error) => {
+            if let Err(stop) =
+                renderer.handle_notice(&RunNotice::InterruptUnavailable(error.to_string()))
+            {
+                canceller.cancel();
+                return Err(stop);
+            }
+            crossbeam_channel::never()
+        }
+    };
+    // The event loop, not the signal callback, owns forced completion. Returning
+    // through it drops the receiver and any staged audit writer normally.
+    let events = std::iter::from_fn(|| {
+        crossbeam_channel::select_biased! {
+            recv(force_quit) -> _ => Some(Err(crate::exit_codes::ReportedFailure::Interrupted.into())),
+            recv(events_rx) -> event => event.ok().map(Ok),
+        }
+    });
+    let RenderedRun { ending, output } =
+        render_run(events, renderer.as_mut(), &summary_label, rules.roundtrip)
+            .inspect_err(|_| canceller.cancel())?;
+    Ok(ValidationOutcome::Streamed { ending, output })
 }
 
 /// What the TUI shows besides the run: its theme and the run's notes.
@@ -149,23 +156,30 @@ fn run_tui_loop(
     paths: &[PathBuf],
     run: &ValidationRun,
     settings: TuiSettings,
-) -> ValidationOutcome {
+) -> crate::exit_codes::CommandResult<ValidationOutcome> {
     let mut input = first_input;
     loop {
         let (events_rx, canceller) = validate_arguments_streaming(input, run);
+        let cancel_on_error = canceller.clone();
         match run_validation_tui_streaming(
             events_rx,
             canceller,
             settings.theme.clone(),
             &settings.notes,
-        ) {
+        )
+        .inspect_err(|_| cancel_on_error.cancel())
+        {
             // The interactive surface has already SHOWN the user how the run
             // ended; the outcome carries that ending, so the exit status says
             // the same thing.
             Ok(TuiAction::Quit(phase)) => {
-                return ValidationOutcome::Interactive(InteractiveEnd::Closed(phase));
+                return Ok(ValidationOutcome::Interactive(InteractiveEnd::Closed(
+                    phase,
+                )));
             }
-            Ok(TuiAction::ForceQuit) => std::process::exit(130),
+            Ok(TuiAction::ForceQuit) => {
+                return Err(crate::exit_codes::ReportedFailure::Interrupted.into());
+            }
             Ok(TuiAction::Rerun) => {
                 eprintln!("Re-running validation...");
                 input = talkbank_transform::paths::expand_transcript_arguments(paths);
@@ -173,7 +187,9 @@ fn run_tui_loop(
             // The terminal failed, so nothing reliable was shown.
             Err(error) => {
                 eprintln!("TUI error: {}", error);
-                return ValidationOutcome::Interactive(InteractiveEnd::TerminalFailed);
+                return Ok(ValidationOutcome::Interactive(
+                    InteractiveEnd::TerminalFailed,
+                ));
             }
         }
     }
@@ -189,11 +205,17 @@ fn run_tui_loop(
 fn install_ctrlc_handler(
     canceller: &Canceller,
     report: InterruptReport,
-) -> Result<(), ctrlc::Error> {
-    let presses = AtomicUsize::new(0);
+) -> Result<crossbeam_channel::Receiver<()>, ctrlc::Error> {
+    enum InterruptStage {
+        Running,
+        Cancelling,
+    }
+    let mut stage = InterruptStage::Running;
     let canceller = canceller.clone();
-    ctrlc::set_handler(move || match presses.fetch_add(1, Ordering::SeqCst) {
-        0 => {
+    let (force_tx, force_rx) = crossbeam_channel::bounded(1);
+    ctrlc::set_handler(move || match stage {
+        InterruptStage::Running => {
+            stage = InterruptStage::Cancelling;
             canceller.cancel();
             match report {
                 InterruptReport::OnStderr => {
@@ -202,12 +224,17 @@ fn install_ctrlc_handler(
                 InterruptReport::Silent => {}
             }
         }
-        _ => {
+        InterruptStage::Cancelling => {
             match report {
                 InterruptReport::OnStderr => eprintln!("\nForce quitting."),
                 InterruptReport::Silent => {}
             }
-            std::process::exit(130);
+            match force_tx.try_send(()) {
+                Ok(()) | Err(crossbeam_channel::TrySendError::Full(())) => {}
+                // The owning command already ended; there is nothing to stop.
+                Err(crossbeam_channel::TrySendError::Disconnected(())) => {}
+            }
         }
-    })
+    })?;
+    Ok(force_rx)
 }

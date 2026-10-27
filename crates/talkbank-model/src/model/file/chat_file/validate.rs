@@ -6,8 +6,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
 
-use std::collections::HashSet;
-
 use super::ChatFile;
 use super::transcript_name::TranscriptName;
 use crate::alignment::unknown_alignment_warning;
@@ -68,28 +66,35 @@ impl MediaTimingPhase for RegeneratingMediaTiming {
     }
 }
 
-/// Build file-level validation context from headers and participant IDs.
+/// Build file-level validation context from current declaration headers.
 ///
 /// Header-derived settings (languages/options) are computed once and shared
 /// across header, utterance, and cross-utterance validators.
 /// This prevents repeated header scanning in downstream validation passes.
 fn build_validation_context(
-    participant_ids: HashSet<crate::model::SpeakerCode>,
-    languages: &crate::model::LanguageCodes,
+    languages: Result<
+        crate::model::DeclaredLanguagesRef<'_>,
+        crate::model::LanguageDeclarationError,
+    >,
     headers: &[&Header],
     rules: RuleSelection,
 ) -> crate::validation::ValidationContext {
-    let declared_languages = languages.as_slice();
-    let default_language = declared_languages.first();
+    let default_language = match languages {
+        Ok(codes) => Some(codes.primary().clone()),
+        Err(_) => None,
+    };
+    let declared_languages = languages.map(crate::model::DeclaredLanguagesRef::to_owned);
 
     let ca_mode = file_uses_ca_mode(headers);
     let enable_quotation_validation = rules.strict_linkers_enabled();
 
     crate::validation::ValidationContext::from_shared(std::sync::Arc::new(
         crate::validation::SharedValidationData {
-            participant_ids,
-            default_language: default_language.cloned(),
-            declared_languages: declared_languages.to_vec(),
+            participant_roster: crate::model::ParticipantRoster::from_headers(
+                headers.iter().copied(),
+            ),
+            default_language,
+            declared_languages,
             ca_mode,
             enable_quotation_validation,
         },
@@ -140,7 +145,13 @@ fn run_validation_checks<P: MediaTimingPhase>(
     // the flag that remembered it was always false and went on 2026-09-08.
     let bullets: Vec<&crate::model::Bullet> = file
         .utterances()
-        .filter_map(|utt| utt.main.content.bullet.as_ref())
+        .filter_map(|utt| {
+            utt.main
+                .content
+                .bullet
+                .as_ref()
+                .and_then(crate::model::BulletState::as_parsed)
+        })
         .collect();
     if !bullets.is_empty() {
         crate::validation::check_bullet_monotonicity(&bullets, errors);
@@ -156,11 +167,20 @@ fn run_validation_checks<P: MediaTimingPhase>(
     // final bullets alone.
     let timing_bullets = main_tier_timing_bullets(file);
     // E544: @Media declares linkage but transcript has no timing evidence.
-    let untimed_media = check_media_linkage_has_timing(
-        &headers_with_locations,
-        file,
-        timing_bullets.first().copied(),
-    );
+    // Rejected timing is not proof that the source has no timing. Do not
+    // cascade a missing-timing diagnostic from failed numeric admission.
+    let untimed_media = if file
+        .utterances()
+        .any(|utt| utt.main.content.has_unparsed_bullets())
+    {
+        None
+    } else {
+        check_media_linkage_has_timing(
+            &headers_with_locations,
+            file,
+            timing_bullets.first().copied(),
+        )
+    };
     let outcome = timing.settle(untimed_media, errors);
 
     // E552: the inverse, @Media declares `unlinked` but the transcript has
@@ -217,6 +237,10 @@ fn run_header_checks(
         .find_map(|line| line.location().span())
         .map_or(0, |span| span.end());
     header::structure::check_headers(headers_with_locations, errors, source_len);
+    // JSON and programmatic models do not retain parser-side findings. Reuse
+    // the same join policy without constructing a second participant cache.
+    crate::model::participant::join::build_participants_from_lines(&file.lines)
+        .report_diagnostics(errors);
 
     // Validate individual headers.
     for (header, location) in headers_with_locations {
@@ -249,16 +273,8 @@ impl ChatFile {
             self.headers_with_locations().collect();
         let headers: Vec<&Header> = headers_with_locations.iter().map(|(h, _)| *h).collect();
 
-        // Extract participant IDs from parsed participant map.
-        let participant_ids: HashSet<crate::model::SpeakerCode> =
-            self.participants.keys().cloned().collect();
-
-        let context = build_validation_context(
-            participant_ids,
-            &self.languages,
-            &headers,
-            RuleSelection::new(),
-        );
+        let context =
+            build_validation_context(self.language_declaration(), &headers, RuleSelection::new());
 
         run_header_checks(self, &headers_with_locations, &context, errors, name);
 
@@ -405,14 +421,8 @@ impl ChatFile {
         );
 
         let headers: Vec<&Header> = self.headers().collect();
-        let participant_ids: HashSet<crate::model::SpeakerCode> =
-            self.participants.keys().cloned().collect();
-        let context = build_validation_context(
-            participant_ids,
-            &self.languages,
-            &headers,
-            RuleSelection::new(),
-        );
+        let context =
+            build_validation_context(self.language_declaration(), &headers, RuleSelection::new());
 
         run_validation_checks(self, &context, errors, name, CompleteMediaTiming);
 
@@ -472,9 +482,7 @@ impl ChatFile {
         );
 
         let headers: Vec<&Header> = self.headers().collect();
-        let participant_ids: HashSet<crate::model::SpeakerCode> =
-            self.participants.keys().cloned().collect();
-        let context = build_validation_context(participant_ids, &self.languages, &headers, rules);
+        let context = build_validation_context(self.language_declaration(), &headers, rules);
 
         run_validation_checks(self, &context, errors, name, CompleteMediaTiming);
 
@@ -497,23 +505,25 @@ impl ChatFile {
 
         // Build shared context once for metadata precomputation.
         let headers: Vec<&Header> = self.headers().collect();
-        let participant_ids: HashSet<crate::model::SpeakerCode> =
-            self.participants.keys().cloned().collect();
-        let context = build_validation_context(
-            participant_ids,
-            &self.languages,
-            &headers,
-            RuleSelection::new(),
-        );
+        let context =
+            build_validation_context(self.language_declaration(), &headers, RuleSelection::new());
 
         let default_language = context.shared.default_language.as_ref();
-        let declared_languages = context.shared.declared_languages.as_slice();
+        let declared_languages = context
+            .shared
+            .declared_languages
+            .as_ref()
+            .map(crate::model::DeclaredLanguages::as_ref)
+            .map_err(|error| *error);
 
         // Compute alignment and language metadata for all utterances.
         for line in &mut self.lines {
             if let Line::Utterance(utterance) = line {
                 utterance.compute_alignments(&context);
-                utterance.compute_language_metadata(default_language, declared_languages);
+                utterance.compute_language_metadata_with_declaration(
+                    default_language,
+                    declared_languages,
+                );
             }
         }
 
@@ -600,13 +610,8 @@ impl ChatFile {
     ) -> Option<crate::Location> {
         self.precompute_alignments();
         let headers: Vec<&Header> = self.headers().collect();
-        let participant_ids = self.participants.keys().cloned().collect();
-        let context = build_validation_context(
-            participant_ids,
-            &self.languages,
-            &headers,
-            RuleSelection::new(),
-        );
+        let context =
+            build_validation_context(self.language_declaration(), &headers, RuleSelection::new());
         run_validation_checks(self, &context, errors, name, RegeneratingMediaTiming)
     }
 }
@@ -663,11 +668,15 @@ fn visit_utterance_timing_bullets<'file>(
 ) {
     use crate::alignment::helpers::{ContentItem, walk_content};
     walk_content(&utt.main.content.content, None, &mut |item| {
-        if let ContentItem::InternalBullet(bullet) = item {
+        if let ContentItem::InternalBullet(bullet) = item
+            && let Some(bullet) = bullet.as_parsed()
+        {
             visit(bullet);
         }
     });
-    if let Some(bullet) = utt.main.content.bullet.as_ref() {
+    if let Some(bullet) = utt.main.content.bullet.as_ref()
+        && let Some(bullet) = bullet.as_parsed()
+    {
         visit(bullet);
     }
 }

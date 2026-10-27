@@ -18,8 +18,7 @@ use super::parser_impl::parser_suite;
 ///
 /// Uses WriteChat to serialize the full tier, then strips the prefix.
 fn wor_tier_to_content(tier: &WorTier) -> String {
-    let mut full = String::new();
-    let _ = tier.write_chat(&mut full);
+    let full = tier.to_chat_string();
     full.strip_prefix("%wor:\t").unwrap_or(&full).to_string()
 }
 
@@ -111,8 +110,7 @@ fn golden_wor_tier_roundtrip_for_every_parser() -> Result<(), TestError> {
 ///
 /// Uses WriteChat to serialize the full tier, then strips the prefix.
 fn com_tier_to_content(tier: &ComTier) -> String {
-    let mut full = String::new();
-    let _ = tier.write_chat(&mut full);
+    let full = tier.to_chat_string();
     full.strip_prefix("%com:\t").unwrap_or(&full).to_string()
 }
 

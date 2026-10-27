@@ -76,7 +76,8 @@ pub(super) fn comment<'tree>(
                     // Bullet-text lowering is still a transitional leaf adapter;
                     // its node and source come from this single admitted body.
                     content: match parse_bullet_content(content.into(), errors) {
-                        Ok(content) => content,
+                        Ok(ParseOutcome::Parsed(content)) => content,
+                        Ok(ParseOutcome::Rejected) => return ParseOutcome::Rejected,
                         Err(fault) => {
                             crate::parser::typed_cst::report_cst_failure(
                                 content.raw_node(),

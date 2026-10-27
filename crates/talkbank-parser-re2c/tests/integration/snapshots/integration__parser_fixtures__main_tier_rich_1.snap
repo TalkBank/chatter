@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
-assertion_line: 92
 expression: result.unwrap()
 ---
 speaker:
@@ -10,7 +9,7 @@ tier_body:
   langcode: ~
   contents:
     - Word:
-        category: Filler
+        category: filler
         body:
           - Text: m
           - Lengthening: ":"
@@ -47,8 +46,7 @@ tier_body:
         annotations: []
         raw_text: attimo
     - Separator:
-        kind: Comma
-        text: ","
+        kind: comma
     - Word:
         category: ~
         body:
@@ -68,7 +66,7 @@ tier_body:
         annotations: []
         raw_text: questo
   terminator:
-    Question: "?"
+    type: question
   postcodes: []
   media_bullet:
     raw_text: "\u0015532330_533470\u0015"

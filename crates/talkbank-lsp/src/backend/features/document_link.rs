@@ -1,71 +1,61 @@
 //! Document link provider for CHAT files.
 //!
-//! Detects `@Media` header lines and creates clickable links to the
-//! referenced media file when it exists on disk alongside the CHAT file.
+//! Presents model-owned `@Media` references as remote URLs or local media links.
 
 use std::path::Path;
 
 use tower_lsp::lsp_types::*;
 
-/// Find document links in a CHAT file (e.g., @Media references).
-pub fn document_links(uri: &Url, document: &str) -> Vec<DocumentLink> {
-    let base_dir = match uri
+/// Present media references from the current source's shared model.
+/// Rejected headers have no `Header::Media` value and cannot become links.
+pub(crate) fn document_links(
+    uri: &Url,
+    analysis: &crate::backend::diagnostics::DocumentAnalysis,
+) -> Vec<DocumentLink> {
+    use crate::backend::utils::LineIndex;
+    use talkbank_model::model::Header;
+
+    let document = analysis.source();
+    let file = analysis.file();
+    let base_dir = uri
         .to_file_path()
         .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-    {
-        Some(dir) => dir,
-        None => return Vec::new(),
-    };
-
-    let mut links = Vec::new();
-
-    for (line_idx, line) in document.lines().enumerate() {
-        if !line.starts_with("@Media:") {
-            continue;
-        }
-
-        // @Media:\tfilename, audio/video
-        let content = match line.split('\t').nth(1) {
-            Some(c) => c.trim(),
-            None => continue,
-        };
-
-        // Extract filename (before the comma).
-        let filename = content.split(',').next().unwrap_or(content).trim();
-        if filename.is_empty() {
-            continue;
-        }
-
-        // Try common media extensions.
-        let media_path = resolve_media_file(&base_dir, filename);
-        let target_uri = match media_path {
-            Some(path) => Url::from_file_path(path).ok(),
-            None => None,
-        };
-
-        // Link range covers the filename portion.
-        let tab_offset = line.find('\t').map_or(0, |i| i + 1);
-        let filename_end = tab_offset + filename.len();
-
-        links.push(DocumentLink {
-            range: Range {
-                start: Position {
-                    line: line_idx as u32,
-                    character: tab_offset as u32,
-                },
-                end: Position {
-                    line: line_idx as u32,
-                    character: filename_end as u32,
-                },
-            },
-            target: target_uri,
-            tooltip: Some(format!("Open media file: {filename}")),
-            data: None,
-        });
-    }
-
-    links
+        .and_then(|path| path.parent().map(Path::to_path_buf));
+    let index = LineIndex::new(document);
+    file.headers_with_locations()
+        .filter_map(|(header, location)| {
+            let Header::Media(media) = header else {
+                return None;
+            };
+            let span = location.span()?;
+            let header_source = document.get(span.start()..span.end())?;
+            // Locate the already-parsed filename, rather than extracting a new
+            // semantic value from delimiters. Require an exact source witness.
+            let after_label = header_source.find(':')? + 1;
+            let payload = header_source.get(after_label..)?.trim_start();
+            let filename = media.filename.as_str();
+            payload.strip_prefix(filename)?;
+            let start = span.start() + header_source.len() - payload.len();
+            let end = start + filename.len();
+            let target = if media.filename.is_remote_url() {
+                Url::parse(media.filename.unquoted()).ok()
+            } else {
+                base_dir
+                    .as_deref()
+                    .and_then(|directory| resolve_media_file(directory, media.filename.unquoted()))
+                    .and_then(|path| Url::from_file_path(path).ok())
+            };
+            Some(DocumentLink {
+                range: Range::new(
+                    index.offset_to_position(start),
+                    index.offset_to_position(end),
+                ),
+                target,
+                tooltip: Some(format!("Open media file: {}", media.filename.unquoted())),
+                data: None,
+            })
+        })
+        .collect()
 }
 
 /// Try to resolve a media filename to an actual file path.
@@ -108,7 +98,8 @@ mod tests {
     fn test_document_links_finds_media_header() {
         let uri = temp_cha_uri("test.cha");
         let doc = "@UTF8\n@Begin\n@Media:\tmyfile, audio\n*CHI:\thello .\n@End\n";
-        let links = document_links(&uri, doc);
+        let analysis = crate::test_fixtures::document_analysis(&uri, doc);
+        let links = document_links(&uri, &analysis);
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].tooltip.as_deref(), Some("Open media file: myfile"));
         assert_eq!(links[0].range.start.line, 2);
@@ -118,7 +109,29 @@ mod tests {
     fn test_no_links_without_media() {
         let uri = temp_cha_uri("test.cha");
         let doc = "@UTF8\n@Begin\n*CHI:\thello .\n@End\n";
-        let links = document_links(&uri, doc);
+        let analysis = crate::test_fixtures::document_analysis(&uri, doc);
+        let links = document_links(&uri, &analysis);
         assert!(links.is_empty());
+    }
+    #[test]
+    fn document_links_resolve_local_unicode_media() {
+        let directory = tempfile::tempdir().unwrap();
+        let filename = "Media🦀";
+        let recording = directory.path().join(format!("{filename}.wav"));
+        std::fs::write(&recording, []).unwrap();
+        let uri = Url::from_file_path(directory.path().join("example.cha")).unwrap();
+        let source = include_str!("../../../../../corpus/reference/core/headers-media.cha")
+            .replace("headers-media,", &format!("{filename},"));
+        let analysis = crate::test_fixtures::document_analysis(&uri, &source);
+        let links = document_links(&uri, &analysis);
+        assert_eq!(links.len(), 1);
+        assert_eq!(
+            links[0].target,
+            Some(Url::from_file_path(recording).unwrap())
+        );
+        assert_eq!(
+            links[0].range.end.character - links[0].range.start.character,
+            filename.encode_utf16().count() as u32
+        );
     }
 }

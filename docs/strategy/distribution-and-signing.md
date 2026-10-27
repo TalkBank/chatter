@@ -22,7 +22,7 @@ exercised across multiple releases (v0.1.0, v0.1.1, v0.2.0, v0.2.1):
   in the decision log below is long done (`release.yml` +
   `release-desktop.yml`).
 - **Auto-update is live in both channels** and has carried real users
-  across multiple version transitions: `chatter update` for the CLI and
+  across multiple version transitions: `chatter experimental update` for the CLI and
   the Tauri updater for the desktop app.
 - **The standalone `talkbank-lsp` server** ships in the same cargo-dist
   release (its own installers and archives) since v0.2.1.
@@ -359,7 +359,7 @@ cargo-dist ships a self-updater. Setting `install-updater = true` in
 install a standalone program named **`chatter-update`** alongside the
 binary; running it polls GitHub Releases and installs the newest release
 in place. Because `chatter` exposes external subcommands, the same thing
-is reachable as **`chatter update`** (the documented, discoverable
+is reachable as **`chatter experimental update`** (the documented, discoverable
 form). Source of these facts: the cargo-dist book, `installers/updater.md`.
 
 Properties that make this the cheap half:

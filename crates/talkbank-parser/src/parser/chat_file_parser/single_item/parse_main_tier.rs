@@ -104,7 +104,7 @@ impl<'tree, 'source, 'input> MainTierFragment<'tree, 'source, 'input> {
             .iter()
             .any(|e| matches!(e.severity, Severity::Error));
         match main_tier.try_map(|lowered| lowered.ok().filter(|_| !has_actual_errors).ok_or(())) {
-            Ok(main_tier) => Ok(fragment.rebase_main_tier(main_tier)),
+            Ok(main_tier) => fragment.rebase_main_tier(main_tier),
             // A rejection carries evidence that its producer already reported
             // a diagnostic to this collector. No synthetic fallback is needed.
             Err(()) => Err(ParseErrors::from(tier_errors)),

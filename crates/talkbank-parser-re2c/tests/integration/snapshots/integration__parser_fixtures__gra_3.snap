@@ -1,26 +1,27 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: tier
 ---
+tier_type: Gra
 relations:
-  - index: "1"
-    head: "2"
+  - index: 1
+    head: 2
     relation: ADVMOD
-  - index: "2"
-    head: "0"
+  - index: 2
+    head: 0
     relation: ROOT
-  - index: "3"
-    head: "2"
+  - index: 3
+    head: 2
     relation: NSUBJ
-  - index: "4"
-    head: "6"
+  - index: 4
+    head: 6
     relation: CASE
-  - index: "5"
-    head: "6"
+  - index: 5
+    head: 6
     relation: DET
-  - index: "6"
-    head: "2"
+  - index: 6
+    head: 2
     relation: OBL
-  - index: "7"
-    head: "2"
+  - index: 7
+    head: 2
     relation: PUNCT

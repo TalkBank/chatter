@@ -9,15 +9,14 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, QuotationNode, QuotationWithOptionalAnnotationsNode, SourceBound, SourceSlotView,
+    AsRawNode, QuotationNode, QuotationWithOptionalAnnotationsNode, SlotView, SourceBound,
 };
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
 
 use super::group::{contents_of, parse_group_contents};
-use super::report_tree_shape;
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 
 /// Parse a bare `quotation` node.
 ///
@@ -35,11 +34,12 @@ use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_disp
 fn parse_quotation_content<'tree>(
     typed: SourceBound<'tree, '_, QuotationNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<UtteranceContent> {
+) -> ParseOutcome<crate::model::Quotation> {
     let node = typed.raw_node();
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_inner(typed),
+        crate::parser::typed_cst::extract_inner(typed)
+            .and_then(|children| children.admit_ranges().map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -48,34 +48,16 @@ fn parse_quotation_content<'tree>(
     };
     let children = associated.children();
 
-    expect_delimiter(children.child_0.slot(), |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected opening quote (U+201C) at position 0 of quotation, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    });
-    let group_items = match contents_of(associated.field_child_1().slot(), errors) {
+    let SlotView::Present(contents) = children.child_1.slot.view();
+    let group_items = match contents_of(*contents, errors) {
         Some(contents) => parse_group_contents(&contents, errors),
-        None => Vec::new(),
+        None => ParseOutcome::Rejected,
     };
-    expect_delimiter(children.child_2.slot(), |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected closing quote (U+201D) in quotation, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    });
     surface_displaced(&children.unexpected, "quotation", source, errors);
 
+    let ParseOutcome::Parsed(group_items) = group_items else {
+        return ParseOutcome::Rejected;
+    };
     if group_items.is_empty() {
         return ParseOutcome::rejected();
     }
@@ -83,7 +65,7 @@ fn parse_quotation_content<'tree>(
     let bracketed = crate::model::BracketedContent::new(group_items);
     let span = span_of(node);
     let quotation = crate::model::Quotation::new(span, bracketed);
-    ParseOutcome::parsed(UtteranceContent::Quotation(quotation))
+    ParseOutcome::parsed(quotation)
 }
 
 /// Parse `quotation_with_optional_annotations`: a quotation that may carry
@@ -131,7 +113,8 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
     let node = typed.raw_node();
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_inner(typed),
+        crate::parser::typed_cst::extract_inner(typed)
+            .and_then(|children| children.admit_ranges().map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -149,11 +132,8 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
     );
 
     // The required wrapper is present; nested payload validity stays separate.
-    let SourceSlotView::Present(quotation) = associated.field_quotation().slot().view();
-    let Some(quotation) = crate::parser::typed_cst::read_source_field(quotation, errors) else {
-        return ParseOutcome::rejected();
-    };
-    let ParseOutcome::Parsed(content) = parse_quotation_content(quotation, errors) else {
+    let SlotView::Present(quotation) = children.quotation.slot.view();
+    let ParseOutcome::Parsed(content) = parse_quotation_content(*quotation, errors) else {
         // The inner parser has already reported why; propagate rather than
         // inventing an empty quotation to hang the annotations on.
         return ParseOutcome::rejected();
@@ -162,27 +142,28 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
     // `annotations` is ONE optional slot, so there is no accumulator that a
     // second `base_annotations` child could silently overwrite. The hand-written
     // loop assigned into a `Vec` and carried no note saying why that was safe.
-    let markers = match associated.field_annotations().slot().optional() {
+    let markers = match children.annotations.slot.as_ref() {
         Some(slot) => match slot.view() {
-            SourceSlotView::Present(annotations) => {
-                match crate::parser::typed_cst::read_source_field(annotations, errors) {
-                    Some(annotations) => {
-                        super::super::annotations::parse_scoped_annotations(annotations, errors)
-                    }
-                    None => Vec::new(),
-                }
+            SlotView::Present(annotations) => {
+                super::super::annotations::parse_scoped_annotations(*annotations, errors)
             }
             // Present-but-unusable (ERROR): the quotation still stands, and
             // recovery remains explicit despite source admission.
-            SourceSlotView::Error(_) => Vec::new(),
-            SourceSlotView::Absent(never) => match never {},
+            SlotView::Error(_) => Ok(Vec::new()),
+            SlotView::Absent(never) => match never {},
         },
         // Genuinely absent: a bare quotation, which folds to itself.
-        None => Vec::new(),
+        None => Ok(Vec::new()),
+    };
+
+    let Ok(markers) = markers else {
+        return ParseOutcome::Rejected;
     };
 
     let span = span_of(node);
     ParseOutcome::parsed(super::marker_chain::fold_marker_chain(
-        content, markers, span,
+        super::marker_chain::MarkerSeed::Quotation(content),
+        markers,
+        span,
     ))
 }

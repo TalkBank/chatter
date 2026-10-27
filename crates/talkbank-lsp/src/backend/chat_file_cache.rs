@@ -81,3 +81,33 @@ fn parse_failure_from(diagnostics: &[ParseError]) -> LspBackendError {
         first_message: diagnostics.first().map(|e| e.message.clone()),
     }
 }
+
+/// Run a feature against one current source-owned analysis. The callback cannot
+/// receive an independently supplied model and source. A transient parse during
+/// debounce does not replace the authoritative analysis baseline.
+pub(crate) fn with_current_analysis<T>(
+    backend: &Backend,
+    uri: &Url,
+    feature: impl FnOnce(&crate::backend::diagnostics::DocumentAnalysis) -> T,
+) -> Result<Option<T>, LspBackendError> {
+    let Some(source) = documents::get_document_text(backend, uri) else {
+        return Ok(None);
+    };
+    if let Some(cached) = backend.analyses.get(uri)
+        && let Some(current) = cached.for_source(&source)
+    {
+        return Ok(Some(feature(current)));
+    }
+    let analysis = backend
+        .language_services
+        .with_parser(|parser| {
+            crate::backend::diagnostics::DocumentAnalysis::parse(
+                parser,
+                uri,
+                Arc::from(source),
+                None,
+            )
+        })
+        .map_err(LspBackendError::LanguageServicesUnavailable)?;
+    Ok(Some(feature(&analysis)))
+}

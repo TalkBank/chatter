@@ -9,13 +9,13 @@ use talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation, WriteChat
 /// Tests parse relation properties.
 #[test]
 fn test_parse_relation_properties() {
-    let rel = GrammaticalRelation::new(1, 2, "SUBJ");
+    let rel = GrammaticalRelation::new(1, 2, "SUBJ".try_into().unwrap());
     assert_eq!(rel.index, 1);
     assert_eq!(rel.head, 2);
     assert_eq!(rel.relation.as_str(), "SUBJ");
     assert!(!rel.is_root());
 
-    let root = GrammaticalRelation::new(2, 0, "ROOT");
+    let root = GrammaticalRelation::new(2, 0, "ROOT".try_into().unwrap());
     assert!(root.is_root());
 }
 
@@ -23,9 +23,9 @@ fn test_parse_relation_properties() {
 #[test]
 fn test_gra_tier_construction() {
     let relations = vec![
-        GrammaticalRelation::new(1, 2, "SUBJ"),
-        GrammaticalRelation::new(2, 0, "ROOT"),
-        GrammaticalRelation::new(3, 2, "OBJ"),
+        GrammaticalRelation::new(1, 2, "SUBJ".try_into().unwrap()),
+        GrammaticalRelation::new(2, 0, "ROOT".try_into().unwrap()),
+        GrammaticalRelation::new(3, 2, "OBJ".try_into().unwrap()),
     ];
     let tier = GraTier::new(
         talkbank_model::Location::Unlocated,

@@ -95,7 +95,7 @@ impl CADelimiter {
 
 impl WriteChat for CADelimiter {
     /// Writes the exact Unicode symbol for this CA delimiter.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.delimiter_type.to_symbol())
     }
 }

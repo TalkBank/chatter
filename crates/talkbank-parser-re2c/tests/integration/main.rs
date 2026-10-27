@@ -21,8 +21,11 @@
 //!
 //! Add a test file by dropping it in this directory and declaring it below.
 
+mod action_suffix_admission;
 mod bullet_admission;
+mod ca_symbols;
 mod categorize_divergences;
+mod chat_lines;
 mod corpus_lex_tests;
 mod corpus_root;
 mod equivalence_tests;
@@ -31,6 +34,7 @@ mod extract_fixtures;
 mod fixture_utils;
 mod full_corpus_parse_test;
 mod golden_parse;
+mod interposed_words;
 mod lexer_tests;
 mod media_whitespace_provenance;
 mod model_study;
@@ -40,8 +44,12 @@ mod postcode_admission;
 mod quick_divergence_check;
 mod separator_provenance;
 mod snapshot_tests;
+mod stress_overlap;
 mod subcategorize_main_tier;
 mod unmatched_bracket_tests;
 mod unsupported_lines;
 
 mod dependent_dispatch;
+
+#[cfg(feature = "trait_tests")]
+mod trait_contracts;

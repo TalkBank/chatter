@@ -158,7 +158,7 @@ fn reference_id_languages_retain_structured_list_selection() {
 
 /// A readable carrier can still contain recovery: range admission is not validity.
 #[test]
-fn participant_recovery_repeat_preserves_source_and_valid_siblings() {
+fn participant_recovery_repeat_preserves_source_without_admitting_a_damaged_list() {
     use talkbank_model::{ErrorCode, ErrorCollector, model::Header};
     use talkbank_parser::generated_traversal::{AsRawNode, ParticipantsContentsNode, ReadableSlot};
     use talkbank_parser_tests::test_error::strict_parse;
@@ -201,19 +201,35 @@ fn participant_recovery_repeat_preserves_source_and_valid_siblings() {
                 _ => None,
             })
             .flatten()
-            .map(|entry| (entry.speaker_code.as_str(), entry.role.as_str()))
+            .map(|entry| {
+                (
+                    entry.speaker_code.as_str(),
+                    entry
+                        .role()
+                        .expect("complete authored declaration")
+                        .as_str(),
+                )
+            })
             .collect();
         let expected = if example == 2 {
             vec![("CHI", "Target_Child")]
         } else {
-            vec![("CHI", "Target_Child"), ("MOT", "Mother")]
+            Vec::new()
         };
-        assert_eq!(actual, expected, "readable siblings are not dropped");
+        assert_eq!(
+            actual, expected,
+            "only an admitted declaration supplies identities"
+        );
         let diagnostics = errors.into_vec();
         if expected_faults == 0 {
             assert!(diagnostics.is_empty(), "{diagnostics:?}");
             assert!(strict_parse(parser.parse_chat_file(&source)).is_ok());
         } else {
+            assert!(
+                file.headers()
+                    .any(|header| matches!(header, Header::UnparsedParticipants(raw)
+                if source.contains(raw.source())))
+            );
             assert!(strict_parse(parser.parse_chat_file(&source)).is_err());
             for range in recovery_ranges {
                 assert!(

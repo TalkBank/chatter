@@ -96,8 +96,7 @@ pub struct RootRelationUnderHost {
 
 impl AttachmentRelation {
     /// The relation `label`, refused when it is a root label.
-    pub fn new(label: impl Into<GrammaticalRelationType>) -> Result<Self, RootRelationUnderHost> {
-        let label = label.into();
+    pub fn new(label: GrammaticalRelationType) -> Result<Self, RootRelationUnderHost> {
         match crate::validation::utterance::gra_relation_vocabulary::is_root_label(label.as_str()) {
             true => Err(RootRelationUnderHost { label }),
             false => Ok(Self(label)),
@@ -321,7 +320,7 @@ impl RootAttachment {
                     }),
                     None => Ok(Self {
                         head: PostHead::Root,
-                        relation: GrammaticalRelationType::new("ROOT"),
+                        relation: GrammaticalRelationType::root(),
                     }),
                 };
             }
@@ -648,16 +647,16 @@ mod tests {
     fn a_root_label_is_not_an_attachment_relation() {
         for label in ["ROOT", "root", "ROOT-x", "INCROOT"] {
             assert_eq!(
-                AttachmentRelation::new(label),
+                AttachmentRelation::new(label.try_into().unwrap()),
                 Err(RootRelationUnderHost {
-                    label: GrammaticalRelationType::new(label)
+                    label: GrammaticalRelationType::new(label).unwrap()
                 }),
                 "{label}"
             );
         }
         for label in ["NMOD", "ROOTS", "DEP"] {
             assert_eq!(
-                AttachmentRelation::new(label)
+                AttachmentRelation::new(label.try_into().unwrap())
                     .map(|relation| relation.as_relation().as_str().to_owned()),
                 Ok(label.to_owned())
             );

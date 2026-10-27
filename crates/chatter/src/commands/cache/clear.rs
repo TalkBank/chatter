@@ -27,10 +27,10 @@ use crate::cli::ClearMode;
 ///
 /// Exits 1 if the cache cannot be opened, migrated, counted or cleared,
 /// including a database a newer build wrote.
-pub fn cache_clear(scope: CacheScope, mode: ClearMode) {
-    let fail = |action: &str, error: CacheError| -> ! {
+pub fn cache_clear(scope: CacheScope, mode: ClearMode) -> crate::exit_codes::CommandResult {
+    let fail = |action: &str, error: CacheError| -> crate::exit_codes::CommandStop {
         eprintln!("Error: Failed to {action}: {error}");
-        std::process::exit(1);
+        crate::exit_codes::ReportedFailure::Input.into()
     };
 
     // What the scope selects, said the same way by a dry run and a clear.
@@ -41,7 +41,7 @@ pub fn cache_clear(scope: CacheScope, mode: ClearMode) {
             prefix.as_path().display()
         ),
     };
-    let found = CacheOnDisk::inspect().unwrap_or_else(|e| fail("open cache", e));
+    let found = CacheOnDisk::inspect().map_err(|e| fail("open cache", e))?;
     match (found, mode) {
         (CacheOnDisk::Absent(absent), ClearMode::DryRun) => outln!(
             "Would clear 0 {selection} (dry-run): no cache database at {}",
@@ -57,30 +57,27 @@ pub fn cache_clear(scope: CacheScope, mode: ClearMode) {
         ),
         (CacheOnDisk::OlderSchema(older), ClearMode::Apply) => {
             let database = older.database();
-            let cache = older.migrate().unwrap_or_else(|e| fail("migrate cache", e));
+            let cache = older.migrate().map_err(|e| fail("migrate cache", e))?;
             outln!(
                 "Migrated the cache database at {} to this build's schema",
                 database.display()
             );
-            let count = cache
-                .clear(&scope)
-                .unwrap_or_else(|e| fail("clear cache", e));
+            let count = cache.clear(&scope).map_err(|e| fail("clear cache", e))?;
             outln!("Cleared {count} {selection}");
         }
         (CacheOnDisk::Current(cache), ClearMode::DryRun) => {
             let count = cache
                 .count(&scope)
-                .unwrap_or_else(|e| fail("count cache entries", e));
+                .map_err(|e| fail("count cache entries", e))?;
             outln!("Would clear {count} {selection} (dry-run)");
         }
         (CacheOnDisk::Current(cache), ClearMode::Apply) => {
             let cache = cache
                 .into_maintenance()
-                .unwrap_or_else(|e| fail("open cache", e));
-            let count = cache
-                .clear(&scope)
-                .unwrap_or_else(|e| fail("clear cache", e));
+                .map_err(|e| fail("open cache", e))?;
+            let count = cache.clear(&scope).map_err(|e| fail("clear cache", e))?;
             outln!("Cleared {count} {selection}");
         }
     }
+    Ok(())
 }

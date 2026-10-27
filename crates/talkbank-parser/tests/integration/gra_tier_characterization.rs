@@ -10,51 +10,13 @@
     clippy::unimplemented
 )]
 
-//! PERMANENT regression tests, not migration scaffolding.
+//! Source-based GRA parsing contracts: exact valid relation values and diagnosed
+//! rejection of malformed input. File recovery retains raw source; neither
+//! structural recovery nor a rejected numeric field constructs an empty graph.
 //!
-//! The visitor-driven parser migration these were written during is COMPLETE
-//! (shipped 0.3.x). What they pin is the parser's CURRENT observable contract
-//! at the real boundary, and every expected value here was captured by RUNNING
-//! the parser rather than guessed. Historical "migration" wording below refers
-//! to that finished work; these files are not leftovers and must not be deleted
-//! as such.
-//!
-//! Characterization tests for the `%gra` dependent tier migrated onto the
-//! generated `extract_gra_dependent_tier` / `extract_gra_contents` /
-//! `extract_gra_relation` typed visitor (Task 4c).
-//!
-//! These tests pin the OBSERVABLE behaviour of the `%gra` tier at the real
-//! parser boundary (`parse_chat_file_streaming` -> `ChatFile` + collected
-//! diagnostics). The migration replaces two hand-walks:
-//!
-//! - `tier_parsers/gra/tier.rs`: the `child.kind() == GRA_CONTENTS` locate loop
-//!   plus the `while gra_contents.child(idx)` + `match child.kind()` relation
-//!   iteration, with exhaustive typed `NodeSlot` matching over the
-//!   `gra_dependent_tier` body slot (`child_2`) and each `gra_contents` relation
-//!   slot.
-//! - `tier_parsers/gra/relation.rs`: the positional `node.child(0/2/4)` walk for
-//!   index / head / relation, with the named `index` / `head` / `relation` slots.
-//!
-//! The migration is BEHAVIOUR-PRESERVING: the parsed relation model and the
-//! recovery diagnostics must not change. Every value here was captured by
-//! RUNNING the pre-migration parser (base HEAD `99ed501`), not guessed. The
-//! tests PASS on the current code and MUST STAY GREEN, byte-identical, after the
-//! migration.
-//!
-//! # Reachability note (why the malformed cases look the way they do)
-//!
-//! `parse_gra_tier` is only invoked from the dispatch when `TierAdmission::admit`
-//! finds the tier node has NO tree-sitter error (`attach_gra` in
-//! `dependent_tier_dispatch/parsed.rs`). A structurally broken `%gra` line (empty body,
-//! missing tab) makes the tier node `has_error()` and is routed to the upstream
-//! placeholder / error path (E600 / E602), so `parse_gra_tier`'s own
-//! "missing gra_contents -> MalformedGrammarRelation + empty tier" silent-partial
-//! is UNREACHABLE from the boundary (documented by
-//! `empty_body_gra_tier_is_handled_upstream_without_a_gra_tier`). The reachable
-//! malformed path is a SEMANTICALLY invalid relation (index 0) inside a
-//! structurally valid `%gra` line, which does reach `parse_gra_tier` +
-//! `parse_gra_relation` and is pinned by
-//! `zero_index_relation_is_rejected_leaving_an_empty_gra_tier`.
+//! Source-bound lowering uses the generated tier, contents and relation visitors.
+//! Structural recovery at document dispatch reports the actual tier range;
+//! numeric rejection in a healthy carrier retains its field-specific diagnostic.
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::model::{DependentTier, Line};
@@ -72,13 +34,13 @@ const VALID_MULTI_RELATION: &str = "@UTF8\n@Begin\n*CHI:\tI go home now .\n%gra:
 /// invalid (index 0; indices are 1-indexed). This reaches `parse_gra_tier`
 /// (the tier node has no tree-sitter error) and `parse_gra_relation`, which
 /// rejects the relation with `InvalidGrammarIndex` (E709). The gra tier stays
-/// attached with ZERO relations (no fabricated default). Byte offsets: the
+/// retained as UnparsedGra (no fabricated graph). Byte offsets: the
 /// `0|0|ROOT` relation node spans 30..38.
 const ZERO_INDEX_RELATION: &str = "@UTF8\n@Begin\n*CHI:\thi .\n%gra:\t0|0|ROOT\n@End\n";
 
 /// A `%gra:` line with an EMPTY body (tab then newline, no relations). This makes
-/// the tier node `has_error()`, so it is handled by the upstream error path
-/// (E600) and NO gra tier is attached; `parse_gra_tier` is never called.
+/// the tier node `has_error()`, so document dispatch reports E316 and retains
+/// raw source without constructing a GraTier.
 const EMPTY_BODY: &str = "@UTF8\n@Begin\n*CHI:\thi .\n%gra:\t\n@End\n";
 
 /// One grammatical relation rendered as a stable structural tuple for assertions.
@@ -153,16 +115,16 @@ fn valid_multi_relation_gra_parses_byte_identical_with_zero_diagnostics() {
 
 /// MALFORMED (reachable): a structurally valid `%gra` line whose single relation
 /// has index 0. `parse_gra_relation` rejects it with `InvalidGrammarIndex`
-/// (E709) at the relation span (30..38); the gra tier stays attached with ZERO
-/// relations. This is the reachable exercise of the migrated `parse_gra_tier`
+/// (E709) at the relation span (30..38); file recovery keeps raw source without
+/// a parsed graph. This exercises `parse_gra_tier`
 /// relation iteration + `parse_gra_relation` rejection.
 #[test]
-fn zero_index_relation_is_rejected_leaving_an_empty_gra_tier() {
+fn zero_index_relation_does_not_construct_a_gra_tier() {
     let (relations, saw_gra_tier, diags) = parse_gra(ZERO_INDEX_RELATION);
 
     assert!(
-        saw_gra_tier,
-        "the gra tier must remain attached for downstream diagnostics"
+        !saw_gra_tier,
+        "rejected lowering must not expose a parsed graph"
     );
     assert!(
         relations.is_empty(),
@@ -187,12 +149,8 @@ fn zero_index_relation_is_rejected_leaving_an_empty_gra_tier() {
     );
 }
 
-/// MALFORMED (upstream): an empty-body `%gra:` line makes the tier node
-/// `has_error()`, so the dispatch routes it to the upstream error path (E600)
-/// and attaches NO gra tier; `parse_gra_tier` is never called and its internal
-/// `MalformedGrammarRelation` + empty-tier silent-partial is unreachable from
-/// the boundary. Pins that reality so the migration cannot accidentally start
-/// attaching a gra tier or emitting `MalformedGrammarRelation` here.
+/// Empty-body structural recovery reports its source range without a graph or
+/// a fabricated relation-level diagnostic.
 #[test]
 fn empty_body_gra_tier_is_handled_upstream_without_a_gra_tier() {
     let (relations, saw_gra_tier, diags) = parse_gra(EMPTY_BODY);

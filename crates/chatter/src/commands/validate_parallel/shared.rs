@@ -46,24 +46,20 @@ pub enum InteractiveEnd {
 pub enum RunNotice {
     /// These codes are suppressed (`--suppress`).
     Suppressing(crate::commands::error_codes::SuppressedCodes),
-    /// `--check-xphon` was passed; it is deprecated and does nothing.
-    CheckXphonIgnored,
     /// The Ctrl-C handler could not be installed, so an interrupt ends the
     /// process without the run's own stop being reported.
     InterruptUnavailable(String),
 }
 
 impl RunNotice {
-    /// The notices a run's flags call for: the deprecated `--check-xphon`,
-    /// and what `--suppress` hides (named, because a suppressed code is
-    /// never emitted, so no count of what it hid exists afterwards).
-    pub(crate) fn for_flags(
-        check_xphon: bool,
+    /// A suppression notice describes exactly the admitted code selection.
+    pub(crate) fn for_suppression(
         suppressed: &crate::commands::error_codes::SuppressedCodes,
     ) -> Vec<Self> {
-        let deprecated = check_xphon.then_some(Self::CheckXphonIgnored);
-        let suppressing = (!suppressed.is_empty()).then(|| Self::Suppressing(suppressed.clone()));
-        deprecated.into_iter().chain(suppressing).collect()
+        match suppressed.is_empty() {
+            true => Vec::new(),
+            false => vec![Self::Suppressing(suppressed.clone())],
+        }
     }
 
     /// The note as a sentence for a terminal.
@@ -79,9 +75,6 @@ impl RunNotice {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Self::CheckXphonIgnored => "note: --check-xphon is deprecated and has no effect; \
-                 Phon %x validation now runs by default (use --suppress xphon to silence it)"
-                .to_owned(),
             Self::InterruptUnavailable(error) => {
                 format!("note: Ctrl-C cannot stop this run cleanly: {error}")
             }
@@ -118,13 +111,6 @@ pub enum ValidationOutcome {
     },
     /// An interactive session and how it closed.
     Interactive(InteractiveEnd),
-    /// The `--audit` output file could not be created, so nothing ran.
-    AuditFileUnwritable {
-        /// The path asked for.
-        path: std::path::PathBuf,
-        /// Why it could not be created.
-        error: std::io::Error,
-    },
 }
 
 impl ValidationOutcome {
@@ -136,7 +122,7 @@ impl ValidationOutcome {
         use super::renderer::RenderedOutput;
         match self {
             Self::Streamed {
-                output: RenderedOutput::AuditFileIncomplete | RenderedOutput::StdoutIncomplete,
+                output: RenderedOutput::AuditFileIncomplete,
                 ..
             } => true,
             Self::Streamed {
@@ -148,7 +134,6 @@ impl ValidationOutcome {
             }
             Self::Interactive(InteractiveEnd::Closed(RunPhase::Running)) => true,
             Self::Interactive(InteractiveEnd::TerminalFailed) => true,
-            Self::AuditFileUnwritable { .. } => true,
         }
     }
 }

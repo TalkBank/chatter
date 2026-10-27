@@ -12,8 +12,8 @@
 //! # Two questions, and only one of them is the LSP's
 //!
 //! WHERE an item is belongs to the model, and is answered by
-//! [`WordRef::span`](talkbank_model::model::WordRef::span) and
-//! [`GroupRef::span`](talkbank_model::model::GroupRef::span). WHETHER the
+//! [`WordRef::location`](talkbank_model::model::WordRef::location) and
+//! [`GroupRef::location`](talkbank_model::model::GroupRef::location). WHETHER the
 //! editor targets it is this crate's policy, and is the only part written
 //! here. Dispatching on [`ContentStructure`] rather than on the 28
 //! `UtteranceContent` variants is what keeps them apart: a new variant is
@@ -24,13 +24,12 @@
 //! that a model-side accessor was "blocked because `LeafRef` does not carry
 //! its node". That was wrong twice over: this consumer answers `None` for
 //! every leaf and so never needs a leaf's span, and the real gap was elsewhere
-//! entirely, in `PhoGroup` and `SinGroup` having no span field at all.
+//! entirely, in `PhoGroup` and `SinGroup` then having no span field at all.
+//! Both now retain locations; that does not change the editor's target policy.
 //!
 //! # What is excluded, and which kind of exclusion each is
 //!
-//! - **Phonological and sign groups**: the model records no span for them.
-//!   A FACT, and `GroupRef::span` reports it.
-//! - **Quotations**: they have spans; not targeting them is a POLICY, and it
+//! - **Phonological/sign groups and quotations**: they have spans; not targeting them is a POLICY, and it
 //!   is inherited from the five copies rather than adjudicated here.
 //! - **Retraces and every leaf**: also policy, also inherited. Retraces are
 //!   the exclusion most worth revisiting, because the model's `%mor` counting
@@ -49,7 +48,7 @@ pub(crate) fn editor_target_span(content: &UtteranceContent) -> Option<Span> {
         ContentStructure::Word(word) => word.location().span(),
         ContentStructure::Group(group) => match group.kind() {
             // The bracketed span, so a hover covers the whole group.
-            GroupKind::Angle => group.location().and_then(talkbank_model::Location::span),
+            GroupKind::Angle => group.location().span(),
             GroupKind::Quotation | GroupKind::Pho | GroupKind::Sin => None,
         },
         ContentStructure::Retrace(_) | ContentStructure::Leaf(_) => None,
@@ -131,9 +130,9 @@ mod tests {
     }
 
     fn one_word() -> BracketedContent {
-        BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+        BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::new(
             located(1, 6),
-            "hello",
+            talkbank_model::WordText::from(talkbank_model::non_empty_literal!("hello")),
         )))])
     }
 
@@ -151,17 +150,17 @@ mod tests {
     #[test]
     fn the_editor_targets_words_and_angle_groups_and_nothing_else() {
         assert_eq!(
-            editor_target_span(&UtteranceContent::Word(Box::new(Word::simple(
+            editor_target_span(&UtteranceContent::Word(Box::new(Word::new(
                 located(0, 5),
-                "hello"
+                talkbank_model::WordText::from(talkbank_model::non_empty_literal!("hello"))
             )))),
             Some(Span::new(0, 5)),
             "a bare word is the primary target"
         );
         assert_eq!(
-            editor_target_span(&UtteranceContent::Word(Box::new(Word::simple(
+            editor_target_span(&UtteranceContent::Word(Box::new(Word::new(
                 talkbank_model::Location::Unlocated,
-                "hello"
+                talkbank_model::WordText::from(talkbank_model::non_empty_literal!("hello"))
             )))),
             None,
             "an unlocated word has nothing to target"
@@ -190,9 +189,12 @@ mod tests {
             "a quotation HAS a span; excluding it is an inherited policy"
         );
         assert_eq!(
-            editor_target_span(&UtteranceContent::PhoGroup(PhoGroup::new(one_word()))),
+            editor_target_span(&UtteranceContent::PhoGroup(PhoGroup::new(
+                Span::new(1, 10),
+                one_word()
+            ))),
             None,
-            "a phonological group has no span in the model at all"
+            "a phonological group has a span; excluding it is an inherited policy"
         );
     }
 
@@ -210,9 +212,9 @@ mod tests {
     #[test]
     fn only_alignable_items_have_a_mor_index() {
         let content = vec![
-            UtteranceContent::Word(Box::new(Word::simple(
+            UtteranceContent::Word(Box::new(Word::new(
                 talkbank_model::Location::Unlocated,
-                "hello",
+                talkbank_model::WordText::from(talkbank_model::non_empty_literal!("hello")),
             ))),
             UtteranceContent::Pause(Pause::new(
                 talkbank_model::Location::Unlocated,

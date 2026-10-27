@@ -51,7 +51,7 @@ fn closed_replacement_at_utterance_start_does_not_claim_a_missing_terminator()
          @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t[: closed] .\n@End\n",
     )?;
 
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
 
     assert!(

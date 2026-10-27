@@ -6,6 +6,7 @@
 //! rejects rather than assembling a parallel model by hand.
 
 use std::path::PathBuf;
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 
 use talkbank_model::ParseValidateOptions;
 use talkbank_transform::media_timing::{MediaTimingState, reconcile_media_timing};

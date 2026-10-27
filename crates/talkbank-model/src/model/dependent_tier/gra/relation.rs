@@ -103,7 +103,7 @@ pub struct GrammaticalRelation {
     /// - NMOD: nominal modifier
     ///
     /// The label is `HEAD` or `HEAD-SUBTYPE`. The model stores it as
-    /// open text; the closed head vocabulary is enforced by validation
+    /// a checked lexical token; the closed head vocabulary is enforced by validation
     /// (`E761`), never at construction.
     pub relation: GrammaticalRelationType,
 }
@@ -114,11 +114,11 @@ impl GrammaticalRelation {
     /// This constructor performs no structural validation on index sequences or
     /// tree shape. Those checks are handled by `%gra` tier validators where the
     /// full relation list is available.
-    pub fn new(index: usize, head: usize, relation: impl Into<GrammaticalRelationType>) -> Self {
+    pub fn new(index: usize, head: usize, relation: GrammaticalRelationType) -> Self {
         Self {
             index,
             head,
-            relation: relation.into(),
+            relation,
         }
     }
 
@@ -182,8 +182,14 @@ impl WriteChat for GrammaticalRelation {
     ///
     /// Serialization is intentionally lossless and does not normalize labels or
     /// rebase indices.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "{}|{}|{}", self.index, self.head, self.relation)
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        {
+            crate::model::WriteChat::write_chat(&self.index, w)?;
+            w.write_str("|")?;
+            crate::model::WriteChat::write_chat(&self.head, w)?;
+            w.write_str("|")?;
+            crate::model::WriteChat::write_chat(&self.relation, w)
+        }
     }
 }
 
@@ -203,10 +209,10 @@ mod tests {
     /// This guards the basic data contract before tree-level validation.
     #[test]
     fn test_grammatical_relation_new() {
-        let rel = GrammaticalRelation::new(1, 2, "NSUBJ");
+        let rel = GrammaticalRelation::new(1, 2, "NSUBJ".try_into().unwrap());
         assert_eq!(rel.index, 1);
         assert_eq!(rel.head, 2);
-        assert_eq!(rel.relation, "NSUBJ".into());
+        assert_eq!(rel.relation.as_str(), "NSUBJ");
         assert!(!rel.is_root());
     }
 
@@ -215,10 +221,10 @@ mod tests {
     /// The test keeps UD-style root behavior explicit.
     #[test]
     fn test_grammatical_relation_root() {
-        let rel = GrammaticalRelation::new(2, 0, "ROOT");
+        let rel = GrammaticalRelation::new(2, 0, "ROOT".try_into().unwrap());
         assert_eq!(rel.index, 2);
         assert_eq!(rel.head, 0);
-        assert_eq!(rel.relation, "ROOT".into());
+        assert_eq!(rel.relation.as_str(), "ROOT");
         assert!(rel.is_root());
     }
 
@@ -229,10 +235,10 @@ mod tests {
     /// a spurious "no ROOT" alongside the real defect. See `is_root`.
     #[test]
     fn test_grammatical_relation_incroot() {
-        let rel = GrammaticalRelation::new(1, 0, "INCROOT");
+        let rel = GrammaticalRelation::new(1, 0, "INCROOT".try_into().unwrap());
         assert_eq!(rel.index, 1);
         assert_eq!(rel.head, 0);
-        assert_eq!(rel.relation, "INCROOT".into());
+        assert_eq!(rel.relation.as_str(), "INCROOT");
         assert!(rel.is_root()); // INCROOT should be recognized as a valid root
     }
 
@@ -242,10 +248,10 @@ mod tests {
     #[test]
     fn test_grammatical_relation_structural_root() {
         // Self-referential relation with non-ROOT label (e.g., FLAT)
-        let rel = GrammaticalRelation::new(6, 6, "FLAT");
+        let rel = GrammaticalRelation::new(6, 6, "FLAT".try_into().unwrap());
         assert_eq!(rel.index, 6);
         assert_eq!(rel.head, 6);
-        assert_eq!(rel.relation, "FLAT".into());
+        assert_eq!(rel.relation.as_str(), "FLAT");
         assert!(rel.is_root()); // Self-referential = structural root
     }
 
@@ -254,7 +260,7 @@ mod tests {
     /// This keeps dependent edges distinct from sentence roots.
     #[test]
     fn test_grammatical_relation_not_root() {
-        let rel = GrammaticalRelation::new(1, 2, "NSUBJ");
+        let rel = GrammaticalRelation::new(1, 2, "NSUBJ".try_into().unwrap());
         assert!(!rel.is_root()); // Neither self-referential nor ROOT/INCROOT
     }
 
@@ -264,7 +270,7 @@ mod tests {
     #[test]
     fn test_grammatical_relation_chat_format() {
         use crate::model::WriteChat;
-        let rel = GrammaticalRelation::new(3, 2, "OBJ");
+        let rel = GrammaticalRelation::new(3, 2, "OBJ".try_into().unwrap());
         assert_eq!(rel.to_chat_string(), "3|2|OBJ");
     }
 }

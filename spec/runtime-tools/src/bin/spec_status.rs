@@ -20,7 +20,6 @@
 
 use generators::repo_paths::RepoRoot;
 use generators::spec::error::ErrorSpec;
-use generators::spec::metadata::Status;
 use spec_runtime_tools::error_spec_validation::{self, Request, spec_dir};
 use std::collections::BTreeMap;
 
@@ -64,72 +63,9 @@ fn spec_statuses(specs: &[ErrorSpec]) -> BTreeMap<String, usize> {
 /// the example's complete claim. An absent code can reflect a legal example,
 /// alternate diagnostics, or an unreachable rule rather than missing code.
 fn list_deferred(root: &RepoRoot) -> Result<(), String> {
-    use talkbank_spec_vocabulary::frontmatter::Claim;
-
-    let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
-    let specs = generators::spec::error::ErrorSpec::load_for_repo(root)?;
-    let (mut matching, mut unmatched) = (0usize, 0usize);
-    let (mut verified_claims, mut pending_claims, mut contradicted_claims) = (0, 0, 0);
-    for spec in &specs {
-        if spec.status() == Status::Implemented {
-            continue;
-        }
-        let definition = &spec.error;
-        for (index, example) in definition.examples.iter().enumerate() {
-            let codes = error_spec_validation::emit_for(&parser, example).all_distinct_codes();
-            let own = &definition.code;
-            let emits_own = codes.iter().any(|c| c == own.as_str());
-            let claim_review = match &example.claim {
-                Claim::Violates => {
-                    pending_claims += 1;
-                    "planned claim"
-                }
-                Claim::Legal | Claim::SubsumedBy(_) => {
-                    if example.claim.satisfied_by(own, |code| {
-                        codes.iter().any(|observed| observed == code.as_str())
-                    }) {
-                        verified_claims += 1;
-                        "claim verified"
-                    } else {
-                        contradicted_claims += 1;
-                        "claim CONTRADICTED"
-                    }
-                }
-            };
-            if emits_own {
-                matching += 1;
-            } else {
-                unmatched += 1;
-            }
-            println!(
-                "  {:<44} ex{} {:<16} {}; {}; claim: {:?}; emits: {}",
-                spec.source_file(),
-                index + 1,
-                spec.status(),
-                if emits_own {
-                    "emits own code"
-                } else {
-                    "own code absent"
-                },
-                claim_review,
-                example.claim,
-                if codes.is_empty() {
-                    "nothing".to_owned()
-                } else {
-                    codes.join(", ")
-                },
-            );
-        }
-    }
-    println!(
-        "\n  {matching} deferred example(s) ALREADY emit their own code: review their claims and status before enabling them.\n           {unmatched} do not emit their declared code; this does not prove missing implementation.\n           Adjudicate alternate diagnostics, invalid examples, deprecation and unreachable cases."
-    );
-    println!(
-        "\n  {verified_claims} verified legal/subsumption claims; \
-         {pending_claims} planned violation claims; {contradicted_claims} contradicted claims.\n  \
-         Deferred code status is not a count of missing validation rules.\n  \
-         Verified claims do not implement or reactivate their historical codes."
-    );
+    let specs = ErrorSpec::load_for_repo(root)?;
+    let reviewed = spec_runtime_tools::deferred_specs::ReviewedDeferred::from_specs(&specs)?;
+    println!("{reviewed}");
     Ok(())
 }
 

@@ -2,7 +2,7 @@ use talkbank_model::ErrorCode;
 use tower_lsp::lsp_types::*;
 
 use super::ProposedQuickFix;
-use super::builders::{insert_at, replace_diagnostic_range};
+use super::builders::replace_diagnostic_range;
 
 /// Build the quick-fix actions offered for one diagnostic, if its code has
 /// a verified fix.
@@ -24,27 +24,23 @@ use super::builders::{insert_at, replace_diagnostic_range};
 /// The string comparison this replaced (`"E501" => ...`) was exactly how
 /// several of the removed cases went stale: a code's meaning moved to a
 /// different number and nothing here noticed.
-pub(super) fn actions_for_diagnostic(diagnostic: &Diagnostic, doc: &str) -> Vec<ProposedQuickFix> {
+pub(super) fn actions_for_diagnostic(diagnostic: &Diagnostic) -> Vec<ProposedQuickFix> {
     let Some(code) = diagnostic_code(diagnostic) else {
         return Vec::new();
     };
 
     match code {
         // These require source-owned catalog findings, not diagnostic geometry.
-        ErrorCode::MissingTerminator | ErrorCode::EmptyUtterance => Vec::new(),
+        ErrorCode::MissingTerminator
+        | ErrorCode::EmptyUtterance
+        | ErrorCode::MissingEndHeader
+        | ErrorCode::MissingUTF8Header => Vec::new(),
         // A diagnostic establishes missing facts, not values for those facts.
         // Keep the same refusal policy as the shared fix catalog: no role,
         // participant or language may be constructed from diagnostic prose.
         ErrorCode::UndeclaredSpeaker
         | ErrorCode::MissingRequiredHeader
         | ErrorCode::EmptyLanguagesHeader => Vec::new(),
-        ErrorCode::MissingEndHeader => insert_at_end(doc, "@End\n", "Insert '@End' at end of file")
-            .into_iter()
-            .collect(),
-        ErrorCode::MissingUTF8Header => vec![insert_at_start(
-            "@UTF8\n",
-            "Insert '@UTF8' at start of file",
-        )],
         ErrorCode::CommaAfterNonSpokenContent => vec![replace_diagnostic_range(
             diagnostic,
             "",
@@ -59,31 +55,4 @@ pub(super) fn diagnostic_code(diagnostic: &Diagnostic) -> Option<ErrorCode> {
         Some(NumberOrString::String(code)) => ErrorCode::parse_exact(code),
         _ => None,
     }
-}
-
-fn insert_at_end(doc: &str, text: &str, title: &str) -> Option<ProposedQuickFix> {
-    let insert_text = if doc.ends_with('\n') {
-        text.to_string()
-    } else {
-        format!("\n{text}")
-    };
-
-    Some(insert_at(
-        crate::backend::utils::offset_to_position(doc, doc.len()),
-        insert_text,
-        title,
-        None,
-    ))
-}
-
-fn insert_at_start(text: &str, title: &str) -> ProposedQuickFix {
-    insert_at(
-        Position {
-            line: 0,
-            character: 0,
-        },
-        text,
-        title,
-        None,
-    )
 }

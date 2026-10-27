@@ -1,4 +1,5 @@
 import type { FileEntry, ValidationEvent, ValidationStats } from "../protocol/validation";
+import type { ValidationEventBatch } from "../runtime/capabilities/validationBatch";
 
 /**
  * Where a validation run is, WITH the data that phase and only that phase has.
@@ -13,16 +14,16 @@ import type { FileEntry, ValidationEvent, ValidationStats } from "../protocol/va
  *
  * Two distinctions here are load-bearing and must not be collapsed:
  *
- * - `invoked` vs `discovering`. `invoked` is set locally the instant the Tauri
- *   command is sent; `discovering` is reachable ONLY from the backend's own
+ * - `invoked` vs `discovering`. `invoked` is set locally when validation is
+ *   requested; `discovering` is reachable ONLY from the backend's own
  *   event. When both were the single value "discovering", the UI could not
  *   tell "the backend never answered" from "the backend is working": no
  *   watchdog was possible, since a legitimately slow discovery looks exactly
  *   like silence, and the best bug report a user could file was the one
  *   received 2026-08-02, "it doesn't seem to go beyond the Discovering files
  *   step".
- * - `aborted` vs `finished`. A run that died produced no results; reporting it
- *   as a clean finish is how empty output reads as success.
+ * - `aborted` vs `finished`. A run that died can retain partial results, but
+ *   it has no complete result set and must not be reported as a clean finish.
  * - `finishedIncomplete` vs `finished`. A run whose workers abandoned files has
  *   perfectly ordinary-looking counts, because the missing files contributed to
  *   no counter. Only `finished` means "every discovered file was examined", so
@@ -61,7 +62,7 @@ export type RunPhase =
  */
 export interface ValidationState {
   run: RunPhase;
-  files: Map<string, FileEntry>;
+  files: ReadonlyMap<string, FileEntry>;
   processedFiles: number;
   totalErrors: number;
   /** Why the cache would not open for this run, if it would not. */
@@ -79,12 +80,10 @@ export function createInitialValidationState(): ValidationState {
 }
 
 /**
- * True while the command has been sent and the backend has said NOTHING yet.
- *
- * The only phase with no legitimate duration: everything between invoke and
- * the first event is building the config, opening the cache, and spawning a
- * thread. A run sitting here is evidence of a fault, which is what makes a
- * watchdog meaningful here and meaningless on `discovering`.
+ * True while validation is requested but no discovery or validation progress
+ * has been observed. Listener setup, queued startup and backend work can take
+ * time; silence alone proves neither a fault nor that scanning has not begun.
+ * A cache warning can arrive without changing this lifecycle phase.
  */
 export function isAwaitingBackend(run: RunPhase): boolean {
   return run.kind === "invoked";
@@ -147,97 +146,126 @@ export function applyValidationEvent(
   event: ValidationEvent,
   relativeName: (path: string) => string,
 ): ValidationState {
-  switch (event.type) {
-    case "cacheUnavailable":
-      return { ...prev, cacheUnavailable: event.reason };
+  return applyValidationEvents(prev, [event], relativeName);
+}
 
-    case "discovering":
-      return { ...prev, run: { kind: "discovering" } };
+/** A writable copy belongs to this delivery, never to an earlier snapshot. */
+class FileUpdates {
+  private state:
+    | { kind: "shared"; files: ReadonlyMap<string, FileEntry> }
+    | { kind: "owned"; files: Map<string, FileEntry> };
 
-    case "started":
-      return { ...prev, run: { kind: "running", totalFiles: event.totalFiles } };
+  constructor(files: ReadonlyMap<string, FileEntry>) {
+    this.state = { kind: "shared", files };
+  }
 
-    case "errors": {
-      const files = new Map(prev.files);
-      const existing = files.get(event.file);
-
-      files.set(
-        event.file,
-        existing
-          ? {
-              ...existing,
-              diagnostics: [...existing.diagnostics, ...event.diagnostics],
-              source: event.source,
-            }
-          : {
-              path: event.file,
-              name: relativeName(event.file),
-              diagnostics: [...event.diagnostics],
-              source: event.source,
-              status: null,
-            },
-      );
-
-      return {
-        ...prev,
-        files,
-        totalErrors: prev.totalErrors + event.diagnostics.length,
-      };
+  update(path: string, change: (previous: FileEntry | undefined) => FileEntry): void {
+    if (this.state.kind === "shared") {
+      this.state = { kind: "owned", files: new Map(this.state.files) };
     }
+    this.state.files.set(path, change(this.state.files.get(path)));
+  }
 
-    case "fileComplete": {
-      const files = new Map(prev.files);
-      const existing = files.get(event.file);
+  snapshot(): ReadonlyMap<string, FileEntry> {
+    return this.state.files;
+  }
+}
 
-      files.set(
-        event.file,
-        existing
-          ? { ...existing, status: event.status }
-          : {
-              path: event.file,
-              name: relativeName(event.file),
-              diagnostics: [],
-              source: "",
-              status: event.status,
-            },
-      );
+/** Consume an ordered nonempty delivery, copying the file population at most once. */
+export function applyValidationEvents(
+  prev: ValidationState,
+  events: ValidationEventBatch,
+  relativeName: (path: string) => string,
+): ValidationState {
+  const next = { ...prev };
+  const files = new FileUpdates(prev.files);
+  for (const event of events) {
+    switch (event.type) {
+      case "cacheUnavailable":
+        next.cacheUnavailable = event.reason;
+        break;
 
-      return { ...prev, files, processedFiles: prev.processedFiles + 1 };
-    }
+      case "discovering":
+        next.run = { kind: "discovering" };
+        break;
 
-    case "aborted":
-      return { ...prev, run: { kind: "aborted", reason: event.reason } };
+      case "started":
+        next.run = { kind: "running", totalFiles: event.totalFiles };
+        break;
 
-    case "finishedIncomplete":
-      return {
-        ...prev,
-        run: {
+      case "errors": {
+        files.update(event.file, (existing) =>
+          existing
+            ? {
+                ...existing,
+                diagnostics: [...existing.diagnostics, ...event.diagnostics],
+                source: event.source,
+              }
+            : {
+                path: event.file,
+                name: relativeName(event.file),
+                diagnostics: [...event.diagnostics],
+                source: event.source,
+                status: null,
+              },
+        );
+
+        next.totalErrors += event.diagnostics.length;
+        break;
+      }
+
+      case "fileComplete": {
+        files.update(event.file, (existing) =>
+          existing
+            ? { ...existing, status: event.status }
+            : {
+                path: event.file,
+                name: relativeName(event.file),
+                diagnostics: [],
+                source: "",
+                status: event.status,
+              },
+        );
+
+        next.processedFiles += 1;
+        break;
+      }
+
+      case "aborted":
+        next.run = { kind: "aborted", reason: event.reason };
+        break;
+
+      case "finishedIncomplete":
+        next.run = {
           kind: "finishedIncomplete",
           stats: event.stats,
           lostFiles: event.lostFiles,
           cause: event.cause,
-        },
-      };
+        };
+        break;
 
-    case "stopped":
-      return {
-        ...prev,
-        run: {
+      case "stopped":
+        next.run = {
           kind: "stopped",
           stats: event.stats,
           unprocessedFiles: event.unprocessedFiles,
           reason: event.reason,
-        },
-      };
+        };
+        break;
 
-    case "finished":
-      return { ...prev, run: { kind: "finished", stats: event.stats, passed: event.passed } };
+      case "finished":
+        next.run = { kind: "finished", stats: event.stats, passed: event.passed };
+        break;
 
-    case "nothingFound":
-      return { ...prev, run: { kind: "nothingFound" } };
+      case "nothingFound":
+        next.run = { kind: "nothingFound" };
+        break;
+      default:
+        assertNever(event);
+    }
   }
-
-  return assertNever(event);
+  next.files = files.snapshot();
+  return next;
 }
 
 /**

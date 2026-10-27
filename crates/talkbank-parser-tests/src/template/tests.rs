@@ -192,9 +192,9 @@ fn require_participant(chat_file: &ChatFile, speaker: &str, role: &str) -> Resul
     let expected_speaker = SpeakerCode::new(speaker);
     let expected_role = ParticipantRole::new(role);
     let found = chat_file.lines.iter().any(|line| match line.as_header() {
-        Some(Header::Participants { entries }) => entries
-            .iter()
-            .any(|entry| entry.speaker_code == expected_speaker && entry.role == expected_role),
+        Some(Header::Participants { entries }) => entries.iter().any(|entry| {
+            entry.speaker_code == expected_speaker && entry.role() == Some(&expected_role)
+        }),
         _ => false,
     });
 

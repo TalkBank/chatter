@@ -12,7 +12,7 @@ import { fileOutcome, shouldShowAllFilesValid, totalFilesOf } from "../hooks/val
 import type { FileEntry, TreeNode } from "../types";
 
 interface Props {
-  files: Map<string, FileEntry>;
+  files: ReadonlyMap<string, FileEntry>;
   /** Gates the "all valid" summary: only true once the run has actually finished. */
   run: RunPhase;
   selectedFile: string | null;
@@ -154,7 +154,7 @@ function countErrors(node: TreeNode): number {
 }
 
 /** Build a directory tree from flat file entries. Sorted alphabetically. */
-function buildTree(files: Map<string, FileEntry>): TreeNode {
+function buildTree(files: ReadonlyMap<string, FileEntry>): TreeNode {
   const root: TreeNode = { name: "", path: "", children: [], file: null };
 
   // Sort alphabetically by path (TUI parity)

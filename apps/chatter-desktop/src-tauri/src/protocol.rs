@@ -4,6 +4,11 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Opaque frontend-issued identity, unique for each requested validation run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ValidationRunId(talkbank_model::model::NonEmptyString);
+
 pub mod commands {
     use super::*;
 
@@ -13,7 +18,6 @@ pub mod commands {
     pub const OPEN_IN_CLAN: &str = "open_in_clan";
     pub const EXPORT_RESULTS: &str = "export_results";
     pub const REVEAL_IN_FILE_MANAGER: &str = "reveal_in_file_manager";
-    pub const INSTALL_CLI: &str = "install_cli";
 
     /// Which parser backend to validate with.
     ///
@@ -29,9 +33,10 @@ pub mod commands {
         Re2c,
     }
 
-    #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct ValidateRequest {
+        pub run_id: ValidationRunId,
         pub path: String,
         /// Run roundtrip test (serialize -> re-parse -> compare) after validation.
         pub roundtrip: bool,
@@ -52,6 +57,13 @@ pub mod commands {
         pub jobs: Option<std::num::NonZeroUsize>,
     }
 
+    /// Cancellation is scoped to the issuing run, never whichever run is newest.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct CancelValidationRequest {
+        pub run_id: ValidationRunId,
+    }
+
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct OpenInClanRequest {
@@ -59,6 +71,7 @@ pub mod commands {
         pub line: i32,
         pub col: i32,
         pub byte_offset: usize,
+        pub source_revision: crate::source_revision::SourceRevision,
         pub msg: String,
     }
 

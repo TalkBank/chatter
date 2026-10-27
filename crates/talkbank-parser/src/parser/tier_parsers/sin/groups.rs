@@ -305,7 +305,7 @@ mod tests {
             };
             groups += 1;
             let children = group
-                .extract_admitted(crate::parser::typed_cst::canonical_grammar().expect("binding"))
+                .extract_canonical()
                 .expect("kind-admitted group")
                 .admit_ranges()
                 .expect("whole selected group");

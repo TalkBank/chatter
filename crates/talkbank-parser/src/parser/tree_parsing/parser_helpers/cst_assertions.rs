@@ -104,15 +104,46 @@ pub(crate) fn present<T, M, E, U, A>(
 ///
 /// The MISSING policy is deliberate: list walkers and MOR pipe separators
 /// report their missing structural tokens locally; bracketed constructs do not.
-pub(crate) fn expect_delimiter<'tree, T, M, E: RecoveryNode<'tree>, U: RecoveryNode<'tree>, A>(
-    slot: &crate::generated_traversal::NodeSlot<T, M, E, U, A>,
-    on_bad: impl FnOnce(Node),
-) {
-    use crate::generated_traversal::NodeSlot;
-    match slot {
-        NodeSlot::Present(_) | NodeSlot::Missing(_) | NodeSlot::Absent(_) => {}
-        NodeSlot::Error(bad) => on_bad(bad.node()),
-        NodeSlot::Unexpected(bad) => on_bad(bad.node()),
+pub(crate) fn expect_delimiter<'tree>(slot: &impl DelimiterSlot<'tree>, on_bad: impl FnOnce(Node)) {
+    if let Some(bad) = slot.displaced() {
+        on_bad(bad);
+    }
+}
+
+/// Normalize raw and range-admitted positions without changing delimiter policy.
+pub(crate) trait DelimiterSlot<'tree> {
+    fn displaced(&self) -> Option<Node<'tree>>;
+}
+
+impl<'tree, T, M, E: RecoveryNode<'tree>, U: RecoveryNode<'tree>, A> DelimiterSlot<'tree>
+    for crate::generated_traversal::NodeSlot<T, M, E, U, A>
+{
+    fn displaced(&self) -> Option<Node<'tree>> {
+        use crate::generated_traversal::NodeSlot;
+        match self {
+            NodeSlot::Present(_) | NodeSlot::Missing(_) | NodeSlot::Absent(_) => None,
+            NodeSlot::Error(bad) => Some(bad.node()),
+            NodeSlot::Unexpected(bad) => Some(bad.node()),
+        }
+    }
+}
+
+impl<'tree, T, M, A> DelimiterSlot<'tree>
+    for crate::generated_traversal::ReadableSlot<
+        T,
+        M,
+        crate::generated_traversal::SourceSlice<'tree, '_>,
+        crate::generated_traversal::Never,
+        A,
+    >
+{
+    fn displaced(&self) -> Option<Node<'tree>> {
+        use crate::generated_traversal::{AsRawNode, ReadableSlot};
+        match self {
+            ReadableSlot::Present(_) | ReadableSlot::Missing(_) | ReadableSlot::Absent(_) => None,
+            ReadableSlot::Error(bad) => Some(bad.raw_node()),
+            ReadableSlot::Unexpected(never) => match *never {},
+        }
     }
 }
 

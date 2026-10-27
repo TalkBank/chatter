@@ -59,3 +59,7 @@ mutants.out.old/
 # Trail learnings are a private working diary; they live in the maintainer's
 # private workspace and never in a public tree.
 .trail/
+
+# A contributor's own Claude Code settings (hooks, status line,
+# permissions for locally installed tools) stay out of the public tree.
+.claude/settings.local.json

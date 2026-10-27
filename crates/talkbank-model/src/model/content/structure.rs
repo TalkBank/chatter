@@ -234,53 +234,94 @@ impl<'a> QuotationRef<'a> {
     }
 }
 
-/// The two spellings of an angle group, in the shape [`QuotationRef`] explains.
+/// Required annotation evidence for an angle-bracket group.
 ///
-/// A STRUCT for the same reason: sibling variants would name IDENTITY while
-/// encoding ANNOTATION STATE, and `matches!(g, AngleRef::Bare(_))` would be the
-/// half-answer one level down.
+/// Present annotations borrow the admitted nonempty wrapper. Missing syntax is
+/// explicit recovery, not an empty slice that callers might treat as valid.
+#[derive(Debug, Clone, Copy)]
+pub enum AngleAnnotations<'a> {
+    /// No annotation followed this angle group.
+    Missing,
+    /// At least one scoped annotation was admitted for this group.
+    Present(&'a crate::model::AnnotatedContentAnnotations),
+}
+
+impl<'a> AngleAnnotations<'a> {
+    /// Annotation contents for language and alignment traversal.
+    pub fn as_slice(self) -> &'a [ContentAnnotation] {
+        match self {
+            Self::Missing => &[],
+            Self::Present(annotations) => annotations,
+        }
+    }
+}
+
+/// An angle group, independently retaining its required annotation state.
+///
+/// Group identity remains one struct: a consumer asking whether this is an
+/// angle group cannot accidentally omit its annotated spelling. The annotation
+/// field distinguishes missing recovery from admitted nonempty annotations.
 #[derive(Debug, Clone, Copy)]
 pub struct AngleRef<'a> {
     /// The group itself, whichever spelling carried it.
     pub group: &'a Group,
-    /// The annotations scoped to it, empty when it carries none.
-    pub annotations: &'a [ContentAnnotation],
+    /// Whether this group's required annotations are present.
+    pub annotations: AngleAnnotations<'a>,
     /// Where the construct is, INCLUDING its annotations when it has them.
     pub location: crate::Location,
 }
 
 impl<'a> AngleRef<'a> {
-    /// A group carrying no annotations.
+    /// A group whose required annotations are missing.
     #[inline]
     fn bare(group: &'a Group) -> Self {
         Self {
             group,
-            annotations: &[],
+            annotations: AngleAnnotations::Missing,
             location: group.location,
         }
     }
 
-    /// A group carrying its own scoped annotations.
+    /// A group carrying its own admitted scoped annotations.
     #[inline]
     fn annotated(annotated: &'a Annotated<Group>) -> Self {
         Self {
             group: &annotated.inner,
-            annotations: annotated.scoped_annotations(),
+            annotations: AngleAnnotations::Present(&annotated.scoped_annotations),
             location: annotated.location,
+        }
+    }
+
+    /// Missing annotation syntax remains invalid without parser provenance.
+    pub(crate) fn validate_recovery(self, errors: &impl crate::ErrorSink) {
+        match self.annotations {
+            AngleAnnotations::Missing => errors.report(crate::ParseError::at_location(
+                crate::ErrorCode::MissingRequiredElement,
+                crate::Severity::Error,
+                self.location,
+                "Angle-bracket group requires a following annotation",
+            )),
+            AngleAnnotations::Present(_) => {}
         }
     }
 }
 
-/// Whether a leaf is audible material or notation, retaining underline markers.
+/// Whether a leaf is audible material or notation, retaining payloads for validation.
 ///
 /// A CHAT fact, so the model owns it. It was written out per variant in
 /// `validation::retrace::collection`, twice, once per content enum, sixteen
 /// arms that had to agree and were bound by nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LeafContent {
-    /// Events, pauses and other spoken events: audible material.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LeafContent<'a> {
+    /// Spoken events: audible material.
     Spoken,
-    /// Separators, overlap points, bullets, freecodes, actions, and the
+    /// A pause, distinguished for phonological-group validation.
+    Pause,
+    /// Another speaker's word: lexical validation applies, main-speaker alignment does not.
+    Interposed(&'a Word),
+    /// An overlap boundary whose index requires lexical validation.
+    OverlapPoint(&'a super::OverlapPoint),
+    /// Separators, bullets, freecodes, actions, and the
     /// long-feature and nonvocal delimiters: notation ABOUT the
     /// utterance rather than speech in it.
     Notation,
@@ -301,14 +342,14 @@ pub enum LeafContent {
 #[derive(Debug, Clone, Copy)]
 pub struct LeafRef<'a> {
     /// Audible material or notation, including underline direction/location.
-    pub content: LeafContent,
+    pub content: LeafContent<'a>,
     /// The annotations scoped to it, empty when it carries none.
     pub annotations: &'a [ContentAnnotation],
 }
 
 impl<'a> LeafRef<'a> {
     /// A leaf carrying no annotations.
-    const fn bare(content: LeafContent) -> Self {
+    const fn bare(content: LeafContent<'a>) -> Self {
         Self {
             content,
             annotations: &[],
@@ -401,8 +442,8 @@ impl<'a> WordRef<'a> {
 /// made `matches!(group, GroupRef::Angle(_))` silently answer "no" for
 /// `<a b> [xyz]`, which is the bug [`QuotationRef`] documents.
 ///
-/// Note that `BracketedItem` has no bare group variant, so a bare `Angle`
-/// arises only from main-tier content.
+/// Both main-tier and bracketed content retain bare angle groups as recovery;
+/// each group's required annotation state remains independently available.
 #[derive(Debug, Clone, Copy)]
 pub enum GroupRef<'a> {
     /// `<...>`, with or without scoped annotations.
@@ -421,7 +462,7 @@ impl<'a> GroupRef<'a> {
     #[inline]
     pub fn scoped_annotations(self) -> &'a [ContentAnnotation] {
         match self {
-            Self::Angle(group) => group.annotations,
+            Self::Angle(group) => group.annotations.as_slice(),
             Self::Quotation(quotation) => quotation.annotations,
             Self::Pho(_) | Self::Sin(_) => &[],
         }
@@ -530,7 +571,7 @@ impl<'a> ContentStructure<'a> {
         match self {
             Self::Word(word) => Some(word.location()),
             Self::Retrace(retrace) => Some(retrace.location()),
-            Self::Group(group) => group.location(),
+            Self::Group(group) => Some(group.location()),
             Self::Leaf(_) => None,
         }
     }
@@ -655,12 +696,17 @@ impl UtteranceContent {
             // Listed rather than caught by `_`: a catch-all here would route a
             // future container variant to "leaf", which is the exact drift this
             // module exists to end.
-            Self::Event(_) | Self::Pause(_) | Self::OtherSpokenEvent(_) => {
-                ContentStructure::Leaf(LeafRef::bare(LeafContent::Spoken))
+            Self::OverlapPoint(point) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::OverlapPoint(point)))
             }
-            Self::Freecode(_)
+            Self::OtherSpokenEvent(event) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::Interposed(event.word())))
+            }
+            Self::Pause(_) => ContentStructure::Leaf(LeafRef::bare(LeafContent::Pause)),
+            Self::Event(_) => ContentStructure::Leaf(LeafRef::bare(LeafContent::Spoken)),
+            Self::OrphanAnnotation(_)
+            | Self::Freecode(_)
             | Self::Separator(_)
-            | Self::OverlapPoint(_)
             | Self::InternalBullet(_)
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)
@@ -712,13 +758,18 @@ impl BracketedItem {
                 annotations: annotated.scoped_annotations(),
             }),
             // Exhaustive for the same reason as above.
-            Self::Event(_) | Self::Pause(_) | Self::OtherSpokenEvent(_) => {
-                ContentStructure::Leaf(LeafRef::bare(LeafContent::Spoken))
+            Self::OverlapPoint(point) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::OverlapPoint(point)))
             }
+            Self::OtherSpokenEvent(event) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::Interposed(event.word())))
+            }
+            Self::Pause(_) => ContentStructure::Leaf(LeafRef::bare(LeafContent::Pause)),
+            Self::Event(_) => ContentStructure::Leaf(LeafRef::bare(LeafContent::Spoken)),
             Self::Action(_)
-            | Self::OverlapPoint(_)
             | Self::Separator(_)
             | Self::InternalBullet(_)
+            | Self::OrphanAnnotation(_)
             | Self::Freecode(_)
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)
@@ -751,20 +802,15 @@ pub enum GroupKind {
 }
 
 impl GroupRef<'_> {
-    /// Where this group is, or `None` when the model records no span for it.
-    ///
-    /// `None` is a FACT here, not a policy: `PhoGroup` and `SinGroup` carry
-    /// only their content and are the only content containers with no span
-    /// field, while `Group` and `Quotation` next door have theirs. A caller
-    /// that wants to exclude a kind it COULD locate is making a different
-    /// decision and should say so on `kind()`.
+    /// Source location of the group, or `Unlocated` for a constructed/imported value.
     #[inline]
     #[must_use]
-    pub fn location(self) -> Option<crate::Location> {
+    pub fn location(self) -> crate::Location {
         match self {
-            Self::Angle(group) => Some(group.location),
-            Self::Quotation(quotation) => Some(quotation.location),
-            Self::Pho(_) | Self::Sin(_) => None,
+            Self::Angle(group) => group.location,
+            Self::Quotation(quotation) => quotation.location,
+            Self::Pho(group) => group.location,
+            Self::Sin(group) => group.location,
         }
     }
 }
@@ -889,6 +935,7 @@ impl UtteranceContent {
             // Leaves. Listed rather than `_ =>` so a new container variant is a
             // compile error here, which is the whole reason this module exists.
             Self::Word(_)
+            | Self::OverlapPoint(_)
             | Self::AnnotatedWord(_)
             | Self::ReplacedWord(_)
             | Self::Event(_)
@@ -896,9 +943,9 @@ impl UtteranceContent {
             | Self::Action(_)
             | Self::AnnotatedAction(_)
             | Self::Pause(_)
+            | Self::OrphanAnnotation(_)
             | Self::Freecode(_)
             | Self::Separator(_)
-            | Self::OverlapPoint(_)
             | Self::InternalBullet(_)
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)
@@ -957,6 +1004,7 @@ impl BracketedItem {
             }
             // Leaves, listed rather than `_ =>` for the reason above.
             Self::Word(_)
+            | Self::OverlapPoint(_)
             | Self::AnnotatedWord(_)
             | Self::ReplacedWord(_)
             | Self::Event(_)
@@ -964,9 +1012,9 @@ impl BracketedItem {
             | Self::Pause(_)
             | Self::Action(_)
             | Self::AnnotatedAction(_)
-            | Self::OverlapPoint(_)
             | Self::Separator(_)
             | Self::InternalBullet(_)
+            | Self::OrphanAnnotation(_)
             | Self::Freecode(_)
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)

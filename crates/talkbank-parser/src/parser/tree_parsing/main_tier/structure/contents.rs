@@ -14,14 +14,16 @@ use talkbank_model::ParseOutcome;
 
 use crate::generated_traversal::{
     AsRawNode, ContentItemChoice, ContentItemChoiceBoundView, ContentItemNode,
-    ContentsChild0Choice, ContentsChild0ChoiceBoundView, ContentsChild0MissingSourceView,
-    ContentsChild1Choice, ContentsChild1ChoiceBoundView, ContentsChild1MissingSourceView,
-    ContentsChildren, ContentsNode, KindAdmitted, OverlapPointNode, SeparatorNode,
-    SourceBindingError, SourceBound, SourceBoundKind, SourceChildren, SourceField, SourceRecovery,
+    ContentsChild0Choice, ContentsChild0ChoiceBoundView, ContentsChild1Choice,
+    ContentsChild1ChoiceBoundView, ContentsChildren, ContentsNode, KindAdmitted, OverlapPointNode,
+    SeparatorNode, SourceBound, SourceBoundKind, SourceChildren, SourceField, SourceRecovery,
     SourceSlotView,
 };
+use crate::node_types::{CONTENT_ITEM, CONTENTS};
 use crate::parser::tree_parsing::parser_helpers::check_not_missing;
-use crate::parser::typed_cst::{read_source_field, report_admission, report_cst_failure};
+use crate::parser::typed_cst::{
+    CstFailure, GeneratedPosition, read_source_field, report_admission, report_cst_failure,
+};
 
 use super::super::super::parser_helpers::parse_separator_node;
 use super::super::content::{
@@ -38,6 +40,9 @@ use super::super::content::{
 /// plus a repeated-tail `child_1`. This trait lets the shared per-item
 /// processing below handle both with one body.
 trait ContentsItem<'tree>: SourceBoundKind<'tree> {
+    /// The generated position, used only if its required selection is absent.
+    const POSITION: GeneratedPosition;
+
     /// Which alternative this item is, retaining its admitted source-bound node.
     ///
     /// The choice enum the generator emits already proves the kind, so the
@@ -47,48 +52,9 @@ trait ContentsItem<'tree>: SourceBoundKind<'tree> {
     fn leaf<'source>(bound: SourceBound<'tree, 'source, Self>) -> ContentsLeaf<'tree, 'source>;
 }
 
-/// A `contents` position's generated missing view under the admitted kind
-/// proof, read as the leaf a present child of its kind would be, so a MISSING
-/// overlap point keeps its kind (the policy `separator.rs` measured and
-/// records). The view still names `content_item` and `separator`, but those
-/// are rules, which tree-sitter never inserts MISSING, and the compiled
-/// grammar proves it: under `KindAdmitted` their payload is the uninhabited
-/// `Never`, so their arms below are empty matches rather than code. One
-/// exhaustive conversion per position, so a kind added to a position's heads
-/// fails to compile here instead of falling through.
-trait ContentsPlaceholder<'value, 'tree, 'source> {
-    /// The leaf, its zero-width range admitted like a present child's.
-    fn read_leaf(self) -> Result<ContentsLeaf<'tree, 'source>, SourceBindingError>;
-}
-
-impl<'value, 'tree, 'source> ContentsPlaceholder<'value, 'tree, 'source>
-    for ContentsChild0MissingSourceView<'value, 'tree, 'source, KindAdmitted>
-{
-    fn read_leaf(self) -> Result<ContentsLeaf<'tree, 'source>, SourceBindingError> {
-        Ok(match self {
-            Self::Whitespaces(_) => ContentsLeaf::Whitespace,
-            Self::ContentItem(item) => match item.0 {},
-            Self::Separator(separator) => match separator.0 {},
-            Self::OverlapPoint(overlap) => ContentsLeaf::OverlapPoint(overlap.read()?),
-        })
-    }
-}
-
-impl<'value, 'tree, 'source> ContentsPlaceholder<'value, 'tree, 'source>
-    for ContentsChild1MissingSourceView<'value, 'tree, 'source, KindAdmitted>
-{
-    fn read_leaf(self) -> Result<ContentsLeaf<'tree, 'source>, SourceBindingError> {
-        Ok(match self {
-            Self::Whitespaces(_) => ContentsLeaf::Whitespace,
-            Self::ContentItem(item) => match item.0 {},
-            Self::Separator(separator) => match separator.0 {},
-            Self::OverlapPoint(overlap) => ContentsLeaf::OverlapPoint(overlap.read()?),
-        })
-    }
-}
-
 /// The four things a `contents` child can be. Each parsed alternative retains
-/// its producer-issued wrapper through dispatch.
+/// its producer-issued wrapper through dispatch. Only a present choice enters
+/// this conversion; there is no conversion from a missing choice view.
 enum ContentsLeaf<'tree, 'source> {
     /// Whitespace between items; contributes nothing.
     Whitespace,
@@ -102,6 +68,8 @@ enum ContentsLeaf<'tree, 'source> {
 }
 
 impl<'tree> ContentsItem<'tree> for ContentsChild0Choice<'tree> {
+    const POSITION: GeneratedPosition = GeneratedPosition::new("ContentsChildren.child_0");
+
     fn leaf<'source>(bound: SourceBound<'tree, 'source, Self>) -> ContentsLeaf<'tree, 'source> {
         match bound.view() {
             ContentsChild0ChoiceBoundView::Whitespaces(_) => ContentsLeaf::Whitespace,
@@ -113,6 +81,8 @@ impl<'tree> ContentsItem<'tree> for ContentsChild0Choice<'tree> {
 }
 
 impl<'tree> ContentsItem<'tree> for ContentsChild1Choice<'tree> {
+    const POSITION: GeneratedPosition = GeneratedPosition::new("ContentsChildren.child_1");
+
     fn leaf<'source>(bound: SourceBound<'tree, 'source, Self>) -> ContentsLeaf<'tree, 'source> {
         match bound.view() {
             ContentsChild1ChoiceBoundView::Whitespaces(_) => ContentsLeaf::Whitespace,
@@ -150,7 +120,7 @@ pub fn parse_main_tier_contents<'tree>(
     // propagates, so the caller rejects the tier rather than lowering it
     // with invented empty content.
     let children = typed.extract_canonical()?;
-    Ok(parse_contents(&children, errors))
+    parse_contents(&children, errors)
 }
 
 /// Parse source-associated `contents` children, wherever they sit.
@@ -165,64 +135,59 @@ pub fn parse_main_tier_contents<'tree>(
 pub(crate) fn parse_contents<'tree>(
     contents: &SourceChildren<'tree, '_, ContentsChildren<'tree, KindAdmitted>>,
     errors: &impl ErrorSink,
-) -> Vec<UtteranceContent> {
+) -> Result<Vec<UtteranceContent>, CstFailure> {
     // `content` starts empty rather than pre-sized to the child count: that
     // count includes the (now explicit) `whitespaces` children, so on a normal
     // whitespace-separated utterance it over-allocates by roughly 2x. Utterances
     // are short, so the one or two reallocations a growing `Vec` costs are cheaper
     // than a guaranteed 2x over-allocation and leave no wasted capacity.
-    let mut content = Vec::new();
-    process_contents_slot(contents.field_child_0().slot(), errors, &mut content);
-    for element in contents.field_child_1().slot().iter() {
-        process_contents_slot(element.slot(), errors, &mut content);
-    }
+    let outcome = (|| {
+        let mut content = Vec::new();
+        process_contents_slot(contents.field_child_0().slot(), errors, &mut content)?;
+        for element in contents.field_child_1().slot().iter() {
+            process_contents_slot(element.slot(), errors, &mut content)?;
+        }
+        Ok(content)
+    })();
+    // Displaced recovery remains visible even when selected-field admission
+    // fails; the caller reports the producer failure once at this owner.
     surface_main_tier_sink(contents.children(), contents.source(), errors);
-    content
+    outcome
 }
 
 /// Process one `contents` position's slot (either the required `child_0` or one
 /// element of the repeated `child_1` tail) into `content`.
 ///
 /// A present item is dispatched on the typed choice it already carries; a
-/// MISSING placeholder is dispatched on its typed missing view (since
-/// 2026-10-20 the generator types a choice's MISSING head by kind), and both
-/// go down one path, the precedent `separator.rs` set and explained.
+/// MISSING placeholder is recovery evidence, never a leaf value. In particular,
+/// a missing overlap marker must not reach the present-token decoder and add
+/// "Empty overlap point token" for text the author did not write.
 fn process_contents_slot<'value, 'tree, 'source, C, M, A>(
     slot: SourceField<'value, 'tree, 'source, NodeSlot<C, M, tree_sitter::Node<'tree>, Never, A>>,
     errors: &impl ErrorSink,
     content: &mut Vec<UtteranceContent>,
-) where
+) -> Result<(), CstFailure>
+where
     C: ContentsItem<'tree>,
     M: SourceRecovery<'value, 'tree, 'source>,
-    M::View: ContentsPlaceholder<'value, 'tree, 'source> + AsRawNode<'tree>,
+    M::View: AsRawNode<'tree>,
     A: Absence,
 {
     let source = slot.source();
     let leaf = match slot.view() {
         // The choice enum names which of the four kinds this is; nothing here
         // reads `node.kind()`.
-        SourceSlotView::Present(item) => {
-            let Some(item) = read_source_field(item, errors) else {
-                return;
-            };
-            C::leaf(item)
-        }
+        SourceSlotView::Present(item) => C::leaf(item.read()?),
         // A zero-width MISSING placeholder: reported here (E342; the
         // whole-tree backstop's same-code duplicate is suppressed, and the
         // backstop can drop a candidate another diagnostic covers, so this
-        // position does not rely on it), then read as the leaf of its kind.
-        // A MISSING `whitespaces` contributes nothing, like a present one;
-        // until 2026-10-20 it was reported as an "unexpected node" instead.
+        // position does not rely on it). Neither a missing whitespace nor a
+        // missing overlap marker contributes content. The admitted kind proof
+        // already excludes the rule-kind missing heads.
         SourceSlotView::Missing(placeholder) => {
             let node = placeholder.raw_node();
             check_not_missing(node, source, errors, "contents");
-            match placeholder.read_leaf() {
-                Ok(leaf) => leaf,
-                Err(error) => {
-                    report_cst_failure(node, source, error, errors);
-                    return;
-                }
-            }
+            return Ok(());
         }
         // ERROR is recovery evidence, not an admitted word suffix. Keep its
         // exact source span for diagnostics; never manufacture a lexical
@@ -233,7 +198,7 @@ fn process_contents_slot<'value, 'tree, 'source, C, M, A>(
                 error_node.source(),
                 MainTierRegion::Body,
             ));
-            return;
+            return Ok(());
         }
         // Selected choices cannot produce Unexpected; producer inconsistencies
         // return CstFailure before content construction.
@@ -242,11 +207,17 @@ fn process_contents_slot<'value, 'tree, 'source, C, M, A>(
         // `Absent`). It is not a MISSING `contents` node, which tree-sitter
         // cannot produce (MISSING nodes are terminals and `contents` is a
         // rule); it would be a walk that left the required first position
-        // empty. It is classified with the coverage drive's batch 5 (the
-        // main-tier batch in the drive plan); until then it is left as it was.
-        SourceSlotView::Absent(_) => return,
+        // empty. Ordinary `contents = repeat1(choice(..))` has a first child,
+        // including recovery; this is a producer fault, not empty CHAT content.
+        SourceSlotView::Absent(_) => {
+            return Err(CstFailure::AbsentRequiredPosition {
+                rule: CONTENTS,
+                position: C::POSITION,
+            });
+        }
     };
     push_leaf(leaf, errors, content);
+    Ok(())
 }
 
 /// Parse one `contents` leaf and push what it yields.
@@ -318,9 +289,21 @@ fn parse_content_item<'tree>(
         }
         SourceSlotView::Unexpected(never) => match never {},
         // A `content_item` whose required content the walk left empty. It is
-        // not a MISSING `content_item` (a rule, never inserted MISSING); it is
-        // classified with the drive's batch 5 and carries nothing to parse.
-        SourceSlotView::Absent(_) => ParseOutcome::rejected(),
+        // not a MISSING `content_item` (a rule, never inserted MISSING).
+        // Every ordinary reduction selects one alternative, so an empty
+        // selection is a producer fault, not silently rejected CHAT.
+        SourceSlotView::Absent(_) => {
+            report_cst_failure(
+                typed.raw_node(),
+                source,
+                CstFailure::AbsentRequiredPosition {
+                    rule: CONTENT_ITEM,
+                    position: GeneratedPosition::new("ContentItemChildren.content"),
+                },
+                errors,
+            );
+            ParseOutcome::rejected()
+        }
     };
     surface_main_tier_sink(children.children(), source, errors);
     outcome

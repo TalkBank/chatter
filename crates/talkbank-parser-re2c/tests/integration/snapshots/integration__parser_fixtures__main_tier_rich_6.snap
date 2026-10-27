@@ -27,7 +27,7 @@ tier_body:
         annotations: []
         raw_text: xeili
   terminator:
-    TrailingOff: +...
+    type: trailingoff
   postcodes: []
   media_bullet:
     raw_text: "\u0015639034_642127\u0015"

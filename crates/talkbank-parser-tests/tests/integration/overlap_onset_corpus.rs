@@ -8,6 +8,83 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::repo_paths::workspace_root;
 use talkbank_parser_tests::test_error::strict_parse;
 
+#[test]
+fn invalid_overlap_points_are_diagnosed_once_each_at_their_own_locations() {
+    use talkbank_model::{ChatParser, ErrorCode};
+    fn check(parser: &impl ChatParser) {
+        let specs = talkbank_parser_tests::error_specs::load(workspace_root()).unwrap();
+        let spec = specs
+            .iter()
+            .find(|spec| spec.filename == "E373.md")
+            .unwrap();
+        for title in [
+            "Paired standalone CA points each retain their invalid index",
+            "Paired grouped CA points each retain their invalid index",
+            "Paired word-internal CA points each retain their invalid index",
+            "Replacement-word CA points retain their invalid indices",
+            "Interposed-word CA points retain their invalid indices",
+        ] {
+            let example = spec
+                .examples()
+                .iter()
+                .find(|example| example.title.as_deref() == Some(title))
+                .unwrap();
+            let source = example.chat.as_str();
+            let expected: Vec<_> = source
+                .match_indices(['⌈', '⌉'])
+                .map(|(start, glyph)| {
+                    talkbank_model::Span::new(start + 41, start + 41 + glyph.len() + 1)
+                })
+                .collect();
+            assert_eq!(expected.len(), 2);
+            let errors = ErrorCollector::new();
+            let mut file = parser
+                .parse_chat_file(source, 41, &errors)
+                .into_option()
+                .unwrap();
+            assert!(
+                errors.is_empty(),
+                "{} {title}: {:?}",
+                parser.parser_name(),
+                errors.to_vec()
+            );
+            file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+            let findings: Vec<_> = errors
+                .into_vec()
+                .into_iter()
+                .filter(|error| error.code == ErrorCode::InvalidOverlapIndex)
+                .collect();
+            assert_eq!(
+                findings.len(),
+                2,
+                "{} {title}: {findings:?}",
+                parser.parser_name()
+            );
+            let spans: Vec<_> = findings.iter().map(|error| error.location.span()).collect();
+            assert_eq!(
+                spans,
+                expected.into_iter().map(Some).collect::<Vec<_>>(),
+                "{} {title}",
+                parser.parser_name()
+            );
+            let wire = serde_json::to_value(&file).unwrap();
+            let mut restored: talkbank_model::model::ChatFile =
+                serde_json::from_value(wire).unwrap();
+            let errors = ErrorCollector::new();
+            restored.validate_with_alignment(&errors, TranscriptName::Anonymous);
+            let findings: Vec<_> = errors
+                .into_vec()
+                .into_iter()
+                .filter(|error| error.code == ErrorCode::InvalidOverlapIndex)
+                .collect();
+            assert_eq!(findings.len(), 2, "JSON {} {title}", parser.parser_name());
+            assert!(findings.iter().all(|error| error.location.span().is_none()));
+        }
+    }
+    check(&TreeSitterParser::new().unwrap());
+    check(&talkbank_parser_re2c::Re2cParser::new());
+}
+
 enum Region {
     Absent,
     Present {
@@ -223,7 +300,12 @@ fn reference_overlap_onsets_preserve_unpaired_and_wordless_observations() {
         let info = extract_overlap_info(&main.content.content);
         assert_eq!(info.total_words, expected.words);
         assert_eq!(info.total_words, main.wor_projection().slot_count().get());
-        let bullet = main.content.bullet.as_ref().expect("reference timing");
+        let bullet = main
+            .content
+            .bullet
+            .as_ref()
+            .and_then(talkbank_model::BulletState::as_parsed)
+            .expect("reference timing");
         assert_eq!(
             info.estimate_onset_ms(bullet.timing.start_ms, bullet.timing.end_ms),
             expected.estimated_onset_ms

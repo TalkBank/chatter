@@ -302,12 +302,10 @@ mod range_tests {
                         Err(SourceBindingError::ForeignTree)
                     ));
                     let reading = SinTierReading::extract(tier).expect("kind-admitted root");
-                    let broad = tier
-                        .extract_admitted(
-                            crate::parser::typed_cst::canonical_grammar().expect("binding"),
-                        )
-                        .expect("broad root observation");
-                    let before = match broad.field_child_2().slot().view() {
+                    let admitted = tier
+                        .extract_canonical()
+                        .expect("kind-admitted root observation");
+                    let before = match admitted.field_child_2().slot().view() {
                         SourceSlotView::Present(_) => 0,
                         SourceSlotView::Missing(_) => 3,
                         SourceSlotView::Error(_) => 1,
@@ -347,9 +345,7 @@ mod range_tests {
                         Err(SourceBindingError::ForeignTree)
                     ));
                     let ranged = groups
-                        .extract_admitted(
-                            crate::parser::typed_cst::canonical_grammar().expect("binding"),
-                        )
+                        .extract_canonical()
                         .expect("kind-admitted groups")
                         .admit_ranges()
                         .expect("groups and inline repeats");
@@ -365,11 +361,7 @@ mod range_tests {
                         foreign.bind(group.raw_node()),
                         Err(SourceBindingError::ForeignTree)
                     ));
-                    let reading = group
-                        .extract_admitted(
-                            crate::parser::typed_cst::canonical_grammar().expect("binding"),
-                        )
-                        .expect("kind-admitted group");
+                    let reading = group.extract_canonical().expect("kind-admitted group");
                     let before = match reading.field_content().slot().view() {
                         SourceSlotView::Present(choice) => match choice.view() {
                             SinGroupChoiceSourceView::SinWord(_) => 0,
@@ -415,9 +407,7 @@ mod range_tests {
                         Err(SourceBindingError::ForeignTree)
                     ));
                     let ranged = content
-                        .extract_admitted(
-                            crate::parser::typed_cst::canonical_grammar().expect("binding"),
-                        )
+                        .extract_canonical()
                         .expect("kind-admitted interior")
                         .admit_ranges()
                         .expect("interior and inline token repeats");

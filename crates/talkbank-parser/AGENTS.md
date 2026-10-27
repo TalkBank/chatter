@@ -2,13 +2,13 @@
 
 **Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-parser/AGENTS.md)
 
-Read the [root guidance](../../AGENTS.md) first. This file adds the canonical
-parser's ownership and boundary rules; it does not create separate gates.
+Read the [root guidance](../../AGENTS.md) first. This file adds the Tree-sitter
+backend's ownership and boundary rules; it does not create separate gates.
 Grammar changes are governed by [grammar/AGENTS.md](../../grammar/AGENTS.md).
 
 ## What this crate is
 
-The canonical CHAT parser: the tree-sitter grammar's CST lowered into
+The Tree-sitter CHAT backend: its grammar's CST lowered into
 `talkbank-model` values. `api/` is the public surface (`TreeSitterParser`,
 `ChatParser` impl, fragment entry points, `fragment.rs` rebasing); `parser/`
 is the lowering (`chat_file_parser/`, `tree_parsing/`, `tier_parsers/`,
@@ -16,6 +16,8 @@ is the lowering (`chat_file_parser/`, `tree_parsing/`, `tier_parsers/`,
 Architecture: [parsing](../../book/src/architecture/parsing.md),
 [parser-model contracts](../../book/src/architecture/parser-model-contracts.md),
 [parser backends](../../book/src/architecture/parser-backends.md).
+Both parsers have equal standing in shared-model design; Tree-sitter was
+prototyped first, not granted ownership of its syntax or recovery types.
 
 ## Generated typed traversal
 
@@ -55,6 +57,11 @@ Architecture: [parsing](../../book/src/architecture/parsing.md),
 
 ## Recovery and diagnostics
 
+- The shared model's
+  [no-defaults/no-sentinels principle](../../book/src/architecture/chat-model/chat-model.md#no-silent-defaults-or-sentinels)
+  applies to lowering: retain explicit recovery or return failure. A fabricated
+  period, empty body or other plausible placeholder can cause spurious cascades
+  and silent corruption. Earlier Tree-sitter behavior does not justify it.
 - Recovery is not validity. Keep the whole-tree recovery backstop beside
   per-position handling; both are load-bearing. Never drop a recovery node,
   never fabricate a model value for one, never read a `MISSING` node as the

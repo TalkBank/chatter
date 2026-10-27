@@ -91,7 +91,7 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
         Found::NoUtterance => Err("No utterance found in parsed output"),
         Found::NoTier => Err("No dependent tier found in parsed output"),
     }) {
-        Ok(tier) => return Ok(fragment.rebase(tier)),
+        Ok(tier) => return fragment.rebase_tier(tier),
         Err(missing) => missing,
     };
     // Nothing to extract: the parse's own diagnostics explain it when there

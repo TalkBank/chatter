@@ -2,11 +2,12 @@ import type {
   DesktopCommandArgs,
   DesktopCommandName,
   DesktopCommandResultMap,
-  ExportFormat,
   ValidationEventPayload,
   ValidationSettings,
 } from "../../protocol/desktopProtocol";
-import type { DiagnosticSourceContext, FileStatus, ParseError, ValidationEvent } from "../../protocol/validation";
+import type { DiagnosticSourceContext, FileStatus, ParseError } from "../../protocol/validation";
+import type { ValidationEventBatch } from "./validationBatch";
+import type { ExportDestination } from "./exportDestination";
 
 /** A `ParseError` paired with its pre-rendered miette text, for text export.
  *
@@ -40,6 +41,8 @@ export type ValidationDragDropEvent =
   | { type: "drop"; paths: string[] };
 
 export interface ValidationRun {
+  /** Settles startup or pre-invoke disposal; the handle already owns cleanup. */
+  readonly ready: Promise<void>;
   cancel(): Promise<void>;
   dispose(): void;
 }
@@ -52,8 +55,8 @@ export interface ValidationRunnerCapability {
   startValidation(
     path: string,
     settings: ValidationSettings,
-    onEvent: (event: ValidationEvent) => void,
-  ): Promise<ValidationRun>;
+    onEvents: (events: ValidationEventBatch) => void,
+  ): ValidationRun;
 }
 
 export interface ValidationTargetCapability {
@@ -71,11 +74,10 @@ export interface ClanCapability {
 }
 
 export interface ExportCapability {
-  chooseExportPath(): Promise<string | null>;
+  chooseExportDestination(): Promise<ExportDestination | null>;
   exportResults(
     results: ValidationExportEntry[],
-    format: ExportFormat,
-    path: string,
+    destination: ExportDestination,
   ): Promise<void>;
 }
 

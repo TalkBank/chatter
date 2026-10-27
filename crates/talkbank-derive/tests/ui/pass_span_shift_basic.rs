@@ -24,4 +24,27 @@ enum Positioned {
     },
 }
 
-fn main() {}
+// Generated method parameters must not collide with declared generic names.
+#[derive(SpanShift)]
+struct TypeCollision<__TalkbankSpanMapError> {
+    span: Span,
+    #[span_shift(skip)]
+    opaque: __TalkbankSpanMapError,
+}
+
+#[allow(non_upper_case_globals)]
+#[derive(SpanShift)]
+struct ConstCollision<const __TalkbankSpanMapError: usize> {
+    span: Span,
+    #[span_shift(skip)]
+    opaque: [u8; __TalkbankSpanMapError],
+}
+
+#[derive(SpanShift)]
+struct Unit;
+
+fn main() {
+    use talkbank_model::SpanShift as _;
+    let result: Result<Unit, ()> = Unit.try_map_spans(&mut Ok);
+    let _ = result;
+}

@@ -22,7 +22,9 @@
 //! left to a reader.
 
 use talkbank_model::ErrorCollector;
-use talkbank_model::model::{ContentStructure, GroupRef, LeafContent, RetraceRef, WordRef};
+use talkbank_model::model::{
+    AngleAnnotations, ContentStructure, GroupRef, LeafContent, RetraceRef, WordRef,
+};
 use talkbank_parser::TreeSitterParser;
 
 use talkbank_parser_tests::test_error::TestError;
@@ -47,13 +49,10 @@ fn classify(fragment: &str) -> Result<Vec<(&'static str, usize)>, TestError> {
                 ContentStructure::Word(WordRef::Replaced(_)) => "replaced-word",
                 ContentStructure::Retrace(RetraceRef::Bare(_)) => "retrace",
                 ContentStructure::Retrace(RetraceRef::Annotated(_)) => "annotated-retrace",
-                ContentStructure::Group(GroupRef::Angle(group)) => {
-                    if group.annotations.is_empty() {
-                        "group"
-                    } else {
-                        "annotated-group"
-                    }
-                }
+                ContentStructure::Group(GroupRef::Angle(group)) => match group.annotations {
+                    AngleAnnotations::Missing => "group",
+                    AngleAnnotations::Present(_) => "annotated-group",
+                },
                 // The two spellings stay DISTINGUISHABLE, as a FIELD rather
                 // than a variant. That is the point of the struct shape: a
                 // caller that wants the difference asks for it, and a caller
@@ -69,8 +68,11 @@ fn classify(fragment: &str) -> Result<Vec<(&'static str, usize)>, TestError> {
                 ContentStructure::Group(GroupRef::Pho(_)) => "pho",
                 ContentStructure::Group(GroupRef::Sin(_)) => "sin",
                 ContentStructure::Leaf(leaf) => match leaf.content {
-                    LeafContent::Spoken => "spoken-leaf",
+                    LeafContent::Pause | LeafContent::Spoken | LeafContent::Interposed(_) => {
+                        "spoken-leaf"
+                    }
                     LeafContent::Notation
+                    | LeafContent::OverlapPoint(_)
                     | LeafContent::UnderlineBegin(_)
                     | LeafContent::UnderlineEnd(_) => "notation-leaf",
                 },

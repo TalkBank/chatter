@@ -377,7 +377,7 @@ fn fixed_file_clears_the_targeted_code_under_independent_validation() -> Result<
         "the post-write safety check refused a legitimate mechanical fix: {fix_stdout}"
     );
 
-    let validate_output = harness.run_output(&["validate", path_arg(&path)?, "--force"])?;
+    let validate_output = harness.run_output(&["validate", path_arg(&path)?, "--refresh-cache"])?;
     let validate_stderr = String::from_utf8_lossy(&validate_output.stderr);
     assert!(
         !validate_stderr.contains("E241"),
@@ -406,7 +406,7 @@ fn catalog_recovery_repair_clears_e750_after_reparse() -> Result<(), TestError> 
         "the E750 repair did not preserve the group while removing both spaces: {after}"
     );
 
-    let validate_output = harness.run_output(&["validate", path_arg(&path)?, "--force"])?;
+    let validate_output = harness.run_output(&["validate", path_arg(&path)?, "--refresh-cache"])?;
     assert!(
         validate_output.status.success(),
         "fixed file did not validate: {}",

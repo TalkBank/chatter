@@ -8,16 +8,17 @@
 
 use super::MainTier;
 use crate::model::CodeSwitchSpan;
-use crate::model::LanguageCode;
 use crate::model::content::UtteranceContent;
 use crate::model::content::word::Word;
+use crate::model::{LanguageCode, RegisteredLanguageCode};
 use crate::validation::word::language::{GoverningMarker, LanguageResolution};
 
 /// A whole-utterance language switch, and the PROOF that no word in the
 /// utterance is governed by a `<...> [@s]` span.
 ///
 /// Its only constructor is [`MainTier::whole_utterance_language_switch_target`],
-/// which refuses any span-governed word before returning one.
+/// which refuses any span-governed word and requires a registry-admitted
+/// target code before returning one.
 ///
 /// It exists because the guarantee used to travel as a comment. `fix_s` clears
 /// each word's own `@s` after writing the `[- LANG]` precode, and for a word
@@ -29,13 +30,13 @@ use crate::validation::word::language::{GoverningMarker, LanguageResolution};
 /// clearing code moves the argument into the signature: a caller who has not
 /// been through the predicate has nothing to pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnspannedSwitchTarget(LanguageCode);
+pub struct UnspannedSwitchTarget(RegisteredLanguageCode);
 
 impl UnspannedSwitchTarget {
     /// The language every word of the utterance resolved to.
     #[must_use]
     pub fn language(&self) -> &LanguageCode {
-        &self.0
+        self.0.as_code()
     }
 
     /// Does `word`'s OWN marker resolve to this target's language?
@@ -67,11 +68,11 @@ impl UnspannedSwitchTarget {
         &self,
         word: &Word,
         tier_language: Option<&LanguageCode>,
-        declared_languages: &[LanguageCode],
+        declared_languages: crate::model::DeclaredLanguagesRef<'_>,
     ) -> bool {
         let outcome = crate::validation::word::language::GoverningMark::of(word, None)
-            .resolve(tier_language, declared_languages);
-        outcome.resolution == LanguageResolution::Single(self.0.clone())
+            .resolve_with_declaration(tier_language, Ok(declared_languages));
+        outcome.resolution == LanguageResolution::Single(self.language().clone())
     }
 }
 
@@ -87,6 +88,21 @@ impl MainTier {
         &self,
         default_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
+    ) -> Option<UnspannedSwitchTarget> {
+        self.whole_utterance_language_switch_target_with_declaration(
+            default_language,
+            crate::model::DeclaredLanguagesRef::new(declared_languages),
+        )
+    }
+
+    /// Explicit markers remain independently resolvable when declaration admission fails.
+    pub fn whole_utterance_language_switch_target_with_declaration(
+        &self,
+        default_language: Option<&LanguageCode>,
+        declared_languages: Result<
+            crate::model::DeclaredLanguagesRef<'_>,
+            crate::model::LanguageDeclarationError,
+        >,
     ) -> Option<UnspannedSwitchTarget> {
         let tier_language = self
             .content
@@ -143,7 +159,7 @@ impl MainTier {
                 return None;
             }
 
-            let outcome = GoverningMarker::of(word, enclosing).resolve(
+            let outcome = GoverningMarker::of(word, enclosing).resolve_with_declaration(
                 word,
                 tier_language,
                 declared_languages,
@@ -162,7 +178,13 @@ impl MainTier {
             }
         }
 
-        target_lang.map(UnspannedSwitchTarget)
+        let code = target_lang?;
+        match RegisteredLanguageCode::try_from(code) {
+            Ok(code) => Some(UnspannedSwitchTarget(code)),
+            // Keep the source marker and its ordinary E519 validation. An
+            // invalid code is not authority to recommend or perform a rewrite.
+            Err(_) => None,
+        }
     }
 }
 

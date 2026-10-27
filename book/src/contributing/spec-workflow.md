@@ -23,6 +23,8 @@ wrong direction is worth a second look.
 
 Before treating deferred examples as implementation work, inspect their live
 claim review with `cargo run --manifest-path spec/Cargo.toml --bin spec_status -- --deferred`.
+This command exits nonzero and identifies the affected example if a claim is
+contradicted or a deferred code is already emitted, using the test gate's admission.
 Legal controls and subsumption claims remain regression obligations, not a request
 to recreate a diagnostic that no longer applies. Resolve contradicted claims from policy and
 source evidence; do not flip registry status merely to reduce the deferred count.

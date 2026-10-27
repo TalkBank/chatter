@@ -22,26 +22,24 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use std::collections::HashMap;
-use talkbank_model::{GemLabel, Header, Line, Span};
+use talkbank_model::Span;
 use tower_lsp::lsp_types::*;
 
+use super::gem_navigation::GemNavigation;
+use crate::backend::diagnostics::DocumentAnalysis;
 use crate::backend::utils::LineIndex;
 
 /// Build the document symbol tree for a CHAT file.
 ///
-/// # Arguments
-/// * `chat_file` - Parsed CHAT file (may be unvalidated).
-/// * `document`  - Full document text (needed for span → line conversion).
+/// The analysis owns both the parsed model and its exact source text.
 ///
 /// # Returns
 /// A flat list whose first element is the top-level "Chat Transcript" module
 /// containing nested "Headers" and "Utterances" namespaces, each of which
 /// contains one child symbol per utterance.
-pub fn document_symbol(
-    chat_file: &talkbank_model::model::ChatFile,
-    document: &str,
-) -> Option<DocumentSymbolResponse> {
+pub(crate) fn document_symbol(analysis: &DocumentAnalysis) -> Option<DocumentSymbolResponse> {
+    let chat_file = analysis.file();
+    let document = analysis.source();
     let doc_len = document.len();
     let index = LineIndex::new(document);
 
@@ -111,48 +109,11 @@ pub fn document_symbol(
     // -----------------------------------------------------------------------
     // Build gem block symbols from @Bg/@Eg pairs.
     // -----------------------------------------------------------------------
-    let mut open_gems: HashMap<Option<&GemLabel>, Vec<Span>> = HashMap::new();
-    let mut gem_symbols: Vec<DocumentSymbol> = Vec::new();
-    for line in &chat_file.lines {
-        let Line::Header {
-            header, location, ..
-        } = line
-        else {
-            continue;
-        };
-        let Some(span) = location.span() else {
-            continue;
-        };
-        match header.as_ref() {
-            Header::BeginGem { label } => {
-                open_gems.entry(label.as_ref()).or_default().push(span);
-            }
-            Header::EndGem { label } => {
-                let Some(begin) = open_gems.get_mut(&label.as_ref()).and_then(Vec::pop) else {
-                    continue;
-                };
-                let start = index.offset_to_position(begin.start());
-                let end = index.offset_to_position(span.end());
-                #[allow(deprecated)]
-                gem_symbols.push(DocumentSymbol {
-                    name: label
-                        .as_ref()
-                        .map_or_else(|| "Gem".to_string(), |label| format!("Gem: {label}")),
-                    detail: None,
-                    kind: SymbolKind::EVENT,
-                    tags: None,
-                    deprecated: None,
-                    range: Range { start, end },
-                    selection_range: Range { start, end: start },
-                    children: None,
-                });
-            }
-            _ => {}
-        }
-    }
-
-    // Merge gem symbols into utterance children so they appear in the outline.
-    utterance_children.extend(gem_symbols);
+    utterance_children.extend(
+        GemNavigation::from_analysis(analysis)
+            .into_iter()
+            .map(GemNavigation::into_symbol),
+    );
     // Sort all children by start line for consistent ordering.
     utterance_children.sort_by_key(|s| s.range.start.line);
 
@@ -254,7 +215,10 @@ fn utterance_block_end(utterance: &talkbank_model::model::Utterance, main_span: 
 /// `byte_offset` in `document`, stripping any leading tab characters.
 fn first_line_at_offset(document: &str, byte_offset: usize, max_chars: usize) -> String {
     let text = &document[byte_offset.min(document.len())..];
-    let line = text.lines().next().unwrap_or("");
+    let line = crate::backend::utils::protocol_lines(text)
+        .map(|line| line.text())
+        .next()
+        .unwrap_or("");
     let trimmed = line.trim_start_matches('\t');
     trimmed.chars().take(max_chars).collect()
 }
@@ -262,13 +226,16 @@ fn first_line_at_offset(document: &str, byte_offset: usize, max_chars: usize) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_fixtures::parse_chat;
+    use crate::test_fixtures::document_analysis;
+    const BASIC: &str = include_str!("../../../../../corpus/reference/core/basic-conversation.cha");
+    const GEMS: &str =
+        include_str!("../../../../../corpus/reference/edge-cases/multiline-paired-gems.cha");
 
     #[test]
     fn returns_nested_symbol_tree() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
-        let chat_file = parse_chat(input);
-        let response = document_symbol(&chat_file, input);
+        let input = BASIC;
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), input);
+        let response = document_symbol(&analysis);
         assert!(response.is_some());
 
         if let Some(DocumentSymbolResponse::Nested(symbols)) = response {
@@ -287,14 +254,14 @@ mod tests {
 
     #[test]
     fn utterances_contain_speaker_labels() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|||||Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thello .\n*MOT:\thi there .\n@End\n";
-        let chat_file = parse_chat(input);
-        let response = document_symbol(&chat_file, input);
+        let input = BASIC;
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), input);
+        let response = document_symbol(&analysis);
 
         if let Some(DocumentSymbolResponse::Nested(symbols)) = response {
             let utterances = &symbols[0].children.as_ref().unwrap()[1];
             let utt_children = utterances.children.as_ref().unwrap();
-            assert_eq!(utt_children.len(), 2);
+            assert_eq!(utt_children.len(), 4);
             assert!(utt_children[0].name.contains("CHI"));
             assert!(utt_children[1].name.contains("MOT"));
         } else {
@@ -304,16 +271,23 @@ mod tests {
 
     #[test]
     fn gem_blocks_appear_as_event_symbols() {
-        for (begin, end, expected) in [
-            ("@Bg:\tPlay", "@Eg:\tPlay", Some("Gem: Play")),
-            ("@Bg", "@Eg", Some("Gem")),
-            ("@Bg:\tPlay", "@Eg:\tOther", None),
+        for (source, expected) in [
+            (GEMS.to_owned(), Some("Gem: morning café play")),
+            (
+                GEMS.replace("@Bg:\tmorning\n\tcafé\n\tplay", "@Bg")
+                    .replace("@Eg:\tmorning café\n\tplay", "@Eg"),
+                Some("Gem"),
+            ),
+            (
+                GEMS.replace("@Eg:\tmorning café\n\tplay", "@Eg:\tOther"),
+                None,
+            ),
         ] {
-            for ending in ["\n", "\r\n"] {
-                let input = format!("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n{begin}\n*CHI:\thello .\n{end}\n@End\n").replace('\n', ending);
-                let chat_file = parse_chat(&input);
-                let Some(DocumentSymbolResponse::Nested(symbols)) =
-                    document_symbol(&chat_file, &input)
+            for ending in ["\n", "\r\n", "\r"] {
+                let input = source.replace('\n', ending);
+                let analysis =
+                    document_analysis(&Url::parse("file:///reference.cha").unwrap(), &input);
+                let Some(DocumentSymbolResponse::Nested(symbols)) = document_symbol(&analysis)
                 else {
                     panic!("expected nested response");
                 };
@@ -328,7 +302,7 @@ mod tests {
                 if let Some(name) = expected {
                     let gem = gems[0];
                     assert_eq!(gem.name, name);
-                    assert_eq!(gem.range.start, Position::new(5, 0));
+                    assert_eq!(gem.range.start, Position::new(6, 0));
                     assert!(utterances.range.start <= gem.range.start);
                     assert!(utterances.range.end >= gem.range.end);
                 }

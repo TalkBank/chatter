@@ -283,6 +283,7 @@ fn pure_word_sequence_from_bracketed(content: &BracketedContent) -> Option<Vec<S
             | BracketedItem::OverlapPoint(_)
             | BracketedItem::Separator(_)
             | BracketedItem::InternalBullet(_)
+            | BracketedItem::OrphanAnnotation(_)
             | BracketedItem::Freecode(_)
             | BracketedItem::LongFeatureBegin(_)
             | BracketedItem::LongFeatureEnd(_)
@@ -326,6 +327,7 @@ fn leading_words_match_prefix(main: &MainTier, prefix: &[String]) -> bool {
 struct EligibleJoin<'a> {
     previous: &'a mut Utterance,
     successor: Box<Utterance>,
+    unioned_bullet: Option<Bullet>,
 }
 
 impl<'a> EligibleJoin<'a> {
@@ -335,10 +337,30 @@ impl<'a> EligibleJoin<'a> {
         successor: Box<Utterance>,
         scope: RetraceJoinScope,
     ) -> Result<Self, Box<Utterance>> {
+        if previous.main.content.has_unparsed_bullets()
+            || successor.main.content.has_unparsed_bullets()
+        {
+            return Err(successor);
+        }
         if join_policy_allows(previous, &successor, scope) {
+            let unioned_bullet = union_bullets(
+                previous
+                    .main
+                    .content
+                    .bullet
+                    .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed),
+                successor
+                    .main
+                    .content
+                    .bullet
+                    .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed),
+            );
             Ok(Self {
                 previous,
                 successor,
+                unioned_bullet,
             })
         } else {
             Err(successor)
@@ -350,6 +372,7 @@ impl<'a> EligibleJoin<'a> {
         let Self {
             previous: u,
             successor,
+            unioned_bullet,
         } = self;
         let v = *successor;
 
@@ -366,16 +389,15 @@ impl<'a> EligibleJoin<'a> {
             content: v_items,
             terminator: v_terminator,
             postcodes: v_postcodes,
-            bullet: v_bullet,
+            bullet: _,
             location: _,
         } = v.main.content;
 
-        let unioned_bullet = union_bullets(u.main.content.bullet.as_ref(), v_bullet.as_ref());
         // U retains its retrace marker; V supplies the final terminator.
         u.main.content.content.append(v_items);
         u.main.content.terminator = v_terminator;
         u.main.content.postcodes.append(v_postcodes);
-        u.main.content.bullet = unioned_bullet;
+        u.main.content.bullet = unioned_bullet.map(Into::into);
 
         if dropped > 0 {
             u.dependent_tiers.clear();
@@ -409,6 +431,7 @@ mod tests {
     use super::{JoinRetraceStats, RetraceJoinScope, join_dangling_retraces};
     use talkbank_model::model::WriteChat;
     use talkbank_parser::TreeSitterParser;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
 
     /// Parse, run the join transform (repetition-only scope), and return the
     /// serialized result and stats.

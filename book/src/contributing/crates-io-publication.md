@@ -81,6 +81,13 @@ contracts cover scoped cache recovery and LSP lifecycle/diagnostic/edit behavior
 not registry installation, released upgrades or every CLI/LSP feature. They do
 not replace the published-candidate installation requirement above.
 
+The CLI's long-version build stamp combines package version, its own `src/`
+fingerprint and build-script time. It works from an extracted package without
+Git and cannot borrow an enclosing repository's revision. Missing/unreadable
+source or a failed clock read stops the build. This stamp is diagnostic, not a
+cryptographic executable hash or a record of all dependency revisions; retain
+artifact checksums and the source/toolchain receipt separately.
+
 Binary distribution follows the new package identity: cargo-dist produces
 `talkbank-chatter-installer.sh` and `.ps1` and records `talkbank-chatter` receipts.
 The publication prerequisite retains `chatter-installer.sh` and `.ps1` wrappers
@@ -143,6 +150,12 @@ The readiness check enforces:
 The metadata-only mode uses locked Cargo metadata and reads README paths. It
 does not validate assembled package contents or registry resolution and cannot
 replace the full pre-publication check.
+
+The transform package must contain `schema/chat-file.schema.json`, which its
+runtime JSON validator embeds. `just schema-gen` writes that packaged artifact
+and the workspace schema from one model-derived byte sequence; the currency test
+checks both files and the embedded value. The package preflight refuses a missing
+embedded artifact. No build may reach outside an extracted package to obtain it.
 
 Package enumeration is not a build or a review of every packaged byte. Only the
 two standalone packages receive dry-run build verification in this script;

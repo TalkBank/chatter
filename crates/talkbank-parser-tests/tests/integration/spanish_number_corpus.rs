@@ -68,7 +68,14 @@ fn spanish_cardinal_unsupported_grammar_preserves_input() {
     assert_eq!(turns.len(), 1);
     assert_eq!(turns[0].words.len(), 8);
     for word in &turns[0].words {
-        let resolved = word.resolve_language(file.languages.first(), &file.languages);
+        let resolved = word.resolve_language(
+            Some(
+                file.language_declaration()
+                    .expect("admitted declaration")
+                    .primary(),
+            ),
+            file.language_declaration().expect("admitted declaration"),
+        );
         assert!(resolved.diagnostics.is_empty());
         let LanguageResolution::Single(language) = resolved.resolution else {
             panic!("spec supplies one generation language");

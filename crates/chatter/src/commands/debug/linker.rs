@@ -1,4 +1,4 @@
-//! `chatter debug linker-audit`, exploratory linker-consistency audit.
+//! `chatter inspect linkers`, exploratory linker-consistency audit.
 
 use std::path::{Path, PathBuf};
 
@@ -17,12 +17,12 @@ use super::*;
 pub fn run_linker_audit(
     paths: &[PathBuf],
     anomalies_path: Option<&Path>,
-) -> Result<(), AuditError> {
+) -> crate::exit_codes::CommandResult {
     use std::collections::HashMap;
 
     use talkbank_model::model::{Line, Linker, LinkerKind, Terminator};
 
-    let (cha_files, parser) = super::transcripts_and_parser(paths);
+    let (cha_files, parser) = super::transcripts_and_parser(paths)?;
     let mut anomaly_writer = anomalies_path.map(OpenReport::create).transpose()?;
 
     let total_files = cha_files.len();

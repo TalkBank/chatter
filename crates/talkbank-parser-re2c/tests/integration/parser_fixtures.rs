@@ -31,9 +31,6 @@ use talkbank_parser_re2c::token::Token;
 #[test]
 fn parse_main_tier_fixtures() {
     let entries = load_and_verify_lex("main_tier");
-    if entries.is_empty() {
-        return;
-    }
 
     let mut parsed = 0;
     let mut failed = 0;
@@ -66,13 +63,13 @@ fn parse_main_tier_fixtures() {
     }
     eprintln!(
         "  main_tier: {parsed}/{} parsed, {failed} failed",
-        entries.len()
+        entries.entry_count()
     );
     assert_eq!(
         failed,
         0,
         "{failed}/{} main tier lines failed to parse",
-        entries.len()
+        entries.entry_count()
     );
 }
 
@@ -95,9 +92,6 @@ fn parse_and_snapshot_main_tier(name: &str, input: &str) {
 #[test]
 fn snapshot_parsed_main_tier_samples() {
     let entries = load_fixture("main_tier");
-    if entries.is_empty() {
-        return;
-    }
 
     for (i, entry) in entries.iter().enumerate().take(10) {
         let input = if entry.ends_with('\n') {
@@ -112,9 +106,6 @@ fn snapshot_parsed_main_tier_samples() {
 #[test]
 fn snapshot_parsed_main_tier_rich_samples() {
     let entries = load_fixture("main_tier_rich");
-    if entries.is_empty() {
-        return;
-    }
 
     // Snapshot the first 15 rich entries (these have brackets, annotations, etc.)
     for (i, entry) in entries.iter().enumerate().take(15) {
@@ -130,9 +121,6 @@ fn snapshot_parsed_main_tier_rich_samples() {
 #[test]
 fn parse_all_main_tier_rich() {
     let entries = load_fixture("main_tier_rich");
-    if entries.is_empty() {
-        return;
-    }
 
     let mut parsed = 0;
     let mut failed = 0;
@@ -157,13 +145,13 @@ fn parse_all_main_tier_rich() {
     }
     eprintln!(
         "  main_tier_rich: {parsed}/{} parsed, {failed} failed",
-        entries.len()
+        entries.entry_count()
     );
     assert_eq!(
         failed,
         0,
         "{failed}/{} rich main tier lines failed to parse",
-        entries.len()
+        entries.entry_count()
     );
 }
 
@@ -236,7 +224,7 @@ fn trailing_ca_no_break_stays_separator_in_model_conversion() {
     let input = "*CHI:\tno break ≈\n";
     let line = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let main_tier = main_tier_to_model(&line.main_tier, line.source, &conversion_errors);
+    let main_tier = main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
 
     assert!(
@@ -254,7 +242,7 @@ fn trailing_ca_technical_break_stays_separator_in_model_conversion() {
     let input = "*CHI:\ttechnical break ≋\n";
     let line = parser::parse_main_tier_with_source(input).expect("expected main tier AST");
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let main_tier = main_tier_to_model(&line.main_tier, line.source, &conversion_errors);
+    let main_tier = main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
 
     assert!(
@@ -366,9 +354,6 @@ fn lex_fixture_main_tier() {
 #[test]
 fn parse_all_mor_fixtures() {
     let entries = load_fixture("tier_mor");
-    if entries.is_empty() {
-        return;
-    }
 
     let mut parsed = 0;
     let mut failed = 0;
@@ -381,25 +366,35 @@ fn parse_all_mor_fixtures() {
             format!("{body}\n")
         };
         let tier = parser::parse_mor_tier(&input);
-        if tier.items.is_empty() && !input.trim().is_empty() {
-            failed += 1;
-            if failed <= 3 {
-                eprintln!("  MOR EMPTY: {}", body.chars().take(60).collect::<String>());
+        match tier {
+            talkbank_model::ParseOutcome::Parsed(tier) => {
+                assert!(
+                    !tier.items().is_empty(),
+                    "authored MOR fixture retains its items"
+                );
+                parsed += 1;
             }
-        } else {
-            parsed += 1;
+            talkbank_model::ParseOutcome::Rejected => {
+                failed += 1;
+                if failed <= 3 {
+                    eprintln!(
+                        "  MOR REJECTED: {}",
+                        body.chars().take(60).collect::<String>()
+                    );
+                }
+            }
         }
     }
-    eprintln!("  %mor: {parsed}/{} parsed, {failed} empty", entries.len());
+    eprintln!(
+        "  %mor: {parsed}/{} parsed, {failed} rejected",
+        entries.entry_count()
+    );
     assert_eq!(failed, 0);
 }
 
 #[test]
 fn snapshot_parsed_mor_samples() {
     let entries = load_fixture("tier_mor");
-    if entries.is_empty() {
-        return;
-    }
 
     for (i, entry) in entries.iter().enumerate().take(5) {
         let body = entry.strip_prefix("%mor:\t").unwrap_or(entry);
@@ -408,7 +403,9 @@ fn snapshot_parsed_mor_samples() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_mor_tier(&input);
+        let tier = parser::parse_mor_tier(&input)
+            .into_option()
+            .expect("MOR fixture parses");
         assert_yaml_snapshot!(format!("mor_{i}"), tier);
     }
 }
@@ -431,14 +428,17 @@ fn parse_all_gra_fixtures() {
         };
         // Native rejection and an empty recovered tier both fail this retained
         // fixture contract. A printed success count alone is not acceptance.
-        if parser::parse_gra_tier(&input).is_some_and(|tier| !tier.relations.is_empty()) {
+        if parser::parse_gra_tier(&input)
+            .into_option()
+            .is_some_and(|tier| !tier.relations().is_empty())
+        {
             parsed += 1;
         }
     }
-    eprintln!("  %gra: {parsed}/{} parsed", entries.len());
+    eprintln!("  %gra: {parsed}/{} parsed", entries.entry_count());
     assert_eq!(
         parsed,
-        entries.len(),
+        entries.entry_count(),
         "every GRA fixture must retain relations"
     );
 }
@@ -446,9 +446,6 @@ fn parse_all_gra_fixtures() {
 #[test]
 fn snapshot_parsed_gra_samples() {
     let entries = load_fixture("tier_gra");
-    if entries.is_empty() {
-        return;
-    }
 
     for (i, entry) in entries.iter().enumerate().take(5) {
         let body = entry.strip_prefix("%gra:\t").unwrap_or(entry);
@@ -457,7 +454,7 @@ fn snapshot_parsed_gra_samples() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_gra_tier(&input);
+        let tier = parser::parse_gra_tier(&input).into_option();
         assert!(tier.is_some(), "fixture %gra body {i} must parse: {input}");
         assert_yaml_snapshot!(format!("gra_{i}"), tier);
     }
@@ -470,9 +467,6 @@ fn snapshot_parsed_gra_samples() {
 #[test]
 fn parse_all_id_fixtures() {
     let entries = load_fixture("header_id");
-    if entries.is_empty() {
-        return;
-    }
     let mut parsed = 0;
     for entry in &entries {
         let body = entry.strip_prefix("@ID:\t").unwrap_or(entry);
@@ -485,16 +479,13 @@ fn parse_all_id_fixtures() {
             parsed += 1;
         }
     }
-    eprintln!("  @ID: {parsed}/{} parsed", entries.len());
-    assert_eq!(parsed, entries.len());
+    eprintln!("  @ID: {parsed}/{} parsed", entries.entry_count());
+    assert_eq!(parsed, entries.entry_count());
 }
 
 #[test]
 fn snapshot_parsed_id_samples() {
     let entries = load_fixture("header_id");
-    if entries.is_empty() {
-        return;
-    }
     for (i, entry) in entries.iter().enumerate().take(5) {
         let body = entry.strip_prefix("@ID:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -514,9 +505,6 @@ fn snapshot_parsed_id_samples() {
 #[test]
 fn parse_all_languages_fixtures() {
     let entries = load_fixture("header_languages");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("@Languages:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -524,18 +512,108 @@ fn parse_all_languages_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let result = parser::parse_languages_header(&input);
-        assert!(!result.codes.is_empty(), "empty codes for: {body}");
+        let talkbank_model::ParseOutcome::Parsed(result) = parser::parse_languages_header(&input)
+        else {
+            panic!("language fixture rejected: {body}");
+        };
+        assert!(!result.as_slice().is_empty(), "empty codes for: {body}");
     }
-    eprintln!("  @Languages: {}/{} parsed", entries.len(), entries.len());
+    eprintln!(
+        "  @Languages: {}/{} parsed",
+        entries.entry_count(),
+        entries.entry_count()
+    );
+}
+
+#[test]
+fn language_fragment_rejects_authored_failures_without_empty_success() {
+    use talkbank_model::{ErrorCollector, ParseOutcome};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let specs = talkbank_parser_tests::error_specs::load(&root).expect("authored specs");
+    enum Expected {
+        Parsed(&'static [&'static str]),
+        Rejected,
+    }
+    for (file, title, expected) in [
+        ("E507.md", "One language", Expected::Parsed(&["eng"])),
+        (
+            "E507.md",
+            "Comma-separated multilingual control",
+            Expected::Parsed(&["eng", "spa"]),
+        ),
+        ("E507.md", "A tab and nothing", Expected::Rejected),
+        (
+            "E507.md",
+            "Replace the sole language code with spaces",
+            Expected::Rejected,
+        ),
+        (
+            "E507.md",
+            "Replace the sole language code with a tab",
+            Expected::Rejected,
+        ),
+        (
+            "E316.md",
+            "Replace a language-list comma with a semicolon",
+            Expected::Rejected,
+        ),
+        (
+            "E316.md",
+            "Duplicate a language-list comma",
+            Expected::Rejected,
+        ),
+    ] {
+        let spec = specs.iter().find(|s| s.filename == file).expect("spec");
+        let example = spec
+            .examples()
+            .iter()
+            .find(|e| e.title.as_deref() == Some(title))
+            .expect("example");
+        let body = example
+            .chat
+            .as_str()
+            .lines()
+            .find_map(|line| line.strip_prefix("@Languages:\t"))
+            .expect("header body");
+        for ending in ["\n", "\r\n", "\r"] {
+            let source = format!("{body}{ending}");
+            let errors = ErrorCollector::new();
+            let outcome = parser::parse_languages_header_with_errors(&source, &errors);
+            match &expected {
+                Expected::Parsed(expected) => {
+                    let ParseOutcome::Parsed(codes) = outcome else {
+                        panic!("{title}: rejected");
+                    };
+                    let actual: Vec<_> =
+                        codes.as_slice().iter().map(|code| code.as_str()).collect();
+                    assert_eq!(&actual, expected, "{title}");
+                    assert!(!errors.has_errors(), "{title}");
+                }
+                Expected::Rejected => {
+                    assert!(
+                        matches!(outcome, ParseOutcome::Rejected),
+                        "{title}: fabricated success"
+                    );
+                    let errors = errors.into_vec();
+                    assert!(
+                        errors
+                            .iter()
+                            .any(|e| e.severity == talkbank_model::Severity::Error),
+                        "{title}"
+                    );
+                    assert!(
+                        errors.iter().all(|e| e.location.span().is_some()),
+                        "{title}: unlocated diagnostic"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]
 fn snapshot_parsed_languages_samples() {
     let entries = load_fixture("header_languages");
-    if entries.is_empty() {
-        return;
-    }
     for (i, entry) in entries.iter().enumerate().take(5) {
         let body = entry.strip_prefix("@Languages:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -543,7 +621,10 @@ fn snapshot_parsed_languages_samples() {
         } else {
             format!("{body}\n")
         };
-        let result = parser::parse_languages_header(&input);
+        let talkbank_model::ParseOutcome::Parsed(result) = parser::parse_languages_header(&input)
+        else {
+            panic!("language fixture rejected: {body}");
+        };
         assert_yaml_snapshot!(format!("languages_{i}"), result);
     }
 }
@@ -555,9 +636,6 @@ fn snapshot_parsed_languages_samples() {
 #[test]
 fn parse_all_participants_fixtures() {
     let entries = load_fixture("header_participants");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("@Participants:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -567,24 +645,21 @@ fn parse_all_participants_fixtures() {
         };
         let result = parser::parse_participants_header(&input, &talkbank_model::NullErrorSink);
         assert!(
-            !result.entries.is_empty(),
+            !result.is_empty(),
             "empty participants for: {}",
             body.chars().take(40).collect::<String>()
         );
     }
     eprintln!(
         "  @Participants: {}/{} parsed",
-        entries.len(),
-        entries.len()
+        entries.entry_count(),
+        entries.entry_count()
     );
 }
 
 #[test]
 fn snapshot_parsed_participants_samples() {
     let entries = load_fixture("header_participants");
-    if entries.is_empty() {
-        return;
-    }
     for (i, entry) in entries.iter().enumerate().take(5) {
         let body = entry.strip_prefix("@Participants:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -616,16 +691,16 @@ fn parse_reference_corpus_file() {
     );
     if let Ok(content) = std::fs::read_to_string(&path) {
         let file = parser::parse_chat_file(&content);
-        assert!(!file.lines.is_empty(), "empty file parse");
+        assert!(!file.lines().is_empty(), "empty file parse");
         let utterances = file
-            .lines
+            .lines()
             .iter()
             .filter(|l| matches!(l, talkbank_parser_re2c::ast::Line::Utterance(_)))
             .count();
         assert!(utterances > 0, "no utterances parsed");
         eprintln!(
             "  basic-conversation.cha: {} lines, {} utterances",
-            file.lines.len(),
+            file.lines().len(),
             utterances
         );
     }
@@ -637,13 +712,11 @@ fn parse_reference_corpus_file() {
 
 #[test]
 #[cfg(feature = "trait_tests")]
-fn convert_mor_to_model() {
+fn parse_mor_directly_to_model() {
     let input = "pro|I v|want n|cookie-PL .\n";
-    let tier = parser::parse_mor_tier(input);
-    assert_eq!(tier.items.len(), 3);
-
-    // Convert to talkbank-model MorTier
-    let model_tier = talkbank_model::MorTier::try_from(&tier).expect("admitted morphology");
+    let model_tier = parser::parse_mor_tier(input)
+        .into_option()
+        .expect("admitted morphology");
     assert_eq!(model_tier.items().len(), 3);
 
     // Verify first item: pro|I
@@ -661,10 +734,11 @@ fn convert_mor_to_model() {
 
 #[test]
 #[cfg(feature = "trait_tests")]
-fn convert_mor_with_clitic_to_model() {
+fn parse_mor_with_clitic_directly_to_model() {
     let input = "pron|it~aux|be-Fin-Ind-Pres-S3 .\n";
-    let tier = parser::parse_mor_tier(input);
-    let model_tier = talkbank_model::MorTier::try_from(&tier).expect("admitted clitic morphology");
+    let model_tier = parser::parse_mor_tier(input)
+        .into_option()
+        .expect("admitted clitic morphology");
 
     assert_eq!(model_tier.items().len(), 1);
     let item = &model_tier.items()[0];
@@ -683,16 +757,16 @@ fn convert_mor_with_clitic_to_model() {
 #[test]
 fn parse_single_word() {
     let w = parser::parse_word("hello").unwrap();
-    assert_eq!(w.body.len(), 1);
-    assert!(matches!(w.body[0], WordBodyItem::Text("hello")));
+    assert_eq!(w.body().len(), 1);
+    assert!(matches!(&w.body()[0], WordBodyItem::Text(text) if text.as_ref() == "hello"));
 }
 
 #[test]
 fn parse_single_compound_word() {
     let w = parser::parse_word("ice+cream").unwrap();
-    assert!(w.body.len() >= 3);
+    assert!(w.body().len() >= 3);
     assert!(
-        w.body
+        w.body()
             .iter()
             .any(|t| matches!(t, WordBodyItem::CompoundMarker(_)))
     );
@@ -700,18 +774,27 @@ fn parse_single_compound_word() {
 
 #[test]
 fn parse_single_mor_word() {
-    let w = parser::parse_mor_word("verb|want-Fin-Ind-Pres").unwrap();
-    assert_eq!(w.pos, "verb");
-    assert_eq!(w.lemma, "want");
-    assert_eq!(w.features, vec!["Fin", "Ind", "Pres"]);
+    let w = parser::parse_mor_word("verb|want-Fin-Ind-Pres")
+        .into_option()
+        .unwrap();
+    assert_eq!(w.pos.as_str(), "verb");
+    assert_eq!(w.lemma.as_str(), "want");
+    assert_eq!(
+        w.features.as_slice(),
+        ["Fin", "Ind", "Pres"]
+            .map(talkbank_model::MorFeature::new)
+            .as_slice()
+    );
 }
 
 #[test]
 fn parse_single_gra_relation() {
-    let r = parser::parse_gra_relation("1|2|SUBJ").unwrap();
-    assert_eq!(r.index, "1");
-    assert_eq!(r.head, "2");
-    assert_eq!(r.relation, "SUBJ");
+    let r = parser::parse_gra_relation("1|2|SUBJ")
+        .into_option()
+        .unwrap();
+    assert_eq!(r.index, 1);
+    assert_eq!(r.head, 2);
+    assert_eq!(r.relation.as_str(), "SUBJ");
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -732,15 +815,17 @@ fn parse_all_pho_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_pho_tier(&input);
+        let talkbank_model::ParseOutcome::Parsed(tier) = parser::parse_pho_tier(&input) else {
+            panic!("authored phonology fixture rejected: {entry}");
+        };
         if !tier.items.is_empty() {
             parsed += 1;
         }
     }
-    eprintln!("  %pho: {parsed}/{} with words", entries.len());
+    eprintln!("  %pho: {parsed}/{} with words", entries.entry_count());
     assert_eq!(
         parsed,
-        entries.len(),
+        entries.entry_count(),
         "every phonology fixture must retain items"
     );
 }
@@ -748,9 +833,6 @@ fn parse_all_pho_fixtures() {
 #[test]
 fn snapshot_parsed_pho_samples() {
     let entries = load_fixture("tier_pho");
-    if entries.is_empty() {
-        return;
-    }
     for (i, entry) in entries.iter().enumerate().take(5) {
         let body = entry
             .strip_prefix("%pho:\t")
@@ -761,7 +843,9 @@ fn snapshot_parsed_pho_samples() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_pho_tier(&input);
+        let talkbank_model::ParseOutcome::Parsed(tier) = parser::parse_pho_tier(&input) else {
+            panic!("authored phonology fixture rejected: {entry}");
+        };
         assert_yaml_snapshot!(format!("pho_parsed_{i}"), tier);
     }
 }
@@ -781,15 +865,17 @@ fn parse_all_com_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         if !tier.segments.is_empty() {
             parsed += 1;
         }
     }
-    eprintln!("  %com: {parsed}/{} with segments", entries.len());
+    eprintln!("  %com: {parsed}/{} with segments", entries.entry_count());
     assert_eq!(
         parsed,
-        entries.len(),
+        entries.entry_count(),
         "every comment fixture must retain segments"
     );
 }
@@ -797,9 +883,6 @@ fn parse_all_com_fixtures() {
 #[test]
 fn snapshot_parsed_com_samples() {
     let entries = load_fixture("tier_com");
-    if entries.is_empty() {
-        return;
-    }
     for (i, entry) in entries.iter().enumerate().take(5) {
         let body = entry.strip_prefix("%com:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -807,7 +890,9 @@ fn snapshot_parsed_com_samples() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert_yaml_snapshot!(format!("com_parsed_{i}"), tier);
     }
 }
@@ -815,9 +900,6 @@ fn snapshot_parsed_com_samples() {
 #[test]
 fn parse_all_act_fixtures() {
     let entries = load_fixture("tier_act");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%act:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -825,7 +907,9 @@ fn parse_all_act_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(
             !tier.segments.is_empty(),
             "empty tier for: {}",
@@ -838,16 +922,18 @@ fn parse_all_act_fixtures() {
 fn parse_text_tier_with_bullet() {
     // Text with inline bullet
     let input = "some text \u{0015}100_200\u{0015} more text\n";
-    let tier = parser::parse_text_tier(input);
+    let tier = parser::parse_text_tier(input)
+        .into_option()
+        .expect("inline-bullet control must parse");
     assert!(
         tier.segments
             .iter()
-            .any(|s| matches!(s, talkbank_parser_re2c::ast::TextTierSegment::Text(_)))
+            .any(|s| matches!(s, talkbank_model::BulletContentSegment::Text(_)))
     );
     assert!(
         tier.segments
             .iter()
-            .any(|s| matches!(s, talkbank_parser_re2c::ast::TextTierSegment::Bullet(_)))
+            .any(|s| matches!(s, talkbank_model::BulletContentSegment::Bullet(_)))
     );
 }
 
@@ -862,9 +948,6 @@ fn parse_text_tier_with_bullet() {
 #[test]
 fn parse_all_eng_fixtures() {
     let entries = load_fixture("tier_eng");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%eng:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -872,7 +955,9 @@ fn parse_all_eng_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(
             !tier.segments.is_empty(),
             "empty for: {}",
@@ -884,9 +969,6 @@ fn parse_all_eng_fixtures() {
 #[test]
 fn parse_all_ort_fixtures() {
     let entries = load_fixture("tier_ort");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%ort:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -894,7 +976,9 @@ fn parse_all_ort_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(!tier.segments.is_empty());
     }
 }
@@ -902,9 +986,6 @@ fn parse_all_ort_fixtures() {
 #[test]
 fn parse_all_spa_fixtures() {
     let entries = load_fixture("tier_spa");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%spa:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -912,7 +993,9 @@ fn parse_all_spa_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(!tier.segments.is_empty());
     }
 }
@@ -920,9 +1003,6 @@ fn parse_all_spa_fixtures() {
 #[test]
 fn parse_all_gpx_fixtures() {
     let entries = load_fixture("tier_gpx");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%gpx:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -930,7 +1010,9 @@ fn parse_all_gpx_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(!tier.segments.is_empty());
     }
 }
@@ -938,9 +1020,6 @@ fn parse_all_gpx_fixtures() {
 #[test]
 fn parse_all_sit_fixtures() {
     let entries = load_fixture("tier_sit");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%sit:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -948,7 +1027,9 @@ fn parse_all_sit_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(!tier.segments.is_empty());
     }
 }
@@ -956,9 +1037,6 @@ fn parse_all_sit_fixtures() {
 #[test]
 fn parse_all_add_fixtures() {
     let entries = load_fixture("tier_add");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%add:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -966,7 +1044,9 @@ fn parse_all_add_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(!tier.segments.is_empty());
     }
 }
@@ -974,9 +1054,6 @@ fn parse_all_add_fixtures() {
 #[test]
 fn parse_all_err_fixtures() {
     let entries = load_fixture("tier_err");
-    if entries.is_empty() {
-        return;
-    }
     for entry in &entries {
         let body = entry.strip_prefix("%err:\t").unwrap_or(entry);
         let input = if body.ends_with('\n') {
@@ -984,7 +1061,9 @@ fn parse_all_err_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_text_tier(&input);
+        let tier = parser::parse_text_tier(&input)
+            .into_option()
+            .expect("text fixture must parse without a fabricated fallback");
         assert!(!tier.segments.is_empty());
     }
 }
@@ -997,14 +1076,10 @@ fn parse_all_err_fixtures() {
 #[cfg(feature = "trait_tests")]
 fn convert_gra_to_model() {
     let input = "1|2|SUBJ 2|0|ROOT 3|2|OBJ\n";
-    let tier = parser::parse_gra_tier(input).expect("a well formed %gra body parses");
     let errors = talkbank_model::ErrorCollector::new();
-    let model_tier = talkbank_parser_re2c::convert::gra_tier_to_model(
-        &tier,
-        talkbank_parser_re2c::source_text::SourceText::new(input),
-        &errors,
-    )
-    .tier_without_health(talkbank_model::Location::Unlocated);
+    let model_tier = parser::parse_gra_tier_with_errors(input, &errors)
+        .into_option()
+        .expect("a well formed GRA body parses");
     assert!(errors.into_vec().is_empty());
     assert_eq!(model_tier.relations().len(), 3);
     assert_eq!(model_tier.relations()[0].index, 1);
@@ -1016,8 +1091,7 @@ fn convert_gra_to_model() {
 #[cfg(feature = "trait_tests")]
 fn convert_id_to_model() {
     let input = "eng|corpus|CHI|3;00.|female|typical||Child|||\n";
-    let parsed = parser::parse_id_header(input).unwrap();
-    let model: talkbank_model::model::IDHeader = (&parsed).into();
+    let model = parser::parse_id_header(input).unwrap();
     assert_eq!(model.speaker.to_string(), "CHI");
     assert_eq!(model.role.to_string(), "Child");
 }
@@ -1027,287 +1101,23 @@ fn convert_id_to_model() {
 fn convert_participants_to_model() {
     let input = "CHI Target_Child, MOT Mother\n";
     let parsed = parser::parse_participants_header(input, &talkbank_model::NullErrorSink);
-    let entries: Vec<talkbank_model::model::ParticipantEntry> =
-        parsed.entries.iter().map(|e| e.into()).collect();
+    let entries = parsed;
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].speaker_code.to_string(), "CHI");
-    assert_eq!(entries[0].role.to_string(), "Target_Child");
-    assert_eq!(entries[1].speaker_code.to_string(), "MOT");
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ChatParser trait tests
-// ═══════════════════════════════════════════════════════════════
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_mor_tier() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_mor_tier("pro|I v|want n|cookie-PL .\n", 0, &errors);
-    assert!(result.is_parsed());
-    let tier = result.into_option().unwrap();
-    assert_eq!(tier.items().len(), 3);
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_gra_tier() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_gra_tier("1|2|SUBJ 2|0|ROOT 3|2|OBJ\n", 0, &errors);
-    assert!(result.is_parsed());
-    let tier = result.into_option().unwrap();
-    assert_eq!(tier.relations().len(), 3);
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_id_header() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_id_header(
-        "@ID:\teng|corpus|CHI|3;00.|female|typical||Child|||\n",
-        0,
-        &errors,
+    assert_eq!(
+        entries[0].role().expect("authored role").to_string(),
+        "Target_Child"
     );
-    assert!(result.is_parsed());
-    let id = result.into_option().unwrap();
-    assert_eq!(id.speaker.to_string(), "CHI");
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_mor_word() {
-    use talkbank_model::errors::ErrorCollector;
-    use talkbank_model::{ChatParser, SemanticEq, Severity};
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    // A word body is contiguous; a newline is a tier boundary, not part of it.
-    let input = "verb|want-Fin-Ind-Pres";
-    let result = p.parse_mor_word(input, 0, &errors);
-    assert!(result.is_parsed());
-    let word = result.into_option().unwrap();
-    assert_eq!(word.pos.as_str(), "verb");
-    assert_eq!(word.lemma.as_str(), "want");
-    assert!(errors.into_vec().is_empty());
-    let canonical = talkbank_parser::TreeSitterParser::new().unwrap();
-    let canonical_errors = ErrorCollector::new();
-    let canonical_word = canonical
-        .parse_mor_word(input, 0, &canonical_errors)
-        .into_option()
-        .unwrap();
-    assert!(canonical_errors.into_vec().is_empty());
-    assert!(word.semantic_eq(&canonical_word));
-    {
-        let input = format!("{input}\n");
-        let native_errors = ErrorCollector::new();
-        let canonical_errors = ErrorCollector::new();
-        p.parse_mor_word(&input, 0, &native_errors);
-        canonical.parse_mor_word(&input, 0, &canonical_errors);
-        assert!(
-            native_errors
-                .into_vec()
-                .iter()
-                .any(|error| error.severity == Severity::Error)
-        );
-        assert!(
-            canonical_errors
-                .into_vec()
-                .iter()
-                .any(|error| error.severity == Severity::Error)
-        );
-    }
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_gra_relation() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_gra_relation("1|2|SUBJ\n", 0, &errors);
-    assert!(result.is_parsed());
-    let rel = result.into_option().unwrap();
-    assert_eq!(rel.index, 1);
-    assert_eq!(rel.head, 2);
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_main_tier() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_main_tier("*CHI:\thello world .\n", 0, &errors);
-    assert!(result.is_parsed());
-    let mt = result.into_option().unwrap();
-    assert_eq!(mt.speaker.to_string(), "CHI");
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_word() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_word("hello", 0, &errors);
-    assert!(result.is_parsed());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_word_compound() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_word("ice+cream", 0, &errors);
-    assert!(result.is_parsed());
-    let word = result.into_option().unwrap();
-    assert!(word.raw_text().contains("+"));
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_act_tier() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_act_tier("CHI is playing with blocks\n", 0, &errors);
-    assert!(result.is_parsed());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_com_tier() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_com_tier("child is waving to camera\n", 0, &errors);
-    assert!(result.is_parsed());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_text_tier_with_bullet() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_act_tier("hello \u{0015}100_200\u{0015} world\n", 0, &errors);
-    assert!(result.is_parsed());
-    let tier = result.into_option().unwrap();
-    assert!(!tier.content.segments.is_empty());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_all_text_tiers() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let input = "some text content\n";
-    assert!(p.parse_act_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_cod_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_com_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_exp_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_add_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_gpx_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_int_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_spa_tier(input, 0, &errors).is_parsed());
-    assert!(p.parse_sit_tier(input, 0, &errors).is_parsed());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_pho_tier() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_pho_tier("hɛloʊ wɝld\n", 0, &errors);
-    assert!(result.is_parsed());
-    let tier = result.into_option().unwrap();
-    assert_eq!(tier.items.len(), 2);
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_pho_word() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_pho_word("hɛloʊ\n", 0, &errors);
-    assert!(result.is_parsed());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_chat_file() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|3;00.||||Child|||\n*CHI:\thello .\n%mor:\tn|hello .\n@End\n";
-    let result = p.parse_chat_file(input, 0, &errors);
-    assert!(result.is_parsed(), "parse_chat_file should succeed");
-    let file = result.into_option().unwrap();
-    assert!(!file.lines.is_empty());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_header() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_header("@Comment:\tsome text\n", 0, &errors);
-    assert!(result.is_parsed());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parse_utterance() {
-    use talkbank_model::ChatParser;
-    use talkbank_model::errors::ErrorCollector;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    let errors = ErrorCollector::new();
-    let result = p.parse_utterance("*CHI:\thello .\n%mor:\tn|hello .\n", 0, &errors);
-    assert!(result.is_parsed());
-    let utt = result.into_option().unwrap();
-    assert_eq!(utt.main.speaker.to_string(), "CHI");
-    assert!(!utt.dependent_tiers.is_empty());
-}
-
-#[test]
-#[cfg(feature = "trait_tests")]
-fn trait_parser_name() {
-    use talkbank_model::ChatParser;
-    let p = talkbank_parser_re2c::Re2cParser::new();
-    assert_eq!(p.parser_name(), "Re2cParser");
+    assert_eq!(entries[1].speaker_code.to_string(), "MOT");
 }
 
 #[test]
 #[cfg(feature = "trait_tests")]
 fn convert_languages_to_model() {
     let input = "eng, fra, zho\n";
-    let parsed = parser::parse_languages_header(input);
-    let model: talkbank_model::LanguageCodes = (&parsed).into();
+    let talkbank_model::ParseOutcome::Parsed(model) = parser::parse_languages_header(input) else {
+        panic!("valid language list rejected");
+    };
     assert_eq!(model.as_slice().len(), 3);
 }
 

@@ -234,3 +234,39 @@ fn test_non_alignable_content_returns_none() -> Result<(), String> {
     );
     Ok(())
 }
+
+#[test]
+fn main_and_mor_hover_after_clitics_use_chunk_alignment() -> Result<(), String> {
+    let source = include_str!("../../../../corpus/reference/edge-cases/clitics-and-compounds.cha");
+    let (file, tree) = parse_and_validate_chat_file(source)?;
+    for (prefix, token) in [
+        ("*CHI:\tit's", "cookie"),
+        ("%mor:\tpron|it~", "noun|cookie"),
+    ] {
+        let (line, text) = source
+            .lines()
+            .enumerate()
+            .find(|(_, text)| text.starts_with(prefix))
+            .ok_or("fixture tier")?;
+        let offset = text.find(token).ok_or("fixture token")?;
+        let position = Position::new(
+            line as u32,
+            text[..offset].encode_utf16().count() as u32 + 1,
+        );
+        let info = find_alignment_hover_info(&file, &tree, position, source).ok_or("hover")?;
+        assert_eq!(
+            info.aligned_to_gra.as_deref(),
+            Some("ROOT → ROOT (root of sentence)")
+        );
+        let mut utterance = file.utterances().next().ok_or("utterance")?.clone();
+        utterance.alignments = None;
+        let local = if prefix.starts_with('*') {
+            super::find_main_tier_hover_info(&utterance, &tree, position, source)
+        } else {
+            super::find_mor_tier_hover_info(&utterance, &tree, position, source, false)
+        }
+        .ok_or("local hover without alignment")?;
+        assert!(local.aligned_to_gra.is_none());
+    }
+    Ok(())
+}

@@ -295,6 +295,9 @@ fn count_items(content: &[UtteranceContent], domain: Option<TierDomain>) -> Coun
         ContentItem::OverlapPoint(_) => counts.overlap_points += 1,
         ContentItem::OtherSpokenEvent(_) => counts.other_spoken_events += 1,
         ContentItem::Freecode(_) => counts.freecodes += 1,
+        ContentItem::OrphanAnnotation(_) => {
+            panic!("valid reference unexpectedly retained an orphan annotation")
+        }
         ContentItem::InternalBullet(_) => counts.internal_bullets += 1,
         ContentItem::LongFeatureBegin(_) => counts.long_feature_begins += 1,
         ContentItem::LongFeatureEnd(_) => counts.long_feature_ends += 1,

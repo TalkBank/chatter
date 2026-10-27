@@ -7,12 +7,13 @@
 //! - `*SPEAKER:` main tier prefixes
 //! - `@Birth of SPEAKER`, `@L1 of SPEAKER` headers
 
-use std::collections::HashMap;
-
+use talkbank_transform::speaker_id::{SpeakerRename, SpeakerRenameDecision, SpeakerRenameError};
 use tower_lsp::lsp_types::*;
 use tree_sitter::{Node, Tree};
 
 use super::super::utils;
+use crate::backend::capabilities::VersionedEdits;
+use crate::backend::diagnostics::{CurrentRevisionDiagnostics, RevisionDiagnostics};
 use crate::backend::requests::{find_ancestor_kind, walk_nodes};
 
 use talkbank_parser::node_types::{
@@ -22,6 +23,9 @@ use talkbank_parser::node_types::{
 /// Validates that the cursor is on a renameable speaker code and returns
 /// its range and current text. Used for `textDocument/prepareRename`.
 pub fn prepare_rename(tree: &Tree, doc: &str, position: Position) -> Option<PrepareRenameResponse> {
+    if tree.root_node().has_error() {
+        return None;
+    }
     let (range, text) = find_speaker_at_position(tree, doc, position)?;
     Some(PrepareRenameResponse::RangeWithPlaceholder {
         range,
@@ -29,29 +33,99 @@ pub fn prepare_rename(tree: &Tree, doc: &str, position: Position) -> Option<Prep
     })
 }
 
-/// Computes a `WorkspaceEdit` that renames all occurrences of the speaker code
-/// at the cursor position to `new_name`.
-pub fn rename(
+/// Proposed speaker edits bound to the exact open revision that produced them.
+/// Only a current-revision capability and negotiated client support can turn
+/// these proposals into edits an editor may apply.
+pub(crate) struct PreparedRename<'a> {
+    revision: &'a RevisionDiagnostics,
+    edits: Vec<TextEdit>,
+}
+
+impl PreparedRename<'_> {
+    pub(crate) fn finish(
+        self,
+        current: CurrentRevisionDiagnostics<'_>,
+        _support: &VersionedEdits,
+    ) -> Option<WorkspaceEdit> {
+        if !std::ptr::eq(self.revision, current.snapshot()) {
+            return None;
+        }
+        Some(WorkspaceEdit {
+            document_changes: Some(DocumentChanges::Edits(vec![TextDocumentEdit {
+                text_document: OptionalVersionedTextDocumentIdentifier {
+                    uri: self.revision.uri().clone(),
+                    version: Some(self.revision.version()),
+                },
+                edits: self.edits.into_iter().map(OneOf::Left).collect(),
+            }])),
+            ..Default::default()
+        })
+    }
+}
+
+/// Refusal to produce a complete identity-preserving edit.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum RenameRefusal {
+    #[error("repair syntax errors before renaming: speaker references may be hidden")]
+    IncompleteSyntax,
+    #[error("speaker source cannot be read from this syntax tree")]
+    UnreadableSource,
+    #[error(transparent)]
+    Admission(#[from] SpeakerRenameError),
+}
+
+/// Prepare edits from one revision; this does not authorize publication.
+pub(crate) fn prepare_rename_edit<'a>(
     tree: &Tree,
-    uri: &Url,
+    revision: &'a RevisionDiagnostics,
+    position: Position,
+    new_name: &str,
+) -> Result<Option<PreparedRename<'a>>, RenameRefusal> {
+    Ok(rename_edits(tree, revision.source(), position, new_name)?
+        .map(|edits| PreparedRename { revision, edits }))
+}
+
+fn rename_edits(
+    tree: &Tree,
     doc: &str,
     position: Position,
     new_name: &str,
-) -> Option<WorkspaceEdit> {
-    let (_range, old_name) = find_speaker_at_position(tree, doc, position)?;
-
-    let edits = collect_speaker_edits(tree, doc, &old_name, new_name);
-    if edits.is_empty() {
-        return None;
+) -> Result<Option<Vec<TextEdit>>, RenameRefusal> {
+    if tree.root_node().has_error() {
+        return Err(RenameRefusal::IncompleteSyntax);
     }
-
-    let mut changes = HashMap::new();
-    changes.insert(uri.clone(), edits);
-
-    Some(WorkspaceEdit {
-        changes: Some(changes),
-        ..Default::default()
-    })
+    let Some((_range, old_name)) = find_speaker_at_position(tree, doc, position) else {
+        return Ok(None);
+    };
+    let mut occurrences = Vec::new();
+    if let Some(error) = walk_nodes(tree.root_node(), |node| {
+        if matches!(node.kind(), SPEAKER | ID_SPEAKER) {
+            match node.utf8_text(doc.as_bytes()) {
+                Ok(text) => occurrences.push((text, node_to_range(node, doc))),
+                Err(_) => return Some(RenameRefusal::UnreadableSource),
+            }
+        }
+        None
+    }) {
+        return Err(error);
+    }
+    match SpeakerRename::admit(
+        &old_name,
+        new_name,
+        occurrences.iter().map(|(text, _)| *text),
+    )? {
+        SpeakerRenameDecision::Unchanged => Ok(None),
+        SpeakerRenameDecision::Rename(rename) => Ok(Some(
+            occurrences
+                .into_iter()
+                .filter(|(text, _)| *text == rename.original())
+                .map(|(_, range)| TextEdit {
+                    range,
+                    new_text: rename.replacement().to_owned(),
+                })
+                .collect(),
+        )),
+    }
 }
 
 /// Finds the speaker code node at the given cursor position and returns its
@@ -59,6 +133,9 @@ pub fn rename(
 /// speaker code.
 fn find_speaker_at_position(tree: &Tree, doc: &str, position: Position) -> Option<(Range, String)> {
     let offset = utils::position_to_offset(doc, position);
+    if utils::offset_to_position(doc, offset) != position {
+        return None;
+    }
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
 
     // Check if we're on a SPEAKER node (main tier or @Participants)
@@ -98,33 +175,6 @@ fn find_of_header_speaker(node: Node, doc: &str) -> Option<String> {
         return node.utf8_text(doc.as_bytes()).ok().map(String::from);
     }
     None
-}
-
-/// Collects all `TextEdit`s needed to rename `old_name` to `new_name` across
-/// the entire document.
-fn collect_speaker_edits(tree: &Tree, doc: &str, old_name: &str, new_name: &str) -> Vec<TextEdit> {
-    let mut edits = Vec::new();
-    let root = tree.root_node();
-
-    walk_nodes(root, |node| {
-        match node.kind() {
-            // Main tier speaker codes: *CHI:
-            SPEAKER | ID_SPEAKER => {
-                if let Ok(text) = node.utf8_text(doc.as_bytes())
-                    && text == old_name
-                {
-                    edits.push(TextEdit {
-                        range: node_to_range(node, doc),
-                        new_text: new_name.to_string(),
-                    });
-                }
-            }
-            _ => {}
-        }
-        None::<()>
-    });
-
-    edits
 }
 
 /// Converts a tree-sitter node to an LSP `Range`.
@@ -176,16 +226,13 @@ mod tests {
             "{PREAMBLE}@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n*MOT:\thi .\n*CHI:\tmore .\n@End\n"
         );
         let tree = parse_tree(&input);
-        let uri = Url::parse("file:///test.cha").unwrap();
 
         // Rename CHI → KID from the main tier
         let line = input.lines().position(|l| l.starts_with("*CHI:")).unwrap() as u32;
-        let result = rename(&tree, &uri, &input, Position { line, character: 1 }, "KID");
+        let result = rename_edits(&tree, &input, Position { line, character: 1 }, "KID").unwrap();
         assert!(result.is_some());
 
-        let edit = result.unwrap();
-        let changes = edit.changes.unwrap();
-        let edits = changes.get(&uri).unwrap();
+        let edits = result.unwrap();
 
         // Should find: @Participants CHI, @ID CHI, *CHI: (twice) = 4 edits
         assert_eq!(
@@ -205,15 +252,12 @@ mod tests {
     fn test_rename_does_not_touch_other_speakers() {
         let input = format!("{PREAMBLE}*CHI:\thello .\n*MOT:\thi .\n@End\n");
         let tree = parse_tree(&input);
-        let uri = Url::parse("file:///test.cha").unwrap();
 
         // Rename CHI → KID
         let line = input.lines().position(|l| l.starts_with("*CHI:")).unwrap() as u32;
-        let result = rename(&tree, &uri, &input, Position { line, character: 1 }, "KID");
+        let result = rename_edits(&tree, &input, Position { line, character: 1 }, "KID").unwrap();
 
-        let edit = result.unwrap();
-        let changes = edit.changes.unwrap();
-        let edits = changes.get(&uri).unwrap();
+        let edits = result.unwrap();
 
         // Verify MOT is not in any edit range
         for e in edits {
@@ -226,5 +270,104 @@ mod tests {
                 replaced
             );
         }
+    }
+
+    #[test]
+    fn rename_covers_speaker_headers_and_other_spoken_events() {
+        for (source, original, expected) in [
+            (
+                include_str!("../../../../../corpus/reference/core/headers-speaker-info.cha"),
+                "MOT",
+                5,
+            ),
+            (
+                include_str!("../../../../../corpus/reference/core/headers-speaker-info.cha"),
+                "F_A_T",
+                4,
+            ),
+            (
+                include_str!(
+                    "../../../../../corpus/reference/edge-cases/other-spoken-event-no-terminator-space.cha"
+                ),
+                "INV",
+                12,
+            ),
+        ] {
+            let tree = parse_tree(source);
+            let position = utils::offset_to_position(source, source.find(original).unwrap());
+            for target in ["A_B", "A+B", "A-B", "A'B", "kid", "123"] {
+                let mut edits = rename_edits(&tree, source, position, target)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(edits.len(), expected);
+                edits.sort_by_key(|edit| {
+                    std::cmp::Reverse(utils::position_to_offset(source, edit.range.start))
+                });
+                let mut applied = source.to_owned();
+                for edit in edits {
+                    let range = utils::position_to_offset(source, edit.range.start)
+                        ..utils::position_to_offset(source, edit.range.end);
+                    assert_eq!(&source[range.clone()], original);
+                    applied.replace_range(range, &edit.new_text);
+                }
+                assert!(!parse_tree(&applied).root_node().has_error(), "{target}");
+            }
+        }
+    }
+
+    #[test]
+    fn prepared_rename_cannot_cross_open_document_instances() {
+        use crate::backend::diagnostics::document_diagnostics;
+        use crate::backend::documents::OpenDocument;
+        use crate::backend::state::Backend;
+        use std::sync::Arc;
+        let (service, _socket) = tower_lsp::LspService::new(Backend::new);
+        let backend = service.inner();
+        let uri = Url::parse("file:///rename-revision.cha").unwrap();
+        let source: Arc<str> =
+            include_str!("../../../../../corpus/reference/core/basic-conversation.cha").into();
+        let tree = parse_tree(&source);
+        let position = utils::offset_to_position(&source, source.find("*CHI:").unwrap() + 1);
+        let capabilities = serde_json::from_value(serde_json::json!({
+            "workspace":{"workspaceEdit":{"documentChanges":true}}
+        }))
+        .unwrap();
+        let support = VersionedEdits::negotiate(&capabilities).unwrap();
+        backend.documents.insert(
+            uri.clone(),
+            crate::backend::documents::DocumentSession::Synchronized(Arc::new(OpenDocument {
+                source: Arc::clone(&source),
+                version: 1,
+            })),
+        );
+        let original = document_diagnostics(backend, &uri).unwrap().unwrap();
+        let prepared = prepare_rename_edit(&tree, &original, position, "KID")
+            .unwrap()
+            .unwrap();
+        assert!(
+            original
+                .with_current(backend, |current| prepared.finish(current, &support))
+                .unwrap()
+                .is_some()
+        );
+        let stale = prepare_rename_edit(&tree, &original, position, "KID")
+            .unwrap()
+            .unwrap();
+        backend.documents.remove(&uri);
+        backend.documents.insert(
+            uri.clone(),
+            crate::backend::documents::DocumentSession::Synchronized(Arc::new(OpenDocument {
+                source,
+                version: 1,
+            })),
+        );
+        assert!(original.with_current(backend, |_| ()).is_none());
+        let reopened = document_diagnostics(backend, &uri).unwrap().unwrap();
+        assert!(
+            reopened
+                .with_current(backend, |current| stale.finish(current, &support))
+                .unwrap()
+                .is_none()
+        );
     }
 }

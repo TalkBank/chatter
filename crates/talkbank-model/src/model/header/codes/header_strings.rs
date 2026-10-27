@@ -129,13 +129,6 @@ string_newtype!(
 );
 
 string_newtype!(
-    /// Page identifier from `@Page`.
-    ///
-    /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Page_Header>
-    pub struct PageNumber;
-);
-
-string_newtype!(
     /// Video references listed in `@Videos`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Videos_Header>
@@ -187,7 +180,7 @@ string_newtype!(
 // JSON consumer has no use for which Rust macro we did or did not invoke.
 //
 // Deserialization is deliberately LENIENT, matching `LanguageCode` and
-// `NonEmptyString`: `#[serde(transparent)]` reconstructs whatever the document
+// `RecoveryText` in policy: the wire reconstructs whatever the document
 // held and the separate `Validate` pass reports the violation with a code and
 // a span. A strict `try_from` here was tried and reverted; see
 // `LanguageCode`'s `deserialize_empty_is_lenient`, which records the same

@@ -6,6 +6,7 @@ use std::process;
 type DynError = Box<dyn Error>;
 type Result<T> = std::result::Result<T, DynError>;
 
+mod dependency_policy;
 mod docs_sync;
 
 fn main() {
@@ -28,12 +29,18 @@ fn run_main() -> Result<()> {
             }
             docs_sync::run(repo_root()?)
         }
+        Some("check-dependencies") => {
+            if args.next().is_some() {
+                return Err(usage_error());
+            }
+            dependency_policy::run(repo_root()?)
+        }
         _ => Err(usage_error()),
     }
 }
 
 fn usage_error() -> DynError {
-    "usage: cargo run -q -p xtask -- {help|lint-docs-sync}".into()
+    "usage: cargo run -q -p xtask -- {help|lint-docs-sync|check-dependencies}".into()
 }
 
 fn print_help() {
@@ -45,6 +52,8 @@ fn print_help() {
     println!(
         "      Check public docs that must stay synchronized with the current chatter surface."
     );
+    println!("  check-dependencies");
+    println!("      Check dev-only architecture exceptions and the isolated LSP dependency graph.");
 }
 
 fn repo_root() -> Result<&'static Path> {

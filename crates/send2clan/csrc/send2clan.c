@@ -286,8 +286,8 @@ static int launch_clan_app(long timeOut) {
     }
 
     // Wait for window to appear (use timeout)
-    DWORD waitTime = timeOut > 0 ? (DWORD)(timeOut * 1000) : 4000; // Default 4 seconds
-    Sleep(waitTime > 10000 ? 10000 : waitTime); // Cap at 10 seconds for launch wait
+    DWORD waitTime = timeOut <= 0 ? 4000 : timeOut >= 10 ? 10000 : (DWORD)timeOut * 1000u;
+    Sleep(waitTime); // Clamp seconds before multiplying, including on 32-bit long.
     return SEND2CLAN_SUCCESS;
 
 #else
@@ -295,6 +295,136 @@ static int launch_clan_app(long timeOut) {
     return SEND2CLAN_ERR_UNSUPPORTED_PLATFORM;
 #endif
 }
+
+#ifdef _WIN32
+/* Only the resolver issues a complete destination to the file writer. */
+typedef struct { char value[512]; } clan_message_path;
+typedef enum { CLAN_DESTINATION_REFUSED, CLAN_DESTINATION_RESOLVED } clan_destination_kind;
+typedef struct {
+    clan_destination_kind kind;
+    union { clan_message_path path; } admitted;
+} clan_destination;
+
+static clan_destination resolve_message_destination(void) {
+    char directory[256];
+    DWORD length = GetEnvironmentVariableA("USERPROFILE", directory, sizeof(directory));
+    if (length >= sizeof(directory)) {
+        /* Windows leaves the buffer undefined when it is too small. */
+        return (clan_destination){.kind = CLAN_DESTINATION_REFUSED};
+    }
+    if (length == 0) {
+        const char *home = getenv("HOME");
+        const char *user = getenv("USER");
+        if (!home || !user || strstr(home, "..") || strstr(home, "\\\\") ||
+            strstr(user, "..") || strchr(user, '/') || strchr(user, '\\') || strlen(user) > 64) {
+            return (clan_destination){.kind = CLAN_DESTINATION_REFUSED};
+        }
+        int written = snprintf(directory, sizeof(directory), "%s/.wine/drive_c/users/%s", home, user);
+        if (written < 0 || (size_t)written >= sizeof(directory)) {
+            return (clan_destination){.kind = CLAN_DESTINATION_REFUSED};
+        }
+    }
+    clan_message_path path;
+    int written = snprintf(path.value, sizeof(path.value), "%s%s", directory, MESSAGE_FILE_NAME);
+    if (written < 0 || (size_t)written >= sizeof(path.value)) {
+        return (clan_destination){.kind = CLAN_DESTINATION_REFUSED};
+    }
+    return (clan_destination){.kind = CLAN_DESTINATION_RESOLVED, .admitted.path = path};
+}
+
+typedef enum { CLAN_MESSAGE_REFUSED, CLAN_MESSAGE_PUBLISHED } clan_message_publication;
+
+/* Publication owns the stream until close, including on a failed write. Only
+ * the published outcome permits notification; failure may leave partial bytes. */
+static clan_message_publication publish_windows_message(const clan_message_path *destination, const char *formattedMessage) {
+    FILE *messageFile;
+    if (fopen_s(&messageFile, destination->value, "w") != 0 || !messageFile) {
+        return CLAN_MESSAGE_REFUSED;
+    }
+    int written = fprintf(messageFile, "%s\n", formattedMessage);
+    int closed = fclose(messageFile);
+    if (written < 0 || closed != 0) return CLAN_MESSAGE_REFUSED;
+    return CLAN_MESSAGE_PUBLISHED;
+}
+
+/* Admission prevents overflow before publication. Only a ready target owns a
+ * non-null window and a positive remaining notification budget. */
+typedef struct { DWORD milliseconds; } clan_wait_duration;
+typedef enum { CLAN_DURATION_REFUSED, CLAN_DURATION_ADMITTED } clan_duration_kind;
+typedef struct {
+    clan_duration_kind kind;
+    union { clan_wait_duration duration; } admitted;
+} clan_duration;
+typedef struct { DWORD started; clan_wait_duration duration; } clan_wait_budget;
+typedef struct { HWND window; UINT remaining; } clan_notification_target;
+typedef enum { CLAN_WAIT_EXPIRED, CLAN_TARGET_READY } clan_target_kind;
+typedef struct {
+    clan_target_kind kind;
+    union { clan_notification_target target; } admitted;
+} clan_target;
+
+static clan_duration admit_wait_duration(long seconds) {
+    if (seconds > 0 && (unsigned long)seconds > UINT32_MAX / 1000u) {
+        return (clan_duration){.kind = CLAN_DURATION_REFUSED};
+    }
+    return (clan_duration){.kind = CLAN_DURATION_ADMITTED,
+        .admitted.duration = {seconds <= 0 ? 30000u : (DWORD)seconds * 1000u}};
+}
+
+static clan_target await_notification_target(clan_wait_budget budget) {
+    for (;;) {
+        HWND window = FindWindowA(MAIN_WINDOW_CLASS, NULL);
+        /* Unsigned subtraction retains elapsed time across tick rollover. */
+        DWORD elapsed = GetTickCount() - budget.started;
+        if (elapsed >= budget.duration.milliseconds) {
+            return (clan_target){.kind = CLAN_WAIT_EXPIRED};
+        }
+        DWORD remaining = budget.duration.milliseconds - elapsed;
+        if (window) {
+            return (clan_target){.kind = CLAN_TARGET_READY,
+                .admitted.target = {window, remaining}};
+        }
+        Sleep(remaining < 100u ? remaining : 100u);
+    }
+}
+
+static int notify_windows_target(clan_notification_target target) {
+    DWORD_PTR reply;
+    /* Failure need not set last error. Never interpret an old timeout as this
+     * call's result, and never read the reply on transport failure. */
+    SetLastError(ERROR_SUCCESS);
+    if (!SendMessageTimeoutA(target.window, WM_APP, 0, 0,
+            SMTO_BLOCK | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, target.remaining, &reply)) {
+        return GetLastError() == ERROR_TIMEOUT ? SEND2CLAN_ERR_TIMEOUT : SEND2CLAN_ERR_SEND_FAILED;
+    }
+    return reply == 0 ? SEND2CLAN_SUCCESS : SEND2CLAN_ERR_SEND_FAILED;
+}
+
+static int send_windows_message(long timeOut, const clan_message_path *destination, const char *formattedMessage) {
+    clan_duration duration = admit_wait_duration(timeOut);
+    switch (duration.kind) {
+        case CLAN_DURATION_REFUSED:
+            return SEND2CLAN_ERR_INVALID_PARAMETER;
+        case CLAN_DURATION_ADMITTED:
+            break;
+    }
+    switch (publish_windows_message(destination, formattedMessage)) {
+        case CLAN_MESSAGE_REFUSED:
+            return SEND2CLAN_ERR_SEND_FAILED;
+        case CLAN_MESSAGE_PUBLISHED:
+            break;
+    }
+    clan_target target = await_notification_target((clan_wait_budget){GetTickCount(), duration.admitted.duration});
+    switch (target.kind) {
+        case CLAN_WAIT_EXPIRED:
+            return SEND2CLAN_ERR_TIMEOUT;
+        case CLAN_TARGET_READY:
+            return notify_windows_target(target.admitted.target);
+    }
+    return SEND2CLAN_ERR_SEND_FAILED;
+}
+
+#endif
 
 static int send_message_to_clan(long timeOut, const char* filePath, int lineNumber, int columnNumber, const char* message) {
     // Format the message. The buffer is sized generously for typical error
@@ -327,62 +457,14 @@ static int send_message_to_clan(long timeOut, const char* filePath, int lineNumb
     return map_platform_error((int)err);
     
 #elif defined(_WIN32)
-    char homeDirectory[256], messageFileName[512];
-    FILE *messageFile;
-
-    // Get user directory
-    if (!GetEnvironmentVariableA("USERPROFILE", homeDirectory, sizeof(homeDirectory))) {
-        const char *home = getenv("HOME");
-        const char *user = getenv("USER");
-
-        // Validate environment variables to prevent path injection
-        if (home && user) {
-            // Check for path traversal attempts in HOME
-            if (strstr(home, "..") != NULL || strstr(home, "\\\\") != NULL) {
-                return SEND2CLAN_ERR_SEND_FAILED;
-            }
-            // Check for path traversal attempts in USER
-            if (strstr(user, "..") != NULL || strstr(user, "/") != NULL ||
-                strstr(user, "\\") != NULL || strlen(user) > 64) {
-                return SEND2CLAN_ERR_SEND_FAILED;
-            }
-
-            snprintf(homeDirectory, sizeof(homeDirectory), "%s/.wine/drive_c/users/%s", home, user);
-        } else {
+    clan_destination destination = resolve_message_destination();
+    switch (destination.kind) {
+        case CLAN_DESTINATION_REFUSED:
             return SEND2CLAN_ERR_SEND_FAILED;
-        }
+        case CLAN_DESTINATION_RESOLVED:
+            return send_windows_message(timeOut, &destination.admitted.path, formattedMessage);
     }
-    snprintf(messageFileName, sizeof(messageFileName), "%s%s", homeDirectory, MESSAGE_FILE_NAME);
-
-    // Write message file
-    if (fopen_s(&messageFile, messageFileName, "w") != 0 || !messageFile) {
-        return SEND2CLAN_ERR_SEND_FAILED;
-    }
-    
-    fprintf(messageFile, "%s\n", formattedMessage);
-    fclose(messageFile);
-
-    // Find CLAN window with timeout
-    HWND window = NULL;
-    DWORD startTime = GetTickCount();
-    DWORD timeoutMs = timeOut > 0 ? (DWORD)(timeOut * 1000) : 30000; // Default 30 seconds
-    
-    while (!window && (GetTickCount() - startTime) < timeoutMs) {
-        window = FindWindowA(MAIN_WINDOW_CLASS, NULL);
-        if (!window) {
-            Sleep(100); // Wait 100ms before retry
-        }
-    }
-    
-    if (!window) {
-        return SEND2CLAN_ERR_TIMEOUT;
-    }
-
-    if (SendMessageA(window, WM_APP, 0, 0) != 0) {
-        return SEND2CLAN_ERR_SEND_FAILED;
-    }
-
-    return SEND2CLAN_SUCCESS;
+    return SEND2CLAN_ERR_SEND_FAILED;
 
 #else
     // Unused parameters on Linux

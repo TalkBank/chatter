@@ -45,6 +45,7 @@ fn timed_reference_refuses_correspondence_that_reverses_disjoint_speech() {
             .content
             .bullet
             .as_ref()
+            .and_then(talkbank_model::BulletState::as_parsed)
             .expect("first timing")
             .timing
             .end_ms
@@ -53,6 +54,7 @@ fn timed_reference_refuses_correspondence_that_reverses_disjoint_speech() {
                 .content
                 .bullet
                 .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
                 .expect("second timing")
                 .timing
                 .start_ms
@@ -261,6 +263,7 @@ fn backward_timing_spec_refuses_merge_without_sorting_source_turns() {
                 .content
                 .bullet
                 .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
                 .expect("spec timing")
                 .timing
                 .start_ms
@@ -317,7 +320,14 @@ fn canonical_mixed_timing_refuses_to_invent_retained_turn_positions() {
     let file = valid.document();
     let times: Vec<_> = file
         .utterances()
-        .map(|u| u.main.content.bullet.as_ref().map(|b| b.timing.start_ms))
+        .map(|u| {
+            u.main
+                .content
+                .bullet
+                .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
+                .map(|b| b.timing.start_ms)
+        })
         .collect();
     assert_eq!(times, [Some(1000), None]);
     let retained = file.unique_utterance_speakers();
@@ -372,10 +382,13 @@ fn reference_donor_selection_binds_identity_and_refuses_invalid_coordinates() {
             .collect();
         let mut previous_start = None;
         let mut reversed = false;
-        for bullet in file
-            .utterances()
-            .filter_map(|u| u.main.content.bullet.as_ref())
-        {
+        for bullet in file.utterances().filter_map(|u| {
+            u.main
+                .content
+                .bullet
+                .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
+        }) {
             reversed |= previous_start.is_some_and(|start| start > bullet.timing.start_ms);
             previous_start = Some(bullet.timing.start_ms);
         }

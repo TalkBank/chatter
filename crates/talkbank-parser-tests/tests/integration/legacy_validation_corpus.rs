@@ -46,7 +46,7 @@ fn spec_legacy_admission_preserves_parse_provenance_and_structural_policy() {
     }
     for (fixture, message) in [
         ("E504_1", "@Participants header missing"),
-        ("E504_2", "@Languages header missing"),
+        ("E504_2", "missing @Languages declaration"),
         ("E522_1", "Speaker *MOT not declared"),
         ("E305_1", "has no terminator"),
     ] {
@@ -84,8 +84,20 @@ fn spec_legacy_admission_preserves_parse_provenance_and_structural_policy() {
     assert!(errors[0].message.contains(first.code.as_str()));
     assert!(errors[0].message.contains(&first.message));
     let empty = ParsedSpec::load(&parser, "E306_1");
-    // Recovery is refused before legacy main-tier checks. This specimen does
-    // not witness the literal-empty-content branch in those later checks.
+    // Missing-token recovery retains an empty body rather than inventing a
+    // separator. The legacy API accumulates both parse provenance and its
+    // independent empty-body finding at the requested MainTierValid level.
+    assert!(
+        empty
+            .file
+            .utterances()
+            .next()
+            .unwrap()
+            .main
+            .content
+            .content
+            .is_empty()
+    );
     let first = empty
         .diagnostics
         .first()
@@ -96,10 +108,15 @@ fn spec_legacy_admission_preserves_parse_provenance_and_structural_policy() {
         ValidityLevel::MainTierValid,
     )
     .expect_err("empty speech refusal");
-    assert_eq!(errors.len(), 1);
+    assert_eq!(errors.len(), 2);
     assert_eq!(errors[0].level, ValidityLevel::Parseable);
     assert!(errors[0].message.contains(first.code.as_str()));
     assert!(errors[0].message.contains(&first.message));
+    assert_eq!(errors[1].level, ValidityLevel::MainTierValid);
+    assert_eq!(
+        errors[1].message,
+        "Utterance by *CHI has an empty main tier"
+    );
 }
 
 #[test]

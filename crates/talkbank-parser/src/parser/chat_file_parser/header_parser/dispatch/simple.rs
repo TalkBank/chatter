@@ -404,8 +404,17 @@ pub(super) fn page<'tree>(
             suggested_fix: None,
         },
         errors,
-        |page| Header::Page {
-            page: model::PageNumber::new(page),
+        |text| match model::PageNumber::new(text) {
+            Ok(page) => Header::Page { page },
+            Err(error) => {
+                errors.report(talkbank_model::ParseError::at_span(
+                    talkbank_model::ErrorCode::UnparsableContent,
+                    talkbank_model::Severity::Error,
+                    crate::parser::node_span::span_of(site.actual()),
+                    error.to_string(),
+                ));
+                site.unknown(error.to_string(), None)
+            }
         },
     )
 }

@@ -2,34 +2,48 @@
 
 **Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-parser-re2c/README.md)
 
-Alternate CHAT transcript parser using a
+CHAT transcript parser using a
 [re2c](https://re2c.org/manual/manual_rust.html) DFA lexer and
 [chumsky](https://docs.rs/chumsky/1.0.0-alpha.8) parser combinators.
 
-This crate implements the `ChatParser` trait from `talkbank-model`, but it is
-not the default parser surface for the TalkBank toolchain. Its primary role is
-to provide an independent implementation for comparison and specialist parsing,
-not a specification oracle against `talkbank-parser`. Its 1.0 contract requires
+This crate and `talkbank-parser` are peer implementations of the `ChatParser`
+trait from `talkbank-model`. Tree-sitter was prototyped first and is the current
+CLI default; the shared model belongs to neither backend. Both parsers can
+drive model changes, including explicit malformed and recovery states. Prefer
+shared model types to duplicate semantic ASTs; backend-specific tokens and
+parser-progress carriers still have their own role. See
+[backend ownership](https://github.com/TalkBank/chatter/blob/main/book/src/architecture/parser-backends.md#equal-backends-one-shared-model).
+
+Neither backend is a specification oracle. The existing 1.0 regression contract requires
 some error for every input that tree-sitter reports as erroneous; exact
 diagnostics and recovered models may differ. Known silent acceptance is a
 defect, not an experimental exemption.
 
 ## Compatibility contract
 
-The book's [Backend compatibility mandate](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate)
+The book's [Backend compatibility mandate](https://github.com/TalkBank/chatter/blob/main/book/src/architecture/parser-backends.md#backend-compatibility-mandate)
 is authoritative for users and developers. Read it before switching parsers or
 changing a parity expectation; the [parity report](docs/parity-report.md)
 contains dated measurements, not a competing policy.
 
 Use `talkbank-parser-re2c` when you want:
 
-- a second parser implementation for cross-checking or fuzzing
+- an independent parser implementation for cross-checking or fuzzing
 - direct access to the re2c lexer and token stream
 - independent full-file parsing where incremental reparsing is not required
 
 Use `talkbank-parser` when you want the default tree-sitter-based parser,
 incremental parsing, or the parser surface used by the LSP and the rest of the
 default toolchain.
+
+## Library use
+
+The [compiled library recipes](https://github.com/TalkBank/chatter/blob/main/book/src/chatter/integrating/library-usage.md)
+run both backends through `parse_validated_with_parser` and
+`parse_source_with_parser`. These accept `ChatParser` and return the same shared
+admission capabilities. For recovery-oriented parsing, use
+`talkbank_model::ParseProduct::parse(&Re2cParser::new(), source)` to retain the
+model alongside diagnostics. A built model is not a validity claim.
 
 ## Architecture
 
@@ -41,8 +55,8 @@ source text             &[Token<'a>]                ast types         talkbank-m
     |                        |                          |                  |
     v                        v                          v                  v
   Lexer::new(input, condition) --> main_tier_parser() --> MainTier<'a> --> model::MainTier
-                          gra_tier_parser()        GraTier<'a>        model::GraTier
-                          mor_tier_parser()        MorTier<'a>        model::MorTier
+                          gra_tier_parser(...)    model::GraTier (direct)
+                          mor_tier_parser(...)    model::MorTier (direct)
                           ...                      ...                ...
 ```
 
@@ -51,8 +65,24 @@ rich tokens with tagged field extraction. A single `Token::Word` carries
 raw_text, prefix, body, form_marker, lang_suffix, and pos_tag -- all
 zero-copy `&str` slices.
 
-**Parser:** Chumsky 1.0-alpha combinators consume `&[Token]` and produce
-AST types. The `recursive()` combinator handles nested groups and
+**Parser:** Chumsky 1.0-alpha combinators consume `&[Token]` and produce shared
+models or parser-specific carriers. Text-tier bodies are recognized as token
+slices and lowered with the existing shared `BulletContent` builder, without
+a second semantic text-tier AST. MOR, GRA, PHO and SIN also construct shared model
+values directly; GRA construction rejects the whole tier if a numeric field fails.
+File recovery preserves the original GRA source as UnparsedGra. PHO/SIN body
+APIs return explicit ParseOutcome rejection; malformed PHO no longer becomes an
+empty successful tier. PHO compounds and PHO/SIN groups use shared model values,
+with tier locations supplied at construction. Failed PHO/MOD/SIN file tiers
+retain their exact source as shared UnparsedPho/UnparsedMod/UnparsedSin values;
+JSON import does not erase their invalidity or alignment taint. WOR parsing
+constructs shared WorItem/WorTier directly with its admitted tier extent;
+unsupported word shapes reject instead of producing empty-word placeholders.
+Rejected file WOR retains original source as UnparsedWor; it is not reconstructed
+or reparsed and JSON preserves its invalidity and timing restrictions. Word/annotation
+lowering and orphan-bullet policy remain separate boundaries.
+Main content and other remaining families still use native
+carriers under assessment. The `recursive()` combinator handles nested groups and
 quotations. File-level dispatch also has an imperative loop for line ownership
 and recovery; not every parsing stage is a combinator.
 
@@ -130,10 +160,6 @@ a matched profile and result boundary.
 
 ### Limitations
 
-- **Long-running service posture:** This crate is designed first as an
-  independently implemented experimental batch parser, not as the
-  toolchain's long-lived incremental parser service. The LSP and default
-  editor/runtime path continue to use `talkbank-parser`.
 - **No incremental parsing.** TreeSitter supports incremental reparsing
   (essential for the LSP). Re2c+chumsky does not. The LSP always uses
   TreeSitterParser.
@@ -154,7 +180,7 @@ cargo bench -p talkbank-parser-re2c --bench parse_comparison
 ```
 
 For lexer-source changes, use the exact generator version in
-[`re2c-version.toml`](../../re2c-version.toml), regenerate with the invocation
+[`re2c-version.toml`](https://github.com/TalkBank/chatter/blob/main/re2c-version.toml), regenerate with the invocation
 in [`build.rs`](build.rs), and run `just verify-vendored-lexer`. That currency
 check compares generated bytes; it does not replace parser behavior tests.
 Do not hand-edit `src/generated/lexer.rs`.

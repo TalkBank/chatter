@@ -36,17 +36,29 @@
 //! # Example
 //!
 //! ```rust
-//! use talkbank_parser::TreeSitterParser;
+//! use talkbank_parser::{ParseProduct, TreeSitterParser};
 //!
 //! let parser = TreeSitterParser::new().expect("grammar loads");
 //!
 //! // Reuse the same parser for multiple files. `parse_chat_file` returns a
 //! // `ParseProduct`, never a bare `Result`: a document that built a model
 //! // always hands the model back, even when it also carries diagnostics.
-//! let file1 = parser.parse_chat_file("@UTF8\n@Begin\n*CHI:\thello .\n@End\n")
-//!     .expect_built();
-//! let file2 = parser.parse_chat_file("@UTF8\n@Begin\n*MOT:\thi .\n@End\n")
-//!     .expect_built();
+//! for source in [
+//!     "@UTF8\n@Begin\n*CHI:\thello .\n@End\n",
+//!     "@UTF8\n@Begin\n*MOT:\thi .\n@End\n",
+//! ] {
+//!     match parser.parse_chat_file(source) {
+//!         ParseProduct::Built { file, diagnostics } => {
+//!             // Retain both: building a model does not establish validity.
+//!             assert_eq!(file.utterances().count(), 1);
+//!             assert!(diagnostics.is_empty());
+//!         }
+//!         ParseProduct::Unbuildable { diagnostics } => {
+//!             return Err(talkbank_model::ParseErrors::from(diagnostics));
+//!         }
+//!     }
+//! }
+//! # Ok::<(), talkbank_model::ParseErrors>(())
 //! ```
 //!
 //! # Thread Safety

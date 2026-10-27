@@ -44,7 +44,7 @@ pub enum CachePolicy {
 }
 
 impl CachePolicy {
-    /// The policy a run's presentation and `--force` allow: an audit reads
+    /// The policy a run's presentation and `--refresh-cache` allow: an audit reads
     /// only, and asking it to refresh is a conflict, never a silent clear.
     pub fn for_run(
         presentation: &ValidationPresentation,
@@ -127,7 +127,7 @@ pub enum PresentationConflict {
     QuietWithJson,
     /// `--tui-mode force` beside a surface that is not the TUI.
     ForcedTuiWith(NonTuiSurface),
-    /// `--force` clears cache rows, and an audit never writes the cache.
+    /// `--refresh-cache` clears cache rows, and an audit never writes the cache.
     ForceWithAudit,
 }
 
@@ -160,9 +160,9 @@ impl std::fmt::Display for PresentationConflict {
             Self::ForcedTuiWith(surface) => {
                 write!(f, "--tui-mode force cannot be used with {surface}")
             }
-            Self::ForceWithAudit => {
-                f.write_str("--force cannot be used with --audit: an audit never writes the cache")
-            }
+            Self::ForceWithAudit => f.write_str(
+                "--refresh-cache cannot be used with --audit: an audit never writes the cache",
+            ),
         }
     }
 }
@@ -267,7 +267,7 @@ pub fn validate_paths_parallel(
     paths: Vec<PathBuf>,
     summary_label: PathBuf,
     options: ValidateDirectoryOptions,
-) -> ValidationOutcome {
+) -> crate::exit_codes::CommandResult<ValidationOutcome> {
     // Every presentation, INCLUDING audit, goes through this one flow; see
     // `audit_renderer` for why audit is a renderer rather than a pipeline.
     runtime::run_validation_runtime(paths, summary_label, options)
@@ -281,14 +281,21 @@ pub fn validate_paths_parallel(
 pub(crate) fn validate_watched_file(
     path: PathBuf,
     run: &talkbank_transform::ValidationRun,
-) -> talkbank_transform::RunEnding {
+) -> crate::exit_codes::CommandResult<talkbank_transform::RunEnding> {
     let mut renderer = renderer::lines_renderer(Verbosity::Quiet);
     let label = path.clone();
-    let (events, _canceller) =
+    let (events, canceller) =
         talkbank_transform::validation_runner::validate_files_streaming(vec![path], run);
     // Quiet text has no output that can fail apart from the run; the
     // ending is the result.
-    renderer::render_run(events, renderer.as_mut(), &label, run.config().roundtrip).ending
+    Ok(renderer::render_run(
+        events.into_iter().map(Ok),
+        renderer.as_mut(),
+        &label,
+        run.config().roundtrip,
+    )
+    .inspect_err(|_| canceller.cancel())?
+    .ending)
 }
 
 #[cfg(test)]
@@ -304,10 +311,10 @@ mod watch_tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let reference = root.join("corpus/reference/core/basic-conversation.cha");
         let run = ValidationRun::uncached(ValidationConfig::default());
-        let ending = validate_watched_file(reference, &run);
+        let ending = validate_watched_file(reference, &run).unwrap();
         assert!(ending.passed(), "{ending:?}");
         let dir = tempfile::tempdir().expect("temporary directory");
-        let gone = validate_watched_file(dir.path().join("gone.cha"), &run);
+        let gone = validate_watched_file(dir.path().join("gone.cha"), &run).unwrap();
         assert!(
             matches!(&gone, RunEnding::Complete(stats) if stats.snapshot().invalid_files() == 1),
             "{gone:?}"

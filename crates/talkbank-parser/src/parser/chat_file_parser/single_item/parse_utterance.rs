@@ -11,8 +11,7 @@ use crate::error::{ErrorCode, ErrorCollector, ParseErrors, ParseResult, Severity
 use crate::generated_traversal::{
     FromNodeKind, NodeSlot, SourceFileChoice, SourceFileNode, extract_source_file,
 };
-use crate::model::Line;
-use crate::model::Utterance;
+use talkbank_model::{SingleUtterance, UtteranceCardinalityError};
 
 /// The probe's decision retains the exact input it classified. A complete
 /// document already owns its admitted envelope; only fragments need scaffolding.
@@ -67,7 +66,10 @@ impl<'input> UtteranceInput<'input> {
 /// This path intentionally reuses whole-file recovery so fragment parsing stays
 /// aligned with normal utterance construction, including preceding headers and
 /// attached dependent tiers.
-pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseResult<Utterance> {
+pub(super) fn parse_utterance(
+    parser: &TreeSitterParser,
+    input: &str,
+) -> ParseResult<SingleUtterance> {
     let fragment = UtteranceInput::admit(parser, input)?.into_wrapped()?;
     let errors_sink = ErrorCollector::new();
     let file = fragment.parse_file(parser, &errors_sink);
@@ -76,24 +78,20 @@ pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseRe
         return Err(ParseErrors::from(parse_errors));
     }
 
-    let utterance = file
-        .map(|file| {
-            file.lines.into_iter().find_map(|line| match line {
-                Line::Utterance(utterance) => Some(*utterance),
-                _ => None,
-            })
-        })
-        .transpose()
-        .ok_or_else(|| {
-            ParseErrors::from(vec![fragment.whole_input_error(
-                ErrorCode::MissingMainTier,
-                Severity::Error,
-                input,
-                "No utterance found in parsed output",
-            )])
-        })?;
+    let utterance = file.try_map(SingleUtterance::admit).map_err(|reason| {
+        let code = match reason {
+            UtteranceCardinalityError::Missing => ErrorCode::MissingMainTier,
+            UtteranceCardinalityError::Multiple => ErrorCode::UnparsableContent,
+        };
+        ParseErrors::from(vec![fragment.whole_input_error(
+            code,
+            Severity::Error,
+            input,
+            reason.to_string(),
+        )])
+    })?;
 
-    Ok(fragment.rebase(utterance))
+    fragment.rebase_utterance(utterance)
 }
 
 #[cfg(test)]

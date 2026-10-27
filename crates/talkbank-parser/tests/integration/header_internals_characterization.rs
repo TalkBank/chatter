@@ -119,7 +119,7 @@ fn headers_speaker_info_fixture_parses_with_zero_diagnostics() {
         r#"Utf8"#,
         r#"Begin"#,
         r#"Languages { codes: LanguageCodes([LanguageCode("eng"), LanguageCode("ara")]) }"#,
-        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }, ParticipantEntry { speaker_code: SpeakerCode("MOT"), name: None, role: ParticipantRole("Mother") }, ParticipantEntry { speaker_code: SpeakerCode("F_A_T"), name: None, role: ParticipantRole("Father") }]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }, ParticipantEntry { speaker_code: SpeakerCode("MOT"), details: Complete { name: None, role: ParticipantRole("Mother") } }, ParticipantEntry { speaker_code: SpeakerCode("F_A_T"), details: Complete { name: None, role: ParticipantRole("Father") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng"), LanguageCode("ara")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: Some(Valid { years: 1, months: Some(8), days: Some(2), raw: "1;08.02" }), sex: Some(Female), group: Some(GroupName("normal")), ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng"), LanguageCode("ara")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("MOT"), age: None, sex: Some(Female), group: None, ses: None, role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng"), LanguageCode("ara")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("F_A_T"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Father"), education: None, custom_field: None })"#,
@@ -266,7 +266,7 @@ fn id_missing_tail_keeps_structural_recovery_without_a_fabricated_header() {
         r#"Utf8"#,
         r#"Begin"#,
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
-        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"Utterance"#,
         r#"End"#,
     ];
@@ -294,14 +294,14 @@ fn id_missing_tail_keeps_structural_recovery_without_a_fabricated_header() {
 }
 
 #[test]
-fn participants_missing_role_rejects_entry_with_e513() {
+fn participants_missing_role_retains_explicit_entry_with_e513() {
     let (reprs, diags) = parse_lines_and_diags(PARTICIPANTS_MISSING_ROLE);
 
     let expected: Vec<&str> = vec![
         r#"Utf8"#,
         r#"Begin"#,
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
-        r#"Participants { entries: ParticipantEntries([]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: MissingRole }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"Utterance"#,
         r#"End"#,
@@ -313,20 +313,12 @@ fn participants_missing_role_rejects_entry_with_e513() {
 
     assert_eq!(
         diags,
-        vec![
-            (
-                "E513".to_string(),
-                44,
-                47,
-                "Participant role cannot be empty".to_string(),
-            ),
-            (
-                "E523".to_string(),
-                48,
-                81,
-                "@ID header for 'CHI' but speaker not in @Participants".to_string(),
-            ),
-        ],
+        vec![(
+            "E513".to_string(),
+            44,
+            47,
+            "Participant role cannot be empty".to_string(),
+        ),],
         "participants_missing_role diagnostics changed, got: {diags:?}"
     );
 }
@@ -339,7 +331,7 @@ fn media_empty_contents_keeps_structural_recovery_without_a_fabricated_header() 
         r#"Utf8"#,
         r#"Begin"#,
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
-        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"Utterance"#,
         r#"End"#,
@@ -360,12 +352,18 @@ fn media_empty_contents_keeps_structural_recovery_without_a_fabricated_header() 
 
 #[test]
 fn languages_digit_token_yields_e316_via_document_level_recovery() {
-    let (reprs, diags) = parse_lines_and_diags(LANGUAGES_DIGIT_TOKEN);
+    assert_rejected_language_source(
+        LANGUAGES_DIGIT_TOKEN,
+        "@Languages:\t123",
+        talkbank_model::model::LanguageHeaderFailure::Syntax,
+    );
+    let (mut reprs, diags) = parse_lines_and_diags(LANGUAGES_DIGIT_TOKEN);
+    reprs.retain(|line| !line.starts_with("UnparsedLanguages("));
 
     let expected: Vec<&str> = vec![
         r#"Utf8"#,
         r#"Begin"#,
-        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"Utterance"#,
         r#"End"#,
@@ -395,13 +393,18 @@ fn languages_digit_token_yields_e316_via_document_level_recovery() {
 /// type-distinct from Present and is reported as a diagnostic instead.
 #[test]
 fn languages_empty_contents_reports_missing_language_code_not_panic() {
-    let (reprs, diags) = parse_lines_and_diags(LANGUAGES_EMPTY_CONTENTS);
+    assert_rejected_language_source(
+        LANGUAGES_EMPTY_CONTENTS,
+        "@Languages:\t\n",
+        talkbank_model::model::LanguageHeaderFailure::List,
+    );
+    let (mut reprs, diags) = parse_lines_and_diags(LANGUAGES_EMPTY_CONTENTS);
+    reprs.retain(|line| !line.starts_with("UnparsedLanguages("));
 
     let expected: Vec<&str> = vec![
         r#"Utf8"#,
         r#"Begin"#,
-        r#"Languages { codes: LanguageCodes([]) }"#,
-        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"Utterance"#,
         r#"End"#,
@@ -440,7 +443,7 @@ fn situation_empty_contents_decodes_empty_text() {
         r#"Utf8"#,
         r#"Begin"#,
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
-        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"Situation { text: SituationDescription("") }"#,
         r#"Utterance"#,
@@ -471,7 +474,7 @@ fn types_missing_activity_and_group_yields_e316_via_document_level_recovery() {
         r#"Utf8"#,
         r#"Begin"#,
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
-        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }]) }"#,
+        r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"Utterance"#,
         r#"End"#,
@@ -491,4 +494,25 @@ fn types_missing_activity_and_group_yields_e316_via_document_level_recovery() {
         ),],
         "types_missing_activity_and_group diagnostics changed, got: {diags:?}"
     );
+}
+
+fn assert_rejected_language_source(
+    source: &str,
+    expected: &str,
+    failure: talkbank_model::model::LanguageHeaderFailure,
+) {
+    let parser = TreeSitterParser::new().expect("parser");
+    let errors = ErrorCollector::new();
+    let file = parser.parse_chat_file_streaming(source, &errors);
+    let raw = file
+        .headers()
+        .find_map(|header| match header {
+            talkbank_model::model::Header::UnparsedLanguages(raw) => Some(raw),
+            _ => None,
+        })
+        .expect("retained language rejection");
+    assert_eq!(raw.source(), expected);
+    assert_eq!(raw.failure(), failure);
+    let span = raw.location().span().expect("source location");
+    assert_eq!(&source[span.start()..span.end()], expected);
 }

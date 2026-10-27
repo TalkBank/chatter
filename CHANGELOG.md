@@ -9,6 +9,90 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-10-27
+
+This release reorganizes the CLI around common tasks and explicit specialist
+workflows, strengthens source-preserving output, and carries breaking model,
+parser and LSP corrections. See the [0.32 migration guide](https://talkbank.github.io/chatter/contributing/migration-0.32.html)
+for Rust API and JSON/RPC changes, and the [CLI migration table](https://talkbank.github.io/chatter/chatter/user-guide/cli-reference.html#migration)
+for command replacements. This remains a pre-1.0 release; parser completeness,
+registry publication and native platform acceptance are separate obligations.
+
+### Changed
+
+- **Breaking CLI redesign:** `format`, `new`, `convert`, `inspect` and `checks`
+  replace the older names; specialist commands live under `experimental`.
+  Old spellings fail with migration guidance, without aliases. Mapping,
+  matching, replay, suggestions and review have distinct requests. Replay
+  requires a session identity and decision file; review requires an operator.
+- Added task-oriented bare/namespace help and `commands list/show`, including
+  `chatter.commands.v1` JSON discovery derived from executable syntax and typed
+  effects. Terminal options belong to validation. Logging format remains
+  separate from result formats.
+- Repair, in-place transforms and cache clearing preview by default;
+  `--apply` authorizes writes. Semantic repairs still require selected codes.
+  Validation refresh uses `--refresh-cache`; export regeneration uses `--rebuild`.
+- Source replacements stage complete output, refuse stale inputs and preserve
+  supported metadata under explicit macOS/Linux/Windows policies. Symlinks,
+  multiply-linked/read-only targets and unsupported metadata are refused.
+  Separate artifacts and complete validation audits also stage regular output
+  and reject source aliases. Streams and multi-file publication remain
+  nontransactional; see the migration guide for their distinct policies.
+- **Breaking model/JSON changes:** headers are authoritative for participants,
+  languages, options and media; duplicated file caches are removed. Participant
+  details, malformed tiers, annotations and timing carry explicit recovery
+  states. Constructors admit lexical/structural evidence; removed unchecked or
+  placeholder constructors no longer manufacture successful content.
+- **Breaking parser/library changes:** source-bound native carriers own their
+  source and locations, shared model types replace duplicate native AST types,
+  fragment rebasing is fallible, and single-utterance APIs reject extra
+  utterances. `WriteChat` propagates typed writer errors. Detailed constructor,
+  enum, method and wire-format migrations are in the migration guide.
+- **Breaking LSP contracts:** execute-command failures use JSON-RPC errors;
+  scoped-search matches carry full LSP ranges; unavailable participant
+  declarations refuse speaker extraction. Source-dependent edits are bound to
+  document revisions and synchronization state.
+- Desktop validation/cancellation events are bound to their issuing run;
+  late callbacks cannot change a replacement run. Target selection, startup
+  cancellation and batched UI updates retain their lifecycle boundaries.
+  The dormant CLI installer is removed; the desktop does not bundle the CLI.
+- CLI/LSP release inventory and updater metadata now require complete product,
+  platform, executable and version/tag agreement. Packaged CLI build stamps use
+  source fingerprints; transform packages include their generated schema.
+  Version synchronization stages owned version edits and preserves unrelated
+  manifest fields. Dependency/tooling versions are refreshed together.
+
+### Fixed
+
+- Both parsers retain rejected source instead of inventing words, empty tiers,
+  terminators or successful declarations. Recovery survives CHAT/JSON roundtrips
+  and cannot confer alignment or timing trust. Native lexing no longer treats
+  embedded NUL as EOF; word/event alphabets and typed header identities prevent
+  malformed syntax from acquiring unrelated semantics.
+- Validation and rendering handle LF, CRLF and CR consistently. Checked fragment
+  spans cannot escape caller input. GRA cycle checks retain repeated-index edges;
+  nested overlap/group checks retain their own source locations. Dependent-tier
+  replacement updates the original label slot, including recovery variants.
+- Formatting and redaction refuse source loss. Redaction retains structural
+  boundaries, uses valid alphabetic placeholders and is idempotent for admitted
+  reference cases; it does not certify anonymity or complete CHAT validity.
+- Speaker transforms reject malformed/colliding identities and unavailable
+  declarations; renames update personal-header references. Review refuses
+  aliased inputs/outputs and trailing decisions. Scans reject missing selected
+  inputs and source-aliased pending output rather than reporting partial success.
+- CLI failures propagate through owned cleanup. Broken stdout stops further
+  work, terminal setup/render failures restore state, and forced validation
+  interruption returns 130. Partial batch failures remain nonzero. File watches
+  survive replacement saves and retain the selected parser/cache identity.
+- LSP search, edits, hints, hovers, completion, media links, speaker references
+  and gem folding use shared parsed relationships and exact UTF-16/line geometry.
+  Rejected edit batches require resynchronization; formatting and quick fixes
+  cannot return stale or source-losing edits.
+- Desktop exports protect every reported source and stage complete reports;
+  uppercase `.JSON` selects JSON. File-manager reveal failures are visible.
+- Windows CLAN sends refuse oversized paths and write/close failures before
+  notification; native build configuration follows Cargo's target.
+
 ## [0.31.0] - 2026-10-20
 
 This interim release gives every model value and diagnostic an honest source
@@ -62,7 +146,7 @@ changes.
   reports the producer fault (`CstFailure::AbsentRequiredPosition`) in the
   `@Languages` code slots (it was a silent rejection), the `@ID` language
   component and list head (they reported E510 for content never read), the
-  three `@Types` fields (they reported E330 "Missing <field>") and the `@ID`
+  three `@Types` fields (they reported E330 `Missing <field>`) and the `@ID`
   speaker and role fields. The `@ID` speaker and role arms also no longer
   report E511 or E515 for a MISSING or ERROR node, a mirror of the model's
   rule with its own wording; the model reports an empty present field
@@ -5825,7 +5909,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/TalkBank/chatter/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/TalkBank/chatter/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/TalkBank/chatter/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/TalkBank/chatter/compare/v0.28.0...v0.29.0

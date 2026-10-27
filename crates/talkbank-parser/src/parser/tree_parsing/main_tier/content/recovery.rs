@@ -1,7 +1,7 @@
 //! Carrier-owned recovery reporting for main-tier body regions.
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::{KindProof, NamedKind, PresenceProof, Raw};
+use crate::generated_traversal::{AsRawNode, KindProof, NamedKind, PresenceProof, RangePhase};
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use tree_sitter::Node;
 
@@ -12,7 +12,7 @@ use super::errors::{MainTierRegion, classify_main_tier_recovery};
 /// arbitrary node slice with a different region or diagnostic label.
 pub(crate) trait MainTierBodyCarrier<'tree>: sealed::Sealed {
     type Owner: NamedKind;
-    fn unexpected(&self) -> &[Node<'tree>];
+    fn unexpected(&self) -> impl Iterator<Item = Node<'tree>>;
 }
 
 mod sealed {
@@ -23,10 +23,13 @@ mod sealed {
 macro_rules! narrowed_body_carriers {
     ($($carrier:ident => $owner:ident),* $(,)?) => {
         $(
-            impl<K: KindProof> sealed::Sealed for crate::generated_traversal::$carrier<'_, K> {}
-            impl<'tree, K: KindProof> MainTierBodyCarrier<'tree> for crate::generated_traversal::$carrier<'tree, K> {
+            impl<'tree, K: KindProof, R: RangePhase<'tree>> sealed::Sealed for crate::generated_traversal::$carrier<'tree, K, R> {}
+            impl<'tree, K: KindProof, R: RangePhase<'tree>> MainTierBodyCarrier<'tree> for crate::generated_traversal::$carrier<'tree, K, R>
+            where R::Node: AsRawNode<'tree> {
                 type Owner = crate::generated_traversal::$owner<'tree>;
-                fn unexpected(&self) -> &[Node<'tree>] { &self.unexpected }
+                fn unexpected(&self) -> impl Iterator<Item = Node<'tree>> {
+                    self.unexpected.iter().map(AsRawNode::raw_node)
+                }
             }
         )*
     };
@@ -46,13 +49,16 @@ narrowed_body_carriers! {
 
 macro_rules! presence_body_carriers {
     ($($carrier:ident => $owner:ident),* $(,)?) => {$(
-        impl<K: KindProof, P: PresenceProof> sealed::Sealed
-            for crate::generated_traversal::$carrier<'_, K, Raw, P> {}
-        impl<'tree, K: KindProof, P: PresenceProof> MainTierBodyCarrier<'tree>
-            for crate::generated_traversal::$carrier<'tree, K, Raw, P>
+        impl<'tree, K: KindProof, R: RangePhase<'tree>, P: PresenceProof> sealed::Sealed
+            for crate::generated_traversal::$carrier<'tree, K, R, P> {}
+        impl<'tree, K: KindProof, R: RangePhase<'tree>, P: PresenceProof> MainTierBodyCarrier<'tree>
+            for crate::generated_traversal::$carrier<'tree, K, R, P>
+        where R::Node: AsRawNode<'tree>
         {
             type Owner = crate::generated_traversal::$owner<'tree>;
-            fn unexpected(&self) -> &[Node<'tree>] { &self.unexpected }
+            fn unexpected(&self) -> impl Iterator<Item = Node<'tree>> {
+                self.unexpected.iter().map(AsRawNode::raw_node)
+            }
         }
     )*};
 }
@@ -73,13 +79,13 @@ pub(crate) fn surface_main_tier_sink<'tree, C: MainTierBodyCarrier<'tree>>(
     for node in carrier.unexpected() {
         if node.is_error() {
             errors.report(classify_main_tier_recovery(
-                *node,
+                node,
                 source,
                 MainTierRegion::Body,
             ));
         } else {
             surface_displaced(
-                std::slice::from_ref(node),
+                std::slice::from_ref(&node),
                 C::Owner::KIND.name(),
                 source,
                 errors,

@@ -4,6 +4,12 @@
 
 Read the [root guidance](../../AGENTS.md) first. This file adds re2c-specific
 ownership and compatibility requirements, not a separate verification policy.
+Tree-sitter and re2c are peer backends. The shared model can evolve for either
+parser; Tree-sitter's earlier prototype does not give it model ownership.
+Follow the shared model's
+[no-defaults/no-sentinels principle](../../book/src/architecture/chat-model/chat-model.md#no-silent-defaults-or-sentinels):
+explicit recovery or rejection, never fabricated successful content. Silent
+placeholders cause spurious diagnostic cascades and corrupt downstream data.
 
 **Mandatory first read for parity, recovery or diagnostic work:**
 [Backend compatibility mandate](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate).
@@ -22,15 +28,20 @@ A CHAT transcript parser using **re2rust** (re2c's Rust backend) for lexing and 
 ## Architecture
 
 ```
-re2c DFA Lexer  -->  Chumsky Combinators  -->  AST  -->  talkbank-model
-  (lexer.re)          (parser/*.rs)       (ast.rs)     (convert/*.rs)
+re2c DFA Lexer  -->  Chumsky Combinators  -->  talkbank-model
+  (lexer.re)          (parser/*.rs)          (convert/*.rs)
 ```
 
 **Pipeline stages:**
 1. **Lexer** (`lexer.re`), re2c DFA produces rich tokens with tagged field extraction.
-2. **Parser** (`parser/`), chumsky combinators consume `&[Token]` and produce AST types.
-3. **Conversion** (`convert/`), conversion functions map AST to talkbank-model
-   values, each built through its model constructor with its `Location` as the
+2. **Parser** (`parser/`), chumsky combinators consume `&[Token]`. MOR parsing
+   constructs shared words, items and tiers directly. Participant lists construct
+   shared `ParticipantEntries`, including explicit missing-role recovery, with no
+   native participant AST or conversion. ID and media bodies also construct shared
+   headers directly. Text-tier parsing retains a token view for direct shared-model construction; other
+   families still use native intermediate types in `ast.rs`.
+3. **Conversion** (`convert/`), conversion functions build talkbank-model
+   values from admitted input, each through its model constructor with its `Location` as the
    first argument. Source-aware conversions use `SourceText` to place original
    input slices; see "Locations" below for what is and is not located.
 
@@ -52,7 +63,7 @@ src/parser/
 
 **Chumsky** (pinned in `Cargo.toml`). Token-stream input via `&[Token<'a>]`. The `select!` macro matches token variants by value. `recursive()` handles nested groups/quotations.
 
-**Borrowed source, temporary tokens.** Parser signatures separate `'tokens` from `'source`. The lexer borrows the caller's input and treats end-of-buffer as NUL without padding or unchecked reads. Local token and recovery vectors are dropped after parsing. `WordWithAnnotations::raw_text` is a slice of the source on both word paths (the rich token's, or the covering slice an assembled word borrows). Never leak allocations to extend a lifetime.
+**Borrowed source, temporary tokens.** Parser signatures separate `'tokens` from `'source`. The lexer borrows the caller's input and distinguishes end-of-buffer from NUL without padding or unchecked reads. Local token and recovery vectors are dropped after parsing. `WordWithAnnotations::raw_text` is a slice of the source from its rich token. Never leak allocations to extend a lifetime.
 
 **Imperative file parser.** The file-level parser (`file.rs`) uses an imperative loop for line ownership and recovery. Exact lexer rules emit `DependentPrefixToken` with a `DependentBodyKind`; the dependent-tier parser exhaustively dispatches that admitted kind. Never reclassify labels with prefix-string tests: `%modsyl` and `%mod` select different body grammars.
 
@@ -61,7 +72,7 @@ at the end of an utterance; linker forms remain linkers. No conversion pass
 promotes them to terminators. See
 [CA Terminator Resolution](../../book/src/architecture/parser-and-grammar/ca-terminator-resolution.md).
 
-**Subtoken word assembly.** When the lexer produces sub-tokens instead of a single rich `Token::Word` (edge cases where the `w_body` regex doesn't match), `subtoken_word()` in `main_tier.rs` assembles them and takes the word's `raw_text` as the source slice from the first token's lexeme through the last's, through the `SourceText` the word parsers receive from `LexedSource::source_text()`. That slice is the source as written: a curly quote the file parser stripped and reported (E256) between two sub-tokens stays in `raw_text` and is absent from `body`.
+**Word admission.** Rich `Token::Word` values are the only lexical word production. Marker-only subtokens reject. Standalone zero actions have a separate source-bound production and never own lexical suffix fields.
 
 ## Locations
 
@@ -69,19 +80,16 @@ Every model constructor takes its `Location` first, and this backend must say
 honestly which it has:
 
 - **Located:** tiers, headers and main-tier words (`SourceText::span_of` on a
-  borrowed `raw_text`). A word the lexer split into subtokens and reassembled
-  (`Cow::Owned`) is still located when the assembly can place it; check the
-  converter rather than assuming. Also located: every item whose token keeps
+  borrowed `raw_text`). Also located: every item whose token keeps
   its WHOLE lexeme (`emit!` rules: terminators, linkers, overlap and
   underline markers, the action marker, `%wor` separators), through
   `convert::locate(source, slice)`, and every tier value, whose extent the
-  line machine owns (`LexedSource::extent`, `LexedSource::main_tier_locations`;
+  line machine owns (`NonEmptyRegion::extent`, `NonEmptyRegion::main_tier_locations`;
   `LocatedMainTier`, `DependentTierEntryParsed::extent`). A line includes its
   ending and main-tier content starts after the separator's colon, the same
   convention as the tree-sitter grammar; it is written on
   `MainTierLocations` and nowhere else. Word-body markers (`WordBodyItem`)
-  carry their lexeme from both producers, the character scanner and the
-  subtoken word builder, and the lengthening run is a `LengtheningRun` that
+  carry their lexeme from the character scanner, and the lengthening run is a `LengtheningRun` that
   owns the nonempty proof once. To locate a new item kind, make its token
   carry the whole lexeme, then `locate` it in the converter; never recompute
   an offset from payload lengths or from a neighbouring token.
@@ -90,8 +98,8 @@ honestly which it has:
   the payload (`eng` of `[- eng]`, `laughs` of `&=laughs`) and is what
   consumers read; `lexeme()` is the item as written and is the ONLY slice to
   pass to `locate`. A payload slice locates the payload, not the item. Events,
-  freecodes, long features, nonvocals, the precode, the other-spoken event
-  (its own `lexeme` field), bullets (`MediaBulletToken::text()`) and the
+  freecodes, long features, nonvocals, the precode, the interposed-speaker prefix,
+  bullets (`MediaBulletToken::text()`) and the
   whitespace token directly before the `@Media` comma are placed this way.
 - **Located as hulls:** groups and quotations from their `Enclosure`
   (opening through closing delimiter), a retrace from its content (the
@@ -99,7 +107,7 @@ honestly which it has:
   replaced word from the word through its last annotation, and every
   `Annotated` wrapper from its construct through its last annotation
   (`ParsedAnnotation::span_in`). The helpers live in `convert/items.rs`
-  (`retrace_span`, `content_item_span`, `annotations_hull`); a hull with any
+  (`retrace_span`, `chain_span`, `annotations_hull`); a hull with any
   part it cannot place is `Unlocated`, never a span that stops short. The
   model's E757 rule depends on these wrappers being placed; do not reintroduce
   a parser-side mirror of it.
@@ -111,6 +119,10 @@ honestly which it has:
   the source being converted (a programming error). Never write a
   placeholder span (`0..0` was the old sentinel and is gone from the
   language); write `talkbank_model::Location::Unlocated`.
+- Word/event character classes and word-attached marker sets come from
+  `src/generated_symbol_sets.re`, emitted by `just symbols-gen` from the
+  canonical symbol registry. Rich word rules own text admission; do not add
+  a fallback word token with a broader character class.
 - Changing `lexer.re` means regenerating `src/generated/lexer.rs` with the
   invocation in `build.rs` under the pinned re2rust (`re2c-version.toml`) in
   the same commit; `just verify-vendored-lexer` byte-compares them.
@@ -158,7 +170,7 @@ Token::Word {
 | `MorWord` | pos, lemma_features | %mor word |
 | `GraRelation` | index, head, relation | %gra relation |
 | `MediaBullet` | start_time, end_time | Timestamp extraction |
-| `OtherSpokenEvent` | speaker, text | &*SPK:word |
+| `OtherSpokenPrefix` | speaker, prefix lexeme | &*SPK: followed by the ordinary word producer |
 
 ## Implementing the shared CHAT language
 
@@ -196,11 +208,13 @@ re2c conditions are numbered states that change what rules are active:
 | `parse_main_tier` | `INITIAL` | `*CHI:\thello .\n` | `MainTier` |
 | `parse_chat_file` | `INITIAL` | full `.cha` file | `ChatFile` |
 | `parse_word` | `MAIN_CONTENT` | `ice+cream@f` | `WordWithAnnotations` |
-| `parse_mor_tier` | `MOR_CONTENT` | `pro\|I v\|want .\n` | `MorTier` |
-| `parse_gra_tier` | `GRA_CONTENT` | `1\|2\|SUBJ 2\|0\|ROOT` | `GraTier` |
-| `parse_pho_tier` | `PHO_CONTENT` | `wɑ+kɪŋ hɛloʊ .\n` | `PhoTier` |
-| `parse_text_tier` | `TIER_CONTENT` | text with bullets | `TextTierParsed` |
-| `parse_id_header` | `ID_CONTENT` | `eng\|corpus\|CHI\|...` | `IdHeaderParsed` |
+| `parse_mor_tier` | `MOR_CONTENT` | `pro\|I v\|want .\n` | `ParseOutcome<talkbank_model::MorTier>` |
+| `parse_gra_tier` | `GRA_CONTENT` | `1\|2\|SUBJ 2\|0\|ROOT` | `ParseOutcome<talkbank_model::GraTier>` |
+| `parse_pho_tier` | `PHO_CONTENT` | `wɑ+kɪŋ hɛloʊ .\n` | `ParseOutcome<talkbank_model::PhoTier>` |
+| `parse_sin_tier` | `SIN_CONTENT` | gesture/sign body | `ParseOutcome<talkbank_model::SinTier>` |
+| `parse_text_tier` | `TIER_CONTENT` | text with bullets | `ParseOutcome<BulletContent>` |
+| `parse_id_header` | `ID_CONTENT` | `eng\|corpus\|CHI\|...` | `Option<IDHeader>` |
+| `parse_languages_header` | `LANGUAGES_CONTENT` | comma-separated language-list body | `ParseOutcome<LanguageCodes>` |
 
 ## ChatParser Trait
 

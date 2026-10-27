@@ -8,6 +8,194 @@ alignment primitives used by Chatter's parsers and consumers. This page
 explains model admission, the three content layers and shared traversal
 owners. Downstream task orchestration is separate from these core contracts.
 
+## Parser-neutral ownership
+
+The shared model serves Tree-sitter and re2c on equal footing. Tree-sitter was
+prototyped first; its current lowering needs do not define the model's limits.
+Either parser can require changes to shared syntax, malformed-state or recovery
+representations. The model is deliberately evolvable, not a fixed target for
+the other backend to imitate.
+
+Use shared types when they represent the required meaning. Keep backend-specific
+carriers for parsing mechanics or syntax evidence that warrants them, and
+review whether extending the shared model would remove a duplicate semantic
+AST. See [backend ownership](../parser-backends.md#equal-backends-one-shared-model).
+
+## No silent defaults or sentinels
+
+Missing, malformed, unavailable and rejected data must remain explicit in the
+types and transitions. Never substitute an ordinary model value for a fact the
+producer does not know. Silent defaults and sentinels cause downstream checks
+to diagnose invented data, creating spurious cascades; serializers and
+transforms can then preserve the invention as if it came from the source,
+causing silent corruption.
+
+For example, a missing terminator must not become a period, failed text parsing
+must not become a successful empty body, and rejected timing must not become
+zero timestamps. Unknown source location is an explicit `Unlocated` state;
+`0..0` is a real insertion point, not an absence marker.
+
+Use a closed malformed/recovery variant with the evidence it needs, or an
+explicit failed outcome such as `ParseOutcome::Rejected` or `Result::Err`.
+Genuine source absence and genuinely empty content have their own meaning and
+must not also encode parser failure. `Default`, `.unwrap_or_default()` and
+fallback constructors must never manufacture semantic facts. Validation and
+dependent checks may use only the facts established by the producing state.
+
+This rule applies equally to both parsers and to shared-model changes. Adding
+recovery support means representing what was observed, not weakening a checked
+constructor or filling required fields with plausible placeholders. Successful
+admission into `ValidChatFile` remains separate from a mutable recovery model.
+
+### Literal admission and remaining recovery boundaries
+
+`non_empty_literal!` constructs `NonEmptyLiteral` evidence at compile time.
+The public literal conversion accepts that evidence, never a raw string, so
+direct callers cannot bypass the macro's check. The conversion needs no runtime
+assertion. This proves non-emptiness, not CHAT lexical validity.
+
+`NonEmptyString` has private storage and checked construction, including serde.
+`RecoveryText` represents the mutable model's two observed states explicitly:
+`NonEmpty(NonEmptyString)` and `Empty`. JSON still carries a string; an empty
+string imports as `Empty`, survives rendering unchanged and receives the usual
+contextual validation diagnostic. It cannot masquerade as admitted nonempty text.
+Consuming `TryFrom<RecoveryText>` admits only the `NonEmpty` variant without
+rechecking its bytes. Borrowing or rendering recovery text does not certify it.
+
+Both parsers use this shared representation. This distinction proves lexical
+non-emptiness only: whitespace can be nonempty but semantically invalid, and
+whole-document acceptance still requires `validate_into`. Other model wrappers
+with lenient serde retain their own validation obligations; this change does not
+claim to seal every model boundary.
+
+Language-code recovery remains permissive, including JSON readback. Rewrites
+that promote a code into a declaration or utterance precode require
+`RegisteredLanguageCode`, admitted by the same shape, placeholder and registry
+rules used by validation. This evidence cannot be deserialized. An invalid
+word or span code remains at its original site for E519; `fix-s` does not add it
+to `@Languages`, and E255 does not recommend a precode for it.
+
+Mixed and ambiguous `WordLanguageMarker` values retain their recovery-capable
+lists. A resolved mixed/ambiguous result instead carries `MultipleLanguageCodes`,
+whose constructor and JSON import require at least two members. Derived
+`WordLanguages` metadata retains the same admitted list. Short recovery
+lists report E212 and resolve to `Unresolved`, preserving the original marker.
+This cardinality evidence does not establish registry membership or whole-file
+validity; individual codes retain their normal validation.
+
+### Unavailable analysis and provider transport
+
+The shared model has no fallback constructor for `L2|xxx` morphology or `xbxxx`
+cleaned text. Unavailable analysis must remain an explicit downstream outcome;
+it cannot silently become a successful `MorWord`. Provider-specific substitutions
+belong in a separate request type retaining the source-word association. Only
+an admitted analysis may enter the shared morphology model. Do not migrate old
+callers by moving the same fallback constructor into their local code.
+
+These removals do not ban literal text in authored CHAT. The text projection
+wrappers also support wire deserialization, so neither their types nor their
+successful deserialization certify source provenance or CHAT validity.
+
+### Participant role evidence
+
+`ParticipantEntry` and joined `Participant` metadata carry `ParticipantDetails`.
+`Complete { name, role }` holds an observed role and optional preceding name;
+`MissingRole {}` preserves a declaration containing only a speaker code. CHAT's
+positional syntax cannot identify a name without a final role token, so the
+missing-role state cannot carry a name. Both parsers construct these same types.
+
+The JSON `details` object requires a `state` tag (`complete` or `missing_role`).
+Missing details and unknown fields are rejected, including a name or role attached
+to `missing_role`. No deserialization default invents evidence. `name()` and
+`role()` return only observed values. Rendering a role-less entry emits its code;
+validation reports E513 even after JSON import. ID metadata cannot supply the
+missing declaration role, and stale joined metadata cannot override declarations.
+LSP speaker results expose absent roles as JSON null, and completion keeps the
+known speaker with an explicit missing-role description.
+
+Structurally damaged participant headers use `Header::UnparsedParticipants`,
+which preserves their complete source, including rejected bytes. A recovered CST
+may expose only a speaker prefix or promote the role token into the code position;
+those leaves cannot establish identities. A rejected header remains present for
+header ordering and duplicate checks, but its roster is indeterminate and its
+metadata join yields no missing-ID or orphan-ID conclusions. Model validation
+reports E316 after JSON import as well as on the original recovered model.
+
+Rejected ID fields use `Header::UnparsedID`, retaining source rather than invented
+metadata. They remain invalid after JSON import. When an ID's speaker is
+unreadable, the join cannot prove that any unmatched declaration lacks an ID;
+it withholds those missing-ID conclusions. Readable orphan IDs and birth
+references remain independently checkable. Sanitization refuses the raw ID.
+
+`participant_declaration()` admits exactly one parsed declaration. Absent,
+rejected and repeated declarations have distinct errors; no first declaration
+wins. The optional `participant_entries()` convenience and `declared_speakers()`
+expose only admitted declarations. Merge refuses unavailable declarations before
+combining speakers. The unchecked-model speaker mapping and rediarization APIs
+also admit readable participant identity headers before rewriting: an unparsed
+ID refuses even when the participant declaration is readable. They never report an unchanged
+fallback as successful output. Sanitization refuses unparsed participant headers
+because their name boundaries are unknown. Pseudonymization's validated-input
+boundary excludes them. A plain role omission is narrower than structural recovery:
+`CHI` still identifies CHI and uses `MissingRole {}`. A genuinely empty
+source body is an empty declaration and retains E506; it is never used as
+a substitute for rejected nonempty syntax.
+
+### Unparsed dependent tiers
+
+`DependentTier::UnparsedMor(UnparsedTier)` preserves a MOR line that a
+backend could not parse, including its prefix and observed ending. Both parsers
+retain this state at the original tier position. It is always invalid morphology;
+JSON deserialization preserves that fact even though source locations and parser
+provenance are not serialized. `mor_tier()` returns only parsed morphology.
+
+The raw tier counts as present for duplicate and missing-tier checks, but cannot
+participate in MOR alignment. Model validation reports its unparsed state instead
+of checking fabricated words or a fabricated terminator. `WriteChat` preserves its
+source content; the enclosing utterance owns the output line ending. This is
+recovery serialization, not a validity or normalization guarantee.
+
+Regeneration replaces this slot in place through `replace_or_add_tier`. The
+lenient parsing helper may suppress owned MOR diagnostics for regeneration, but
+retains the raw state and recovery provenance. Sanitization refuses unparsed MOR;
+pseudonymization requires validated input. Utterance splitting applies its existing
+MOR regeneration policy to both parsed and unparsed morphology.
+
+Malformed phone alignment and interval syntax uses
+`DependentTier::UnparsedPhoaln(UnparsedTier)` and
+`DependentTier::UnparsedXphoint(UnparsedTier)`. Both backends retain the original
+source and tier position rather than dropping the line or relabeling a supported
+tier as unsupported. These variants reuse the same raw-source payload as MOR;
+the enclosing enum states which tier failed. No parsed pairs or intervals exist.
+
+The model rejects all three recovery variants after construction or JSON import.
+Their presence withdraws the corresponding alignment trust. Regeneration can
+replace the matching parsed or unparsed tier in its original slot. Sanitization
+and utterance splitting drop raw phonological tiers under the same policy as
+parsed phonological tiers. Genuinely empty parsed tiers remain separate from
+malformed source and continue to receive the empty-content diagnostic.
+
+## Custom dependent-tier labels
+
+`UserDefinedDependentTierLabel::new(text)` admits the complete custom label,
+including its leading `x` and excluding the percent sign. It requires an ASCII
+letter after `x`, followed by ASCII alphanumerics, and excludes structured Phon
+labels owned by `spec/symbols/phon_tier_labels.json`. The grammar's structured
+prefixes and the model's exclusions are generated from that same registry.
+Both parser backends construct this type before building a custom tier; JSON
+deserialization and JSON Schema enforce the same boundary. The label has no
+mutable string access or unchecked constructor.
+
+The former standalone `UserDefinedTier` and suffix-only `UserDefinedTierLabel`
+have been removed. Neither represented the payload used by the parsers or
+`DependentTier`. Callers use `UserDefinedDependentTier` with a full checked
+label; the label type's Rustdoc contains a compiled construction example.
+
+`DependentTier::Unsupported` carries a separate `UnsupportedDependentTier`
+recovery payload. Its raw label remains available for unsupported-tier
+diagnostics. Empty custom-tier bodies remain representable and are judged by
+the existing empty-content rule independently of label admission.
+
 ## Date admission
 
 Construct `ChatDate` through `from_text` or `new`. `Valid(CheckedChatDate)`
@@ -28,13 +216,25 @@ The root type is `ChatFile`, representing a complete CHAT transcript:
 ```rust,ignore
 pub struct ChatFile {
     pub lines: ChatFileLines,
-    pub participants: IndexMap<SpeakerCode, Participant>,
-    pub languages: LanguageCodes,
-    pub options: ChatOptionFlags,
-    pub media: Option<Box<MediaHeader>>,
     pub line_map: Option<LineMap>,
 }
 ```
+
+Header lines are the authority for file options and media. `option_flags()`
+borrows the last `@Options` header's flags (empty when absent), and
+`media_header()` borrows the first `@Media` header (absent when undeclared).
+These accessors preserve recovery-model selection; neither proves unique headers
+or valid media linkage. Line edits take effect immediately. JSON has no duplicate
+root `options` or `media` fields that could disagree with the headers. Language
+declaration likewise comes from `language_declaration()`, not a cached field.
+Participant metadata likewise borrows current `@Participants`, `@ID` and
+`@Birth` headers through the shared join. `get_participant()` and
+`all_participants()` return `ParticipantView` values; `declared_speakers()`
+retains declarations even when their ID metadata is absent. The borrowed views
+cannot survive header mutation. The join still reports E522/E523/E524 at parse,
+transform and validation boundaries; a readable view is not validation evidence.
+JSON contains no root `participants` cache. Legacy root caches are ignored on
+import. For an explicitly detached snapshot, call `to_owned_participant()`.
 
 `validate_into` consumes the mutable model using default rules and structural
 alignment checks. It returns either an immutable `ValidChatFile` with
@@ -77,13 +277,12 @@ flowchart TD
     chatfile["ChatFile\n(talkbank-model/src/model/file/chat_file/core.rs)"]
     valid["ValidChatFile (immutable validation evidence)"] --> chatfile
     chatfile --> lines["lines: ChatFileLines\n(ordered Line newtype)"]
-    chatfile --> participants["participants:\nIndexMap&lt;SpeakerCode, Participant&gt;"]
-    chatfile --> languages["languages: LanguageCodes"]
-    chatfile --> options["options: ChatOptionFlags"]
-    chatfile --> media["media: Option&lt;Box&lt;MediaHeader&gt;&gt;"]
     chatfile --> line_map["line_map: Option&lt;LineMap&gt;\n(not serialized)"]
 
     lines --> header_line["Line::Header (Header)"]
+    header_line --> options["option_flags(): borrowed current flags"]
+    header_line --> media["media_header(): borrowed current media"]
+    header_line --> participants["all_participants(): borrowed current metadata"]
     lines --> utt_line["Line::Utterance (Utterance)"]
 
     utt_line --> preceding["preceding_headers:\nSmallVec&lt;Header&gt;"]
@@ -338,7 +537,7 @@ Used by the alignment pipeline (onset estimation)
 and the validator (pairing checks). For whole-file analysis,
 `analyze_file_overlaps()` matches top regions (⌈) with bottom regions
 (⌊) across utterances with 1:N support (used by E347 and
-`chatter debug overlap-audit`).
+`chatter inspect overlaps`).
 
 ## Validation
 
@@ -402,7 +601,15 @@ For the alignment algorithms themselves, see
 ## Serialization
 
 - **CHAT**: `WriteChat` serializes supported model values. Writing is not
-  validation and need not reproduce original source bytes.
+  validation and need not reproduce original source bytes. Renderers use
+  `ChatWriter`, whose associated error belongs to the destination. Existing
+  `std::fmt::Write` sinks propagate `fmt::Error`; owned-string helpers use
+  `ChatString` with `Infallible`, so they cannot suppress a rendering error and
+  return a partial string as success. The rendering interface accepts text,
+  characters and decimal integers, not arbitrary fallible `Display` callbacks.
+  Streaming failure may leave a prefix in the caller's sink; callers must handle
+  the returned error. Changing an implementation requires migrating its bound
+  to `W: ChatWriter` and its result to `Result<(), W::Error>`.
 - **JSON**: the transcript model has a serde representation; runtime trust,
   source indexes and accepted-document evidence are not reconstructed by
   deserialization. `ValidChatFile` has no deserialization path. See the

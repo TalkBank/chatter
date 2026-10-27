@@ -18,19 +18,23 @@ recording or transcript preview.
 Use separate working copies and avoid simultaneous writers. There is no
 dry-run flag or automatic decision history.
 
-## `chatter adjudicate`
+## `chatter experimental review`
 
 Choose one of these forms, using your own retained inputs:
 
 ```bash
-chatter adjudicate pending.toml --override-file overrides.toml \
-  --scripted decisions.toml --operator operator
+chatter experimental review scripted pending.toml --override-file overrides.toml \
+  --script decisions.toml --operator operator
 ```
 
 ```bash
-chatter adjudicate pending.toml --override-file overrides.toml \
-  --interactive --operator operator
+chatter experimental review interactive pending.toml --override-file overrides.toml \
+   --operator operator
 ```
+
+Use separate files for pending entries, overrides and scripted decisions.
+The command refuses file aliases (including hard links and symlinks) before
+prompting or writing. Keep these paths stable while the command runs.
 
 On success, decisions replace/insert session entries in the override file,
 then the pending file is rewritten without resolved entries.
@@ -54,22 +58,30 @@ the scripted format, admitted decision/kind pairs and in-memory retry contract.
 
 ## Failure and recovery
 
+Scripted decisions must match the pending entries in order and be exhausted
+when those entries end. Missing, out-of-order or unused trailing decisions cause
+exit 2. Check the script against the retained pending file before retrying;
+do not remove a decision without reviewing why it has no matching request.
+
 Decision failure occurs before either CLI file write: answers already supplied
 during that invocation are not persisted. On a write failure, however, the
 override file may already have changed while the pending file remains old.
-The two writes are not transactional.
+The two writes are not transactional. Each uses its own exclusively created
+temporary sibling; existing `*.toml.tmp` files are left untouched. Replacement
+files use owner-only permissions on Unix, so review sharing permissions after
+successful publication if other accounts need access.
 
 Compare both files with the retained originals before retrying. Do not simply
 assume exit failure means no change, or that replay creates a history record.
 See [Override File Format](../integrating/merge-overrides.md).
 
-## `chatter sanity-scan`
+## `chatter experimental speakers scan`
 
 The scan flags a mean-utterance-word-count asymmetry for operator review.
 It is not a nearby-text-similarity detector or a speaker-identity oracle.
 
 ```text
-chatter sanity-scan MERGED_DIR \
+chatter experimental speakers scan MERGED_DIR \
   --override-file overrides.toml --anchor CHI --write-pending pending.toml
 ```
 

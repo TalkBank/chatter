@@ -2,7 +2,8 @@
 //!
 //! `schema_for!(ChatFile)` produces the Draft 2020-12 schema. Only top-level
 //! metadata is added before the result is written to the workspace
-//! `schema/chat-file.schema.json`. Run with `--nocapture` to see the summary.
+//! `schema/chat-file.schema.json` and the packaged schema artifact.
+//! Run with `--nocapture` to see both destinations.
 
 mod io;
 mod metadata;
@@ -45,17 +46,17 @@ fn build_canonical_schema_json() -> Result<String, TestError> {
 #[ignore = "writes the canonical schema; run just schema-gen explicitly"]
 fn generate_chat_file_schema() -> Result<(), TestError> {
     let schema_json = build_canonical_schema_json()?;
-    let canonical_path = io::schema_path_for("chat-file.schema");
-    io::write_schema_file(&canonical_path, &schema_json)
-        .map_err(|source| TestError::Io { source })?;
-    io::print_summary(&canonical_path, schema_json.len());
+    for path in io::schema_paths() {
+        io::write_schema_file(&path, &schema_json).map_err(|source| TestError::Io { source })?;
+        io::print_summary(&path, schema_json.len());
+    }
 
     Ok(())
 }
 
 /// Guard against forgetting to regenerate the schema after a model change.
 ///
-/// The committed `schema/chat-file.schema.json` is embedded at compile time as
+/// The committed crate-local `schema/chat-file.schema.json` is embedded as
 /// `talkbank_transform::SCHEMA_JSON` (and `chatter to-json` validates its own
 /// output against it). If a model type's shape/fields/serde/doc comments change
 /// without regenerating, the freshly-built schema diverges from the embedded
@@ -64,9 +65,18 @@ fn generate_chat_file_schema() -> Result<(), TestError> {
 #[test]
 fn committed_schema_matches_model() -> Result<(), TestError> {
     let generated = build_canonical_schema_json()?;
+    for path in io::schema_paths() {
+        let artifact = io::read_schema_file(&path).map_err(|source| TestError::Io { source })?;
+        assert_eq!(
+            generated,
+            artifact,
+            "{} is stale; run just schema-gen",
+            path.display()
+        );
+    }
     let committed = talkbank_transform::SCHEMA_JSON;
     assert!(
-        generated.trim_end() == committed.trim_end(),
+        generated == committed,
         "schema/chat-file.schema.json is stale relative to the talkbank-model types. \
          Run `just schema-gen` and rebuild, \
          then commit the regenerated schema."
@@ -84,9 +94,9 @@ fn generated_ref_siblings_enforce_tag_and_payload() -> Result<(), Box<dyn std::e
         "$ref": "#/$defs/BracketedItem",
     });
     let validator = jsonschema::validator_for(&schema)?;
-    let mut word = serde_json::to_value(talkbank_model::Word::simple(
+    let mut word = serde_json::to_value(talkbank_model::Word::new(
         talkbank_model::Location::Unlocated,
-        "hello",
+        talkbank_model::WordText::from(talkbank_model::non_empty_literal!("hello")),
     ))?;
     word["type"] = serde_json::json!("word");
     assert!(validator.is_valid(&word));

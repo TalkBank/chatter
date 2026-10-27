@@ -13,7 +13,9 @@ use talkbank_model::model::dependent_tier::mor::{
 /// whose subject is the host, not the block.
 fn rooted_block(item: &Mor) -> SplicedBlock {
     let relations = (1..=item.count_chunks())
-        .map(|chunk| GrammaticalRelation::new(chunk, usize::from(chunk > 1), "DEP"))
+        .map(|chunk| {
+            GrammaticalRelation::new(chunk, usize::from(chunk > 1), "DEP".try_into().unwrap())
+        })
         .collect();
     SplicedBlock::new(vec![item.clone()], relations).expect("a rooted block")
 }
@@ -25,97 +27,110 @@ mod counting_contracts;
 
 #[test]
 fn feature_specs_preserve_main_and_clitic_values_and_independent_diagnostics() {
-    use talkbank_model::model::{MorFeature, MorTier, WriteChat};
-    use talkbank_model::{ErrorCode, ErrorCollector};
-    use talkbank_parser_tests::repo_paths::workspace_root;
-    let parser = TreeSitterParser::new().expect("parser");
-    for (index, expected) in [
-        [(None, "Nom"), (None, "Pres")],
-        [(Some("Case"), "Nom"), (Some("Tense"), "Pres")],
-        [(Some("Case"), ""), (Some("Tense"), "Pres")],
-        [(Some("Case"), "Nom"), (Some("Tense"), "")],
-        [(Some("Case"), ""), (Some("Tense"), "")],
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let source = std::fs::read_to_string(workspace_root().join(format!(
+    fn check(parser: &impl talkbank_model::ChatParser) {
+        use talkbank_model::model::{MorFeature, MorTier, WriteChat};
+        use talkbank_model::{ErrorCode, ErrorCollector};
+        use talkbank_parser_tests::repo_paths::workspace_root;
+        for (index, expected) in [
+            [(None, "Nom"), (None, "Pres")],
+            [(Some("Case"), "Nom"), (Some("Tense"), "Pres")],
+            [(Some("Case"), ""), (Some("Tense"), "Pres")],
+            [(Some("Case"), "Nom"), (Some("Tense"), "")],
+            [(Some("Case"), ""), (Some("Tense"), "")],
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let source = std::fs::read_to_string(workspace_root().join(format!(
             "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E711_postclitic_features_{}.cha", index + 1,
         ))).expect("canonical feature mutation");
-        let file = strict_parse(parser.parse_chat_file(&source))
-            .expect("all feature variants retain syntax");
-        let utterance = file.utterances().next().expect("authored utterance");
-        let mor = utterance.mor_tier().expect("authored morphology");
-        assert_eq!(mor.len(), 1);
-        assert_eq!(mor.count_chunks(), 3);
-        let item = &mor.items()[0];
-        assert_eq!(item.post_clitics.len(), 1);
-        let words = [&item.main, &item.post_clitics[0]];
-        for (word, (key, value)) in words.into_iter().zip(expected) {
-            assert_eq!(word.features.len(), 1);
-            let feature = &word.features[0];
-            assert_eq!(feature.key(), key);
-            assert_eq!(feature.value(), value);
-            assert_eq!(feature.is_flat(), key.is_none());
-            assert_eq!(feature.is_empty(), value.is_empty());
-            // Public constructor roundtrip from observed components must not
-            // infer a key, normalize spelling, or silently discard emptiness.
-            let rebuilt = match feature.key() {
-                Some(key) => MorFeature::with_key_value(key, feature.value()),
-                None => MorFeature::flat(feature.value()),
-            };
-            assert!(rebuilt.semantic_eq(feature));
-            assert_eq!(feature.to_string(), feature.to_chat_string());
-            for nontext in [
-                serde_json::Value::Null,
-                serde_json::json!(42),
-                serde_json::json!([]),
-            ] {
-                assert!(
-                    serde_json::from_value::<MorFeature>(nontext).is_err(),
-                    "feature imports require a string"
+            let parse_errors = ErrorCollector::new();
+            let file = parser
+                .parse_chat_file(&source, 37, &parse_errors)
+                .into_option()
+                .expect("all feature variants retain syntax");
+            assert!(
+                parse_errors.is_empty(),
+                "{}: {:?}",
+                parser.parser_name(),
+                parse_errors.to_vec()
+            );
+            let utterance = file.utterances().next().expect("authored utterance");
+            let mor = utterance.mor_tier().expect("authored morphology");
+            assert_eq!(mor.len(), 1);
+            assert_eq!(mor.count_chunks(), 3);
+            let item = &mor.items()[0];
+            assert_eq!(item.post_clitics.len(), 1);
+            let words = [&item.main, &item.post_clitics[0]];
+            for (word, (key, value)) in words.into_iter().zip(expected) {
+                assert_eq!(word.features.len(), 1);
+                let feature = &word.features[0];
+                assert_eq!(feature.key(), key);
+                assert_eq!(feature.value(), value);
+                assert_eq!(feature.is_flat(), key.is_none());
+                assert_eq!(feature.is_empty(), value.is_empty());
+                // Public constructor roundtrip from observed components must not
+                // infer a key, normalize spelling, or silently discard emptiness.
+                let rebuilt = match feature.key() {
+                    Some(key) => MorFeature::with_key_value(key, feature.value()),
+                    None => MorFeature::flat(feature.value()),
+                }
+                .expect("parsed feature components retain their shape");
+                assert!(rebuilt.semantic_eq(feature));
+                assert_eq!(feature.to_string(), feature.to_chat_string());
+                for nontext in [
+                    serde_json::Value::Null,
+                    serde_json::json!(42),
+                    serde_json::json!([]),
+                ] {
+                    assert!(
+                        serde_json::from_value::<MorFeature>(nontext).is_err(),
+                        "feature imports require a string"
+                    );
+                }
+                assert_eq!(
+                    serde_json::to_value(&rebuilt).expect("rebuilt feature"),
+                    serde_json::to_value(feature).expect("source feature")
                 );
             }
+            let expected_errors = expected
+                .iter()
+                .filter(|(_, value)| value.is_empty())
+                .count();
+            let errors = ErrorCollector::new();
+            mor.validate_content(&errors);
+            let diagnostics = errors.into_vec();
+            assert_eq!(diagnostics.len(), expected_errors);
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|error| error.code == ErrorCode::MorEmptyContent)
+            );
+            assert!(
+                diagnostics
+                    .iter()
+                    .all(|error| error.location.span().expect("located diagnostic")
+                        == mor.location.span().expect("located"))
+            );
+            let wire = serde_json::to_string(mor).expect("serialize morphology");
+            let decoded: MorTier = serde_json::from_str(&wire).expect("decode morphology");
+            assert!(decoded.semantic_eq(mor));
+            let wire_errors = ErrorCollector::new();
+            decoded.validate_content(&wire_errors);
             assert_eq!(
-                serde_json::to_value(&rebuilt).expect("rebuilt feature"),
-                serde_json::to_value(feature).expect("source feature")
+                wire_errors.into_vec().len(),
+                expected_errors,
+                "wire decoding cannot make an empty feature valid"
+            );
+            assert_eq!(
+                file.to_chat_string(),
+                source,
+                "feature validation does not rewrite invalid values"
             );
         }
-        let expected_errors = expected
-            .iter()
-            .filter(|(_, value)| value.is_empty())
-            .count();
-        let errors = ErrorCollector::new();
-        mor.validate_content(&errors);
-        let diagnostics = errors.into_vec();
-        assert_eq!(diagnostics.len(), expected_errors);
-        assert!(
-            diagnostics
-                .iter()
-                .all(|error| error.code == ErrorCode::MorEmptyContent)
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .all(|error| error.location.span().expect("located diagnostic")
-                    == mor.location.span().expect("located"))
-        );
-        let wire = serde_json::to_string(mor).expect("serialize morphology");
-        let decoded: MorTier = serde_json::from_str(&wire).expect("decode morphology");
-        assert!(decoded.semantic_eq(mor));
-        let wire_errors = ErrorCollector::new();
-        decoded.validate_content(&wire_errors);
-        assert_eq!(
-            wire_errors.into_vec().len(),
-            expected_errors,
-            "wire decoding cannot make an empty feature valid"
-        );
-        assert_eq!(
-            file.to_chat_string(),
-            source,
-            "feature validation does not rewrite invalid values"
-        );
     }
+    check(&TreeSitterParser::new().expect("parser"));
+    check(&talkbank_parser_re2c::Re2cParser::new());
 }
 
 /// A JSON-imported lexical payload is not a validated morphological analysis.

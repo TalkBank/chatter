@@ -159,16 +159,27 @@ impl crate::SpanShift for RetraceKind {
     fn shift_spans_after(&mut self, _threshold: usize, _delta: isize) {
         // No span fields, nothing to shift
     }
+    fn try_map_spans<E>(
+        self,
+        _map: &mut impl FnMut(crate::Span) -> Result<crate::Span, E>,
+    ) -> Result<Self, E> {
+        Ok(self)
+    }
 }
 
 impl crate::model::WriteChat for RetraceKind {
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "{self}")
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        w.write_str(match self {
+            Self::Partial => "[/]",
+            Self::Full => "[//]",
+            Self::Multiple => "[///]",
+            Self::Reformulation => "[/-]",
+        })
     }
 }
 
 impl crate::model::WriteChat for Retrace {
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         if self.is_group {
             w.write_char('<')?;
         }

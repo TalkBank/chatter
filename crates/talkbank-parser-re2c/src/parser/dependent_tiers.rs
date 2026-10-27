@@ -1,7 +1,8 @@
 //! Chumsky parser combinators for dependent tier parsing.
 //!
 //! Each parser operates on `&[Token<'a>]` (span-stripped token stream) and
-//! produces the corresponding AST type from `ast.rs`.
+//! produces a shared model or a parser-specific carrier. Text-body recognition
+//! retains a lexer-token slice and constructs the shared BulletContent directly.
 //!
 //! Tier parsers: %mor, %gra, %pho, %sin, text tiers.
 // Design rule 3, enforced by the compiler rather than by prose: a `_` arm over
@@ -11,8 +12,11 @@
 
 use chumsky::prelude::*;
 
-use crate::ast::*;
 use crate::token::Token;
+use talkbank_model::model::dependent_tier::pho::PhoGroupWords;
+use talkbank_model::model::{
+    PhoItem, PhoTier, PhoTierType, PhoWord, SinGroupGestures, SinItem, SinTier,
+};
 
 use crate::token::TokenDiscriminants;
 
@@ -41,64 +45,68 @@ pub(super) fn opt_newline<'tokens, 'a: 'tokens>()
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a `%gra` tier body: whitespace-separated `GraRelation` tokens.
-pub fn gra_tier_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, GraTier<'a>> + Clone {
+pub fn gra_tier_parser<'tokens, 'a: 'tokens>(
+    source: crate::source_text::SourceText<'a>,
+    extent: talkbank_model::Span,
+    errors: &'tokens (impl talkbank_model::ErrorSink + ?Sized),
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::ParseOutcome<talkbank_model::GraTier>>
++ Clone {
     let relation = select! {
-        Token::GraRelation { index, head, relation } => GraRelationParsed {
-            index, head, relation,
-        },
+        Token::GraRelation { index, head, relation } => super::gra::relation(index, head, relation, source, errors),
     };
-
     ws().ignore_then(
         relation
             .separated_by(ws())
             .allow_trailing()
+            .at_least(1)
             .collect::<Vec<_>>(),
     )
     .then_ignore(ws())
     .then_ignore(opt_newline())
-    .map(|relations| GraTier { relations })
+    .map(move |relations| {
+        relations
+            .into_iter()
+            .collect::<talkbank_model::GraLowering>()
+            .finish(extent)
+    })
 }
 
 // ═══════════════════════════════════════════════════════════
 // %mor tier
-// grammar.js: mor_contents = seq(mor_content+, optional(terminator))
-// grammar.js: mor_content = seq(mor_word, repeat(seq(tilde, mor_word)))
-// ═══════════════════════════════════════════════════════════
+// The shared tier requires an observed terminator; refusal is not a model value.
 
-/// Parse a single `MorWord` token into `MorWordParsed`.
+/// Parse a rich MOR token directly into the shared morphology word.
 pub fn mor_word_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, MorWordParsed<'a>> + Clone {
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::MorWord> + Clone {
+    use talkbank_model::{MorFeature, MorStem, MorWord, PosCategory};
     select! {
         Token::MorWord { pos, lemma_features } => {
-            // The rich token admits a nonempty lemma and nonempty feature
-            // values. No fallback empty lemma can be fabricated here.
-            let (lemma, features) = match lemma_features.split_once('-') {
-                Some((lemma, feature_text)) => (lemma, feature_text.split('-').collect()),
-                None => (lemma_features, Vec::new()),
-            };
-            MorWordParsed { pos, lemma, features }
+            match lemma_features.split_once('-') {
+                Some((lemma, features)) => features.split('-').fold(
+                    MorWord::new(PosCategory::new(pos), MorStem::new(lemma)),
+                    |word, feature| word.with_feature(MorFeature::new(feature)),
+                ),
+                None => MorWord::new(PosCategory::new(pos), MorStem::new(lemma_features)),
+            }
         },
     }
 }
 
-/// Parse a `%mor` item: main word + optional post-clitics (~word~word).
+/// Parse a shared MOR item with its observed post-clitics.
 fn mor_item_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, MorItem<'a>> + Clone {
-    let tilde = select! { Token::MorTilde(_) => () };
-    let clitic = tilde.ignore_then(mor_word_parser());
-
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::Mor> + Clone {
+    let clitic = select! { Token::MorTilde(_) => () }.ignore_then(mor_word_parser());
     mor_word_parser()
-        .then(clitic.repeated().collect::<Vec<_>>())
-        .map(|(main, post_clitics)| MorItem { main, post_clitics })
+        .map(talkbank_model::Mor::new)
+        .foldl(clitic.repeated(), |item, word| item.with_post_clitic(word))
 }
 
-/// Parse a `%mor` tier body: mor items, optional terminator.
-pub fn mor_tier_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, MorTier<'a>> + Clone {
-    let terminator = select! {
-        tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
-    };
+/// Parse a shared MOR tier with a required, source-located terminator.
+pub fn mor_tier_parser<'tokens, 'a: 'tokens>(
+    source: crate::source_text::SourceText<'a>,
+    location: talkbank_model::Location,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::MorTier> + Clone {
+    let terminator = main_tier::terminator(source);
 
     ws().ignore_then(
         mor_item_parser()
@@ -109,10 +117,7 @@ pub fn mor_tier_parser<'tokens, 'a: 'tokens>()
     .then(ws().ignore_then(terminator))
     .then_ignore(ws())
     .then_ignore(opt_newline())
-    .map(|(items, terminator)| MorTier {
-        items,
-        terminator: Some(terminator),
-    })
+    .map(move |(items, terminator)| talkbank_model::MorTier::new_mor(location, items, terminator))
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -121,31 +126,30 @@ pub fn mor_tier_parser<'tokens, 'a: 'tokens>()
 
 /// Parse a single phonological word (possibly compound with +).
 fn pho_word_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, PhoWordParsed<'a>> + Clone {
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, PhoWord> + Clone {
     let pho_word = select! { Token::PhoWord(s) => s };
     let plus = select! { Token::PhoPlus(_) => () };
 
     pho_word
-        .then(plus.ignore_then(pho_word).repeated().collect::<Vec<_>>())
-        .map(|(first, rest)| {
-            let mut segments = vec![first];
-            segments.extend(rest);
-            PhoWordParsed { segments }
-        })
+        .map(str::to_owned)
+        .foldl(
+            plus.ignore_then(pho_word).repeated(),
+            |mut word, segment| {
+                word.push('+');
+                word.push_str(segment);
+                word
+            },
+        )
+        .map(PhoWord::new)
 }
 
 /// Parse a `%pho` tier body.
-pub fn pho_tier_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, PhoTier<'a>> + Clone {
+pub fn pho_tier_parser<'tokens, 'a: 'tokens>(
+    location: talkbank_model::Span,
+    tier_type: PhoTierType,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, PhoTier> + Clone {
     let terminator = select! {
-        tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
-    };
-
-    // Pauses are skipped in %pho
-    let pause = select! {
-        Token::PauseLong(_) => (),
-        Token::PauseMedium(_) => (),
-        Token::PauseShort(_) => (),
+        tok if is_terminator(TokenDiscriminants::from(&tok)) => tok,
     };
 
     let group_begin = select! { Token::PhoGroupBegin(_) => () };
@@ -160,26 +164,15 @@ pub fn pho_tier_parser<'tokens, 'a: 'tokens>()
                 .collect::<Vec<_>>(),
         )
         .then_ignore(group_end)
-        .map(PhoItemParsed::Group);
+        .map(|words| PhoItem::Group(PhoGroupWords::new(words)));
 
-    let pho_item = choice((
-        pho_group,
-        pho_word_parser().map(PhoItemParsed::Word),
-        pause.to(PhoItemParsed::Word(PhoWordParsed { segments: vec![] })),
-    ));
+    let pho_item = choice((pho_group, pho_word_parser().map(PhoItem::Word)));
 
     ws().ignore_then(pho_item.padded_by(ws()).repeated().collect::<Vec<_>>())
-        .then(ws().ignore_then(terminator).or_not())
+        .then_ignore(ws().ignore_then(terminator).or_not())
         .then_ignore(ws())
         .then_ignore(opt_newline())
-        .map(|(items, terminator): (Vec<PhoItemParsed<'_>>, _)| {
-            // Filter out empty words from skipped pauses
-            let items = items
-                .into_iter()
-                .filter(|item| !matches!(item, PhoItemParsed::Word(w) if w.segments.is_empty()))
-                .collect();
-            PhoTier { items, terminator }
-        })
+        .map(move |items| PhoTier::new(location, tier_type, items))
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -187,8 +180,9 @@ pub fn pho_tier_parser<'tokens, 'a: 'tokens>()
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a `%sin` tier body.
-pub fn sin_tier_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, SinTierParsed> + Clone {
+pub fn sin_tier_parser<'tokens, 'a: 'tokens>(
+    location: talkbank_model::Span,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, SinTier> + Clone {
     let sin_word = select! {
         Token::SinWord(s) => s,
         Token::Zero(s) => s,
@@ -207,38 +201,40 @@ pub fn sin_tier_parser<'tokens, 'a: 'tokens>()
                 .collect::<Vec<_>>(),
         )
         .then_ignore(group_end)
-        .map(SinItemParsed::Group);
+        .map(|gestures| SinItem::SinGroup(SinGroupGestures::new(gestures)));
 
-    let sin_item = choice((sin_group, sin_word.map(SinItemParsed::Token)));
+    let sin_item = choice((sin_group, sin_word.map(SinItem::Token)));
 
     ws().ignore_then(sin_item.padded_by(ws()).repeated().collect::<Vec<_>>())
         .then_ignore(opt_newline())
-        .map(|items| SinTierParsed { items })
+        .map(move |items| SinTier::new(location, items))
 }
 
 // ═══════════════════════════════════════════════════════════
 // Text tier (for %com, %act, %cod, %exp, etc.)
 // ═══════════════════════════════════════════════════════════
 
-/// Text-tier tokens after inline-bullet policy admission. Rejected bullets are
-/// diagnosed at their lexer spans and omitted, retaining surrounding content.
-pub(crate) struct AdmittedTextTierTokens<'source>(Vec<Token<'source>>);
+/// Text-tier tokens after diagnosis. Rejected numeric bullets remain available
+/// for explicit shared-model recovery; a diagnostic never authorizes omission.
+pub(crate) struct DiagnosedTextTierTokens<'source>(Vec<Token<'source>>);
 
-impl<'source> AdmittedTextTierTokens<'source> {
+impl<'source> DiagnosedTextTierTokens<'source> {
     pub(crate) fn admit(
-        lexed: &super::LexedSource<'source>,
-        range: std::ops::Range<usize>,
+        selected: super::LocatedTokens<'_, 'source>,
         errors: &impl talkbank_model::ErrorSink,
-    ) -> Self {
-        let mut admitted = Vec::new();
-        for (token, span) in lexed.located(range) {
+    ) -> talkbank_model::ParseOutcome<Self> {
+        use talkbank_model::ParseOutcome;
+        let mut admitted = ParseOutcome::Parsed(Vec::new());
+        let source = selected.source();
+        for (token, span) in selected.into_located() {
             if let Some(context) = token.error_context() {
+                admitted = ParseOutcome::Rejected;
                 errors.report(talkbank_model::ParseError::new(
                     talkbank_model::ErrorCode::UnparsableContent,
                     talkbank_model::Severity::Error,
                     talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                     talkbank_model::ErrorContext::new(
-                        lexed.source(),
+                        source,
                         talkbank_model::Span::new(span.start, span.end),
                         "dependent_content",
                     ),
@@ -256,17 +252,18 @@ impl<'source> AdmittedTextTierTokens<'source> {
                     talkbank_model::Severity::Error,
                     talkbank_model::DiagnosticLocation::from_offsets(span.start, span.end),
                     talkbank_model::ErrorContext::new(
-                        lexed.source(),
+                        source,
                         talkbank_model::Span::new(span.start, span.end),
                         "",
                     ),
                     message,
                 ));
-            } else {
-                admitted.push(token.clone());
+            }
+            if let ParseOutcome::Parsed(tokens) = &mut admitted {
+                tokens.push(token.clone());
             }
         }
-        Self(admitted)
+        admitted.map(Self)
     }
 
     pub(crate) fn tokens(&self) -> &[Token<'source>] {
@@ -278,28 +275,19 @@ impl<'source> AdmittedTextTierTokens<'source> {
     }
 }
 
-/// Parse a text tier body (text_with_bullets).
+/// Recognize one text body, retaining its original tokens for shared lowering.
 pub fn text_tier_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, TextTierParsed<'a>> + Clone {
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, &'tokens [Token<'a>]> + Clone {
     let segment = select! {
-        Token::TextSegment(s) => TextTierSegment::Text(s),
-        Token::MediaBullet { bullet } => TextTierSegment::Bullet(bullet),
-        tok @ Token::InlinePic(_) => TextTierSegment::Pic(tok),
-        // Continuation is structural, skip
+        Token::TextSegment(_) | Token::MediaBullet { .. }
+        | Token::InlinePic(_) | Token::Continuation(_) => (),
     };
 
-    // Skip continuations between segments
-    let skip_structural = select! {
-        Token::Continuation(_) => (),
-        Token::Newline(_) => (),
-    };
+    // Continuations are body segments, not bare line endings. Only one ending
+    // can follow the complete body; further newlines cannot disappear into it.
+    let ending = select! { Token::Newline(_) => () }.or_not();
 
-    choice((segment.map(Some), skip_structural.to(None)))
-        .repeated()
-        .collect::<Vec<_>>()
-        .map(|items| TextTierParsed {
-            segments: items.into_iter().flatten().collect(),
-        })
+    segment.repeated().to_slice().then_ignore(ending)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -307,7 +295,7 @@ pub fn text_tier_parser<'tokens, 'a: 'tokens>()
 // ═══════════════════════════════════════════════════════════
 
 /// Keep the timing token, admitted or rejected, associated with its source
-/// word; the converter places the bullet at the token's own bytes.
+/// word; shared-model construction places it at the token's own bytes.
 fn timing_bullet<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, crate::token::MediaBulletToken<'a>> + Clone {
     select! {
@@ -318,10 +306,10 @@ fn timing_bullet<'tokens, 'a: 'tokens>()
 /// Parse a `%wor` tier body: words with optional timing bullets.
 pub fn wor_tier_parser<'tokens, 'a: 'tokens>(
     source: crate::source_text::SourceText<'a>,
-) -> impl Parser<'tokens, Tokens<'tokens, 'a>, WorTierParsed<'a>> + Clone {
-    let terminator = select! {
-        tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
-    };
+    location: talkbank_model::Span,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::WorTier> + Clone {
+    use talkbank_model::model::dependent_tier::wor::WorItem;
+    let terminator = main_tier::terminator(source);
 
     // `%wor` may open with a language precode, exactly as the main tier may:
     // `grammar.js`'s `wor_tier_body` declares an optional `language_code`
@@ -329,114 +317,40 @@ pub fn wor_tier_parser<'tokens, 'a: 'tokens>(
     // Chinese and bilingual corpora). Without this the whole tier failed to
     // parse: 510 E316 across 8 of 2,158 sampled files, every one of which
     // tree-sitter reads cleanly. Same shape as `main_tier::tier_body_parser`.
-    let langcode = select! { Token::Langcode(code) => code }.then_ignore(ws());
+    let langcode = main_tier::language_precode(source);
 
-    // Same owner as the main tier: `SeparatorKindParsed::from_token`. This used
-    // to gate on `classify::is_separator`, a second copy of the same fifteen
-    // tokens, whose drift would have surfaced as an E316 on valid CHAT.
-    let separator = any().try_map(|tok: Token<'a>, _span| {
-        SeparatorKindParsed::from_token(&tok)
-            .map(|kind| WorItemParsed::Separator {
-                kind,
-                text: tok.text(),
-            })
-            .ok_or_else(Default::default)
+    let separator = main_tier::separator(source).map(|separator| {
+        use talkbank_model::WriteChat;
+        WorItem::Separator {
+            text: separator.to_chat_string(),
+            location: separator.location(),
+        }
     });
 
-    /// A `%wor` entry with no word behind it: a placeholder, not a parsed word.
-    fn placeholder_word<'a>(
-        bullet: Option<crate::token::MediaBulletToken<'a>>,
-    ) -> WorItemParsed<'a> {
-        WorItemParsed::Word {
-            word: Box::new(WordWithAnnotations::default()),
-            bullet,
-        }
-    }
-
-    // A word (rich or legacy) followed by optional timing bullet
-    let word_with_bullet = choice((
-        main_tier::rich_word(source),
-        main_tier::subtoken_word(source),
-    ))
-    .then(ws().ignore_then(timing_bullet()).or_not())
-    .map(|(content_item, bullet)| {
-        match content_item {
-            ContentItem::Word(w) => WorItemParsed::Word {
-                word: Box::new(w),
-                bullet,
-            },
-            // If it parsed as a retrace or action, wrap the inner word
-            ContentItem::Retrace(r) => {
-                if let Some(ContentItem::Word(w)) = r.body.into_items().into_iter().next() {
-                    WorItemParsed::Word {
-                        word: Box::new(w),
-                        bullet,
-                    }
-                } else {
-                    placeholder_word(bullet)
-                }
+    // Standalone syntax cannot consume or erase main-tier annotations.
+    let word_with_bullet = main_tier::standalone_word(source)
+        .then(ws().ignore_then(timing_bullet()).or_not())
+        .try_map(move |(mut word, bullet), _| {
+            if let Some(bullet) = bullet {
+                let model = crate::convert::bullet_from_token(bullet, source)
+                    .into_parsed()
+                    .map_err(|_| chumsky::error::EmptyErr::default())?;
+                word = word.with_inline_bullet(model);
             }
-            ContentItem::Action { zero, .. } => WorItemParsed::Word {
-                word: Box::new(WordWithAnnotations {
-                    category: Some(WordCategory::Omission),
-                    raw_text: zero,
-                    ..WordWithAnnotations::default()
-                }),
-                bullet,
-            },
-            // Unreachable: `choice((rich_word(), subtoken_word()))` has range
-            // `Word | Retrace | Action`, all handled above. Spelled out so a
-            // widening of that range is a compile error here. The real fix is
-            // narrowing what those parsers RETURN, which would delete this
-            // list and `placeholder_word` with it; `classify.rs`'s `Chain` is
-            // the in-repo precedent for exactly that.
-            ContentItem::Pause(_)
-            | ContentItem::Freecode(_)
-            | ContentItem::OrphanAnnotation(_)
-            | ContentItem::Separator { .. }
-            | ContentItem::OverlapPoint { .. }
-            | ContentItem::Group(_)
-            | ContentItem::Quotation(_)
-            | ContentItem::Event(_)
-            | ContentItem::AnnotatedEvent { .. }
-            | ContentItem::MediaBullet { .. }
-            | ContentItem::UnderlineBegin(_)
-            | ContentItem::UnderlineEnd(_)
-            | ContentItem::OtherSpokenEvent { .. }
-            | ContentItem::PhoGroup(_)
-            | ContentItem::SinGroup(_)
-            | ContentItem::LongFeatureBegin(_)
-            | ContentItem::LongFeatureEnd(_)
-            | ContentItem::NonvocalBegin(_)
-            | ContentItem::NonvocalEnd(_)
-            | ContentItem::NonvocalSimple(_) => placeholder_word(bullet),
-        }
-    });
+            Ok(WorItem::Word(Box::new(word)))
+        });
 
-    // Skip orphan bullets
-    let skip_bullet = select! { Token::MediaBullet { .. } => () };
-
-    // An orphan bullet yields no item at all. It used to yield a SEPARATOR
-    // holding a whitespace token, a sentinel that was also a legal value, which
-    // the collector then removed by matching that exact fake. Typing the
-    // variant made that unrepresentable; `Option` says the same thing honestly.
-    let wor_item = choice((
-        word_with_bullet.map(Some),
-        separator.map(Some),
-        skip_bullet.to(None),
-    ));
+    // Unassociated timing rejects the tier so file recovery retains the source.
+    let wor_item = choice((word_with_bullet, separator));
 
     ws().ignore_then(langcode.or_not())
         .then(wor_item.padded_by(ws()).repeated().collect::<Vec<_>>())
         .then(ws().ignore_then(terminator).or_not())
         .then_ignore(ws())
         .then_ignore(opt_newline())
-        .map(|((langcode, items), terminator)| {
-            let items: Vec<WorItemParsed<'a>> = items.into_iter().flatten().collect();
-            WorTierParsed {
-                langcode,
-                items,
-                terminator,
-            }
+        .map(move |((langcode, items), terminator)| {
+            talkbank_model::WorTier::new(location, items)
+                .with_language_code(langcode.map(|precode| precode.code))
+                .with_terminator(terminator)
         })
 }

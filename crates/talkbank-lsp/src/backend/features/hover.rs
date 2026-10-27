@@ -68,7 +68,9 @@ pub fn hover(
 
 /// Hover for CHAT headers, shows documentation for the header type.
 fn header_hover(document: &str, position: Position) -> Option<String> {
-    let line = document.lines().nth(position.line as usize)?;
+    let line = crate::backend::utils::protocol_lines(document)
+        .map(|line| line.text())
+        .nth(position.line as usize)?;
     if !line.starts_with('@') {
         return None;
     }
@@ -119,7 +121,9 @@ fn header_hover(document: &str, position: Position) -> Option<String> {
 ///
 /// CHAT bullets use U+0015 (NAK) as the delimiter: `\x15NNN_NNN\x15`.
 fn bullet_hover(document: &str, position: Position) -> Option<String> {
-    let line = document.lines().nth(position.line as usize)?;
+    let line = crate::backend::utils::protocol_lines(document)
+        .map(|line| line.text())
+        .nth(position.line as usize)?;
     let col = crate::backend::utils::position_to_offset(line, Position::new(0, position.character));
 
     const BULLET: char = '\u{0015}';

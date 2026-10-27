@@ -31,26 +31,7 @@ use talkbank_parser::TreeSitterParser;
 ///
 /// The ChatParser::parse_mor_tier method expects content only, not the full tier line.
 fn mor_tier_content(tier: &MorTier) -> String {
-    let mut content = String::new();
-
-    for (i, item) in tier.items().iter().enumerate() {
-        if i > 0 {
-            content.push(' ');
-        }
-        if let Err(err) = item.write_chat(&mut content) {
-            eprintln!("Failed to write mor item: {err}");
-        }
-    }
-
-    if !tier.items().is_empty() {
-        content.push(' ');
-    }
-    use talkbank_model::WriteChat;
-    let mut term_buf = String::new();
-    let _ = tier.terminator.write_chat(&mut term_buf);
-    content.push_str(&term_buf);
-
-    content
+    tier.to_content()
 }
 
 /// Generate the shared golden %mor tier list from a reference corpus.

@@ -20,11 +20,13 @@ fn word_languages_validation_tags() {
         ValidationTag::Clean
     );
     assert_eq!(
-        WordLanguages::Multiple(vec![lc("eng"), lc("spa")]).validation_tag(),
+        WordLanguages::Multiple(vec![lc("eng"), lc("spa")].try_into().expect("two codes"))
+            .validation_tag(),
         ValidationTag::Clean
     );
     assert_eq!(
-        WordLanguages::Ambiguous(vec![lc("eng"), lc("spa")]).validation_tag(),
+        WordLanguages::Ambiguous(vec![lc("eng"), lc("spa")].try_into().expect("two codes"))
+            .validation_tag(),
         ValidationTag::Clean
     );
     assert_eq!(

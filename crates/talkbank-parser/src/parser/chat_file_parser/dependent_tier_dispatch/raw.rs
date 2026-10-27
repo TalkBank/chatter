@@ -213,7 +213,7 @@ syl_tier_appliers! {
 macro_rules! fallible_content_tier_appliers {
     ($(
         $name:ident : $node:ident / $children:ident => $variant:ident
-            using $parse:ident into $tier:ident labelled $label:literal;
+            using $parse:ident into $tier:ident recovery $recovery:ident labelled $label:literal;
     )*) => {
         $(
             optional_body_carrier!($children);
@@ -268,6 +268,16 @@ macro_rules! fallible_content_tier_appliers {
                                 ),
                                 format!("malformed {} content: {}", $label, e),
                             ));
+                            if let ParseOutcome::Parsed(source) =
+                                crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+                                    raw, input, errors, "unparsed dependent-tier source",
+                                )
+                            {
+                                utterance.dependent_tiers.push(DependentTierEntry::with_separator(
+                                    DependentTier::$recovery(talkbank_model::UnparsedTier::new(span, source)),
+                                    separator,
+                                ));
+                            }
                         }
                     }
                 }
@@ -278,9 +288,9 @@ macro_rules! fallible_content_tier_appliers {
 
 fallible_content_tier_appliers! {
     apply_phoaln: PhoalnDependentTierNode / PhoalnDependentTierChildren => Phoaln
-        using parse_phoaln_content into PhoalnTier labelled "%phoaln";
+        using parse_phoaln_content into PhoalnTier recovery UnparsedPhoaln labelled "%phoaln";
     apply_xphoint: XphointDependentTierNode / XphointDependentTierChildren => Xphoint
-        using parse_xphoint_content into XphointTier labelled "%xphoint";
+        using parse_xphoint_content into XphointTier recovery UnparsedXphoint labelled "%xphoint";
 }
 
 optional_body_carrier!(TimDependentTierChildren);

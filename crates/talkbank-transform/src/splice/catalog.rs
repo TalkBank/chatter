@@ -146,6 +146,7 @@ use talkbank_model::model::content::word::MarkerSpelling;
 use talkbank_model::{DiagnosticLocation, ErrorCode, ParseError, Span};
 
 use super::engine::{EditProvenance, EditTarget, Replacement, SpliceEdit};
+mod headers;
 mod proposal;
 mod refusal;
 pub use proposal::{BatchSafety, CatalogFix, FixKind, NamedAlternative};
@@ -191,8 +192,8 @@ pub(super) fn catalog_fix(
         ErrorCode::MissingTerminator => located().and_then(|d| e305_missing_terminator(d, parsed)),
         ErrorCode::EmptyUtterance => located().and_then(|d| e306_empty_utterance(d, parsed)),
         ErrorCode::DuplicateHeader => located().and_then(|d| e501_duplicate_header(d, parsed)),
-        ErrorCode::MissingEndHeader => e502_missing_end_header(error.code, source),
-        ErrorCode::MissingUTF8Header => e503_missing_utf8_header(error.code),
+        ErrorCode::MissingEndHeader => Ok(headers::HeaderRepair::End.propose(source)),
+        ErrorCode::MissingUTF8Header => Ok(headers::HeaderRepair::Utf8.propose(source)),
         ErrorCode::GraWithoutMor => located().and_then(|d| e604_gra_without_mor(d, parsed)),
         ErrorCode::SpaceInsideAngleGroup => {
             located().and_then(|d| e750_space_inside_angle_group(d, parsed))
@@ -582,40 +583,6 @@ fn e501_duplicate_header(
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
 ) -> CatalogResult {
     Ok(IdenticalHeaderDuplicate::admit(parsed, diagnosis.span)?.into_fix(diagnosis.code))
-}
-
-/// E502 `MissingEndHeader`: append `@End` at end of file, prefixing a
-/// newline first if the file does not already end with one. Mechanical:
-/// every valid CHAT file ends this way, no judgment involved.
-///
-/// Header-scoped, so `chatter fix` cannot apply it today; see the note on
-/// `e501_duplicate_header` above.
-fn e502_missing_end_header(code: ErrorCode, source: &str) -> CatalogResult {
-    let text = if source.ends_with('\n') {
-        "@End\n"
-    } else {
-        "\n@End\n"
-    };
-    let edit = SpliceEdit::new(
-        EditTarget::InsertAt(source.len()),
-        Replacement::new(text),
-        EditProvenance::Diagnostic(code),
-    );
-    Ok(CatalogFix::mechanical(vec![edit]))
-}
-
-/// E503 `MissingUTF8Header`: prepend `@UTF8` as the first line. Mechanical:
-/// every modern CHAT file declares this, no judgment involved.
-///
-/// Header-scoped, so `chatter fix` cannot apply it today; see the note on
-/// `e501_duplicate_header` above.
-fn e503_missing_utf8_header(code: ErrorCode) -> CatalogResult {
-    let edit = SpliceEdit::new(
-        EditTarget::InsertAt(0),
-        Replacement::new("@UTF8\n"),
-        EditProvenance::Diagnostic(code),
-    );
-    Ok(CatalogFix::mechanical(vec![edit]))
 }
 
 /// E604 `GraWithoutMor`: the diagnostic anchors to the main tier the

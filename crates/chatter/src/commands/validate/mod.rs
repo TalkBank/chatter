@@ -17,9 +17,7 @@ pub(crate) mod cache;
 
 use std::path::PathBuf;
 
-use super::validate_parallel::{
-    ValidateDirectoryOptions, ValidationOutcome, validate_paths_parallel,
-};
+use super::validate_parallel::{ValidateDirectoryOptions, validate_paths_parallel};
 
 /// Execute one top-level `chatter validate` invocation: every input shape
 /// (one file, many, directories, or a mix) goes through the one streaming
@@ -28,18 +26,13 @@ use super::validate_parallel::{
 pub fn run_validate_command(
     paths: crate::commands::inputs::NonEmpty<PathBuf>,
     options: ValidateDirectoryOptions,
-) {
+) -> crate::exit_codes::CommandResult {
     // The summary's label: the first argument as typed (the directory, for
     // a one-directory run).
     let summary_label = paths.first().clone();
-    let outcome = validate_paths_parallel(paths.into_iter().collect(), summary_label, options);
-    if let ValidationOutcome::AuditFileUnwritable { path, error } = &outcome {
-        eprintln!(
-            "Error: cannot create the audit file {}: {error}",
-            path.display()
-        );
-    }
+    let outcome = validate_paths_parallel(paths.into_iter().collect(), summary_label, options)?;
     if outcome.failed() {
-        std::process::exit(1);
+        return Err(crate::exit_codes::ReportedFailure::Input.into());
     }
+    Ok(())
 }

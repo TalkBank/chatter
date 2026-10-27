@@ -24,6 +24,12 @@ pub enum AuditError {
     },
 }
 
+impl From<AuditError> for crate::exit_codes::CommandStop {
+    fn from(error: AuditError) -> Self {
+        super::die(&error.to_string())
+    }
+}
+
 /// A writable report. Each successful transition retains sole ownership.
 pub(super) struct OpenReport<W> {
     path: PathBuf,

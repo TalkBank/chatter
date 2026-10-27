@@ -6,15 +6,15 @@
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, NoChild, NonMissingKindSlot, ReplacementNode, SourceBound, SourceField,
-    SourceSlotView, StandaloneWordNode,
+    AsRawNode, NoChild, NonMissingKindSlot, Ranged, ReplacementNode, SlotView, SourceBound,
+    StandaloneWordNode,
 };
 use crate::model::{Replacement, Word};
 use crate::parser::ChildCapacity;
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::word::convert_word_node;
 use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
-use crate::parser::typed_cst::ExtractCanonical;
+use crate::parser::typed_cst::{ExtractCanonical, ReportedCstFailure};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -31,20 +31,18 @@ use tree_sitter::Node;
 /// Compiled grammar admission proves that composite word slots cannot be
 /// Missing. Delimiter recovery and zero-width word refusal retain their existing
 /// diagnostics; a replacement with no admitted word remains rejected.
-pub(crate) fn parse_replacement<'tree>(
+pub(in crate::parser) fn parse_replacement<'tree>(
     typed: SourceBound<'tree, '_, ReplacementNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<Replacement> {
+) -> Result<ParseOutcome<Replacement>, ReportedCstFailure> {
     let source = typed.source();
     let node = typed.node().raw_node();
-    let extraction = typed.extract_canonical();
-    let Ok(associated) =
-        crate::parser::typed_cst::report_admission(extraction, node, source, errors)
-    else {
-        return ParseOutcome::Rejected;
-    };
+    let extraction = typed
+        .extract_canonical()
+        .and_then(|children| children.admit_ranges().map_err(Into::into));
+    let associated = crate::parser::typed_cst::report_admission(extraction, node, source, errors)?;
     let children = associated.children();
-    expect_delimiter(children.child_0.slot(), |bad| {
+    expect_delimiter(&children.child_0.slot, |bad| {
         report(
             bad,
             source,
@@ -55,7 +53,7 @@ pub(crate) fn parse_replacement<'tree>(
             ),
         );
     });
-    expect_delimiter(children.child_1.slot(), |bad| {
+    expect_delimiter(&children.child_1.slot, |bad| {
         report(
             bad,
             source,
@@ -69,16 +67,17 @@ pub(crate) fn parse_replacement<'tree>(
 
     // A capacity hint: at most one word per child of the node.
     let mut words = ChildCapacity::for_node(node).into_vec();
-    if let SourceSlotView::Present(first) = associated.field_child_2().slot().view() {
-        push_word(first.field_child_1().slot(), &mut words, errors);
+    let mut result = Ok(());
+    if let SlotView::Present(first) = children.child_2.slot.view() {
+        result = result.and(push_word(&first.child_1.slot, &mut words, errors));
     }
-    for element in associated.field_child_3().slot().iter() {
-        if let SourceSlotView::Present(next) = element.slot().view() {
-            push_word(next.field_child_1().slot(), &mut words, errors);
+    for element in &children.child_3.slot {
+        if let SlotView::Present(next) = element.slot.view() {
+            result = result.and(push_word(&next.child_1.slot, &mut words, errors));
         }
     }
 
-    expect_delimiter(children.child_4.slot(), |bad| {
+    expect_delimiter(&children.child_4.slot, |bad| {
         report(
             bad,
             source,
@@ -88,36 +87,44 @@ pub(crate) fn parse_replacement<'tree>(
     });
     surface_displaced(&children.unexpected, "replacement", source, errors);
 
-    match talkbank_model::model::annotation::ReplacementWords::new(words) {
-        Ok(words) => ParseOutcome::parsed(Replacement::new(words)),
-        Err(_) => ParseOutcome::rejected(),
-    }
+    result?;
+    Ok(
+        match talkbank_model::model::annotation::ReplacementWords::new(words) {
+            Ok(words) => ParseOutcome::parsed(Replacement::new(words)),
+            Err(_) => ParseOutcome::rejected(),
+        },
+    )
 }
 
 /// Convert an admitted composite word slot, preserving zero-width refusal,
 /// source-read failures and the existing Error/Absent recovery policy.
-fn push_word<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, StandaloneWordNode<'tree>>>,
+fn push_word<'tree, 'source>(
+    slot: &NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, StandaloneWordNode<'tree>>,
+        Ranged<'source>,
+    >,
     words: &mut Vec<Word>,
     errors: &impl ErrorSink,
-) {
-    let source = slot.source();
+) -> Result<(), ReportedCstFailure> {
     match slot.view() {
-        SourceSlotView::Present(word) => {
+        SlotView::Present(word) => {
+            let source = word.source();
             let raw = word.raw_node();
             if raw.start_byte() == raw.end_byte() {
                 report(raw, source, errors, "Replacement text empty".to_string());
-                return;
+                return Ok(());
             }
-            if let Some(word) = crate::parser::typed_cst::read_source_field(word, errors)
-                && let ParseOutcome::Parsed(word) = convert_word_node(word, errors)
+            if let ParseOutcome::Parsed(word) =
+                convert_word_node(*word, errors)?.into_replacement_word(errors)
             {
                 words.push(word);
             }
         }
         // An ERROR at the word position is the whole-tree pass's to name.
-        SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {}
+        SlotView::Error(_) | SlotView::Absent(NoChild) => {}
     }
+    Ok(())
 }
 
 /// A `ReplacementParseError` at `node`.

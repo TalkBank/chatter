@@ -166,7 +166,7 @@ pub enum WordMaterial {
 
 impl WriteChat for WordCategory {
     /// Writes the category prefix that precedes the lexical word body.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.to_chat_prefix())
     }
 }

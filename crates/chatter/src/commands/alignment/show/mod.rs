@@ -47,7 +47,11 @@ impl crate::cli::FlagMode for AlignmentView {
 /// Dependent Tier sections) so the developer can see why alignment may have failed, and then the `render`
 /// modules produce a tier-specific tabular view of aligned words and features. The view can operate in
 /// compact mode or limited to a specific `AlignmentTier` filter to keep attention on the relevant CHAT tiers.
-pub fn show_alignment(input: &PathBuf, tier_filter: Option<AlignmentTier>, view: AlignmentView) {
+pub fn show_alignment(
+    input: &PathBuf,
+    tier_filter: Option<AlignmentTier>,
+    view: AlignmentView,
+) -> crate::exit_codes::CommandResult {
     let _span = span!(Level::INFO, "show_alignment", ?input).entered();
     info!("Showing alignment for {:?}", input);
 
@@ -56,7 +60,7 @@ pub fn show_alignment(input: &PathBuf, tier_filter: Option<AlignmentTier>, view:
         Err(err) => {
             error!("{}", err);
             eprintln!("{}", err);
-            std::process::exit(1);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -77,5 +81,6 @@ pub fn show_alignment(input: &PathBuf, tier_filter: Option<AlignmentTier>, view:
         tier_filter,
         view,
         had_validation_errors,
-    );
+    )?;
+    Ok(())
 }

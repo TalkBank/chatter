@@ -11,7 +11,7 @@ existing files. The commands work in a checkout-free installation.
 ## 1. Create a valid starting point
 
 ```bash
-chatter new-file --output practice.cha --speaker CHI --language eng --utterance 'hello .'
+chatter new --output practice.cha --speaker CHI --language eng --utterance 'hello .'
 chatter --tui-mode disable validate practice.cha
 ```
 
@@ -63,7 +63,7 @@ Normalization is a separate operation: it serializes CHAT consistently, not
 a promise to repair invalid input or preserve every original byte.
 
 ```bash
-chatter normalize practice.cha --validate --output practice.normalized.cha
+chatter format practice.cha --validate --output practice.normalized.cha
 chatter --tui-mode disable validate practice.normalized.cha
 ```
 
@@ -75,8 +75,8 @@ change, not just a new filename.
 ## 4. Export the structured model and return to CHAT
 
 ```bash
-chatter to-json practice.cha --output practice.json
-chatter from-json practice.json --output restored.cha
+chatter convert to-json practice.cha --output practice.json
+chatter convert from-json practice.json --output restored.cha
 chatter --tui-mode disable validate restored.cha
 ```
 
@@ -97,7 +97,9 @@ for plain text. For machine-readable validation results, use `--format json`:
 these diagnostic records are **not** the transcript-model JSON from `to-json`.
 
 For feedback while editing, `chatter watch practice.cha` keeps running and
-revalidates on saves; stop it with Ctrl+C.
+revalidates on saves, including editors that replace the file when saving; stop
+it with Ctrl+C. A file watch follows its resolved filename by monitoring its
+parent directory. Monitoring failures are reported and exit with status 1.
 
 - [Batch Workflows](batch-workflows.md): directory validation, exports and cache management
 - [CLI Reference](cli-reference.md): commands, options and policy choices

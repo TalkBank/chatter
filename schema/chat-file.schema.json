@@ -23,6 +23,10 @@
       "type": "string"
     },
     "ActivityType": {
+      "minLength": 1,
+      "not": {
+        "pattern": "[^A-Za-z0-9]"
+      },
       "type": "string"
     },
     "AddTier": {
@@ -47,7 +51,7 @@
         "source": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyString"
+              "$ref": "#/$defs/RecoveryText"
             },
             {
               "type": "null"
@@ -58,7 +62,7 @@
         "target": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyString"
+              "$ref": "#/$defs/RecoveryText"
             },
             {
               "type": "null"
@@ -867,7 +871,7 @@
           "type": "object"
         },
         {
-          "$ref": "#/$defs/Bullet",
+          "$ref": "#/$defs/BulletState",
           "description": "Internal bullet/timestamp within group",
           "properties": {
             "type": {
@@ -881,11 +885,48 @@
           "type": "object"
         },
         {
-          "$ref": "#/$defs/Freecode",
+          "anyOf": [
+            {
+              "properties": {
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "unparsed": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "unparsed"
+              ],
+              "type": "object"
+            }
+          ],
           "description": "Freecode - free-form inline annotation (e.g., `[^ comment]`)",
           "properties": {
             "type": {
               "const": "freecode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/OrphanAnnotation",
+          "description": "Annotation source with no preceding host inside this group.",
+          "properties": {
+            "type": {
+              "const": "orphan_annotation",
               "type": "string"
             }
           },
@@ -993,16 +1034,26 @@
           "type": "object"
         },
         {
-          "$ref": "#/$defs/OtherSpokenEvent",
+          "additionalProperties": false,
           "description": "Other spoken event (&*SPEAKER:word) - someone else speaking in background",
           "properties": {
+            "speaker": {
+              "$ref": "#/$defs/SpeakerCode",
+              "description": "Speaker code for the interposed source."
+            },
             "type": {
               "const": "other_spoken_event",
               "type": "string"
+            },
+            "word": {
+              "$ref": "#/$defs/Word",
+              "description": "Ordinary word syntax spoken by the other speaker.\nThis word is validated but does not enter the main speaker's alignment."
             }
           },
           "required": [
-            "type"
+            "type",
+            "speaker",
+            "word"
           ],
           "type": "object"
         }
@@ -1095,6 +1146,20 @@
           "type": "object"
         },
         {
+          "$ref": "#/$defs/UnparsedBullet",
+          "description": "Rejected media source, retained without numeric timing.",
+          "properties": {
+            "type": {
+              "const": "unparsed_bullet",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
           "$ref": "#/$defs/BulletContentPicture",
           "description": "Picture reference: \\u0015%pic:\\\"filename\\\"\\u0015\nOnly valid in @Comment and %com",
           "properties": {
@@ -1142,6 +1207,28 @@
         "text"
       ],
       "type": "object"
+    },
+    "BulletState": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Bullet",
+          "description": "Numerically representable timing; semantic validation remains separate."
+        },
+        {
+          "description": "Observed source that failed numeric or syntax admission.",
+          "properties": {
+            "unparsed": {
+              "$ref": "#/$defs/UnparsedBullet",
+              "description": "Exact rejected source, never numeric timing."
+            }
+          },
+          "required": [
+            "unparsed"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "An occupied media-bullet position: numeric timing or explicit rejected source.\n\nAbsence is represented by the enclosing optional slot, never by this enum.\nParsed JSON retains the existing timing shape; rejected JSON uses an explicit\n`unparsed` payload. Neither reading nor writing recovery admits numeric timing."
     },
     "CADelimiter": {
       "description": "One CA delimiter token used to bound a prosodic region.\n\n# Structure\n\nA CA delimiter consists of:\n- **type**: The kind of prosodic modification (rate, volume, voice quality)\n- **span**: Optional source location information\n\n# CHAT Format Examples\n\n```text\n*CHI: I want ∆that∆ .                  # Faster speech\n*MOT: °okay° .                         # Softer speech\n*CHI: ∬thank you∬ .                    # Smile voice\n*INV: ∇very slow∇ .                    # Slower speech\n```\n\n# Delimiter Pairing\n\nCA delimiters should be balanced within an utterance:\n```text\n∆fast∆             # ✅ Balanced\n∆fast              # ❌ Unbalanced - validation error E230\n°soft∆             # ❌ Mismatched - validation error E230\n```\n\n# Usage\n\n```rust\nuse talkbank_model::{CADelimiter, CADelimiterType, Location};\n\nlet faster = CADelimiter::new(Location::Unlocated, CADelimiterType::Faster);\nlet softer = CADelimiter::new(Location::Unlocated, CADelimiterType::Softer);\n```\n\n# References\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)",
@@ -1591,6 +1678,159 @@
             },
             "type": {
               "const": "Mor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed morphology source. Preserves the tier slot but is always invalid.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedMor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed grammar source, retained without inventing a dependency graph.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedGra",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed actual phonology source; retains identity without parsed items.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedPho",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed model phonology source; retains identity without parsed items.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedMod",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed gesture/sign source; retains identity without parsed items.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedSin",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed word-timing source; retains identity without trusted timing items.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedWor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed phone alignment source, retained without inventing alignment pairs.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedPhoaln",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unparsed phone interval source, retained without inventing intervals.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTier"
+            },
+            "type": {
+              "const": "UnparsedXphoint",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Rejected text source, preserved without silently deleting malformed tokens.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/UnparsedTextTier"
+            },
+            "type": {
+              "const": "UnparsedText",
               "type": "string"
             }
           },
@@ -2114,7 +2354,7 @@
           "description": "Unsupported/unknown tier (e.g. %foo, not a standard tier, not %x-prefixed)\n\nDistinct from `UserDefined` which is intentional (`%xLABEL`). This variant\ncaptures tiers that the grammar's catch-all matched but that are not\nrecognized CHAT tiers. Validators reject these as an error (E605): the\nsupported dependent-tier set is closed, so an unrecognized non-`%x` tier\nmakes the file invalid.",
           "properties": {
             "data": {
-              "$ref": "#/$defs/UserDefinedDependentTier"
+              "$ref": "#/$defs/UnsupportedDependentTier"
             },
             "type": {
               "const": "Unsupported",
@@ -2130,6 +2370,10 @@
       ]
     },
     "DesignType": {
+      "minLength": 1,
+      "not": {
+        "pattern": "[^A-Za-z0-9]"
+      },
       "type": "string"
     },
     "DiagnosticLocation": {
@@ -3362,7 +3606,7 @@
         "line_offset": {
           "description": "Starting line number of source_text in the original file (1-indexed)\nUsed by miette to display correct line numbers in error output",
           "format": "uint",
-          "minimum": 0,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -3428,7 +3672,10 @@
       "type": "object"
     },
     "EventType": {
-      "description": "Event descriptor payload written after `&=`.\n\nThis is modeled as an unconstrained string newtype because corpora often\nintroduce project-specific event labels.\n\n# CHAT Format Examples\n\n```text\n&=laughs        Simple laughter event\n&=coughs        Coughing event\n&=clears:throat Throat clearing with detail\n&=crying        Crying event\n```\n\n# References\n\n- [Simple Events](https://talkbank.org/0info/manuals/CHAT.html#SimpleEvents)\n- [Local Events](https://talkbank.org/0info/manuals/CHAT.html#Local_Event)",
+      "minLength": 1,
+      "not": {
+        "pattern": "[\\u0026\\u002c\\u003b\\u0021\\u003f\\u002e\\u0028\\u0029\\u005b\\u005d\\u2308\\u2309\\u230a\\u230b\\u3014\\u3015\\u005c\\u2190\\u2192\\u2196\\u2197\\u2198\\u2199\\u21d7\\u21d8\\u003c\\u003e\\u2248\\u224b\\u0015\\u0001\\u0002\\u0003\\u0004\\u0007\\u0008\\u0009\\u000a\\u000d\\u0020\\u2039\\u203a\\u0022\\u201c\\u201d\\u0040\\u002a\\u0025\\u002b\\u007e\\u221e\\u2261\\u2051\\u2191\\u2193\\u21bb\\u2260\\u2219\\u223e\\u2906\\u2907\\u1f29\\u2047\\u00a7\\u204e\\u00b0\\u21ab\\u2206\\u2207\\u222c\\u222e\\u2581\\u2594\\u25c9\\u263a\\u264b\\u03ab\\u0000]"
+      },
       "type": "string"
     },
     "ExpTier": {
@@ -3584,19 +3831,6 @@
         }
       ]
     },
-    "Freecode": {
-      "description": "Inline free-form annotation payload.\n\nThe model stores raw text and leaves interpretation to downstream tooling.\n\n# CHAT Format Examples\n\n```text\n*CHI: I want [^ gesture] cookie .\n*MOT: look [^ emphasis] there !\n```\n\n# References\n\n- [Complex Local Events](https://talkbank.org/0info/manuals/CHAT.html#ComplexLocalEvents)",
-      "properties": {
-        "text": {
-          "description": "Payload text written after `[^ ` and before `]`.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "type": "object"
-    },
     "GemLabel": {
       "description": "Label for gem headers (`@Bg`, `@Eg`, `@G`).\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Bg_Header>\n- <https://talkbank.org/0info/manuals/CHAT.html#Eg_Header>\n- <https://talkbank.org/0info/manuals/CHAT.html#G_Header>",
       "type": "string"
@@ -3680,7 +3914,7 @@
       "type": "array"
     },
     "GraTier": {
-      "description": "Grammatical relations tier (%gra).\n\nContains dependency syntax annotations using Universal Dependencies relations.\nEach relation specifies how morphological chunks in the %mor tier relate syntactically.\n\n# Alignment with %mor\n\nThe %gra tier aligns with **morphological chunks**, not individual %mor items:\n- Clitics in %mor (e.g., `pro|it~v|be`) produce **two** %gra relations\n- Non-clitic words produce **one** %gra relation each\n- Terminators get their own %gra relation (typically PUNCT)\n\n# Dependency Relations\n\nUses Universal Dependencies relation types including:\n- **ROOT**: Main predicate of sentence (head = 0)\n- **NSUBJ**: Nominal subject\n- **OBJ**: Direct object\n- **IOBJ**: Indirect object\n- **DET**: Determiner\n- **AMOD**: Adjectival modifier\n- **ADVMOD**: Adverbial modifier\n- **PUNCT**: Punctuation\n\nA label is a UD universal relation, optionally followed by a\nlanguage-specific subtype (`NMOD-POSS`, `ACL-RELCL`). The head is a\nclosed set of 37 and is enforced by validation (`E761`); subtypes are\nopen by UD's own design and are not checked.\n\n# CHAT Manual Reference\n\n- [Grammatical Relations Tier](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)\n- [Universal Dependencies](https://universaldependencies.org/)\n\nNote: The legacy CLAN MOR manual has been removed from the TalkBank\nwebsite. GRA now follows UD-oriented conventions documented in the\nCHAT manual.\n\n# Example\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation};\n\n// Create a %gra tier\nlet gra = GraTier::new_gra(Location::Unlocated, vec![\n    GrammaticalRelation::new(1, 2, \"NSUBJ\"),   // Word 1 is subject of word 2\n    GrammaticalRelation::new(2, 0, \"ROOT\"),   // Word 2 is root\n    GrammaticalRelation::new(3, 2, \"OBJ\"),    // Word 3 is object of word 2\n    GrammaticalRelation::new(4, 2, \"PUNCT\"),  // Terminator\n]);\n```",
+      "description": "Grammatical relations tier (%gra).\n\nContains dependency syntax annotations using Universal Dependencies relations.\nEach relation specifies how morphological chunks in the %mor tier relate syntactically.\n\n# Alignment with %mor\n\nThe %gra tier aligns with **morphological chunks**, not individual %mor items:\n- Clitics in %mor (e.g., `pro|it~v|be`) produce **two** %gra relations\n- Non-clitic words produce **one** %gra relation each\n- Terminators get their own %gra relation (typically PUNCT)\n\n# Dependency Relations\n\nUses Universal Dependencies relation types including:\n- **ROOT**: Main predicate of sentence (head = 0)\n- **NSUBJ**: Nominal subject\n- **OBJ**: Direct object\n- **IOBJ**: Indirect object\n- **DET**: Determiner\n- **AMOD**: Adjectival modifier\n- **ADVMOD**: Adverbial modifier\n- **PUNCT**: Punctuation\n\nA label is a UD universal relation, optionally followed by a\nlanguage-specific subtype (`NMOD-POSS`, `ACL-RELCL`). The head is a\nclosed set of 37 and is enforced by validation (`E761`); subtypes are\nopen by UD's own design and are not checked.\n\n# CHAT Manual Reference\n\n- [Grammatical Relations Tier](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)\n- [Universal Dependencies](https://universaldependencies.org/)\n\nNote: The legacy CLAN MOR manual has been removed from the TalkBank\nwebsite. GRA now follows UD-oriented conventions documented in the\nCHAT manual.\n\n# Example\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation};\n\n// Create a %gra tier\nlet gra = GraTier::new_gra(Location::Unlocated, vec![\n    GrammaticalRelation::new(1, 2, \"NSUBJ\".try_into().unwrap()),   // Word 1 is subject of word 2\n    GrammaticalRelation::new(2, 0, \"ROOT\".try_into().unwrap()),   // Word 2 is root\n    GrammaticalRelation::new(3, 2, \"OBJ\".try_into().unwrap()),    // Word 3 is object of word 2\n    GrammaticalRelation::new(4, 2, \"PUNCT\".try_into().unwrap()),  // Terminator\n]);\n```",
       "properties": {
         "relations": {
           "$ref": "#/$defs/GraRelations",
@@ -3724,7 +3958,7 @@
         },
         "relation": {
           "$ref": "#/$defs/GrammaticalRelationType",
-          "description": "Relation type (e.g., \"NSUBJ\", \"OBJ\", \"ROOT\", \"DET\", \"PUNCT\")\n\nCommon Universal Dependencies relations:\n- ROOT: root of sentence\n- NSUBJ: nominal subject\n- OBJ: object\n- DET: determiner\n- PUNCT: punctuation\n- NMOD: nominal modifier\n\nThe label is `HEAD` or `HEAD-SUBTYPE`. The model stores it as\nopen text; the closed head vocabulary is enforced by validation\n(`E761`), never at construction."
+          "description": "Relation type (e.g., \"NSUBJ\", \"OBJ\", \"ROOT\", \"DET\", \"PUNCT\")\n\nCommon Universal Dependencies relations:\n- ROOT: root of sentence\n- NSUBJ: nominal subject\n- OBJ: object\n- DET: determiner\n- PUNCT: punctuation\n- NMOD: nominal modifier\n\nThe label is `HEAD` or `HEAD-SUBTYPE`. The model stores it as\na checked lexical token; the closed head vocabulary is enforced by validation\n(`E761`), never at construction."
         }
       },
       "required": [
@@ -3735,7 +3969,11 @@
       "type": "object"
     },
     "GrammaticalRelationType": {
-      "description": "Grammatical relation type (Universal Dependencies).\n\nRelation labels from the Universal Dependencies framework describing syntactic\nrelationships between words in a sentence.\n\nThe model intentionally treats relation labels as open-text tokens: it\npreserves corpus-provided values as-is and leaves strict vocabulary\npolicy to higher-level validation.\n\n# Common Universal Dependencies Relations\n\n**Core arguments:**\n- **ROOT**: Root of the sentence (head = 0)\n- **NSUBJ**: Subject (nominal subject)\n- **OBJ**: Direct object\n- **IOBJ**: Indirect object\n- **CSUBJ**: Clausal subject\n- **CCOMP**: Clausal complement\n\n**Nominal dependents:**\n- **DET**: Determiner (the, a, this)\n- **AMOD**: Adjectival modifier\n- **NMOD**: Nominal modifier\n- **NUM**: Numeric modifier\n- **POSS**: Possessive modifier\n\n**Function words:**\n- **AUX**: Auxiliary verb\n- **CASE**: Case marking (prepositions, postpositions)\n- **MARK**: Marker (subordinating conjunction)\n- **PUNCT**: Punctuation\n\n**Other:**\n- **ADV**: Adverbial modifier\n- **CONJ**: Conjunct\n- **CC**: Coordinating conjunction\n- **NEG**: Negation\n\n# CHAT Format Examples\n\n```text\n*CHI: I eat cookies .\n%mor: pro:sub|I v|eat det:art|the n|cookie-PL .\n%gra: 1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT\n```\n\n# References\n\n- [Universal Dependencies Relations](https://universaldependencies.org/u/dep/)\n- [CHAT Manual: Grammatical Relations](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)",
+      "minLength": 1,
+      "not": {
+        "pattern": "[^A-Za-z0-9-]"
+      },
+      "pattern": "^[A-Za-z]",
       "type": "string"
     },
     "Group": {
@@ -3763,6 +4001,10 @@
       "type": "string"
     },
     "GroupType": {
+      "minLength": 1,
+      "not": {
+        "pattern": "[^A-Za-z0-9]"
+      },
       "type": "string"
     },
     "Header": {
@@ -3822,6 +4064,56 @@
           "required": [
             "type",
             "codes"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/UnparsedLanguageHeader",
+          "description": "Rejected @Languages source; never an admitted language declaration.",
+          "properties": {
+            "type": {
+              "const": "unparsed_languages",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Rejected participant-header source; establishes no speaker identities.",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unparsed_participants",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "source"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Recognized ID header whose fields could not be admitted.\nRaw source remains invalid through serialization; no identity is inferred.",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unparsed_id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "source"
           ],
           "type": "object"
         },
@@ -4618,6 +4910,21 @@
       },
       "type": "array"
     },
+    "LanguageHeaderFailure": {
+      "description": "Which language-header boundary rejected the observed source.",
+      "oneOf": [
+        {
+          "const": "syntax",
+          "description": "The header envelope could not be parsed.",
+          "type": "string"
+        },
+        {
+          "const": "list",
+          "description": "The header was recognized but its ordered language list was rejected.",
+          "type": "string"
+        }
+      ]
+    },
     "LanguageMetadata": {
       "description": "Language metadata for an entire utterance.\n\nTracks the resolved language for each WORD of the main tier, at any depth,\nincluding inside quotations, phonological groups, sign groups and retraces.\n\nThis structure stores:\n- **tier language**: utterance baseline (`[- code]` or `@Languages` primary)\n- **word languages**: resolved per-word language/provenance entries\n\nThe vector is in in-order traversal order. It is NOT an alignment index:\nthe tier domains disagree about what they count (Mor excludes retraces,\nPho counts them), so correlating with `%mor`/`%gra` positions requires the\nalignment layer's own index types, not this order.\n\n# Structure\n\n```text\nLanguageMetadata\n  ├─ tier_language: Option<LanguageCode>  (e.g., \"eng\")\n  └─ word_languages: WordLanguageInfos\n       ├─ [0]: languages=Single(\"eng\"), source=Default\n       ├─ [1]: languages=Single(\"spa\"), source=WordShortcut\n       └─ ...\n```\n\n# CHAT Format Examples\n\n**Example 1: Single language utterance**\n\n```text\n@Languages: eng\n*CHI: I want cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`: All words have language=\"eng\", source=Default\n- `is_code_switching()`: false\n\n**Example 2: Code-switching utterance**\n\n```text\n@Languages: eng, spa\n*CHI: I want galletas@s please .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`:\n  - \"I\" → eng (Default)\n  - \"want\" → eng (Default)\n  - \"galletas\" → spa (WordShortcut)\n  - \"please\" → eng (Default)\n- `is_code_switching()`: true (uses both \"eng\" and \"spa\")\n\n**Example 3: Tier-scoped language change**\n\n```text\n@Languages: eng, fra\n*CHI: [- fra] je veux cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"fra\") (from `[- fra]` marker)\n- `word_languages`: All words have language=\"fra\", source=TierScoped\n- `is_code_switching()`: false\n\n# Use Cases\n\n**Code-switching detection:**\n```rust\n# use talkbank_model::LanguageMetadata;\n# fn report_switching(language_metadata: &LanguageMetadata) {\nif language_metadata.is_code_switching() {\n    let counts = language_metadata.count_by_language();\n    println!(\"Utterance uses {} languages\", counts.len());\n}\n# }\n```\n\n**Per-word language lookup:**\n```rust\n# use talkbank_model::LanguageMetadata;\n# fn report_third_word(language_metadata: &LanguageMetadata) {\nif let Some(info) = language_metadata.word_languages.as_slice().get(2) {\n    println!(\"Word 2 language assignment: {:?}\", info.languages);\n}\n# }\n```\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)",
       "properties": {
@@ -4828,7 +5135,7 @@
       "type": "string"
     },
     "LongFeatureBegin": {
-      "description": "Begin boundary for a long-event scope.\n\nA valid scope pairs this marker with a later [`LongFeatureEnd`] carrying the\nsame label.\n\n# CHAT Format\n\n```text\n&{l=LABEL\n```\n\n# Examples\n\n```text\n*CHI: &{l=singing happy birthday to you &}l=singing .\n*MOT: what did you &{l=whisper say to him &}l=whisper ?\n*CHI: &{l=overlap I want &}l=overlap one .\n*FAT: &{l=overlap no you can't &}l=overlap .\n```\n\n# Overlapping Speech\n\nFor overlapping speech between speakers, use matching `&{l=overlap` and\n`&}l=overlap` markers in both speakers' utterances to show where the\nsimultaneous speech occurs.\n\n# Validation\n\nThe source span enables validation that begin markers are properly paired\nwith matching end markers. Unpaired markers generate validation errors.\n\n# References\n\n- [Long Event](https://talkbank.org/0info/manuals/CHAT.html#LongEvent)\n- [Overlaps](https://talkbank.org/0info/manuals/CHAT.html#Overlaps)",
+      "description": "Begin boundary for a long-event scope.\n\nA valid scope pairs this marker with a later [`LongFeatureEnd`] carrying the\nsame label.\n\n# CHAT Format\n\n```text\n&{l=LABEL\n```\n\n# Examples\n\n```text\n*CHI: &{l=singing happy birthday to you &}l=singing .\n*MOT: what did you &{l=whisper say to him &}l=whisper ?\n*CHI: &{l=overlap I want &}l=overlap one .\n*FAT: &{l=overlap no you can't &}l=overlap .\n```\n\n# Overlapping Speech\n\nFor overlapping speech between speakers, use matching `&{l=overlap` and\n`&}l=overlap` markers in both speakers' utterances to show where the\nsimultaneous speech occurs.\n\n# Validation\n\nValidation checks that begin markers are properly paired\nwith matching end markers. Unpaired markers generate validation errors.\n\n# References\n\n- [Long Event](https://talkbank.org/0info/manuals/CHAT.html#LongEvent)\n- [Overlaps](https://talkbank.org/0info/manuals/CHAT.html#Overlaps)",
       "properties": {
         "label": {
           "$ref": "#/$defs/LongFeatureLabel",
@@ -4854,8 +5161,8 @@
       "type": "object"
     },
     "LongFeatureLabel": {
-      "description": "Long-event label text written after `l=`.\n\nModeled as an unconstrained newtype because corpora commonly use\nproject-specific labels.\n\n# CHAT Format Examples\n\n```text\n&{l=overlap        Begin overlapping speech\n&}l=overlap        End overlapping speech\n&{l=singing        Begin singing\n&}l=singing        End singing\n&{l=whisper        Begin whispered speech\n&}l=whisper        End whispered speech\n```\n\n# Common Labels\n\n- **Overlapping speech**: overlap, simultaneous\n- **Prosodic features**: singing, chanting, whisper, shout, emphasis\n- **Code-switching**: code-switch, mixed-language\n- **Quotation**: quote, reported-speech\n- **Other discourse**: sarcasm, irony, imitation\n\n# Usage\n\nLong events mark spans where the marked feature applies continuously across\nmultiple words. The begin marker (`&{l=LABEL`) starts the scope, and the end\nmarker (`&}l=LABEL`) closes it. All words between the markers are affected\nby the feature.\n\n# References\n\n- [Long Event](https://talkbank.org/0info/manuals/CHAT.html#LongEvent)",
-      "type": "string"
+      "$ref": "#/$defs/ScopedMarkerLabel",
+      "description": "Admitted label after `l=` in a long-event begin/end marker.\nLabels remain project-defined; only their lexical shape is restricted.\n\n```compile_fail\nuse talkbank_model::{LongFeatureBegin, NonvocalLabel, Location};\nlet other = NonvocalLabel::new(\"label\").unwrap();\nlet marker = LongFeatureBegin::new(Location::Unlocated, other);\n```"
     },
     "MainTier": {
       "description": "Typed representation of one main-tier utterance line.\n\nMain tiers are the alignment anchor for dependent tiers (`%mor`, `%gra`,\n`%pho`, `%wor`, ...).\n\n# CHAT Format Examples\n\n```text\n*CHI: I want cookie .\n*MOT: do you want a cookie ?\n*CHI: ++ yeah !\n*FAT: [- spa] hola ! [+ code-switching]\n*CHI: the dog &=barks ! •12345_23456•\n```\n\n# Components\n\n- **Speaker**: Three-letter code identifying the participant (e.g., `CHI`, `MOT`, `INV`)\n- **Linkers**: Optional discourse markers (`++`, `+<`, `+^`) appearing after the speaker\n- **Language code**: Optional marker for code-switching (`[- code]`)\n- **Content**: Sequence of words, events, pauses, groups, and other elements\n- **Terminator**: Punctuation (`.`, `?`, `!`, `+...`, etc.) marking utterance end\n- **Postcodes**: Optional annotations after terminator (`[+ text]`, `[+bch]`, etc.)\n- **Bullet**: Optional media timestamp (`•start_end•`)\n\n# References\n\n- [Main Tier](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Speaker Codes](https://talkbank.org/0info/manuals/CHAT.html#Speaker_Codes)\n- [Utterance Linkers](https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers)\n- [Postcodes](https://talkbank.org/0info/manuals/CHAT.html#Postcodes)",
@@ -5013,7 +5320,7 @@
       "type": "string"
     },
     "MorTier": {
-      "description": "Morphological analysis tier (%mor).\n\nProvides word-by-word UD-style morphological annotation aligned with the main tier.\nEach word receives a morphological code specifying part of speech, lemma,\nand grammatical features.\n\n# CHAT Format Example\n\n```text\n*CHI: I want cookies .\n%mor: pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres-S1 noun|cookie-Plur .\n```\n\n# Morphological Format\n\nEach mor item has the UD structure: `POS|lemma[-Feature]*`\n- **POS**: UD-style part-of-speech tag (e.g., `noun`, `verb`, `pron`)\n- **Lemma**: Base form (e.g., `I`, `want`, `cookie`)\n- **Features**: UD feature values (e.g., `-Plur`, `-Fin-Ind-Pres-S3`)\n\n# Alignment\n\nMor tiers align 1-to-1 with alignable main tier content (words, not pauses/events).\nSee `crate::alignment::mor` for alignment algorithm.\n\n# Terminator\n\nStandard `%mor:` tiers end with a typed [`Terminator`] that matches the\nmain tier. In CA-mode, or for specialized fragments, the terminator may be\nomitted if the main tier has no terminator.\n\n# References\n\n- [Morphological Tier](https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier)",
+      "description": "Morphological analysis tier (%mor).\n\nProvides word-by-word UD-style morphological annotation aligned with the main tier.\nEach word receives a morphological code specifying part of speech, lemma,\nand grammatical features.\n\n# CHAT Format Example\n\n```text\n*CHI: I want cookies .\n%mor: pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres-S1 noun|cookie-Plur .\n```\n\n# Morphological Format\n\nEach mor item has the UD structure: `POS|lemma[-Feature]*`\n- **POS**: UD-style part-of-speech tag (e.g., `noun`, `verb`, `pron`)\n- **Lemma**: Base form (e.g., `I`, `want`, `cookie`)\n- **Features**: UD feature values (e.g., `-Plur`, `-Fin-Ind-Pres-S3`)\n\n# Alignment\n\nMor tiers align 1-to-1 with alignable main tier content (words, not pauses/events).\nSee `crate::alignment::mor` for alignment algorithm.\n\n# Terminator\n\nThis parsed representation requires an observed typed [`Terminator`].\nIf parsing cannot supply one, retain `UnparsedTier` or reject the\nfragment; never invent a period to satisfy this constructor.\n\n# References\n\n- [Morphological Tier](https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier)",
       "properties": {
         "items": {
           "$ref": "#/$defs/MorItems",
@@ -5070,8 +5377,15 @@
       ],
       "type": "object"
     },
+    "MultipleLanguageCodes": {
+      "items": {
+        "$ref": "#/$defs/LanguageCode"
+      },
+      "minItems": 2,
+      "type": "array"
+    },
     "NonEmptyString": {
-      "description": "String wrapper with a non-empty construction invariant.\n\n`new()` enforces non-empty input. Deserialization intentionally allows empty\npayloads so invariant violations can flow through normal validation/error\nreporting with source context.\n\nNote: Whitespace-only strings are considered valid (they are non-empty).\n\n# Construction\n\nUse `NonEmptyString::new()`, which returns `Result<NonEmptyString, EmptyText>`,\nor the equivalent `TryFrom<&str>`:\n\n```\nuse talkbank_model::model::NonEmptyString;\n\n// Successful construction\nif let Ok(s) = NonEmptyString::new(\"hello\") {\n    assert_eq!(s.as_str(), \"hello\");\n}\n\n// Whitespace is valid (non-empty)\nassert!(NonEmptyString::new(\"   \").is_ok());\n\n// Only empty string is rejected\nassert!(NonEmptyString::new(\"\").is_err());\n```\n\n# Validation\n\nAfter deserializing data, use the `Validate` trait to check invariants:\n\n```ignore\nuse talkbank_model::validation::{Validate, ValidationContext};\nuse talkbank_model::ErrorCollector;\n\nlet errors = ErrorCollector::new();\nlet ctx = ValidationContext::default();\ndeserialized_data.validate(&ctx, &errors);\n// Check errors.into_vec() for any NonEmptyString violations\n```\n\n# Usage\n\n`NonEmptyString` derefs to `&str` for convenient access:\n\n```\nuse talkbank_model::model::NonEmptyString;\n\nif let Ok(s) = NonEmptyString::new(\"hello\") {\n    assert_eq!(s.as_str().get(0..2), Some(\"he\"));  // str methods work via Deref\n}\n```\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>\n- <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>",
+      "minLength": 1,
       "type": "string"
     },
     "NonvocalBegin": {
@@ -5101,8 +5415,8 @@
       "type": "object"
     },
     "NonvocalLabel": {
-      "description": "Nonvocal event label payload.\n\nKept as an open string newtype because corpora commonly define custom\nnonvocal labels beyond any fixed vocabulary. Labels are preserved\nverbatim for roundtrip fidelity and begin/end pairing checks.\n\n# CHAT Format Examples\n\n```text\n&{n=laugh}         Simple laugh (point event)\n&{n=crying         Begin crying (scoped event start)\n&}n=crying         End crying (scoped event end)\n&{n=cough}         Simple cough\n&{n=gesture        Begin gesture\n&}n=gesture        End gesture\n```\n\n# Common Labels\n\n- **Vocalizations**: laugh, cry, cough, yawn, sneeze, grunt, sigh, gasp, hiccup\n- **Gestures**: point, wave, clap, nod, shake, gesture\n- **Actions**: eat, drink, play, touch, throw, drop\n- **Other**: breath, sniff, burp, whistle, hum\n\n# References\n\n- [Long Nonverbal Event](https://talkbank.org/0info/manuals/CHAT.html#LongNonverbalEvent)\n\nThese labels stay verbatim because researchers often invent corpus-specific terms;\nthe type exists so validators can require label parity between begin/end markers.",
-      "type": "string"
+      "$ref": "#/$defs/ScopedMarkerLabel",
+      "description": "Admitted label after `n=` in a nonvocal begin/end/simple marker.\nThe distinct type prevents substituting a long-event label by accident."
     },
     "NonvocalSimple": {
       "description": "Point nonvocal event marker (`&{n=LABEL}`).\n\nUnlike scoped begin/end markers, this form represents a single localized\nnonvocal event.\n\n# CHAT Format\n\n```text\n&{n=LABEL}\n```\n\n# Examples\n\n```text\n*CHI: I want &{n=cough} cookie .\n*MOT: look at this &{n=laugh} .\n*CHI: &{n=sneeze} excuse me .\n```\n\n# Difference from Scoped Events\n\nSimple markers (`&{n=laugh}`) are used for instantaneous or brief events,\nwhile scoped markers (`&{n=crying ... &}n=crying`) span multiple words or\ncontent elements.\n\n# References\n\n- [Long Nonverbal Event](https://talkbank.org/0info/manuals/CHAT.html#LongNonverbalEvent)",
@@ -5120,21 +5434,15 @@
     "Number": {
       "type": "string"
     },
-    "OtherSpokenEvent": {
-      "description": "Interposed speech payload.\n\n# CHAT Format Examples\n\n```text\n&*MOT:careful         Mother says \"careful\" in background\n&*FAT:watch           Father says \"watch\" while child speaks\n&*CHI:mine            Child interjects \"mine\"\n&*BRO:stop            Brother says \"stop\" in background\n```\n\n# Usage Context\n\nInterposed words are used when another speaker briefly interjects or speaks\nin the background without taking the conversational floor. If the intervention\nis substantial enough to constitute a turn, it should be transcribed as a\nseparate utterance instead.\n\n# References\n\n- [Interposed Words](https://talkbank.org/0info/manuals/CHAT.html#InterposedWords)",
+    "OrphanAnnotation": {
+      "description": "Observed annotation source with no admitted host.\n\nThis is always invalid recovery, even after JSON import. Its original\ndelimiters are retained; it is never rewritten as an authored freecode.",
       "properties": {
-        "speaker": {
-          "$ref": "#/$defs/SpeakerCode",
-          "description": "Speaker code for the interposed source."
-        },
-        "text": {
-          "description": "Interposed text payload.",
+        "source": {
           "type": "string"
         }
       },
       "required": [
-        "speaker",
-        "text"
+        "source"
       ],
       "type": "object"
     },
@@ -5201,7 +5509,10 @@
       ]
     },
     "PageNumber": {
-      "description": "Page identifier from `@Page`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Page_Header>",
+      "minLength": 1,
+      "not": {
+        "pattern": "[^0-9]"
+      },
       "type": "string"
     },
     "ParseError": {
@@ -5264,50 +5575,54 @@
       ],
       "type": "object"
     },
-    "Participant": {
-      "description": "Participant record assembled from participant-related headers.\n\nCombines:\n- `@Participants` entry (`code`, optional `name`, `role`)\n- `@ID` payload (language/age/sex/corpus/etc.)\n- optional `@Birth of <CODE>` date\n\n# CHAT Format Reference\n\n- [@Participants](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)\n- [@ID](https://talkbank.org/0info/manuals/CHAT.html#ID_Header)\n- [@Birth](https://talkbank.org/0info/manuals/CHAT.html#Birth_Header)\n\nThis type is the source of truth used by validation and JSON export for\nparticipant metadata.\n\n# Example\n\n```rust\n# use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ParticipantName, LanguageCode};\nlet entry = ParticipantEntry {\n    speaker_code: SpeakerCode::new(\"CHI\"),\n    name: Some(ParticipantName::new(\"Ruth\")),\n    role: ParticipantRole::new(\"Target_Child\"),\n};\n\nlet id = IDHeader::new(LanguageCode::new(\"eng\")?, \"CHI\", \"Target_Child\");\n\nlet participant = Participant::new(entry, id);\nassert_eq!(participant.code.as_str(), \"CHI\");\n# Ok::<_, Box<dyn std::error::Error>>(())\n```",
-      "properties": {
-        "birth_date": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ChatDate"
+    "ParticipantDetails": {
+      "description": "The observed name and role of a participant, or an explicit missing role.\n\nThe positional syntax cannot identify a name without a final role token.\nKeeping the optional name inside Complete prevents an omitted role from\nturning an alleged name into a different role during serialization.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Observed role token and optional preceding name; validity is separate.",
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ParticipantName"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional name preceding the role."
             },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Optional date from `@Birth of <CODE>`."
-        },
-        "code": {
-          "$ref": "#/$defs/SpeakerCode",
-          "description": "Speaker code used on main tiers (`*CHI: ...`).\n\nThis code is used in main tier lines to identify the speaker:\n```chat\n*CHI:    hello .\n```"
-        },
-        "id": {
-          "$ref": "#/$defs/IDHeader",
-          "description": "Full `@ID` metadata payload."
-        },
-        "name": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ParticipantName"
+            "role": {
+              "$ref": "#/$defs/ParticipantRole",
+              "description": "Observed role token, not an inferred value from ID metadata."
             },
-            {
-              "type": "null"
+            "state": {
+              "const": "complete",
+              "type": "string"
             }
+          },
+          "required": [
+            "state",
+            "role"
           ],
-          "description": "Optional human-readable name from `@Participants`."
+          "type": "object"
         },
-        "role": {
-          "$ref": "#/$defs/ParticipantRole",
-          "description": "Role token from `@Participants`."
+        {
+          "additionalProperties": false,
+          "description": "Only a speaker code was observed.",
+          "properties": {
+            "state": {
+              "const": "missing_role",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "code",
-        "role",
-        "id"
-      ],
-      "type": "object"
+      ]
     },
     "ParticipantEntries": {
       "description": "Ordered payload of an `@Participants` header.\n\nOrder is preserved from source so tools can roundtrip the author's header\nlayout and keep participant listings stable in UIs.\n\n# Reference\n\n- [Participants header](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)",
@@ -5317,31 +5632,21 @@
       "type": "array"
     },
     "ParticipantEntry": {
+      "additionalProperties": false,
       "description": "Participant entry in @Participants header\n\nFormat: `SPEAKER_CODE [Optional Name] Role`\nExample: `CHI Alex Target_Child` or `MOT Mother`\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Participants_Header>",
       "properties": {
-        "name": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ParticipantName"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Optional participant name (e.g., \"Alex\", \"Mary\")"
-        },
-        "role": {
-          "$ref": "#/$defs/ParticipantRole",
-          "description": "Participant role (e.g., \"Target_Child\", \"Mother\", \"Father\")"
+        "details": {
+          "$ref": "#/$defs/ParticipantDetails",
+          "description": "Complete name/role syntax or explicit role omission."
         },
         "speaker_code": {
           "$ref": "#/$defs/SpeakerCode",
-          "description": "Three-letter speaker code (e.g., \"CHI\", \"MOT\", \"FAT\")"
+          "description": "Observed speaker code."
         }
       },
       "required": [
         "speaker_code",
-        "role"
+        "details"
       ],
       "type": "object"
     },
@@ -5354,7 +5659,7 @@
       "type": "string"
     },
     "Pause": {
-      "description": "Pause marker serialized as `(payload)`.\n\n# Duration Types\n\n- **Short** (`.`): Brief pause\n- **Medium** (`..`): Moderate pause\n- **Long** (`...`): Extended pause\n- **Timed** (`1.5`, `2.0`, etc.): Pause duration in seconds\n\n# CHAT Manual Reference\n\n- [Pause Markers](https://talkbank.org/0info/manuals/CHAT.html#Pauses)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Pause, PauseDuration, PauseTimedDuration};\n\n// Short pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Short);\nassert_eq!(pause.to_string(), \"(.)\");\n\n// Medium pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Medium);\nassert_eq!(pause.to_string(), \"(..)\");\n\n// Long pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Long);\nassert_eq!(pause.to_string(), \"(...)\");\n\n// Timed pause (2.5 seconds)\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Timed(PauseTimedDuration::new(\"2.5\")));\nassert_eq!(pause.to_string(), \"(2.5)\");\n```",
+      "description": "Pause marker serialized as `(payload)`.\n\n# Duration Types\n\n- **Short** (`.`): Brief pause\n- **Medium** (`..`): Moderate pause\n- **Long** (`...`): Extended pause\n- **Timed** (`1.5`, `2.0`, etc.): Pause duration in seconds\n\n# CHAT Manual Reference\n\n- [Pause Markers](https://talkbank.org/0info/manuals/CHAT.html#Pauses)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Pause, PauseDuration, TimedPause};\n\n// Short pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Short);\nassert_eq!(pause.to_string(), \"(.)\");\n\n// Medium pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Medium);\nassert_eq!(pause.to_string(), \"(..)\");\n\n// Long pause\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Long);\nassert_eq!(pause.to_string(), \"(...)\");\n\n// Timed pause (2.5 seconds)\nlet pause = Pause::new(Location::Unlocated, PauseDuration::Timed(TimedPause::new(\"2.5\").unwrap()));\nassert_eq!(pause.to_string(), \"(2.5)\");\n```",
       "properties": {
         "duration": {
           "$ref": "#/$defs/PauseDuration",
@@ -5409,7 +5714,7 @@
           "type": "object"
         },
         {
-          "$ref": "#/$defs/PauseTimedDuration",
+          "$ref": "#/$defs/TimedPause",
           "description": "Numeric pause value preserved as source text (for example `1.5`, `2.0`).",
           "properties": {
             "type": {
@@ -5423,17 +5728,6 @@
           "type": "object"
         }
       ]
-    },
-    "PauseTimedDuration": {
-      "properties": {
-        "seconds": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "seconds"
-      ],
-      "type": "object"
     },
     "PhoAlignment": {
       "description": "Result of aligning main-tier units to `%pho` tokens.\n\n`pairs` always preserves positional intent, including placeholder entries for\nmismatches. `errors` carries user-facing diagnostics explaining why those\nplaceholders were needed.",
@@ -5566,7 +5860,7 @@
           "description": "The phone's time interval (start/end media offsets, milliseconds)."
         },
         "phone": {
-          "$ref": "#/$defs/NonEmptyString",
+          "$ref": "#/$defs/RecoveryText",
           "description": "The phone, identical to the corresponding phone of the `%pho` word."
         }
       },
@@ -5585,17 +5879,33 @@
       "type": "string"
     },
     "Postcode": {
-      "description": "Utterance-level postcode payload.\n\nThe model stores raw postcode text and leaves interpretation to downstream\ntooling/pipelines.\n\n# CHAT Format Examples\n\n```text\n*CHI: I want cookie [+ exc] .      Exclude from analysis\n*MOT: very good [+ imp] !          Imitation prompt\n```\n\n# Common Postcodes\n\n- `[+ exc]` - Exclude utterance\n- `[+ trn]` - Translation\n- `[+ gram]` - Grammatical\n- `[+ jar]` - Jargon\n\n# References\n\n- [Postcodes](https://talkbank.org/0info/manuals/CHAT.html#Postcodes)\n- [Excluded Utterance Postcode](https://talkbank.org/0info/manuals/CHAT.html#ExcludedUtterancePostcode)\n- [Included Utterance Postcode](https://talkbank.org/0info/manuals/CHAT.html#IncludedUtterancePostcode)",
-      "properties": {
-        "text": {
-          "description": "Payload text written after `[+ ` and before `]`.",
-          "type": "string"
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "unparsed": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "unparsed"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "text"
       ],
-      "type": "object"
+      "description": "Utterance-level postcode payload.\n\nThe model stores raw postcode text and leaves interpretation to downstream\ntooling/pipelines.\n\n# CHAT Format Examples\n\n```text\n*CHI: I want cookie [+ exc] .      Exclude from analysis\n*MOT: very good [+ imp] !          Imitation prompt\n```\n\n# Common Postcodes\n\n- `[+ exc]` - Exclude utterance\n- `[+ trn]` - Translation\n- `[+ gram]` - Grammatical\n- `[+ jar]` - Jargon\n\n# References\n\n- [Postcodes](https://talkbank.org/0info/manuals/CHAT.html#Postcodes)\n- [Excluded Utterance Postcode](https://talkbank.org/0info/manuals/CHAT.html#ExcludedUtterancePostcode)\n- [Included Utterance Postcode](https://talkbank.org/0info/manuals/CHAT.html#IncludedUtterancePostcode)"
     },
     "Quotation": {
       "description": "Quoted speech group (`“...”`).\n\nThis form preserves quoted payload boundaries as a single bracketed unit.\n\n# CHAT Format Examples\n\n```text\nShe said \"hello there\" loudly\nI told him \"no way\"\n```\n\n# References\n\n- [Quotation](https://talkbank.org/0info/manuals/CHAT.html#Quotation)",
@@ -5613,8 +5923,12 @@
     "RecordingQuality": {
       "type": "string"
     },
+    "RecoveryText": {
+      "description": "A lexical field retained for contextual validation, including observed emptiness.\n\nJSON remains a string. An empty payload becomes `Empty`; it never constructs\na `NonEmptyString`. Rendering preserves the observed text and does not admit it.",
+      "type": "string"
+    },
     "ReplacedWord": {
-      "description": "A spoken word paired with CHAT replacement metadata.\n\n`ReplacedWord` models the local structure:\n`spoken [: intended] [scoped-annotations...]`.\n\n# Format in CHAT\n\n```text\nactual_word [: replacement] [* error_code] [= explanation]\n```\n\n# Structure\n\n- **word**: What was actually said\n- **replacement**: What should have been said (one or more words)\n- **scoped_annotations**: Optional error codes, explanations, etc.\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n- [Error Coding with Replacements](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{ReplacedWord, Replacement, ContentAnnotation, ScopedError, Word};\n\n// Simple replacement\nlet replaced = ReplacedWord::new(\n    Location::Unlocated,\n    Word::simple(Location::Unlocated, \"doggie\"),\n    Replacement::from_word(Word::simple(Location::Unlocated, \"dog\"))\n);\n\n// With error annotation\nlet replaced = ReplacedWord::new(\n    Location::Unlocated,\n    Word::simple(Location::Unlocated, \"goed\"),\n    Replacement::from_word(Word::simple(Location::Unlocated, \"went\"))\n).with_scoped_annotations(vec![\n    ContentAnnotation::Error(ScopedError { code: Some(\"grammar\".into()) })\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: I doggie [: dog] .\n*CHI: he goed [: went] [* grammar] home .\n```",
+      "description": "A spoken word paired with CHAT replacement metadata.\n\n`ReplacedWord` models the local structure:\n`spoken [: intended] [scoped-annotations...]`.\n\n# Format in CHAT\n\n```text\nactual_word [: replacement] [* error_code] [= explanation]\n```\n\n# Structure\n\n- **word**: What was actually said\n- **replacement**: What should have been said (one or more words)\n- **scoped_annotations**: Optional error codes, explanations, etc.\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n- [Error Coding with Replacements](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{ReplacedWord, Replacement, ContentAnnotation, ScopedError, Word};\n\n// Simple replacement\nlet replaced = ReplacedWord::new(\n    Location::Unlocated,\n    Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!(\"doggie\"))),\n    Replacement::from_word(Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!(\"dog\"))))\n);\n\n// With error annotation\nlet replaced = ReplacedWord::new(\n    Location::Unlocated,\n    Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!(\"goed\"))),\n    Replacement::from_word(Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!(\"went\"))))\n).with_scoped_annotations(vec![\n    ContentAnnotation::Error(ScopedError { code: Some(\"grammar\".into()) })\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: I doggie [: dog] .\n*CHI: he goed [: went] [* grammar] home .\n```",
       "properties": {
         "replacement": {
           "$ref": "#/$defs/Replacement",
@@ -5643,7 +5957,7 @@
       "type": "array"
     },
     "Replacement": {
-      "description": "Replacement specification indicating the intended word(s).\n\nA replacement shows what should have been said instead of what was actually uttered.\nIn CHAT format, this is written as `[: intended_word]` after the actual word.\n\n# Structure\n\n- Can contain one or more words (though single word is most common)\n- Must be non-empty (validated during parsing)\n- Words in replacement follow normal word structure (can have form types, etc.)\n\n# Common Usage\n\nReplacements are typically used for:\n- **Phonological errors**: Sound substitutions or mispronunciations\n- **Morphological errors**: Incorrect inflections (e.g., \"goed\" → \"went\")\n- **Lexical errors**: Wrong word selection\n- **Target forms**: What the child was attempting to say\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Replacement, Word};\n\n// Single word replacement\nlet replacement = Replacement::from_word(\n    Word::simple(Location::Unlocated, \"dog\")\n);\n\n// Multi-word replacement\nlet replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![\n    Word::simple(Location::Unlocated, \"went\"),\n    Word::simple(Location::Unlocated, \"home\"),\n]).expect(\"nonempty words\"));\n```",
+      "description": "Replacement specification indicating the intended word(s).\n\nA replacement shows what should have been said instead of what was actually uttered.\nIn CHAT format, this is written as `[: intended_word]` after the actual word.\n\n# Structure\n\n- Can contain one or more words (though single word is most common)\n- Must be non-empty (validated during parsing)\n- Words in replacement follow normal word structure (can have form types, etc.)\n\n# Common Usage\n\nReplacements are typically used for:\n- **Phonological errors**: Sound substitutions or mispronunciations\n- **Morphological errors**: Incorrect inflections (e.g., \"goed\" → \"went\")\n- **Lexical errors**: Wrong word selection\n- **Target forms**: What the child was attempting to say\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n\n# Examples\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Replacement, Word};\n\n// Single word replacement\nlet replacement = Replacement::from_word(\n    Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!(\"dog\")))\n);\n\n// Multi-word replacement\nlet replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![\n    Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!(\"went\"))),\n    Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!(\"home\"))),\n]).expect(\"nonempty words\"));\n```",
       "properties": {
         "words": {
           "$ref": "#/$defs/ReplacementWords",
@@ -5752,6 +6066,13 @@
         "text"
       ],
       "type": "object"
+    },
+    "ScopedMarkerLabel": {
+      "minLength": 1,
+      "not": {
+        "pattern": "[^\\u0061\\u0062\\u0063\\u0064\\u0065\\u0066\\u0067\\u0068\\u0069\\u006a\\u006b\\u006c\\u006d\\u006e\\u006f\\u0070\\u0071\\u0072\\u0073\\u0074\\u0075\\u0076\\u0077\\u0078\\u0079\\u007a\\u0041\\u0042\\u0043\\u0044\\u0045\\u0046\\u0047\\u0048\\u0049\\u004a\\u004b\\u004c\\u004d\\u004e\\u004f\\u0050\\u0051\\u0052\\u0053\\u0054\\u0055\\u0056\\u0057\\u0058\\u0059\\u005a\\u0030\\u0031\\u0032\\u0033\\u0034\\u0035\\u0036\\u0037\\u0038\\u0039\\u0040\\u0025\\u005f\\u002d]"
+      },
+      "type": "string"
     },
     "ScopedOverlapBegin": {
       "description": "Overlap begin marker data for `[<]` or `[<N]` annotations.\n\n# Reference\n\n- [Overlap precedes scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope)",
@@ -6162,7 +6483,7 @@
       "type": "object"
     },
     "SinToken": {
-      "$ref": "#/$defs/NonEmptyString",
+      "$ref": "#/$defs/RecoveryText",
       "description": "A single gesture/sign token (e.g., `g:ball:dpoint` or `0` for no gesture).\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Gestures>\n- <https://talkbank.org/0info/manuals/CHAT.html#Sign_Tier>"
     },
     "SitTier": {
@@ -6209,7 +6530,7 @@
         "words": {
           "description": "Syllabified words (space-separated in CHAT serialization).\n\nEach word is a raw string containing `phoneme:Position` sequences.\nFull segment-level parsing of these strings is deferred, the word\nboundary structure is sufficient for alignment validation.",
           "items": {
-            "$ref": "#/$defs/NonEmptyString"
+            "$ref": "#/$defs/RecoveryText"
           },
           "type": "array"
         }
@@ -6420,7 +6741,7 @@
     "TextTier": {
       "anyOf": [
         {
-          "$ref": "#/$defs/NonEmptyString"
+          "$ref": "#/$defs/RecoveryText"
         },
         {
           "type": "null"
@@ -6434,7 +6755,7 @@
         "bullet": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Bullet"
+              "$ref": "#/$defs/BulletState"
             },
             {
               "type": "null"
@@ -6512,6 +6833,21 @@
     "TimeStartValue": {
       "type": "string"
     },
+    "TimedPause": {
+      "properties": {
+        "seconds": {
+          "not": {
+            "pattern": "[^0-9:.]"
+          },
+          "pattern": "^[0-9]+(:[0-9]+)?\\.[0-9]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "type": "object"
+    },
     "TranscriberName": {
       "description": "Transcriber name captured in `@Transcriber`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Transcriber_Header>",
       "type": "string"
@@ -6553,6 +6889,86 @@
       ],
       "description": "Marker for underline begin/end control characters.\n\nCarries a source span for error reporting but serializes as `null` (adjacently tagged)\nor `{}` → nothing extra (internally tagged) to preserve backward-compatible JSON.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>"
     },
+    "UnparsedBullet": {
+      "description": "Observed media-bullet source that could not be admitted as timing.\n\nThe source includes its delimiters. This is always invalid recovery data,\nincluding after JSON deserialization, and provides no numeric accessors.",
+      "properties": {
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "UnparsedLanguageHeader": {
+      "description": "Unparsed language-header source, retained in its original header position.\n\nThis is always unparsed data, including after JSON deserialization.\nIt contains the observed header source, including its prefix and any line\nending owned by the parser span,\nnot invented codes or other successful payload. Consumers needing parsed\ncontent must use the corresponding parsed `Header` variant instead.",
+      "properties": {
+        "failure": {
+          "$ref": "#/$defs/LanguageHeaderFailure"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "failure"
+      ],
+      "type": "object"
+    },
+    "UnparsedTextTier": {
+      "description": "Rejected text-tier source with its observed label retained for tier identity.\nThis payload never certifies parsed text, including after JSON readback.",
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        "raw": {
+          "$ref": "#/$defs/UnparsedTier"
+        }
+      },
+      "required": [
+        "label",
+        "raw"
+      ],
+      "type": "object"
+    },
+    "UnparsedTier": {
+      "description": "Unparsed dependent-tier source, retained in its original dependent-tier position.\n\nThis is always unparsed data, including after JSON deserialization.\nIt contains the complete observed source line (prefix and ending included),\nnot invented words or a fallback terminator. Consumers needing parsed\ncontent must use the corresponding parsed `DependentTier` variant instead.",
+      "properties": {
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "UnsupportedDependentTier": {
+      "description": "An observed unsupported tier, retained for diagnostics and serialization.\nIts recovery label is deliberately distinct from an admitted custom label.",
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecoveryText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Observed free-form body, absent when the tier has no body."
+        },
+        "label": {
+          "$ref": "#/$defs/RecoveryText",
+          "description": "Observed label, without the percent sign."
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
     "UntranscribedStatus": {
       "description": "Classification for untranscribed-word marker tokens.\n\nEach variant maps directly to one canonical CHAT marker (`xxx`, `yyy`, `www`).\n\n# CHAT Format Examples\n\n```text\nxxx               Unintelligible speech\nyyy               Requires phonetic transcription\nwww               Deliberately untranscribed\n```\n\n# Usage Context\n\nThese markers appear as the word text itself when speech cannot be\ntranscribed using standard orthography:\n\n```text\n*CHI: I want xxx .           Child says something unintelligible\n*MOT: did you say yyy ?      Requires phonetic analysis\n*CHI: www and then we left   Deliberately not transcribed\n```\n\n# References\n\n- [Untranscribed Material](https://talkbank.org/0info/manuals/CHAT.html#Untranscribed_Material)",
       "oneOf": [
@@ -6579,16 +6995,16 @@
         "content": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonEmptyString"
+              "$ref": "#/$defs/RecoveryText"
             },
             {
               "type": "null"
             }
           ],
-          "description": "The free-form text content of the tier, or `None` when the line\ndeclared a tier and gave it nothing.\n\n`Option` because the empty case is REAL CHAT that a parser can meet, and\nE756 exists to report it. While this was `NonEmptyString` the state the\nrule checks for was unrepresentable, so each parser had to invent a way\nround it: the re2c parser fabricated a single space (which tripped E756\nby accident, right answer for the wrong reason) and the tree-sitter\nparser dropped the tier and reported a generic parse error instead. The\ntwo disagreed because the model gave them no honest option."
+          "description": "The free-form text content of the tier, or `None` when the line\ndeclared a tier and gave it nothing.\n\n`Option` because the empty case is REAL CHAT that a parser can meet, and\nE756 exists to report it. Before explicit empty-tier recovery the state the\nrule checks for was unrepresentable, so each parser had to invent a way\nround it: the re2c parser fabricated a single space (which tripped E756\nby accident, right answer for the wrong reason) and the tree-sitter\nparser dropped the tier and reported a generic parse error instead. The\ntwo disagreed because the model gave them no honest option."
         },
         "label": {
-          "$ref": "#/$defs/NonEmptyString",
+          "$ref": "#/$defs/UserDefinedDependentTierLabel",
           "description": "The tier label including the 'x' prefix (e.g., \"xmor\" for %xmor)."
         }
       },
@@ -6596,6 +7012,25 @@
         "label"
       ],
       "type": "object"
+    },
+    "UserDefinedDependentTierLabel": {
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "[^A-Za-z0-9]"
+          },
+          {
+            "enum": [
+              "xmodsyl",
+              "xphosyl",
+              "xphoaln",
+              "xphoint"
+            ]
+          }
+        ]
+      },
+      "pattern": "^x[A-Za-z][A-Za-z0-9]*$",
+      "type": "string"
     },
     "Utterance": {
       "description": "A complete utterance with one main tier and zero or more dependent tiers.\n\nIn CHAT transcripts, each utterance is a speaker turn anchored by a required\nmain line (`*SPEAKER:`). Dependent tiers attach analysis layers (`%mor`,\n`%gra`, `%pho`, `%wor`, text commentary tiers, etc.) in source order.\n\n# Structure\n\n- **Main tier**: required, stores speaker code + utterance content.\n- **Dependent tiers**: optional, preserves original per-utterance tier order.\n- **Runtime metadata**: alignment/parse-health/language state derived during validation.\n\n# Tier Types\n\n- **%mor**: Morphological analysis (parts of speech, lemmas, affixes)\n- **%gra**: Grammatical relations (dependency structure for %mor)\n- **%pho**: Phonological transcription (actual pronunciation)\n- **%mod**: target/model phonological form\n- **%sin**: Gesture/sign annotations\n- **%com**: Comments about the utterance\n- **%exp**: Explanations or expansions\n- **%act**: Actions performed during utterance\n- **%cod**: Coding categories for analysis\n\n# CHAT Manual Reference\n\n- [Main Line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)\n- [Morphology (%mor)](https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier)\n- [Grammar (%gra)](https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier)\n\n# Example\n\n```\nuse talkbank_model::model::{MainTier, MainTierLocations, Terminator, Utterance};\n\nlet utterance = Utterance::new(\n    MainTier::new(\n        MainTierLocations::UNLOCATED,\n        \"CHI\",\n        vec![/* words */],\n        Terminator::Period { location: talkbank_model::Location::Unlocated },\n    )\n);\n// Dependent tiers can be added via builder methods\n```",
@@ -6871,11 +7306,48 @@
           "type": "object"
         },
         {
-          "$ref": "#/$defs/Freecode",
+          "anyOf": [
+            {
+              "properties": {
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "unparsed": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "unparsed"
+              ],
+              "type": "object"
+            }
+          ],
           "description": "Freecode - free-form inline annotation (e.g., `[^ comment]`)",
           "properties": {
             "type": {
               "const": "freecode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/OrphanAnnotation",
+          "description": "Annotation source with no preceding host; always invalid recovery.",
+          "properties": {
+            "type": {
+              "const": "orphan_annotation",
               "type": "string"
             }
           },
@@ -6913,7 +7385,7 @@
           "type": "object"
         },
         {
-          "$ref": "#/$defs/Bullet",
+          "$ref": "#/$defs/BulletState",
           "description": "Internal bullet/timestamp (media_url within content, not terminal)\nThese mark timing for content segments, distinct from terminal bullets",
           "properties": {
             "type": {
@@ -7025,16 +7497,26 @@
           "type": "object"
         },
         {
-          "$ref": "#/$defs/OtherSpokenEvent",
+          "additionalProperties": false,
           "description": "Other spoken event (&*SPEAKER:word) - someone else speaking in background",
           "properties": {
+            "speaker": {
+              "$ref": "#/$defs/SpeakerCode",
+              "description": "Speaker code for the interposed source."
+            },
             "type": {
               "const": "other_spoken_event",
               "type": "string"
+            },
+            "word": {
+              "$ref": "#/$defs/Word",
+              "description": "Ordinary word syntax spoken by the other speaker.\nThis word is validated but does not enter the main speaker's alignment."
             }
           },
           "required": [
-            "type"
+            "type",
+            "speaker",
+            "word"
           ],
           "type": "object"
         }
@@ -7782,10 +8264,7 @@
           "description": "Multiple languages mixed together (code-mixing)",
           "properties": {
             "Multiple": {
-              "items": {
-                "$ref": "#/$defs/LanguageCode"
-              },
-              "type": "array"
+              "$ref": "#/$defs/MultipleLanguageCodes"
             }
           },
           "required": [
@@ -7798,10 +8277,7 @@
           "description": "Ambiguous between languages",
           "properties": {
             "Ambiguous": {
-              "items": {
-                "$ref": "#/$defs/LanguageCode"
-              },
-              "type": "array"
+              "$ref": "#/$defs/MultipleLanguageCodes"
             }
           },
           "required": [
@@ -7829,12 +8305,12 @@
       "type": "object"
     },
     "WordPhonetic": {
-      "$ref": "#/$defs/NonEmptyString",
+      "$ref": "#/$defs/RecoveryText",
       "description": "The phonetic transcription string of a `@u` special-form word.\n\nDeliberately does NOT enforce a symbol inventory, matching the stance of\nthe `%pho` tier's `PhoWord`: IPA, legacy UNIBET (ASCII), and X-SAMPA\nnotations all pass. Strict phonetic-inventory constraints belong in\ncorpus- or project-specific validators, never here (maintainer ruling,\n2026-07-14, docs/design UNIBET modeling). Only non-emptiness is enforced."
     },
     "WordShortening": {
-      "$ref": "#/$defs/NonEmptyString",
-      "description": "An omitted sound within a word, written in parentheses in CHAT format.\n\nRepresents the elided portion of a word, e.g., `(be)` in `(be)cause`.\nWraps a [`NonEmptyString`] and dereferences to `&str`.\n\n# Reference\n\n- [Shortenings](https://talkbank.org/0info/manuals/CHAT.html#Shortenings)"
+      "$ref": "#/$defs/RecoveryText",
+      "description": "An omitted sound within a word, written in parentheses in CHAT format.\n\nRepresents the elided portion of a word, e.g., `(be)` in `(be)cause`.\nWraps a [`RecoveryText`] and dereferences to `&str`.\n\n# Reference\n\n- [Shortenings](https://talkbank.org/0info/manuals/CHAT.html#Shortenings)"
     },
     "WordStressMarker": {
       "description": "A stress marker within a word (primary or secondary).\n\nStress markers indicate lexical stress on syllables. They are distinct from\nCA prosodic elements and are not included in cleaned text.\n\n# Reference\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)",
@@ -7869,8 +8345,8 @@
       "type": "object"
     },
     "WordText": {
-      "$ref": "#/$defs/NonEmptyString",
-      "description": "A plain text segment within a word.\n\nWraps a [`NonEmptyString`]. Checked construction rejects empty text;\ndeserialized values require validation. Dereferences to `&str` for access.\n\n# Reference\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)"
+      "$ref": "#/$defs/RecoveryText",
+      "description": "A plain text segment within a word.\n\nWraps a [`RecoveryText`]. Checked construction rejects empty text;\ndeserialized values require validation. Dereferences to `&str` for access.\n\n# Reference\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)"
     },
     "XphointGroup": {
       "description": "One word-group on `%xphoint`: the time-aligned phones of a single `%pho`\nword. Groups are separated by ` / ` in serialization.",
@@ -7909,38 +8385,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "JSON Schema for TalkBank CHAT format transcript files. This schema defines the structure of CHAT files when serialized to JSON.",
   "properties": {
-    "languages": {
-      "$ref": "#/$defs/LanguageCodes",
-      "default": [],
-      "description": "Languages from `@Languages` header. Empty if absent.\n\nAuto-extracted from `lines` during construction. The first code is the\ntranscript default language."
-    },
     "lines": {
       "$ref": "#/$defs/ChatFileLines",
       "description": "Sequence of lines (headers + utterances) in file order.\n\nThe vector preserves exact interleaving from source text.\n\nHeaders and utterances can appear in any order, though typical files have:\n- File headers at the beginning (@UTF8, @Begin, @Participants, @ID)\n- Utterances in the middle\n- Comments and notes interleaved with utterances\n- @End header at the end"
-    },
-    "media": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/MediaHeader"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "description": "Media info from `@Media` header. `None` if absent.\n\nAuto-extracted from `lines` during construction. Only the first\n`@Media` header is captured (CHAT files have at most one)."
-    },
-    "options": {
-      "$ref": "#/$defs/ChatOptionFlags",
-      "default": [],
-      "description": "Option flags from `@Options` header. Empty if absent.\n\nAuto-extracted from `lines` during construction."
-    },
-    "participants": {
-      "additionalProperties": {
-        "$ref": "#/$defs/Participant"
-      },
-      "default": {},
-      "description": "Structured participant metadata (derived from `@Participants` + `@ID` + `@Birth`).\n\nPopulated during parsing by matching:\n- @Participants entries with their corresponding @ID headers\n- Optional `@Birth of <CODE>` headers\n\nEach participant listed in @Participants MUST have a corresponding @ID header.\nThis is validated during parsing (E522 error if missing).\n\n# Example\n\nFor a CHAT file with:\n```chat\n@Participants:    CHI Ruth Target_Child, INV Chiat Investigator\n@ID:    eng|chiat|CHI|10;03.||||Target_Child|||\n@ID:    eng|chiat|INV|||||Investigator|||\n@Birth of CHI:    28-JUN-2001\n```\n\nThis map will contain:\n- CHI => Participant { code: \"CHI\", name: Some(\"Ruth\"), id: {...}, birth_date: Some(\"28-JUN-2001\") }\n- INV => Participant { code: \"INV\", name: Some(\"Chiat\"), id: {...}, birth_date: None }\n\n# Note\n\nUses `#[serde(default)]` for backwards compatibility with existing JSON.\n\nParticipants are stored in an `IndexMap` so serialization preserves the declared order\nfrom @Participants/@ID headers, ensuring deterministic JSON output.",
-      "type": "object"
     }
   },
   "required": [

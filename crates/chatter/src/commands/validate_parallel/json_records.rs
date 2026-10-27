@@ -280,11 +280,6 @@ pub(super) enum NoticeRecord<'a> {
         /// The codes, sorted.
         codes: Vec<&'static str>,
     },
-    /// A deprecated flag was passed.
-    DeprecatedFlag {
-        /// The flag.
-        flag: &'static str,
-    },
     /// The Ctrl-C handler could not be installed.
     InterruptUnavailable {
         /// Why, as a sentence for a person.
@@ -341,10 +336,10 @@ mod tests {
             serde_json::json!({"type": "cache", "action": "warning", "operation": "initialize", "error": "locked"})
         );
         assert_eq!(
-            value(&JsonRecord::Notice(NoticeRecord::DeprecatedFlag {
-                flag: "--check-xphon"
+            value(&JsonRecord::Notice(NoticeRecord::Suppressing {
+                codes: vec!["E736"]
             })),
-            serde_json::json!({"type": "notice", "notice": "deprecated_flag", "flag": "--check-xphon"})
+            serde_json::json!({"type": "notice", "notice": "suppressing", "codes": ["E736"]})
         );
     }
 

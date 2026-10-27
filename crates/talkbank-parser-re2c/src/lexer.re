@@ -12,36 +12,39 @@ pub type LexerSpan = std::ops::Range<usize>;
 
 /// State for our lexer.
 pub struct Lexer<'a> {
-    /// Borrowed source text; an optional legacy NUL sentinel is accepted.
-    pub nul_terminated: &'a str,
+    /// Bounded caller input; a real NUL remains an input byte.
+    input: LexerInput<'a>,
 
     /// Used by generated lexer for conditions.
     /// Set via Lexer::new(input, condition) for multiple entry points.
     /// E.g., start in MOR_CONTENT to parse a %mor tier in isolation.
-    pub condition: usize,
+    condition: usize,
 
     /// Used by generated lexer while lexing.
-    pub cursor: usize,
+    cursor: usize,
 
     /// Used by generated lexer while lexing.
-    pub marker: usize,
+    marker: usize,
 
-    /*!stags:re2c format = "/** An intermediate tag for lexer. */\npub @@: usize,\n"; */
-    /*!svars:re2c format = "/** A tag for semantic actions. */\npub @@: usize,\n"; */
+    /*!stags:re2c format = "/** An intermediate tag for lexer. */\n@@: usize,\n"; */
+    /*!svars:re2c format = "/** A tag for semantic actions. */\n@@: usize,\n"; */
 }
 
 impl<'a> Lexer<'a> {
     /// Create a lexer starting in the given condition.
-    /// Use condition 0 for INITIAL (full file parsing).
-    /// Use named condition constants (e.g., YYC_MOR_CONTENT) for fragment parsing.
-    pub fn new(nul_terminated: &'a str, condition: usize) -> Self {
+    /// Only supported entry points can construct a lexer; its source and
+    /// internal DFA coordinates remain private for the entire iteration.
+    /// ```compile_fail
+    /// let _ = talkbank_parser_re2c::lexer::Lexer::new("", usize::MAX);
+    /// ```
+    pub fn new(source: &'a str, condition: StartCondition) -> Self {
         let cursor = 0;
         let marker = 0;
         Self {
-            nul_terminated,
+            input: LexerInput::new(source),
             cursor,
             marker,
-            condition,
+            condition: condition.state(),
             /*!stags:re2c format = "@@: NONE,"; */
             /*!svars:re2c format = "@@: NONE,"; */
         }
@@ -54,8 +57,7 @@ impl<'a> Iterator for Lexer<'a> {
     /// Return the next token with its span.
     #[instrument(level = "debug", skip(self))]
     fn next(&mut self) -> Option<Self::Item> {
-        let yyinput = self.nul_terminated;
-        let buffer = yyinput.as_bytes();
+        let yyinput = self.input.text();
         let start = self.cursor;
 
         debug!(cursor = start, "Lexing");
@@ -77,6 +79,18 @@ impl<'a> Iterator for Lexer<'a> {
                 let matched = &yyinput[start..end];
                 let prefix = crate::token::PrefixToken::from_lexed(matched, matched, start);
                 return Some((Token::$variant(prefix), start..end));
+            }};
+        }
+
+        macro_rules! emit_header_prefix {
+            ($kind:ident) => {{
+                let end = self.cursor;
+                let matched = &yyinput[start..end];
+                let prefix = crate::token::PrefixToken::from_lexed(matched, matched, start);
+                let admitted = crate::token::HeaderPrefixToken::from_lexed(
+                    prefix, crate::token::HeaderKind::$kind,
+                );
+                return Some((Token::HeaderPrefix(admitted), start..end));
             }};
         }
 
@@ -132,7 +146,9 @@ impl<'a> Iterator for Lexer<'a> {
         re2c:tags = 1;
         re2c:yyfill:enable = 0;
         re2c:YYCTYPE = "u8";
-        re2c:YYPEEK = "buffer.get(self.cursor).copied().unwrap_or(0)";
+        re2c:eof = 0;
+        re2c:YYPEEK = "self.input.symbol(self.cursor).lookahead()";
+        re2c:YYLESSTHAN = "self.input.symbol(self.cursor).is_end()";
         re2c:YYSKIP = "self.cursor += 1;";
         re2c:YYBACKUP = "self.marker = self.cursor;";
         re2c:YYRESTORE = "self.cursor = self.marker;";
@@ -181,13 +197,10 @@ impl<'a> Iterator for Lexer<'a> {
         // (shaddend.cha, found by the 2026-04-30 parity oracle) into
         // separate event + word tokens. Aligned to grammar.js, only the
         // chars that grammar.js itself forbids are excluded here.
-        ev_char = [^ \t\r\n\x00,;!?.()[\]~+@&*%"<>\\\u0015\u0001\u0002\u0003\u0004\u0007\u0008\u2308\u2309\u230A\u230B\u3014\u3015\u2039\u203A\u02C8\u02CC\u201C\u201D\u201E\u2021\u2248\u224B\u221E\u2261\u21D7\u2197\u2192\u2198\u21D8\u2051\u2191\u2193\u21BB\u2260\u2219\u223E\u2906\u2907\u1F29\u2047\u00A7\u204E\u00B0\u21AB\u2206\u2207\u222C\u222E\u2581\u2594\u25C9\u263A\u264B\u03AB];
-
-        // Word segment first character: excludes 0 and all structural/CA chars
-        ws_first = [^ \t\r\n\x00,;:!?.()[\]{}~^+$@&*%"<>\\\u0015\u0001\u0002\u0003\u0004\u0007\u0008\u2308\u2309\u230A\u230B\u3014\u3015\u2039\u203A\u02C8\u02CC\u201C\u201D\u2018\u2019\u201E\u2021\u2248\u224B\u221E\u2261\u21D7\u2197\u2192\u2198\u21D8\u2051\u2191\u2193\u21BB\u2260\u2219\u223E\u2906\u2907\u1F29\u2047\u00A7\u204E\u00B0\u21AB\u2206\u2207\u222C\u222E\u2581\u2594\u25C9\u263A\u264B\u03AB0];
-
-        // Word segment rest characters: allows 0, excludes backslash
-        ws_rest = [^ \t\r\n\x00,;:!?.()[\]{}~^+$@&*%"<>\\\u0015\u0001\u0002\u0003\u0004\u0007\u0008\u2308\u2309\u230A\u230B\u3014\u3015\u2039\u203A\u02C8\u02CC\u201C\u201D\u2018\u2019\u201E\u2021\u2248\u224B\u221E\u2261\u21D7\u2197\u2192\u2198\u21D8\u2051\u2191\u2193\u21BB\u2260\u2219\u223E\u2906\u2907\u1F29\u2047\u00A7\u204E\u00B0\u21AB\u2206\u2207\u222C\u222E\u2581\u2594\u25C9\u263A\u264B\u03AB];
+        // Canonical event/word character classes and word-attached markers.
+        // One registry owns their exclusions, including segment-initial versus
+        // later characters. No fallback may broaden these classes.
+        !include "generated_symbol_sets.re";
 
         // Word text segment: first char + zero or more rest chars
         w_text = ws_first ws_rest*;
@@ -208,12 +221,6 @@ impl<'a> Iterator for Lexer<'a> {
         // Overlap points with optional digit
         w_overlap = [\u2308\u2309\u230A\u230B] [1-9]?;
 
-        // CA element symbols (from symbol registry)
-        w_ca_elem = [\u2260\u223E\u2051\u2907\u2219\u1F29\u2193\u21BB\u2191\u2906];
-
-        // CA delimiter symbols (from symbol registry)
-        w_ca_delim = [\u2047\u00A7\u204E\u00B0\u21AB\u2206\u2207\u222C\u222E\u2581\u2594\u25C9\u263A\u264B\u03AB];
-
         // Underline markers
         w_ul_begin = "\u0002\u0001";
         w_ul_end = "\u0002\u0002";
@@ -227,7 +234,7 @@ impl<'a> Iterator for Lexer<'a> {
         // Text-initial: starts with text, shortening, or stress
         // Marker-initial: starts with marker(s) then text (grammar.js: marker_start pattern)
         w_text_start = (w_text | w_short | w_stress);
-        w_marker_start = (w_overlap | w_ca_elem | w_ca_delim | w_ul_begin)+
+        w_marker_start = (w_overlap | w_ca_elem | w_ca_delim | w_ul_begin | "^")+
                          (w_text | w_short | w_stress);
         w_body_start = w_text_start | w_marker_start;
 
@@ -249,12 +256,8 @@ impl<'a> Iterator for Lexer<'a> {
         // Word prefix
         // grammar.js `language_code: /[a-z]{2,4}/`, ONE spelling.
         //
-        // This file already spelled the same closed pattern three ways
-        // (`[a-z][a-z][a-z]?[a-z]?` for @Languages, `[a-z][a-z][a-z]?` inside
-        // `w_lang`), and the code-switch span was about to add a fourth. The
-        // grammar side has one owner, `$.language_code`; this is its
-        // counterpart. Where a rule below still spells it inline, that rule
-        // means something NARROWER than a language code and says so.
+        // Header and code-switch-span language codes share this production.
+        // Word suffixes below retain their narrower two/three-letter grammar.
         lang_code = [a-z]{2,4};
         w_prefix = "&-" | "&~" | "&+";
 
@@ -271,20 +274,14 @@ impl<'a> Iterator for Lexer<'a> {
         form_candidate = ("s" [a-zA-Z] [-a-zA-Z]* | [a-rt-zA-RT-Z] [-a-zA-Z]*) (":" [a-zA-Z0-9_]+)?;
         repeated_form_candidate = [a-zA-Z0-9:_-]* ("@" [a-zA-Z0-9:_-]*)+;
 
-        // Language suffix: @s or @s:codes
-        w_lang = "@s" (":" [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)?;
-
-        // POS tag suffix: $tag
-        w_pos = "$" [a-zA-Z:]+;
-
         // ═══════════════════════════════════════════════════════
         // GLOBAL RULES (all conditions)
         // ═══════════════════════════════════════════════════════
 
-        // EOF sentinel, NUL byte terminates input.
-        <*> [\x00] {
-            return None;
-        }
+        // Only the bounded source's end accepts EOF. An authored NUL is an
+        // error token, never permission to drop the remaining input.
+        <*> $ { return None; }
+        <*> [\x00] { emit!(ErrorUnrecognized); }
 
         // grammar.js: continuation = /[\r\n]+\t[ ]*/
         // Continuation line: newline(s), a tab, and any incidental spaces the
@@ -324,8 +321,8 @@ impl<'a> Iterator for Lexer<'a> {
         <INITIAL> "@New Episode" { emit!(HeaderNewEpisode); }
 
         // ── Headers with structured content (specific conditions) ──
-        <INITIAL> "@ID:\t" " "* => ID_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Types:\t" " "* => TYPES_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@ID:\t" " "* => ID_CONTENT { emit_header_prefix!(Id); }
+        <INITIAL> "@Types:\t" " "* => TYPES_CONTENT { emit_header_prefix!(Types); }
 
         // ── Speaker-embedded headers ──
         // @Birth of SPK:\t, @Birthplace of SPK:\t, @L1 of SPK:\t
@@ -343,52 +340,52 @@ impl<'a> Iterator for Lexer<'a> {
         // ── Headers with bullet-aware content (text_with_bullets) ──
         // @Comment uses text_with_bullets_and_pics per grammar.js
         // @Comment uses text_with_bullets_and_pics (same as %com)
-        <INITIAL> "@Comment:\t" " "* => COM_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Comment:\t" " "* => COM_CONTENT { emit_header_prefix!(Comment); }
         // @Bg, @Eg, @G optional content variants also get bullet support
         // (handled in optional-content section below)
 
         // ── Headers with structured content (specific conditions) ──
         // These have internal structure the lexer should extract.
-        <INITIAL> "@Languages:\t" " "* => LANGUAGES_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Participants:\t" " "* => PARTICIPANTS_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Date:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Media:\t" " "* => MEDIA_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Options:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Recording Quality:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Transcription:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Number:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Languages:\t" " "* => LANGUAGES_CONTENT { emit_header_prefix!(Languages); }
+        <INITIAL> "@Participants:\t" " "* => PARTICIPANTS_CONTENT { emit_header_prefix!(Participants); }
+        <INITIAL> "@Date:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Date); }
+        <INITIAL> "@Media:\t" " "* => MEDIA_CONTENT { emit_header_prefix!(Media); }
+        <INITIAL> "@Options:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Options); }
+        <INITIAL> "@Recording Quality:\t" " "* => HEADER_CONTENT { emit_header_prefix!(RecordingQuality); }
+        <INITIAL> "@Transcription:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Transcription); }
+        <INITIAL> "@Number:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Number); }
 
         // ── Headers with free text content (truly opaque) ──
-        <INITIAL> "@Location:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Situation:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Activities:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Room Layout:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Tape Location:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Time Duration:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Time Start:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Transcriber:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Warning:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Page:\t" " "* => PAGE_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Videos:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Thumbnail:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@T:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Bck:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@PID:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Font:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Window:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Color words:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Location:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Location); }
+        <INITIAL> "@Situation:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Situation); }
+        <INITIAL> "@Activities:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Activities); }
+        <INITIAL> "@Room Layout:\t" " "* => HEADER_CONTENT { emit_header_prefix!(RoomLayout); }
+        <INITIAL> "@Tape Location:\t" " "* => HEADER_CONTENT { emit_header_prefix!(TapeLocation); }
+        <INITIAL> "@Time Duration:\t" " "* => HEADER_CONTENT { emit_header_prefix!(TimeDuration); }
+        <INITIAL> "@Time Start:\t" " "* => HEADER_CONTENT { emit_header_prefix!(TimeStart); }
+        <INITIAL> "@Transcriber:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Transcriber); }
+        <INITIAL> "@Warning:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Warning); }
+        <INITIAL> "@Page:\t" " "* => PAGE_CONTENT { emit_header_prefix!(Page); }
+        <INITIAL> "@Videos:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Videos); }
+        <INITIAL> "@Thumbnail:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Thumbnail); }
+        <INITIAL> "@T:\t" " "* => HEADER_CONTENT { emit_header_prefix!(T); }
+        <INITIAL> "@Bck:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Bck); }
+        <INITIAL> "@PID:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Pid); }
+        <INITIAL> "@Font:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Font); }
+        <INITIAL> "@Window:\t" " "* => HEADER_CONTENT { emit_header_prefix!(Window); }
+        <INITIAL> "@Color words:\t" " "* => HEADER_CONTENT { emit_header_prefix!(ColorWords); }
 
         // ── Optional-content headers (can appear with or without :\t) ──
-        <INITIAL> "@Bg:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Bg" { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Eg:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Eg" { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@G:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@G" { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Bg:\t" " "* => HEADER_CONTENT { emit_header_prefix!(BeginGem); }
+        <INITIAL> "@Bg" { emit_header_prefix!(BeginGem); }
+        <INITIAL> "@Eg:\t" " "* => HEADER_CONTENT { emit_header_prefix!(EndGem); }
+        <INITIAL> "@Eg" { emit_header_prefix!(EndGem); }
+        <INITIAL> "@G:\t" " "* => HEADER_CONTENT { emit_header_prefix!(LazyGem); }
+        <INITIAL> "@G" { emit_header_prefix!(LazyGem); }
 
         // ── Catch-all for unknown @headers ──
         <INITIAL> "@" [^\x00:\r\n]* => HEADER_AFTER_NAME {
-            emit_prefix!(HeaderPrefix);
+            emit_header_prefix!(Unknown);
         }
 
         // grammar.js: star = '*'
@@ -405,7 +402,6 @@ impl<'a> Iterator for Lexer<'a> {
 
         // Structured tiers (parsed into typed AST)
         <INITIAL> "%mor:\t" " "* => MOR_CONTENT { emit_dependent_prefix!(Mor); }
-        <INITIAL> "%trn:\t" " "* => MOR_CONTENT { emit_dependent_prefix!(Trn); }
         <INITIAL> "%gra:\t" " "* => GRA_CONTENT { emit_dependent_prefix!(Gra); }
         <INITIAL> "%pho:\t" " "* => PHO_CONTENT { emit_dependent_prefix!(Pho); }
         <INITIAL> "%mod:\t" " "* => PHO_CONTENT { emit_dependent_prefix!(Mod); }
@@ -840,7 +836,7 @@ impl<'a> Iterator for Lexer<'a> {
         // grammar.js: illegal_curly_quote = token(prec(10, choice(U+2018, U+2019)))
         // Curly single quotes (U+2018/U+2019) are NOT legal word characters
         // (excluded from the ws_first/ws_rest word classes and the inline
-        // WordSegment rule below); they surface as a recognized IllegalCurlyQuote
+        // word rules below); they surface as a recognized IllegalCurlyQuote
         // token so the parser can emit E256 (CLAN CHECK 138/139) instead of
         // silently absorbing them. Unlike the curly doubles, these are never
         // delimiters, so there is no group. This rule precedes the MAIN_CONTENT
@@ -1055,55 +1051,25 @@ impl<'a> Iterator for Lexer<'a> {
         // grammar.js: long_feature_begin = seq('&', '{l=', label)
         // grammar.js: long_feature_end = seq('&', '}l=', label)
         // Rich token with tag marking label start.
-        <MAIN_CONTENT> "&{l=" @t1 [A-Za-z0-9@%_\-]+ { emit_t1!(LongFeatureBegin); }
-        <MAIN_CONTENT> "&}l=" @t1 [A-Za-z0-9@%_\-]+ { emit_t1!(LongFeatureEnd); }
+        <MAIN_CONTENT> "&{l=" @t1 scope_label_char+ { emit_t1!(LongFeatureBegin); }
+        <MAIN_CONTENT> "&}l=" @t1 scope_label_char+ { emit_t1!(LongFeatureEnd); }
 
         // grammar.js: nonvocal_simple = seq('&', '{n=', label, '}')
         // Must come before nonvocal_begin (re2c longest match: &{n=BANG} > &{n=BANG)
-        <MAIN_CONTENT> "&{n=" @t1 [A-Za-z0-9@%_\-]+ @t2 "}" { emit_t1t2!(NonvocalSimple); }
+        <MAIN_CONTENT> "&{n=" @t1 scope_label_char+ @t2 "}" { emit_t1t2!(NonvocalSimple); }
 
         // grammar.js: nonvocal_begin = seq('&', '{n=', label)
         // grammar.js: nonvocal_end = seq('&', '}n=', label)
-        <MAIN_CONTENT> "&{n=" @t1 [A-Za-z0-9@%_\-]+ { emit_t1!(NonvocalBegin); }
-        <MAIN_CONTENT> "&}n=" @t1 [A-Za-z0-9@%_\-]+ { emit_t1!(NonvocalEnd); }
+        <MAIN_CONTENT> "&{n=" @t1 scope_label_char+ { emit_t1!(NonvocalBegin); }
+        <MAIN_CONTENT> "&}n=" @t1 scope_label_char+ { emit_t1!(NonvocalEnd); }
 
         // grammar.js: other_spoken_event = seq(ampersand, star, speaker, colon, standalone_word)
-        // RICH TOKEN: &*SPK:word, entire other spoken event as one token.
-        // Tags mark speaker and word boundaries.
-        // Must come before bare '&' rule (re2c picks longest match).
-        //
-        // The text portion uses `w_body` (the same body production used by
-        // `standalone_word`). Earlier this rule used the much looser
-        // `[^ \t\r\n\x00]+` pattern, which greedily absorbed the next
-        // utterance terminator when there was no space between them
-        // (e.g. `&*INV:oh_hm.` was tokenized with text `oh_hm.` rather
-        // than `oh_hm` followed by `.`). A first attempt with `w_text`
-        // narrowed correctly past `.?!` but went too far; it also
-        // excluded the lengthening colon (`&*INV:ah:`), regressing 27
-        // wild-corpus files. `w_body` is the right surface: it allows
-        // `:+`, `^`, `~`, CA elements, etc. but stops at terminators.
-        // Found by the re2c parity oracle on 2026-04-30.
-        //
-        // `w_body` ALONE was still one production short, because
-        // `standalone_word` is a body PLUS the three optional suffixes the
-        // Word rules above spell out: a form marker, an `@s` language suffix
-        // and a `$` pos tag. So `&*VMO:a:nda@i` lexed as `a:nda`, the `@i`
-        // fell out of the token, and the utterance failed with E253 "Word
-        // content cannot be empty" pointing at byte 0 of the FILE. The
-        // suffixes are repeated verbatim rather than referenced because re2c
-        // cannot name a group; keep them identical to the Word rules. The
-        // emitted `text` runs to the cursor, so no tags are needed here.
-        // Found by the same parity oracle on 2026-08-26, from rhd-data
-        // Spanish PerLA. Spec:
-        // spec/constructs/word/interposed_word_with_form_marker.md
-        <MAIN_CONTENT> "&*" @t1 [A-Za-z0-9_'+\-]+ @t2 ":" @t3 w_body ("@" w_form_code (":" [a-zA-Z0-9_]+)?)? ("@s" (":" [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)?)? ("$" [a-zA-Z:]+)? {
-            let end = self.cursor;
-            return Some((Token::OtherSpokenEvent {
-                speaker: &yyinput[self.t1..self.t2],
-                text: &yyinput[self.t3..end],
-                lexeme: &yyinput[start..end],
-            }, start..end));
-        }
+        // Admit only the speaker prefix here. The next token uses the ordinary
+        // word rules, and the parser consumes their structured word result.
+        // Keeping a second whole-word pattern here let its raw text bypass
+        // word admission and validation. Tags retain the speaker and prefix
+        // lexeme; the parser requires adjacency to the source-owned word.
+        <MAIN_CONTENT> "&*" @t1 [A-Za-z0-9_'+\-]+ @t2 ":" { emit_t1t2!(OtherSpokenPrefix); }
 
         // grammar.js: ampersand = '&' (bare, for constructs not caught above)
         <MAIN_CONTENT> "&" { emit!(Ampersand); }
@@ -1125,17 +1091,9 @@ impl<'a> Iterator for Lexer<'a> {
         // grammar.js: right_bracket = ']'
         <MAIN_CONTENT> "]" { emit!(RightBracket); }
 
-        // ── Word segment (catch-all for text runs) ──
-        // grammar.js: word_segment = token(prec(5, seq(WORD_SEGMENT_FIRST_RE, WORD_SEGMENT_REST_RE)))
-        // WORD_SEGMENT_FORBIDDEN_FIRST includes: ,;:!?.()[]{}⌈⌉⌊⌋〔〕\^ˈˌ←→↖↗↘↙⇗⇘<>≈≋
-        //   + ALL_MARKER_SYMBOLS + \u0015\u0001-\u0004\u0007\u0008\t\n\r ‹›""„@*&%‡+=~∞≡$ + 0
-        // WORD_SEGMENT_FORBIDDEN_REST is same but without 0 and with \\ extra
-        //
-        // Simplified: exclude all structural chars. Anything not matched by
-        // specific rules above falls here.
-        <MAIN_CONTENT> [^ \t\r\n\x00,;:!?.()[\]{}~^+$@&*%"<>\u0015\u0001\u0002\u0003\u0004\u0007\u0008\u2308\u2309\u230A\u230B\u3014\u3015\u2039\u203A\u02C8\u02CC\u201C\u201D\u2018\u2019\u201E\u2021\u2248\u224B\u221E\u2261\u21D7\u2197\u2192\u2198\u21D8\u2051\u2191\u2193\u21BB\u2260\u2219\u223E\u2906\u2907\u1F29\u2047\u00A7\u204E\u00B0\u21AB\u2206\u2207\u222C\u222E\u2581\u2594\u25C9\u263A\u264B\u03AB0] [^ \t\r\n\x00,;:!?.()[\]{}~^+$@&*%"<>\u0015\u0001\u0002\u0003\u0004\u0007\u0008\u2308\u2309\u230A\u230B\u3014\u3015\u2039\u203A\u02C8\u02CC\u201C\u201D\u2018\u2019\u201E\u2021\u2248\u224B\u221E\u2261\u21D7\u2197\u2192\u2198\u21D8\u2051\u2191\u2193\u21BB\u2260\u2219\u223E\u2906\u2907\u1F29\u2047\u00A7\u204E\u00B0\u21AB\u2206\u2207\u222C\u222E\u2581\u2594\u25C9\u263A\u264B\u03AB]* {
-            emit!(WordSegment);
-        }
+        // Every admitted word segment is already covered by the higher-priority
+        // rich Word rules through w_text. Unmatched characters reach the error
+        // rule below; a second text fallback would bypass the registry boundary.
 
         // ═══════════════════════════════════════════════════════
         // MOR_CONTENT, %mor tier body
@@ -1208,9 +1166,15 @@ impl<'a> Iterator for Lexer<'a> {
         // Group delimiters ‹ › are separate tokens.
         // ═══════════════════════════════════════════════════════
 
+        // A numeric pause is one phonological word, including minutes:seconds.
+        // Keep the colon confined to this admitted spelling, not arbitrary IPA.
+        <PHO_CONTENT> "(" [0-9]+ (":" [0-9]+)? "." [0-9]* ")" {
+            emit!(PhoWord);
+        }
+
         // PHO word: IPA + phonological characters.
         // grammar.js: pho_word includes (, ., ), ^, * in its character class.
-        // So (..) is a pho_word, NOT a pause, pauses are main tier only.
+        // So (..) is a pho_word, not a main-tier pause token.
         // First char excludes only structural separators (space, +, ‹, ›, NAK).
         // Dot and parens are INCLUDED (unlike main tier).
         <PHO_CONTENT> [^\x00 \t\r\n:+\u2039\u203A\u0015] [^\x00 \t\r\n:+\u2039\u203A\u0015]* {

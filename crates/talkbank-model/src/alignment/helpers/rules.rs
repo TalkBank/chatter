@@ -40,20 +40,27 @@ fn is_alignment_ignore_annotation(annotation: &ContentAnnotation) -> bool {
 /// That invariant is what lets a single traversal call one leaf predicate, so
 /// do not reintroduce a container-context argument here.
 pub fn counts_for_tier(word: &Word, domain: TierDomain) -> bool {
-    // Empty words (from parser artifacts) should never align
-    if word.cleaned_text().is_empty() {
-        return false;
-    }
+    admit_text_for_tier(word, domain).is_some()
+}
+
+/// Keep lexical non-emptiness as evidence when a consumer needs to build text.
+pub(crate) fn admit_text_for_tier(
+    word: &Word,
+    domain: TierDomain,
+) -> Option<crate::model::NonEmptyStr<'_>> {
+    let Ok(text) = crate::model::NonEmptyStr::new(word.cleaned_text()) else {
+        return None;
+    };
 
     if word
         .category
         .as_ref()
         .is_some_and(WordCategory::is_omission)
     {
-        return false;
+        return None;
     }
 
-    match domain {
+    let included = match domain {
         // %mor = linguistic/morphological content (excludes ALL fragments, untranscribed)
         TierDomain::Mor => is_linguistic_content(word),
 
@@ -86,7 +93,8 @@ pub fn counts_for_tier(word: &Word, domain: TierDomain) -> bool {
         // %pho and %sin include everything that was phonologically/gesturally produced
         // This includes fragments, untranscribed material, etc.
         TierDomain::Pho | TierDomain::Sin => true,
-    }
+    };
+    included.then_some(text)
 }
 
 /// Return whether a word category is excluded from `%wor`.

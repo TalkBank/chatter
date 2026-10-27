@@ -59,9 +59,9 @@ fn test_mor_alignment_errors_have_no_bogus_context() {
             content: crate::Location::Unlocated,
         },
         "CHI",
-        vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
+        vec![UtteranceContent::Word(Box::new(Word::new(
             crate::Location::Unlocated,
-            "one",
+            crate::WordText::from(crate::non_empty_literal!("one")),
         )))],
         Terminator::Period {
             location: crate::Location::Unlocated,

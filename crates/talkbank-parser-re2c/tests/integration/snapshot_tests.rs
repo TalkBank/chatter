@@ -30,11 +30,11 @@ struct TokenView {
     text: String,
 }
 
-fn lex_snapshot(input: &str, condition: usize) -> Vec<TokenView> {
-    let mut s = input.to_string();
-    s.push('\0');
-    let s: &str = Box::leak(s.into_boxed_str());
-    Lexer::new(s, condition)
+fn lex_snapshot(
+    input: &str,
+    condition: talkbank_parser_re2c::lexer::StartCondition,
+) -> Vec<TokenView> {
+    Lexer::new(input, condition)
         .map(|(tok, _span)| {
             let _kind = format!("{:?}", std::mem::discriminant(&tok));
             // Use the variant name from Debug output

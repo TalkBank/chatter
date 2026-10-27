@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "zho"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Target_Child",
+            "details": {
+              "name": null,
+              "role": "Target_Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Father",
+            "details": {
+              "name": null,
+              "role": "Father",
+              "state": "complete"
+            },
             "speaker_code": "FAT"
           }
         ],
@@ -802,38 +805,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "5;01.",
-        "corpus": "corpus",
-        "language": [
-          "zho"
-        ],
-        "role": "Target_Child",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Target_Child"
-    },
-    "FAT": {
-      "birth_date": null,
-      "code": "FAT",
-      "id": {
-        "age": "35;00.",
-        "corpus": "corpus",
-        "language": [
-          "zho"
-        ],
-        "role": "Father",
-        "speaker": "FAT"
-      },
-      "name": null,
-      "role": "Father"
-    }
-  }
+  ]
 }

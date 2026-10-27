@@ -93,11 +93,46 @@ use talkbank_model::model::{
 
 /// Parse a `@Participants` header into [`Header::Participants`].
 ///
-/// Every participant entry that parses is kept; an entry that does not
-/// (a missing code, a missing role) is reported and dropped, so the header
-/// still names the speakers it can, and the cross-header checks (E522,
-/// E523) work from those.
+/// An observed speaker without a role remains an explicit shared recovery
+/// entry. Missing speaker codes still reject: a missing CST token cannot
+/// supply a declaration identity.
 pub fn parse_participants_header<'tree>(
+    typed: SourceBound<'tree, '_, ParticipantsHeaderNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<Header, crate::parser::typed_cst::CstFailure> {
+    // A recovered CST may expose a truncated code or promote a role to a code.
+    // Keep the complete header as rejected evidence before those leaves acquire
+    // declaration semantics. A plain missing role has no CST recovery nodes.
+    let rejected = typed.raw_node().has_error();
+    let raw = talkbank_model::model::UnparsedParticipantHeader::new(
+        span_of(typed.raw_node()),
+        typed.text(),
+    );
+    // An actually empty source body is an empty declaration, not failed
+    // lowering disguised as an empty list. The exact prefix establishes which
+    // bytes are the body; no ERROR-node text is reclassified here.
+    let empty_body = typed
+        .text()
+        .strip_prefix("@Participants:\t")
+        .is_some_and(|body| body.trim().is_empty());
+    let findings = talkbank_model::ErrorCollector::new();
+    let result = parse_participants_payload(typed, &findings);
+    errors.report_all(
+        findings
+            .into_vec()
+            .into_iter()
+            .filter(|finding| !rejected || finding.code != ErrorCode::EmptyParticipantRole)
+            .collect(),
+    );
+    let result = result?;
+    if rejected && !empty_body {
+        Ok(Header::UnparsedParticipants(raw))
+    } else {
+        Ok(result)
+    }
+}
+
+fn parse_participants_payload<'tree>(
     typed: SourceBound<'tree, '_, ParticipantsHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<Header, crate::parser::typed_cst::CstFailure> {
@@ -385,9 +420,9 @@ fn parse_participant_slot<'tree>(
 ///
 /// The last word is the role and every word before it is the name. The
 /// `speaker` and `participant_word` tokens are non-empty by their regexes,
-/// so the only ways an entry fails are a code the parser had to invent
-/// (E342 from the recovery report; the entry is dropped) and no word at all
-/// after the code (E513, `@Participants:\tCHI`). E512 has no route here: the
+/// so a missing code is a code the parser had to invent
+/// (E342 from the recovery report; the entry rejects). No word after the code
+/// is explicit missing-role recovery (E513, `@Participants:\tCHI`). E512 has no route here: the
 /// first word of an entry is always its code, which `E512.md` records.
 fn parse_participant_entry<'tree>(
     typed: SourceBound<'tree, '_, ParticipantNode<'tree>>,
@@ -509,7 +544,9 @@ fn parse_participant_entry<'tree>(
             ErrorContext::new(source, span_of(node), PARTICIPANT),
             "Participant role cannot be empty",
         ));
-        return ParseOutcome::rejected();
+        return ParseOutcome::parsed(ParticipantEntry::missing_role(SpeakerCode::new(
+            speaker_code,
+        )));
     };
     let name = if words.names().is_empty() {
         None
@@ -517,9 +554,9 @@ fn parse_participant_entry<'tree>(
         Some(ParticipantName::new(words.names().join(" ")))
     };
 
-    ParseOutcome::parsed(ParticipantEntry {
-        speaker_code: SpeakerCode::new(speaker_code),
+    ParseOutcome::parsed(ParticipantEntry::new(
+        SpeakerCode::new(speaker_code),
         name,
-        role: ParticipantRole::new(words.role().as_str()),
-    })
+        ParticipantRole::new(words.role().as_str()),
+    ))
 }

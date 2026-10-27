@@ -165,16 +165,11 @@ impl crate::validation::Validate for ReplacementWords {
                 );
             }
 
-            if let Some(crate::model::WordCategory::Omission) = replacement_word.category {
-                errors.report(
-                    crate::ParseError::at_location(
-                        crate::ErrorCode::ReplacementContainsOmission,
-                        crate::Severity::Error,
-                        replacement_word.location,
-                        "Replacement word cannot be an omission (0-prefix)",
-                    )
-                    .with_suggestion("Remove the 0 prefix from replacement words"),
-                );
+            if let Some(error) = replacement_omission_diagnostic(
+                replacement_word.category.as_ref(),
+                replacement_word.location,
+            ) {
+                errors.report(error);
             }
 
             if replacement_word.untranscribed().is_some() {
@@ -191,6 +186,31 @@ impl crate::validation::Validate for ReplacementWords {
                 );
             }
         }
+    }
+}
+
+/// Diagnose an actual omission prefix in a replacement, even when its word
+/// body is incomplete and cannot be represented by a model `Word`.
+/// Location chooses the diagnostic position, never whether the rule applies.
+pub fn replacement_omission_diagnostic(
+    category: Option<&crate::model::WordCategory>,
+    location: crate::Location,
+) -> Option<crate::ParseError> {
+    match category {
+        Some(crate::model::WordCategory::Omission) => Some(
+            crate::ParseError::at_location(
+                crate::ErrorCode::ReplacementContainsOmission,
+                crate::Severity::Error,
+                location,
+                "Replacement word cannot be an omission (0-prefix)",
+            )
+            .with_suggestion("Remove the 0 prefix from replacement words"),
+        ),
+        None
+        | Some(crate::model::WordCategory::Nonword)
+        | Some(crate::model::WordCategory::CAOmission)
+        | Some(crate::model::WordCategory::PhonologicalFragment)
+        | Some(crate::model::WordCategory::Filler) => None,
     }
 }
 
@@ -316,13 +336,13 @@ impl IntoIterator for ReplacedWordAnnotations {
 ///
 /// // Single word replacement
 /// let replacement = Replacement::from_word(
-///     Word::simple(Location::Unlocated, "dog")
+///     Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("dog")))
 /// );
 ///
 /// // Multi-word replacement
 /// let replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![
-///     Word::simple(Location::Unlocated, "went"),
-///     Word::simple(Location::Unlocated, "home"),
+///     Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("went"))),
+///     Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("home"))),
 /// ]).expect("nonempty words"));
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
@@ -350,7 +370,7 @@ impl Replacement {
     }
 
     /// Serializes this replacement as CHAT `[: ... ]` syntax.
-    pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str("[: ")?;
         for (i, word) in self.words.iter().enumerate() {
             if i > 0 {
@@ -404,15 +424,15 @@ impl crate::validation::Validate for Replacement {
 /// // Simple replacement
 /// let replaced = ReplacedWord::new(
 ///     Location::Unlocated,
-///     Word::simple(Location::Unlocated, "doggie"),
-///     Replacement::from_word(Word::simple(Location::Unlocated, "dog"))
+///     Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("doggie"))),
+///     Replacement::from_word(Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("dog"))))
 /// );
 ///
 /// // With error annotation
 /// let replaced = ReplacedWord::new(
 ///     Location::Unlocated,
-///     Word::simple(Location::Unlocated, "goed"),
-///     Replacement::from_word(Word::simple(Location::Unlocated, "went"))
+///     Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("goed"))),
+///     Replacement::from_word(Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("went"))))
 /// ).with_scoped_annotations(vec![
 ///     ContentAnnotation::Error(ScopedError { code: Some("grammar".into()) })
 /// ]);
@@ -468,7 +488,7 @@ impl ReplacedWord {
     }
 
     /// Serializes `word [: replacement]` and trailing scoped annotations.
-    pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         self.word.write_chat(w)?;
         w.write_char(' ')?;
         self.replacement.write_chat(w)?;
@@ -547,5 +567,32 @@ impl std::fmt::Display for ReplacedWord {
     /// Renders the replacement using CHAT serialization format.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.write_chat(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replacement_omission_diagnostic;
+    use crate::model::WordCategory;
+    use crate::{DiagnosticLocation, ErrorCode, Location};
+
+    #[test]
+    fn replacement_omission_policy_depends_on_category_not_location() {
+        let error =
+            replacement_omission_diagnostic(Some(&WordCategory::Omission), Location::Unlocated)
+                .expect("an unlocated omission still violates the replacement rule");
+        assert_eq!(error.code, ErrorCode::ReplacementContainsOmission);
+        assert_eq!(error.location, DiagnosticLocation::Unlocated);
+        for category in [
+            None,
+            Some(WordCategory::CAOmission),
+            Some(WordCategory::Nonword),
+            Some(WordCategory::Filler),
+            Some(WordCategory::PhonologicalFragment),
+        ] {
+            assert!(
+                replacement_omission_diagnostic(category.as_ref(), Location::Unlocated).is_none()
+            );
+        }
     }
 }

@@ -23,22 +23,21 @@
 use talkbank_model::Span;
 use tower_lsp::lsp_types::*;
 
+use super::gem_navigation::GemNavigation;
+use crate::backend::diagnostics::DocumentAnalysis;
 use crate::backend::utils::LineIndex;
 
 /// Build the list of folding ranges for a CHAT file.
 ///
-/// # Arguments
-/// * `chat_file` - Parsed CHAT file.
-/// * `document`  - Full document text (for span → line number conversion).
+/// The analysis owns both the parsed model and its exact source text.
 ///
 /// # Returns
 /// A list of `FoldingRange` values, one per utterance block that spans more
 /// than one line (i.e., has at least one dependent tier), plus an optional
 /// header-block fold if a header section exists.
-pub fn folding_range(
-    chat_file: &talkbank_model::model::ChatFile,
-    document: &str,
-) -> Vec<FoldingRange> {
+pub(crate) fn folding_range(analysis: &DocumentAnalysis) -> Vec<FoldingRange> {
+    let chat_file = analysis.file();
+    let document = analysis.source();
     let mut ranges: Vec<FoldingRange> = Vec::new();
     let index = LineIndex::new(document);
 
@@ -92,26 +91,11 @@ pub fn folding_range(
         }
     }
 
-    // Gem block folds: @Bg: Activity → @Eg: Activity.
-    let mut gem_stack: Vec<(u32, &str)> = Vec::new(); // (line, label)
-    for (i, line) in document.lines().enumerate() {
-        let line_num = i as u32;
-        if let Some(label) = line.strip_prefix("@Bg:\t") {
-            gem_stack.push((line_num, label.trim()));
-        } else if line.starts_with("@Eg:")
-            && let Some((start_line, _label)) = gem_stack.pop()
-            && line_num > start_line
-        {
-            ranges.push(FoldingRange {
-                start_line,
-                start_character: None,
-                end_line: line_num,
-                end_character: None,
-                kind: Some(FoldingRangeKind::Region),
-                collapsed_text: None,
-            });
-        }
-    }
+    ranges.extend(
+        GemNavigation::from_analysis(analysis)
+            .into_iter()
+            .filter_map(GemNavigation::into_fold),
+    );
 
     ranges
 }
@@ -132,41 +116,41 @@ fn utterance_block_end(utterance: &talkbank_model::model::Utterance, main_span: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_fixtures::parse_chat;
+    use crate::test_fixtures::document_analysis;
+    const BASIC: &str = include_str!("../../../../../corpus/reference/core/basic-conversation.cha");
+    const MOR_GRA: &str = include_str!("../../../../../corpus/reference/tiers/mor-gra.cha");
+    const GEMS: &str =
+        include_str!("../../../../../corpus/reference/edge-cases/multiline-paired-gems.cha");
 
     #[test]
     fn fold_utterance_with_dependent_tiers() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n%mor:\tn|hello n|world .\n%gra:\t1|2|SUBJ 2|0|ROOT 3|2|OBJ\n@End\n";
-        let chat_file = parse_chat(input);
-        let ranges = folding_range(&chat_file, input);
+        let input = MOR_GRA;
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), input);
+        let ranges = folding_range(&analysis);
 
         // Should have at least one utterance fold and a header fold
         assert!(ranges.len() >= 2);
 
         // Find the utterance fold (starts at the *CHI: line)
-        let utt_fold = ranges.iter().find(|r| r.start_line == 5).unwrap();
+        let utt_fold = ranges.iter().find(|r| r.start_line == 11).unwrap();
         assert!(utt_fold.end_line > utt_fold.start_line);
     }
 
     #[test]
     fn no_fold_for_single_line_utterance() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
-        let chat_file = parse_chat(input);
-        let ranges = folding_range(&chat_file, input);
+        let input = BASIC;
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), input);
+        let ranges = folding_range(&analysis);
 
         // No utterance fold, only header fold (if any)
-        assert!(
-            ranges
-                .iter()
-                .all(|r| r.start_line == 0 || r.start_line != 5)
-        );
+        assert!(ranges.iter().all(|r| r.start_line == 0));
     }
 
     #[test]
     fn header_block_fold() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
-        let chat_file = parse_chat(input);
-        let ranges = folding_range(&chat_file, input);
+        let input = BASIC;
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), input);
+        let ranges = folding_range(&analysis);
 
         // Header fold starts at line 0
         let header_fold = ranges.iter().find(|r| r.start_line == 0);
@@ -176,15 +160,12 @@ mod tests {
 
     #[test]
     fn gem_block_fold() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Bg:\tActivity\n*CHI:\thello .\n@Eg:\tActivity\n@End\n";
-        let chat_file = parse_chat(input);
-        let ranges = folding_range(&chat_file, input);
+        let input = GEMS;
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), input);
+        let ranges = folding_range(&analysis);
 
         // Should have a gem fold from @Bg to @Eg
-        let gem_fold = ranges.iter().find(|r| {
-            let start_line = input.lines().nth(r.start_line as usize).unwrap_or("");
-            start_line.starts_with("@Bg:")
-        });
-        assert!(gem_fold.is_some());
+        let gem_fold = ranges.iter().find(|r| r.start_line == 6).unwrap();
+        assert_eq!(gem_fold.end_line, 11);
     }
 }

@@ -46,7 +46,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
 
-use crate::model::{Bullet, NonEmptyString};
+use crate::model::{Bullet, RecoveryText};
+
+mod write;
 
 // ---------------------------------------------------------------------------
 // Syllabified phonology tier (%modsyl, %phosyl)
@@ -89,7 +91,7 @@ pub struct SylTier {
     /// Each word is a raw string containing `phoneme:Position` sequences.
     /// Full segment-level parsing of these strings is deferred, the word
     /// boundary structure is sufficient for alignment validation.
-    pub words: Vec<NonEmptyString>,
+    pub words: Vec<RecoveryText>,
 
     /// Source span for error reporting.
     #[serde(skip, default = "crate::Location::unlocated")]
@@ -102,7 +104,7 @@ impl SylTier {
     pub fn new(
         location: impl Into<crate::Location>,
         tier_type: SylTierType,
-        words: Vec<NonEmptyString>,
+        words: Vec<RecoveryText>,
     ) -> Self {
         Self {
             tier_type,
@@ -134,26 +136,6 @@ impl SylTier {
             SylTierType::Modsyl => "%xmodsyl",
             SylTierType::Phosyl => "%xphosyl",
         }
-    }
-}
-
-impl std::fmt::Display for SylTier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut first = true;
-        for word in &self.words {
-            if !first {
-                write!(f, " ")?;
-            }
-            write!(f, "{}", word)?;
-            first = false;
-        }
-        Ok(())
-    }
-}
-
-impl super::WriteChat for SylTier {
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "{}:\t{}", self.prefix(), self)
     }
 }
 
@@ -251,7 +233,7 @@ impl std::fmt::Display for PositionCode {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SyllableUnit {
     /// The IPA phone, verbatim, identical to the corresponding source-tier phone.
-    pub phone: NonEmptyString,
+    pub phone: RecoveryText,
     /// The syllable constituent this phone fills.
     pub code: PositionCode,
 }
@@ -369,13 +351,10 @@ pub fn is_pause_marker(word: &str) -> bool {
 /// Parse `word` as a numeric inter-word pause marker `(<duration>)`, returning
 /// its typed duration when it is one, `None` otherwise (including for the
 /// three untimed forms, which [`classify_syl_word`] matches directly).
-fn numeric_pause_duration(word: &str) -> Option<crate::model::PauseTimedDuration> {
-    use crate::model::PauseTimedDuration;
+fn numeric_pause_duration(word: &str) -> Option<crate::model::TimedPause> {
+    use crate::model::TimedPause;
     let inner = word.strip_prefix('(')?.strip_suffix(')')?;
-    match PauseTimedDuration::new(inner) {
-        parsed @ PauseTimedDuration::Parsed(_) => Some(parsed),
-        PauseTimedDuration::Unsupported(_) => None,
-    }
+    TimedPause::new(inner).ok()
 }
 
 /// Classify one syllabification-tier word: pause filler or `phone:CODE` units.
@@ -428,7 +407,7 @@ pub fn tokenize_syl_word(word: &str) -> Result<Vec<SylToken>, SylWordError> {
             return Err(SylWordError::EmptyCode);
         };
         let phone =
-            NonEmptyString::new(phone_str).map_err(|_| SylWordError::EmptyPhone(code_char))?;
+            RecoveryText::new(phone_str).map_err(|_| SylWordError::EmptyPhone(code_char))?;
         let code = PositionCode::try_from(code_char).map_err(SylWordError::IllegalCode)?;
         tokens.push(SylToken::Unit(SyllableUnit { phone, code }));
         rest = &after[code_char.len_utf8()..];
@@ -456,20 +435,9 @@ pub fn tokenize_syl_word(word: &str) -> Result<Vec<SylToken>, SylWordError> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct AlignmentPair {
     /// Source segment (from target/model), `None` = `∅` (insertion).
-    pub source: Option<NonEmptyString>,
+    pub source: Option<RecoveryText>,
     /// Target segment (from actual/phone), `None` = `∅` (deletion).
-    pub target: Option<NonEmptyString>,
-}
-
-impl std::fmt::Display for AlignmentPair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (&self.source, &self.target) {
-            (Some(s), Some(t)) => write!(f, "{}↔{}", s, t),
-            (Some(s), None) => write!(f, "{}↔∅", s),
-            (None, Some(t)) => write!(f, "∅↔{}", t),
-            (None, None) => write!(f, "∅↔∅"),
-        }
-    }
+    pub target: Option<RecoveryText>,
 }
 
 /// Word-level alignment: a sequence of segment alignment pairs.
@@ -480,20 +448,6 @@ impl std::fmt::Display for AlignmentPair {
 pub struct WordAlignment {
     /// Segment-level alignment pairs for this word.
     pub pairs: Vec<AlignmentPair>,
-}
-
-impl std::fmt::Display for WordAlignment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut first = true;
-        for pair in &self.pairs {
-            if !first {
-                write!(f, ",")?;
-            }
-            write!(f, "{}", pair)?;
-            first = false;
-        }
-        Ok(())
-    }
 }
 
 /// Phone alignment tier (`%phoaln`).
@@ -548,28 +502,6 @@ impl PhoalnTier {
     }
 }
 
-impl std::fmt::Display for PhoalnTier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut first = true;
-        for word in &self.words {
-            if !first {
-                write!(f, " ")?;
-            }
-            write!(f, "{}", word)?;
-            first = false;
-        }
-        Ok(())
-    }
-}
-
-impl super::WriteChat for PhoalnTier {
-    /// Serializes as `%xphoaln:` under Chatter's current canonical output policy.
-    /// When officially adopted into CHAT, update to `%phoaln:`.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "%xphoaln:\t{}", self)
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Phone interval tier (%xphoint)
 // ---------------------------------------------------------------------------
@@ -589,15 +521,9 @@ const XPHOINT_GROUP_SEP: &str = " / ";
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct PhoneInterval {
     /// The phone, identical to the corresponding phone of the `%pho` word.
-    pub phone: NonEmptyString,
+    pub phone: RecoveryText,
     /// The phone's time interval (start/end media offsets, milliseconds).
     pub bullet: Bullet,
-}
-
-impl std::fmt::Display for PhoneInterval {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.phone, self.bullet)
-    }
 }
 
 /// One word-group on `%xphoint`: the time-aligned phones of a single `%pho`
@@ -606,20 +532,6 @@ impl std::fmt::Display for PhoneInterval {
 pub struct XphointGroup {
     /// The phones of this word, each with its bullet, in order.
     pub phones: Vec<PhoneInterval>,
-}
-
-impl std::fmt::Display for XphointGroup {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut first = true;
-        for phone in &self.phones {
-            if !first {
-                write!(f, " ")?;
-            }
-            write!(f, "{}", phone)?;
-            first = false;
-        }
-        Ok(())
-    }
 }
 
 /// Phone interval tier (`%xphoint`): the per-phone time segmentation of `%pho`.
@@ -656,27 +568,6 @@ impl XphointTier {
     /// Number of word groups (aligns 1-to-1 with `%pho` words).
     pub fn word_count(&self) -> usize {
         self.groups.len()
-    }
-}
-
-impl std::fmt::Display for XphointTier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut first = true;
-        for group in &self.groups {
-            if !first {
-                write!(f, "{}", XPHOINT_GROUP_SEP)?;
-            }
-            write!(f, "{}", group)?;
-            first = false;
-        }
-        Ok(())
-    }
-}
-
-impl super::WriteChat for XphointTier {
-    /// Serializes as `%xphoint:` under Chatter's current canonical output policy.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "%xphoint:\t{}", self)
     }
 }
 
@@ -728,7 +619,7 @@ fn parse_xphoint_group(group: &str) -> Result<XphointGroup, XphointParseError> {
         let bullet_tok = tokens
             .get(i + 1)
             .ok_or_else(|| XphointParseError::MissingBullet(phone_tok.to_string()))?;
-        let phone = NonEmptyString::new(phone_tok).map_err(|_| XphointParseError::EmptyPhone)?;
+        let phone = RecoveryText::new(phone_tok).map_err(|_| XphointParseError::EmptyPhone)?;
         let bullet = parse_xphoint_bullet(bullet_tok)?;
         phones.push(PhoneInterval { phone, bullet });
         i += 2;
@@ -808,13 +699,13 @@ fn parse_alignment_pair(s: &str) -> Result<AlignmentPair, PhoalnParseError> {
     let source = if source_str == "∅" || source_str.is_empty() {
         None
     } else {
-        Some(NonEmptyString::new(source_str).map_err(|_| PhoalnParseError::EmptySegment)?)
+        Some(RecoveryText::new(source_str).map_err(|_| PhoalnParseError::EmptySegment)?)
     };
 
     let target = if target_str == "∅" || target_str.is_empty() {
         None
     } else {
-        Some(NonEmptyString::new(target_str).map_err(|_| PhoalnParseError::EmptySegment)?)
+        Some(RecoveryText::new(target_str).map_err(|_| PhoalnParseError::EmptySegment)?)
     };
 
     Ok(AlignmentPair { source, target })
@@ -842,10 +733,10 @@ pub enum PhoalnParseError {
 ///
 /// Simply splits on whitespace to get word-level boundaries.
 /// Within-word segment parsing (position codes) is deferred.
-pub fn parse_syl_content(content: &str) -> Vec<NonEmptyString> {
+pub fn parse_syl_content(content: &str) -> Vec<RecoveryText> {
     content
         .split_whitespace()
-        .filter_map(|token| NonEmptyString::new(token).ok())
+        .filter_map(|token| RecoveryText::new(token).ok())
         .collect()
 }
 
@@ -1115,11 +1006,11 @@ mod tests {
     /// fail `phone:CODE` tokenization.
     #[test]
     fn classify_syl_word_accepts_numeric_pause() {
-        use crate::model::{PauseDuration, PauseTimedDuration};
+        use crate::model::{PauseDuration, TimedPause};
         let kind = classify_syl_word("(1.5)").expect("numeric pause is a legal filler");
         assert_eq!(
             kind,
-            SylWordKind::PauseFiller(PauseDuration::Timed(PauseTimedDuration::new("1.5")))
+            SylWordKind::PauseFiller(PauseDuration::Timed(TimedPause::new("1.5").unwrap()))
         );
     }
 
@@ -1134,10 +1025,12 @@ mod tests {
 
     #[test]
     fn is_pause_marker_recognizes_all_legal_forms() {
-        for marker in ["(.)", "(..)", "(...)", "(1.5)", "(2)", "(1:02.5)"] {
+        // Phon's numeric form is CHAT's `(x.x)`, not every spelling the
+        // standalone numeric projection accepts (such as integer-only `2`).
+        for marker in ["(.)", "(..)", "(...)", "(1.5)", "(2.)", "(1:02.5)"] {
             assert!(is_pause_marker(marker), "{marker} should be a pause marker");
         }
-        for not_a_pause in ["(x)", "k:O", "kæt", "()"] {
+        for not_a_pause in ["(x)", "k:O", "kæt", "()", "(2)", "(+1.5)", "(1:02)"] {
             assert!(
                 !is_pause_marker(not_a_pause),
                 "{not_a_pause} should not be a pause marker"

@@ -101,3 +101,88 @@ fn reference_word_and_structured_tier_fragments_agree() -> Result<(), String> {
     assert!(witnesses.iter().all(|count| *count > 0));
     batch.finish()
 }
+
+/// Every original main-tier slice must survive both public fragment adapters.
+/// The checked corpus and comparison batch refuse missing input or partial success.
+#[test]
+fn reference_original_main_tier_fragments_agree() -> Result<(), String> {
+    let (ts, re2c) = both_parsers();
+    let corpus = ChatCorpus::reference().map_err(|error| error.to_string())?;
+    let mut batch = ComparisonBatch::default();
+    let mut main_tiers = 0;
+    let mut continuations = 0;
+    let mut contextual = 0;
+    for fixture in corpus.fixtures() {
+        let file = strict_parse(ts.parse_chat_file(fixture.source()))
+            .map_err(|error| format!("{}: {error}", fixture.path().display()))?;
+        let options = file
+            .lines
+            .iter()
+            .filter_map(|line| match line {
+                Line::Header { header, .. } => match header.as_ref() {
+                    Header::Options { options } => Some(options.iter().cloned()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let context = FragmentSemanticContext::new().with_option_flags(options);
+        for utterance in file.utterances() {
+            let span = utterance
+                .main
+                .location
+                .span()
+                .expect("located reference main tier");
+            let input = fixture
+                .source()
+                .get(span.to_range())
+                .expect("original main-tier slice");
+            let origin = span.start();
+            let label = format!("{} main tier {origin}", fixture.path().display());
+            batch.record(
+                format!("{label} low-level native"),
+                talkbank_parser_re2c::parser::parse_main_tier_with_source(input)
+                    .map(|_| ())
+                    .ok_or_else(|| "native main-tier grammar rejected original source".to_owned()),
+            );
+            batch.record(
+                format!("{label} fragment agreement"),
+                compare_parses(
+                    |errors| {
+                        ChatParser::parse_main_tier_with_context(
+                            &ts, input, origin, &context, errors,
+                        )
+                    },
+                    |errors| {
+                        ChatParser::parse_main_tier_with_context(
+                            &re2c, input, origin, &context, errors,
+                        )
+                    },
+                ),
+            );
+            batch.record(
+                format!("{label} original file meaning"),
+                compare_parses(
+                    |_| talkbank_model::ParseOutcome::Parsed(utterance.main.clone()),
+                    |errors| {
+                        ChatParser::parse_main_tier_with_context(
+                            &re2c, input, origin, &context, errors,
+                        )
+                    },
+                ),
+            );
+            main_tiers += 1;
+            continuations += usize::from(input.contains("\n\t"));
+            contextual += usize::from(!context.option_flags.is_empty());
+        }
+    }
+    eprintln!(
+        "original main tiers: {main_tiers}; continuations: {continuations}; contextual: {contextual}"
+    );
+    assert!(
+        continuations > 0 && contextual > 0,
+        "reference boundary witnesses remain present"
+    );
+    batch.finish()
+}

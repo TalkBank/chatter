@@ -1,0 +1,25 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Authored full-document controls from spec/constructs/utterance/mor_*.md.
+	These are independently authored examples, not derived corpus transcripts.
+	Matching main/dependent endings retain MOR alignment across adjacent turns.
+*CHI:	hello +...
+%mor:	co|hello +...
+*CHI:	hello +/.
+%mor:	co|hello +/.
+*CHI:	hello +//.
+%mor:	co|hello +//.
+*CHI:	hello +..?
+%mor:	co|hello +..?
+*CHI:	hello +/?
+%mor:	co|hello +/?
+*CHI:	hello +//?
+%mor:	co|hello +//?
+*CHI:	hello +!?
+%mor:	co|hello +!?
+*CHI:	hello +.
+%mor:	co|hello +.
+@End

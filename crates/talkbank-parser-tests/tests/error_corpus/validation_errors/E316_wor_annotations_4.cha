@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|||||Child|||
+@Media:	wor-annotations, audio
+*CHI:	hello world .
+%wor:	hello [: hi] 100_200 world .
+@End

@@ -92,10 +92,10 @@ Update through the method that installed the selected executable:
 - **CLI:** run
 
   ```sh
-  chatter update
+  chatter experimental update
   ```
 
-  This self-update runs **in-process**: `chatter update` embeds `axoupdater`
+  This self-update runs **in-process**: `chatter experimental update` embeds `axoupdater`
   as a library and downloads the newest release from GitHub Releases
   directly, without a separate bundled `chatter-update` program. It requires
   a supported official installer receipt for this executable. Source and
@@ -129,7 +129,7 @@ cargo install --path crates/talkbank-lsp --locked
 This installs the `chatter` binary to `~/.cargo/bin/` (macOS/Linux) or
 `%USERPROFILE%\.cargo\bin\` (Windows). To update a source install, pull
 and reinstall the selected package with `--force --locked`, retaining the
-reviewed checkout revision. `chatter update` targets published installer
+reviewed checkout revision. `chatter experimental update` targets published installer
 releases, not the source revision you selected.
 
 For a local verification install that must not replace your normal commands,

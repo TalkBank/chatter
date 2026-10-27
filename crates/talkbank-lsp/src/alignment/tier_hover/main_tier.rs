@@ -10,12 +10,16 @@
 // Added per file as each is cleaned; `content_catch_alls` lists the rest.
 #![deny(clippy::wildcard_enum_match_arm)]
 
-use super::helpers::{find_target_index_for_source, format_gra_alignment_text, position_to_offset};
+use super::helpers::{
+    find_target_index_for_source, format_gra_alignment_text, gra_relation_for_mor_item,
+    position_to_offset,
+};
 use crate::alignment::formatters::{
     format_content_item, format_mor_item, format_pho_item, format_sin_item,
 };
 use crate::alignment::types::AlignmentHoverInfo;
 use crate::editor_target::{find_content_index_at_offset, mor_alignment_index};
+use talkbank_model::alignment::MorItemIndex;
 use talkbank_model::model::Utterance;
 use tower_lsp::lsp_types::Position;
 
@@ -42,22 +46,19 @@ pub fn find_main_tier_hover_info(
     // Look up %mor/%gra alignment via utterance-level AlignmentSet.
     if let Some(alignments) = &utterance.alignments {
         let mor_idx = alignments.mor.as_ref().and_then(|mor_alignment| {
-            find_target_index_for_source(&mor_alignment.pairs, alignment_idx)
+            find_target_index_for_source(&mor_alignment.pairs, alignment_idx).map(MorItemIndex::new)
         });
 
         if let Some(mor_idx) = mor_idx
             && let Some(mor_tier) = utterance.mor_tier()
-            && let Some(mor_item) = mor_tier.items().get(mor_idx)
+            && let Some(mor_item) = mor_tier.items().get(mor_idx.as_usize())
         {
             info.aligned_to_mor = Some(format_mor_item(mor_item));
         }
 
         if let Some(mor_idx) = mor_idx
             && let Some(mor_tier) = utterance.mor_tier()
-            && let Some(gra_alignment) = &alignments.gra
-            && let Some(gra_idx) = find_target_index_for_source(&gra_alignment.pairs, mor_idx)
-            && let Some(gra_tier) = utterance.gra_tier()
-            && let Some(gra_relation) = gra_tier.relations().get(gra_idx)
+            && let Some(gra_relation) = gra_relation_for_mor_item(utterance, mor_idx)
         {
             info.aligned_to_gra = Some(format_gra_alignment_text(mor_tier, gra_relation));
         }

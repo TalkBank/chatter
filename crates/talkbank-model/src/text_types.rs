@@ -1,20 +1,20 @@
-//! Provenance-encoding newtype wrappers for text flowing through CHAT pipelines.
+//! Distinct raw and cleaned text projections for CHAT pipelines.
 //!
-//! `ChatCleanedText` and `ChatRawText` are **provenance-sealed**: the only way
-//! to mint a value of either type is from a typed CHAT-AST node (a parsed
-//! [`Word`] or [`Separator`]). There is no public string-accepting constructor,
-//! by design.
+//! `ChatCleanedText` and `ChatRawText` distinguish two text projections. Their
+//! named constructors project a typed CHAT-AST [`Word`] or [`Separator`].
+//! Deserialization also accepts wire strings, so these types do not certify
+//! source provenance or validation.
 //!
-//! # Why provenance-sealed
+//! # Why distinct projection types
 //!
-//! Cleaned text is, by definition, a computed view of a valid CHAT model, see
+//! Cleaned text is, by definition, a computed view of a CHAT model, see
 //! [`Word::compute_cleaned_text`] for the canonical projection (concatenated
 //! `WordContent::Text` graphemes plus `WordContent::Shortening` restored
 //! material; all prosodic/analytical markers excluded). "Cleaned" is meaningful
-//! only relative to a structured source state. Constructing a `ChatCleanedText`
-//! from a raw string is a category error: there is no source CHAT model the
-//! string was cleaned *from*. The type system enforces this by making the
-//! string-accepting constructor unavailable.
+//! only relative to a structured source state. Named construction therefore
+//! projects model values, while imported strings carry no proof of that origin.
+//! Provider transport substitutions belong in a separate downstream request
+//! type; they must never be manufactured as cleaned source text.
 //!
 //! Per-consumer projections downstream of `ChatCleanedText` (lowercasing for
 //! frequency keys, apostrophe stripping for `wdlen`, etc.) are downstream
@@ -33,11 +33,11 @@ use crate::model::WriteChat;
 use crate::model::content::Separator;
 use crate::model::content::Word;
 
-/// Generates the six `PartialEq` impls that let a provenance-sealed
+/// Generates the six `PartialEq` impls that let a projection
 /// string newtype be compared against `str`, `&str`, and `String` (in
 /// either argument position). Comparison is read-only and does not
 /// construct a value; this is ergonomics for tests and diagnostic
-/// code, and does not undermine the constructor's provenance seal.
+/// code without constructing another projection.
 ///
 /// Used by [`ChatRawText`] and [`ChatCleanedText`].
 macro_rules! impl_string_comparison_helpers {
@@ -78,8 +78,8 @@ macro_rules! impl_string_comparison_helpers {
 /// Source-faithful raw token text from a parsed CHAT AST node.
 ///
 /// Includes CHAT markers and punctuation exactly as parsed, suitable for
-/// roundtrip serialization and precise diagnostics. Provenance-sealed: only
-/// constructible from a typed AST source, see module-level docs.
+/// roundtrip serialization and diagnostics. Named constructors project a typed
+/// AST source; deserialization does not certify provenance.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 #[repr(transparent)]
@@ -117,8 +117,8 @@ impl AsRef<str> for ChatRawText {
 }
 
 // Read-only comparison helpers (see the macro definition below for
-// rationale). Comparison cannot construct a value, so the seal stays
-// intact; these are ergonomics for tests and log/diagnostic code.
+// rationale). Comparison does not construct a value; these are ergonomics
+// for tests and log/diagnostic code.
 impl_string_comparison_helpers!(ChatRawText);
 
 /// Lexical content extracted from CHAT after markup stripping, projected from a
@@ -129,8 +129,8 @@ impl_string_comparison_helpers!(ChatRawText);
 /// (elided material restored, e.g. `som(e)` → `some`). All prosodic/analytical
 /// markers are excluded.
 ///
-/// Provenance-sealed: only constructible from a typed AST source, see
-/// module-level docs.
+/// Named constructors project a typed AST source. Deserialization does not
+/// certify source provenance; see module-level docs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 #[repr(transparent)]
@@ -148,23 +148,6 @@ impl ChatCleanedText {
     /// cleaned form is its CHAT surface; there are no markers to strip.
     pub fn from_separator(sep: &Separator) -> Self {
         Self(sep.to_chat_string())
-    }
-
-    /// Synthetic placeholder substituted for special-form (`@<letter>`,
-    /// excluding `@s`) surface text before Stanza dispatch. Stanza sees the
-    /// placeholder, not the non-word, so the surrounding parse stays clean.
-    /// The post-Stanza synthesis pass replaces the placeholder's analysis
-    /// with form-type-derived MOR.
-    ///
-    /// This is the **only** blessed exception to provenance sealing; it is
-    /// not derived from a parsed AST node, but its constant value is part of
-    /// the morphotag-pipeline contract and tokenizes as a single word in
-    /// every Stanza language pack. See
-    /// `crates/talkbank-transform/src/morphosyntax/payload.rs` for usage,
-    /// and `crates/talkbank-transform/src/morphosyntax/synthesis/` for the
-    /// post-Stanza recognition + replacement.
-    pub fn stanza_placeholder() -> Self {
-        Self("xbxxx".to_string())
     }
 
     /// Borrows the wrapped cleaned text.
@@ -204,8 +187,11 @@ mod tests {
 
     #[test]
     fn cleaned_and_raw_text_remain_distinct() {
-        let word = Word::simple(crate::Location::Unlocated, "hello")
-            .with_form_type(crate::model::FormType::C);
+        let word = Word::new(
+            crate::Location::Unlocated,
+            crate::WordText::from(crate::non_empty_literal!("hello")),
+        )
+        .with_form_type(crate::model::FormType::C);
         let raw = ChatRawText::from_word_raw(&word);
         let cleaned = ChatCleanedText::from_word(&word);
 
@@ -214,19 +200,11 @@ mod tests {
     }
 
     #[test]
-    fn stanza_placeholder_value_is_pinned() {
-        // The placeholder string is a contract with the post-Stanza
-        // synthesis pass in `crates/talkbank-transform/src/morphosyntax/synthesis/`,
-        // which recognizes this exact value to identify substituted
-        // special-form positions. Changing it would silently break the
-        // round-trip. Pinning the value here surfaces any change as a
-        // failing test.
-        assert_eq!(ChatCleanedText::stanza_placeholder().as_str(), "xbxxx");
-    }
-
-    #[test]
     fn cleaned_text_serializes_transparently() {
-        let word = Word::simple(crate::Location::Unlocated, "test");
+        let word = Word::new(
+            crate::Location::Unlocated,
+            crate::WordText::from(crate::non_empty_literal!("test")),
+        );
         let text = ChatCleanedText::from_word(&word);
         let json = serde_json::to_string(&text).unwrap();
         assert_eq!(json, "\"test\"");

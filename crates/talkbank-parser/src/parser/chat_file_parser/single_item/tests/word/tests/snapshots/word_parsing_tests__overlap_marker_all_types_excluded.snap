@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
-assertion_line: 12
 expression: result
 ---
 Ok(
@@ -16,8 +15,10 @@ Ok(
             [
                 Text(
                     WordText(
-                        NonEmptyString(
-                            "w",
+                        NonEmpty(
+                            NonEmptyString(
+                                "w",
+                            ),
                         ),
                     ),
                 ),
@@ -35,8 +36,10 @@ Ok(
                 ),
                 Text(
                     WordText(
-                        NonEmptyString(
-                            "or",
+                        NonEmpty(
+                            NonEmptyString(
+                                "or",
+                            ),
                         ),
                     ),
                 ),
@@ -54,8 +57,10 @@ Ok(
                 ),
                 Text(
                     WordText(
-                        NonEmptyString(
-                            "d",
+                        NonEmpty(
+                            NonEmptyString(
+                                "d",
+                            ),
                         ),
                     ),
                 ),
@@ -73,8 +78,10 @@ Ok(
                 ),
                 Text(
                     WordText(
-                        NonEmptyString(
-                            "te",
+                        NonEmpty(
+                            NonEmptyString(
+                                "te",
+                            ),
                         ),
                     ),
                 ),
@@ -92,8 +99,10 @@ Ok(
                 ),
                 Text(
                     WordText(
-                        NonEmptyString(
-                            "st",
+                        NonEmpty(
+                            NonEmptyString(
+                                "st",
+                            ),
                         ),
                     ),
                 ),

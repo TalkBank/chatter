@@ -5,11 +5,13 @@ use talkbank_model::{BulletContent, Header, IDHeader};
 use super::REDACTED_TEXT;
 
 /// Sanitizes a single header in place.
-pub(crate) fn sanitize_header(header: &mut Header) {
+pub(crate) fn sanitize_header(header: &mut Header) -> Result<(), super::RedactError> {
     match header {
+        Header::UnparsedID(_) => return Err(super::RedactError::UnparsedID),
+        Header::UnparsedParticipants(_) => return Err(super::RedactError::UnparsedParticipants),
         Header::Participants { entries } => {
             for entry in entries.as_mut_slice().iter_mut() {
-                entry.name = None;
+                entry.details.clear_name();
             }
         }
         Header::ID(id) => {
@@ -36,6 +38,7 @@ pub(crate) fn sanitize_header(header: &mut Header) {
         | Header::Begin
         | Header::End
         | Header::Languages { .. }
+        | Header::UnparsedLanguages(_)
         | Header::Date { .. }
         | Header::Pid { .. }
         | Header::Media(_)
@@ -61,6 +64,7 @@ pub(crate) fn sanitize_header(header: &mut Header) {
         | Header::Videos { .. }
         | Header::T { .. } => {}
     }
+    Ok(())
 }
 
 fn anonymize_id(id: &mut IDHeader) {

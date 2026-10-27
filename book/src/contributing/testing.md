@@ -1206,15 +1206,17 @@ diagnostics, while issuing `ValidChatFile` proofs for the corresponding valid
 controls. Both proof and refusal retain the parsed document unchanged. An
 `Ok(())` from a compatibility check must never substitute for that proof.
 
-Dependent-tier regeneration uses parsed reference entries for every supported
-family (`%mor`, `%gra`, `%wor`, user-defined). Identity replacement must preserve
-order and separator provenance; remove-and-append must retain other entries and
-create a clean separator. E758's non-CA `%mor` fixture separately proves payload
+Dependent-tier regeneration uses the model's borrowed `DependentTierKey`,
+which identifies a slot by its canonical label across parsed and recovery
+payloads. Every reference tier from both backends must replace itself without
+adding a duplicate. The `%mor`, `%gra`, `%wor` and user-defined controls also
+check remove-and-append, retaining other entries and creating a clean separator. E758's non-CA `%mor` fixture separately proves payload
 replacement retains the original spacing evidence and resulting diagnostic.
 A separate contract uses semantically distinct parsed reference donors with a
 matching typed regeneration key (including the user-defined label). The exact
-expected tier sequence changes only that payload, and every family must have
-a distinct donor. This tests the regeneration helper's boundary, not whole-file
+expected tier sequence changes only the first matching payload, preserving
+later entries and source provenance. Morphology, grammar, word timing, custom,
+comment and English-translation families must each have a distinct donor. This tests the regeneration helper's boundary, not whole-file
 alignment validity after combining tiers from different reference utterances.
 
 Whole-utterance language-switch rewrites compare E255's per-word violations
@@ -1537,8 +1539,9 @@ derived from the reference documents' recorded bullets, with both existing and
 new anonymous track labels. They check exact attribution/flag accounting,
 preservation of everything except speaker attribution, reconciled participant
 and ID sets, and full model wire equivalence. A returned model must not carry
-an empty participant map despite populated headers, so rediarization travels
-the canonical participant-join reporting transition before returning the model;
+stale participant metadata after header reconciliation. Metadata views borrow
+current headers, and rediarization reports the canonical join's diagnostics
+before returning the model;
 the tests do not certify acoustic truth or invent source timestamps.
 The first corpus-derived contested row also tests every truncated JSON output
 capacity using standard bounded byte buffers. Each refusal must propagate an

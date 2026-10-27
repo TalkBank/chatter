@@ -21,8 +21,6 @@
 
 use axoupdater::{AxoUpdater, AxoupdateError, ReleaseSourceType, UpdateResult};
 
-use crate::exit_codes::EXIT_INPUT_ERROR;
-
 /// Where a user reinstalls when in-place self-update is unavailable.
 const RELEASES_URL: &str = "https://github.com/TalkBank/chatter/releases/latest";
 
@@ -97,8 +95,8 @@ impl InstalledUpdater {
 }
 
 /// Run `chatter update`: self-update the running binary in place to the latest
-/// release. Always terminates the process; never returns.
-pub fn run_update() {
+/// release. Return success or a reported failure to the program boundary.
+pub fn run_update() -> crate::exit_codes::CommandResult {
     let updater = match InstalledUpdater::load() {
         Ok(updater) => updater,
         Err(err) => {
@@ -113,7 +111,7 @@ pub fn run_update() {
             );
             eprintln!("  {RELEASES_URL}");
             eprintln!("(details: {err})");
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -126,7 +124,8 @@ pub fn run_update() {
             eprintln!("chatter update: self-update failed: {err}");
             eprintln!("You can reinstall the latest release from:");
             eprintln!("  {RELEASES_URL}");
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     }
+    Ok(())
 }

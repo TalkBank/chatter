@@ -40,6 +40,7 @@ pub mod word;
 mod action;
 mod bracketed;
 mod bullet;
+mod code_payload;
 mod event;
 mod freecode;
 mod group;
@@ -47,16 +48,19 @@ mod linker;
 mod long_feature;
 mod main_tier;
 mod nonvocal;
+mod orphan_annotation;
 mod other_spoken;
 mod overlap;
 mod pause;
 mod postcode;
 mod retrace;
+mod scoped_label;
 mod separator;
 mod structure;
 mod terminator;
 mod tier_content;
 mod tier_separator;
+mod timed_pause;
 mod utterance_content;
 
 pub use action::*;
@@ -66,22 +70,25 @@ pub use event::*;
 pub use freecode::*;
 pub use group::*;
 pub use linker::*;
-pub use long_feature::{LongFeatureBegin, LongFeatureEnd, LongFeatureLabel};
+pub use long_feature::{LongFeatureBegin, LongFeatureEnd};
 pub use main_tier::*;
 pub use nonvocal::{NonvocalBegin, NonvocalEnd, NonvocalLabel, NonvocalSimple};
+pub use orphan_annotation::*;
 pub use other_spoken::*;
 pub use overlap::*;
 pub use pause::*;
 pub use postcode::*;
 pub use retrace::*;
+pub use scoped_label::{InvalidScopedLabel, LongFeatureLabel};
 pub use separator::*;
 pub use structure::{
-    AngleRef, ContainerMut, ContentStructure, Descend, GroupKind, GroupMut, GroupRef, LeafContent,
-    LeafRef, QuotationRef, RetraceRef, WordRef,
+    AngleAnnotations, AngleRef, ContainerMut, ContentStructure, Descend, GroupKind, GroupMut,
+    GroupRef, LeafContent, LeafRef, QuotationRef, RetraceRef, WordRef,
 };
 pub use terminator::*;
 pub use tier_content::*;
 pub use tier_separator::TierSeparator;
+pub use timed_pause::*;
 pub use utterance_content::*;
 
 // Re-export word types at content level

@@ -16,7 +16,9 @@ pub use inspection::{LexError, LexResult};
 pub use lang_suffix::LangSuffix;
 pub use pause::PauseLexeme;
 pub use postcode::PostcodeToken;
-pub use prefix::{DependentBodyKind, DependentPrefixToken, PrefixToken};
+pub use prefix::{
+    DependentBodyKind, DependentPrefixToken, HeaderKind, HeaderPrefixToken, PrefixToken,
+};
 
 use serde::Serialize;
 use strum::EnumDiscriminants;
@@ -40,7 +42,7 @@ pub enum Token<'a> {
     // ── Headers ─────────────────────────────────────────────
     /// Header prefix: @HeaderName:\t (includes the colon+tab for structured headers)
     /// Or just @HeaderName for no-content headers or catch-all.
-    HeaderPrefix(PrefixToken<'a>),
+    HeaderPrefix(HeaderPrefixToken<'a>),
     /// Header separator: ":\t" (only for unknown headers via HEADER_AFTER_NAME)
     HeaderSep(PrefixToken<'a>),
     /// Header content: free text after colon+tab
@@ -239,18 +241,11 @@ pub enum Token<'a> {
         pos_tag: Option<&'a str>,
     },
 
-    // ── Word structure (sub-tokens for body parsing) ─────
-    /// A word text segment (from WORD_SEGMENT regex).
-    WordSegment(&'a str),
-    /// grammar.js: shortening = seq('(', word_segment, ')')
-    Shortening(&'a str),
+    // ── Word structure (lexer-emitted fallback sub-tokens) ─────
+    // Shortening and stress are carried inside rich Word bodies, never as
+    // standalone tokens. Their body items are decoded by parse_word_body.
     /// grammar.js: lengthening = token(prec(5, /:{1,}/))
     Lengthening(&'a str),
-    // ── Stress markers (typed) ──
-    /// ˈ primary stress (U+02C8)
-    StressPrimary(&'a str),
-    /// ˌ secondary stress (U+02CC)
-    StressSecondary(&'a str),
     // ── Overlap points (typed, one variant per OverlapPointKind) ──
     /// ⌈ with optional digit
     OverlapTopBegin(&'a str),
@@ -286,14 +281,9 @@ pub enum Token<'a> {
     /// grammar.js: zero = token(prec(3, '0'))
     Zero(&'a str),
 
-    /// Rich other_spoken_event: &*SPK:word
-    /// Fields extracted by tags: speaker (t1..t2), text (t3..end); `lexeme` is
-    /// the whole match, for placement.
-    OtherSpokenEvent {
-        speaker: &'a str,
-        text: &'a str,
-        lexeme: &'a str,
-    },
+    /// Interposed-speaker prefix `&*SPK:`. The payload is the speaker code;
+    /// the following word is admitted by the ordinary word grammar.
+    OtherSpokenPrefix(Extracted<'a>),
 
     // ── Word suffixes ───────────────────────────────────────
     /// The `@` marker on a word, WITHOUT the `@`: `b`, `fp`, `z:grm`.

@@ -51,12 +51,30 @@ qualification.
 - `talkbank-transform` owns higher-level parsing/validation/conversion,
   transformation and runner workflows. Its default `validation-runner`
   feature adds the shared cache and channel dependencies.
-- The CLI and desktop consume transform workflows. The LSP directly uses
-  the primary parser, model and grammar services; it does not depend on the
-  transform runner or SQLite cache.
+- The CLI and desktop consume transform workflows. The CLI also uses the
+  Tree-sitter parser directly and owns a separate SQL receipt store for
+  pseudonymization; that store is not the validation cache. The LSP directly
+  uses the Tree-sitter backend, model and grammar services, plus transform
+  rewrite, rename and splice APIs with default features disabled. It does not
+  depend on the transform runner or SQLite cache.
 - `talkbank-llm` adapts the transform judgment-provider interface to HTTP for
   explicitly requested model-assisted work. Ordinary CHAT parsing/validation
   does not require a model service.
+
+`just deps-check` enforces direct-parent boundaries in `deny.toml`, treating
+unused wrapper warnings as failures. These allowlists cover the root workspace;
+the separate spec workspace is outside this check. Parser backends remain peers in normal
+code; cross-backend parity helpers and cache test support have dev-only
+exceptions checked by `xtask check-dependencies` against Cargo manifest
+metadata. That command also checks the separately selected LSP normal graph,
+including transform features, so workspace feature unification cannot hide an
+accidental runner dependency. Failed Cargo commands are errors, never evidence
+that a dependency is absent.
+
+These are dependency ownership rules, not a network sandbox. The model adapter
+owns `ureq`; CLI and desktop updater dependencies also use networking. The
+workspace tracks current stable Rust and does not maintain older-compiler
+compatibility.
 
 These selected **normal dependency** edges come from the package manifests;
 arrows point from consumer to dependency. Build/dev dependencies and other
@@ -78,6 +96,7 @@ flowchart TD
     L["talkbank-lsp"] --> P
     L --> M
     L --> G["tree-sitter-talkbank"]
+    L -->|"default features disabled"| X
     P --> G
 ```
 

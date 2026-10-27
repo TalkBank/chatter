@@ -222,3 +222,141 @@ fn validation_failure_stays_internal_even_with_unknown_provenance() {
         assert_eq!(retained.diagnostics(), expected);
     }
 }
+
+/// A backend choice cannot select a different source/model admission policy.
+#[test]
+fn both_backends_share_retained_admission_and_refusal() {
+    use talkbank_model::ChatParser;
+    use talkbank_parser_re2c::Re2cParser;
+    use talkbank_transform::parse_source_with_parser;
+
+    fn check(parser: &impl ChatParser) {
+        let errors = ErrorCollector::new();
+        let admitted = parse_validated_with_parser(
+            parser,
+            REFERENCE,
+            policy(),
+            TranscriptName::Anonymous,
+            &errors,
+        )
+        .expect("authored reference admission");
+        assert!(!errors.has_errors());
+        let preserved = parse_source_with_parser(parser, REFERENCE)
+            .admit(TranscriptName::Anonymous, &errors)
+            .expect("source admission with full alignment policy");
+        assert_eq!(preserved.source(), REFERENCE);
+        assert!(preserved.document().semantic_eq(admitted.document()));
+
+        let parse_errors = ErrorCollector::new();
+        let refusal = parse_source_with_parser(parser, PARSE_ERROR)
+            .admit(TranscriptName::Anonymous, &parse_errors)
+            .expect_err("authored malformed input");
+        let ValidatedParseError::Parse(product) = refusal else {
+            panic!("malformed source must retain parse failure");
+        };
+        assert!(product.has_error_diagnostics());
+        assert_eq!(product.diagnostics(), parse_errors.into_vec());
+
+        let model_errors = ErrorCollector::new();
+        let refusal = parse_validated_with_parser(
+            parser,
+            INVALID,
+            policy(),
+            TranscriptName::Anonymous,
+            &model_errors,
+        )
+        .expect_err("authored model invalidity");
+        assert!(matches!(refusal, ValidatedParseError::Validation(_)));
+        assert!(model_errors.has_errors());
+    }
+    check(&TreeSitterParser::new().expect("grammar"));
+    check(&Re2cParser::new());
+}
+
+/// Optional validation changes admission policy, never backend ownership or
+/// diagnostic delivery. Recovery is observable without treating it as validity.
+#[test]
+fn both_backends_preserve_optional_policy_and_streams() {
+    use talkbank_model::{ChatParser, ParseValidateOptions};
+    use talkbank_parser_re2c::Re2cParser;
+    use talkbank_transform::{
+        parse_and_validate_named, parse_and_validate_streaming_named,
+        parse_and_validate_streaming_with_parser, parse_and_validate_with_parser,
+    };
+    const MEDIA_MISMATCH: &str = include_str!(
+        "../../../../tests/error_corpus/validation_errors/E531_media_filename_mismatch.cha"
+    );
+    fn check(parser: &impl ChatParser) {
+        let parsed =
+            parse_and_validate_with_parser(parser, REFERENCE, ParseValidateOptions::default())
+                .expect("reference parse-only");
+        let errors = ErrorCollector::new();
+        let streamed = parse_and_validate_streaming_with_parser(
+            parser,
+            REFERENCE,
+            ParseValidateOptions::default(),
+            &errors,
+        )
+        .expect("reference streaming");
+        assert!(parsed.semantic_eq(&streamed));
+        assert!(errors.into_vec().is_empty());
+
+        let expected = ParseProduct::parse(parser, PARSE_ERROR);
+        let PipelineError::Parse(refused) =
+            parse_and_validate_with_parser(parser, PARSE_ERROR, ParseValidateOptions::default())
+                .expect_err("ordinary parse-only rejects parse errors")
+        else {
+            panic!("parse refusal must not become parser creation failure");
+        };
+        assert_eq!(refused.errors, expected.diagnostics());
+        let recovery_errors = ErrorCollector::new();
+        parse_and_validate_streaming_with_parser(
+            parser,
+            PARSE_ERROR,
+            ParseValidateOptions::default(),
+            &recovery_errors,
+        )
+        .expect("parse-only streaming retains the backend's recovered model");
+        assert_eq!(recovery_errors.into_vec(), expected.diagnostics());
+
+        let forwarded = ErrorCollector::new();
+        let product = ParseProduct::parse_streaming(parser, PARSE_ERROR, &forwarded);
+        assert_eq!(product.diagnostics(), forwarded.into_vec());
+        let discarded = ParseProduct::parse_streaming(parser, PARSE_ERROR, &NullErrorSink);
+        assert_eq!(discarded.diagnostics(), expected.diagnostics());
+        for source in [PARSE_ERROR, INVALID] {
+            assert!(
+                parse_and_validate_streaming_with_parser(
+                    parser,
+                    source,
+                    ParseValidateOptions::default().with_alignment(),
+                    &NullErrorSink,
+                )
+                .is_err(),
+                "required checks cannot be disabled by the sink"
+            );
+        }
+        parse_and_validate_with_parser(parser, INVALID, ParseValidateOptions::default())
+            .expect("parse-only does not claim model validity");
+
+        let name = TranscriptName::for_path(Path::new("different-transcript.cha"));
+        let options = ParseValidateOptions::default().with_validation();
+        let ordinary = parse_and_validate_named(parser, MEDIA_MISMATCH, options.clone(), name)
+            .expect_err("named validation observes the transcript identity");
+        let errors = ErrorCollector::new();
+        let streamed =
+            parse_and_validate_streaming_named(parser, MEDIA_MISMATCH, options, &errors, name)
+                .expect_err("streaming named validation preserves identity");
+        assert!(
+            ordinary
+                .diagnostics()
+                .expect("diagnostics")
+                .iter()
+                .any(|d| d.code == ErrorCode::MediaFilenameMismatch)
+        );
+        assert_eq!(ordinary.diagnostics(), streamed.diagnostics());
+        assert_eq!(streamed.diagnostics(), Some(errors.into_vec().as_slice()));
+    }
+    check(&TreeSitterParser::new().expect("grammar"));
+    check(&Re2cParser::new());
+}

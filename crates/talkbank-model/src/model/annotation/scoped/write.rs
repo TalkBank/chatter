@@ -18,7 +18,7 @@ impl ContentAnnotation {
     /// roundtrip tooling can keep corpus-specific extensions intact. Keeping
     /// formatting logic centralized here guarantees consistent rendering across
     /// main-tier, bracketed, and replacement contexts.
-    pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             ContentAnnotation::Error(error) => match error.code.as_ref() {
                 None => w.write_str("[*]"),
@@ -35,14 +35,22 @@ impl ContentAnnotation {
             }
             ContentAnnotation::OverlapBegin(overlap) => {
                 if let Some(idx) = overlap.index.as_ref() {
-                    write!(w, "[<{}]", idx)
+                    {
+                        w.write_str("[<")?;
+                        crate::model::WriteChat::write_chat(&idx.get(), w)?;
+                        w.write_str("]")
+                    }
                 } else {
                     w.write_str("[<]")
                 }
             }
             ContentAnnotation::OverlapEnd(overlap) => {
                 if let Some(idx) = overlap.index.as_ref() {
-                    write!(w, "[>{}]", idx)
+                    {
+                        w.write_str("[>")?;
+                        crate::model::WriteChat::write_chat(&idx.get(), w)?;
+                        w.write_str("]")
+                    }
                 } else {
                     w.write_str("[>]")
                 }

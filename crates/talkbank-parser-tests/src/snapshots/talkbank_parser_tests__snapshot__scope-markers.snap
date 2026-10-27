@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Child",
+            "details": {
+              "name": null,
+              "role": "Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           }
         ],
@@ -265,41 +268,184 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Multiple annotations retain order and extend one wrapper on each host.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "content": {
+                "content": [
+                  {
+                    "cleaned_text": "hello",
+                    "content": [
+                      {
+                        "content": "hello",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "hello",
+                    "type": "word"
+                  }
+                ]
+              },
+              "scoped_annotations": [
+                {
+                  "type": "uncertain"
+                },
+                {
+                  "type": "stressing"
+                }
+              ],
+              "type": "annotated_quotation"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "event_type": "laughs",
+              "scoped_annotations": [
+                {
+                  "type": "uncertain"
+                },
+                {
+                  "type": "stressing"
+                }
+              ],
+              "type": "annotated_event"
+            },
+            {
+              "cleaned_text": "hello",
+              "content": [
+                {
+                  "content": "hello",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "hello",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "scoped_annotations": [
+                {
+                  "type": "uncertain"
+                },
+                {
+                  "type": "stressing"
+                }
+              ],
+              "type": "annotated_action"
+            },
+            {
+              "cleaned_text": "hello",
+              "content": [
+                {
+                  "content": "hello",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "hello",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "content": {
+                "content": [
+                  {
+                    "cleaned_text": "hello",
+                    "content": [
+                      {
+                        "content": "hello",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "hello",
+                    "type": "word"
+                  }
+                ]
+              },
+              "kind": "partial",
+              "scoped_annotations": [
+                {
+                  "type": "uncertain"
+                },
+                {
+                  "type": "stressing"
+                }
+              ],
+              "type": "annotated_retrace"
+            },
+            {
+              "cleaned_text": "hello",
+              "content": [
+                {
+                  "content": "hello",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "hello",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "3;00.",
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Child",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Child"
-    },
-    "MOT": {
-      "birth_date": null,
-      "code": "MOT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Mother",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    }
-  }
+  ]
 }

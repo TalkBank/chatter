@@ -7,12 +7,12 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{AsRawNode, NonvocalNode};
-use crate::model::{NonvocalBegin, NonvocalEnd, NonvocalLabel, NonvocalSimple, UtteranceContent};
+use crate::model::UtteranceContent;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 
-use super::{delimiter, marker_label, span_of};
+use super::labeled_marker::MarkerSource;
 
 /// Parse one `nonvocal` node: a begin marker (`&{n=label`), an end marker
 /// (`&}n=label`) or a self-contained one (`&{n=label}`), over the generated
@@ -59,119 +59,16 @@ pub(crate) fn parse_nonvocal<'tree>(
         }
         crate::generated_traversal::SourceSlotView::Absent(_) => return ParseOutcome::rejected(),
     };
-    let built = match choice.view() {
+    let marker = match choice.view() {
         crate::generated_traversal::NonvocalChoiceBoundView::NonvocalBegin(node) => {
-            let Ok(associated) = crate::parser::typed_cst::report_admission(
-                crate::parser::typed_cst::extract_inner(node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let inner = associated.children();
-            surface_displaced(&inner.unexpected, "nonvocal_begin", source, errors);
-            // Every delimiter is checked (and reported) before the verdict;
-            // a marker whose shape is not intact is not built.
-            let intact = inner.unexpected.is_empty()
-                & delimiter(
-                    inner.child_0.slot(),
-                    "'&'",
-                    "nonvocal_begin",
-                    source,
-                    errors,
-                )
-                & delimiter(
-                    inner.child_1.slot(),
-                    "'{n='",
-                    "nonvocal_begin",
-                    source,
-                    errors,
-                );
-            let span = span_of(node.raw_node());
-            marker_label(associated.field_child_2().slot(), "nonvocal_begin", errors)
-                .filter(|_| intact)
-                .map(|label| {
-                    UtteranceContent::NonvocalBegin(NonvocalBegin::new(
-                        span,
-                        NonvocalLabel::new(label),
-                    ))
-                })
+            MarkerSource::NonvocalBegin(node)
         }
         crate::generated_traversal::NonvocalChoiceBoundView::NonvocalEnd(node) => {
-            let Ok(associated) = crate::parser::typed_cst::report_admission(
-                crate::parser::typed_cst::extract_inner(node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let inner = associated.children();
-            surface_displaced(&inner.unexpected, "nonvocal_end", source, errors);
-            // Every delimiter is checked (and reported) before the verdict;
-            // a marker whose shape is not intact is not built.
-            let intact = inner.unexpected.is_empty()
-                & delimiter(inner.child_0.slot(), "'&'", "nonvocal_end", source, errors)
-                & delimiter(
-                    inner.child_1.slot(),
-                    "'}n='",
-                    "nonvocal_end",
-                    source,
-                    errors,
-                );
-            let span = span_of(node.raw_node());
-            marker_label(associated.field_child_2().slot(), "nonvocal_end", errors)
-                .filter(|_| intact)
-                .map(|label| {
-                    UtteranceContent::NonvocalEnd(NonvocalEnd::new(span, NonvocalLabel::new(label)))
-                })
+            MarkerSource::NonvocalEnd(node)
         }
         crate::generated_traversal::NonvocalChoiceBoundView::NonvocalSimple(node) => {
-            let Ok(associated) = crate::parser::typed_cst::report_admission(
-                crate::parser::typed_cst::extract_inner(node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let inner = associated.children();
-            surface_displaced(&inner.unexpected, "nonvocal_simple", source, errors);
-            // Every delimiter is checked (and reported) before the verdict;
-            // a marker whose shape is not intact is not built.
-            let intact = inner.unexpected.is_empty()
-                & delimiter(
-                    inner.child_0.slot(),
-                    "'&'",
-                    "nonvocal_simple",
-                    source,
-                    errors,
-                )
-                & delimiter(
-                    inner.child_1.slot(),
-                    "'{n='",
-                    "nonvocal_simple",
-                    source,
-                    errors,
-                )
-                & delimiter(
-                    inner.child_3.slot(),
-                    "'}'",
-                    "nonvocal_simple",
-                    source,
-                    errors,
-                );
-            let span = span_of(node.raw_node());
-            marker_label(associated.field_child_2().slot(), "nonvocal_simple", errors)
-                .filter(|_| intact)
-                .map(|label| {
-                    UtteranceContent::NonvocalSimple(NonvocalSimple::new(
-                        span,
-                        NonvocalLabel::new(label),
-                    ))
-                })
+            MarkerSource::NonvocalSimple(node)
         }
     };
-    ParseOutcome::from(built)
+    marker.parse(errors)
 }

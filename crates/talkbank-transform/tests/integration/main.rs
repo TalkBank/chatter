@@ -44,6 +44,7 @@ mod render_parity;
 mod sanitize_tests;
 mod speaker_id_tests;
 mod splice_catalog_tests;
+mod splice_preservation;
 mod transcript_merge_tests;
 #[cfg(feature = "validation-runner")]
 mod validation_runner_tests;

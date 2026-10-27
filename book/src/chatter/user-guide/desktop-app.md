@@ -132,6 +132,10 @@ Three ways to start validating:
 2. **Choose Folder**: opens a folder picker; validates all `.cha` files recursively
 3. **Drag and drop**: drag one `.cha` file or one folder onto the app window
 
+Finish or cancel an open picker before selecting another target. If validation
+starts while a picker is open, its later selection is ignored; it cannot replace
+the running validation.
+
 When idle, if you've previously validated a target, the drop zone shows
 **"Last: corpus/reference/, Re-validate?"** as a clickable shortcut.
 
@@ -258,7 +262,11 @@ See [Headers](../../chat-format/headers.md) for normalization details.
 
 Chatter follows your system appearance by default. A **System / Light / Dark**
 toggle in the drop zone area lets you override. Your preference is remembered
-across sessions.
+across sessions when local preference storage is available. If reading or saving
+a preference fails, Chatter shows a message and keeps working with the current
+session setting. This also applies to the recent target and welcome screen;
+a failed save does not prevent validation from starting. An unreadable or
+unrecognized saved value uses the initial setting with a visible notice.
 
 The dark palette uses muted Apple-style colors, readable miette error
 highlighting on dark backgrounds.
@@ -279,7 +287,7 @@ messages.
 | Action | Where | What it does |
 |--------|-------|--------------|
 | **Re-validate** | Status bar / last-target hint | Re-run validation on the same target (picks up edits) |
-| **Cancel** | Status bar (during validation) | Stop the current run |
+| **Cancel** | Status bar (startup, discovery or validation) | Request cancellation of the current run |
 | **Export** | Status bar | Save results as JSON or plain text via a save dialog |
 | **Open in CLAN** | Per-error button | Opens the file at the error location in the CLAN editor |
 | **Copy** | Per-error button | Copies the plain-text error to clipboard |
@@ -299,6 +307,17 @@ diagnostics. Read, parse and roundtrip failure reasons are included even when
 there is no CHAT diagnostic card. Copying one card exports only that diagnostic,
 not the outcome of the whole file or folder.
 
+The selected filename determines the format: `.json` is recognized regardless
+of letter case (`.JSON` and `.JsOn` also produce JSON). Other filenames produce
+plain text; use `.txt` to make that choice clear. The selected path is preserved
+as entered. Cancelling the dialog writes nothing.
+
+Choose a separate report destination. Export refuses a destination that is any
+reported source file, including valid files hidden from the tree and aliases
+through symbolic or hard links. If a source file has disappeared or its identity
+cannot be checked, export fails without replacing an existing report. An existing
+report distinct from the sources can still be replaced.
+
 A cancelled run contains only the results obtained before cancellation. An
 export is a record of those results, not proof that every requested file was
 checked. Retain the run's completion/cancellation context with the report;
@@ -311,7 +330,7 @@ population before making a whole-folder validity claim.
 | Shortcut | Action |
 |----------|--------|
 | Ctrl+R / Cmd+R | Re-validate |
-| Escape | Cancel running validation |
+| Escape | Request cancellation during startup, discovery or validation |
 
 All other navigation is mouse-driven (click files, scroll errors).
 
@@ -352,6 +371,10 @@ discovery, which can take time on a large folder. If the app sits on "Starting" 
 than a few seconds it says so in the status bar, and that message is worth
 quoting in a bug report.
 
+Cancel and Escape remain available during startup and discovery. Cancellation
+can take time while startup is pending; wait for the final status before
+treating the run as stopped.
+
 ### ETA
 
 After 5 or more files have been processed, the status bar shows an estimated
@@ -367,16 +390,17 @@ No notification is not evidence that validation failed or never finished.
 ### First launch
 
 On first launch, an onboarding overlay explains the four main interactions: drag
-files, error panel, keyboard shortcuts, and export. Dismiss with "Got it", it
-won't appear again.
+files, error panel, keyboard shortcuts, and export. Dismiss with "Got it". When
+that choice can be saved, the overlay will stay dismissed on later launches.
+If saving fails, it stays dismissed for the current session and Chatter shows
+a message.
 
 ## CLI Bundling
 
 Install the CLI separately from the same release when you need scripted
 validation or repairs. The current desktop bundle configuration does not ship a
-CLI resource or an **Install CLI Command** menu item. A backend installation
-command is not evidence that a released bundle contains a CLI. Bundling remains
-future work, not a prerequisite for using desktop validation.
+CLI resource, an **Install CLI Command** menu item, or an installation command.
+Bundling remains future work, not a prerequisite for using desktop validation.
 
 ## Troubleshooting and reporting a problem
 
@@ -416,7 +440,7 @@ apps/chatter-desktop/
       main.rs         Bin entry, calls chatter_desktop_lib::run()
       lib.rs          Tauri app setup (Builder + module wiring)
       protocol.rs     Shared command/event names + request types
-      commands.rs     validate, cancel, open_in_clan, export, reveal, install_cli
+      commands.rs     validate, cancel, open_in_clan, export, reveal
       events.rs       ValidationEvent → frontend event bridge
       validation.rs   Desktop validation orchestration for one target
   src/                React + TypeScript frontend
@@ -433,8 +457,22 @@ on-disk cache used by the CLI and TUI. Events flow over crossbeam channels to
 the Rust side, then are serialized to JSON and emitted to the frontend via
 Tauri's event bridge.
 
-Cancellation uses `ArcSwapOption` for lock-free atomic swap of the cancel
-sender, no mutex.
+During validation, file results appear in batches on animation frames or after
+50 files complete. Completion and cancellation flush any remaining results
+immediately. Every received file result and diagnostic is retained in order.
+
+Each validation request has its own identity. Backend events and cancellation
+requests carry that identity, so a previous run cannot update or cancel its
+replacement. Startup owns a pending session before opening the cache; it must
+retain ownership to install its canceller. Completion releases only that same
+session. The session slot uses `ArcSwapOption`, without a mutex.
+
+The frontend owns the run handle immediately, including while event subscription
+or startup is pending. Reset and unmount dispose that handle; late subscription
+completion removes its listener, and a request already issued is cancelled after
+startup settles. Issued backend requests preserve their order; a disposed
+subscription that never issued a command does not delay the replacement. Queued
+callbacks and late failures from a replaced run cannot change the newer run's state.
 
 The frontend keeps Tauri-specific code confined to `src/runtime/tauriTransport.ts`.
 React components and hooks consume narrower capabilities (`validationRunner`,

@@ -51,6 +51,15 @@ impl TreeSitterParser {
     /// - The main tier node contains unrecoverable CST errors.
     /// - No main tier line is found in the input.
     pub fn parse_utterance(&self, input: &str) -> ParseResult<Utterance> {
+        self.parse_single_utterance(input)
+            .map(talkbank_model::SingleUtterance::into_utterance)
+    }
+
+    /// Keep document semantics attached through extraction and coordinate rebasing.
+    pub(crate) fn parse_single_utterance(
+        &self,
+        input: &str,
+    ) -> ParseResult<talkbank_model::SingleUtterance> {
         parse_utterance::parse_utterance(self, input)
     }
 

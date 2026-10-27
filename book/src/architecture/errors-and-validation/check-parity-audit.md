@@ -465,9 +465,9 @@ Fixture: `CHECK_069_missing_utf8.cha`. Chatter regression codes: E503.
 
 ### CHECK 70 — parity
 
-A speaker tier containing no text word (only delimiters/pauses/brackets and not the '0' placeholder) at tier end (check.cpp 4984, isTextFound never set). Fixture '*CHI:\t.'; chatter rejects with three codes including E306 (no meaningful content). SCOPE (2026-07-24, empirically verified live): CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances; both validators ACCEPT those shapes, so the old 'pause-only utterance' policy-gap framing was wrong.
+A speaker tier containing no text word (only delimiters/pauses/brackets and not the '0' placeholder) at tier end (check.cpp 4984, isTextFound never set). Fixture '*CHI:\t.'; chatter rejects with E342 for required-content recovery. A MISSING separator is not materialized to trigger E253/E306; authored separator-only turns retain those validation findings. SCOPE (2026-07-24, empirically verified live): CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances; both validators ACCEPT those shapes, so the old 'pause-only utterance' policy-gap framing was wrong.
 
-Fixture: `CHECK_070_no_text.cha`. Chatter regression codes: E253, E306, E342.
+Fixture: `CHECK_070_no_text.cha`. Chatter regression codes: E342.
 
 ### CHECK 70 — parity
 

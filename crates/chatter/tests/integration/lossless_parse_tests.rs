@@ -26,7 +26,7 @@ use std::path::PathBuf;
 
 use talkbank_parser_tests::test_error::TestError;
 
-use crate::common::{CliHarness, combined_output, stdout_string, write_fixture};
+use crate::common::{CliHarness, combined_output, write_fixture};
 
 /// A minimal CHAT header for a single-language, single-participant fixture.
 const HEADER: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n";
@@ -39,40 +39,33 @@ fn healthy_then_diagnostic_body() -> String {
     format!("{HEADER}*CHI:\thello world .\n*CHI:\tgoodbye .\n%mor:\t|goodbye .\n@End\n")
 }
 
-/// `chatter debug sanitize` on a single file: the FIRST utterance is
-/// well-formed and LATER content is not. The command must still produce
-/// its result for the healthy region (the sanitized first utterance),
-/// rather than aborting the whole file over the later diagnostic, and must
-/// report the diagnostic rather than silently dropping it.
+/// A healthy earlier region does not authorize publishing a document whose
+/// later raw MOR cannot be sanitized through typed lexical fields.
 #[test]
-fn sanitize_produces_healthy_region_and_reports_the_rest() -> Result<(), TestError> {
+fn sanitize_refuses_unparsed_mor_after_healthy_content() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let input = healthy_then_diagnostic_body();
     let fixture = write_fixture(harness.home_dir(), "mixed.cha", &input)?;
-
-    let output = harness.run_output(&["debug", "sanitize", fixture.to_str().unwrap()])?;
-    assert!(
-        output.status.success(),
-        "sanitize must still succeed for the healthy region; output: {}",
+    let output = harness.run_output(&[
+        "experimental",
+        "transform",
+        "redact",
+        fixture.to_str().unwrap(),
+    ])?;
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
         combined_output(&output)
     );
-
-    // Sanitize replaces word content with `wN` placeholders (that is the
-    // whole point of the tool), so "healthy region survives" here means
-    // the first utterance still comes out as a normal two-word sanitized
-    // utterance (`w1 w2 .`), not that its literal text is preserved.
-    let sanitized = stdout_string(&output);
+    assert!(output.stdout.is_empty(), "no partial sanitized document");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("diagnostic"), "{stderr}");
     assert!(
-        sanitized.contains("*CHI:\tw1 w2 ."),
-        "the healthy first utterance must still be sanitized and emitted, got:\n{sanitized}"
+        stderr.contains("cannot sanitize unparsed morphology"),
+        "{stderr}"
     );
-
-    let combined = combined_output(&output);
-    assert!(
-        combined.contains("diagnostic"),
-        "the later diagnostic must be reported, not silently dropped, got:\n{combined}"
-    );
-
+    assert_eq!(std::fs::read(&fixture)?, input.as_bytes());
     Ok(())
 }
 
@@ -109,7 +102,7 @@ fn fix_s_processes_the_second_file_after_a_diagnostic_in_the_first() -> Result<(
 
     let paths: Vec<PathBuf> = vec![first, second.clone()];
     let path_args: Vec<&str> = paths.iter().map(|p| p.to_str().unwrap()).collect();
-    let mut args = vec!["debug", "fix-s"];
+    let mut args = vec!["experimental", "transform", "language-runs", "--apply"];
     args.extend(path_args);
 
     let run = harness.run_output(&args)?;

@@ -68,12 +68,10 @@ impl SemanticTokensProvider {
             if token.end <= start_offset || token.start >= end_offset {
                 continue;
             }
-            let mut offset = token.start;
-            for part in text[token.start..token.end].split_inclusive('\n') {
-                let content = part.strip_suffix('\n').unwrap_or(part);
-                let content = content.strip_suffix('\r').unwrap_or(content);
+            for part in crate::backend::utils::protocol_lines(&text[token.start..token.end]) {
+                let content = part.text();
                 if !content.is_empty() {
-                    let position = index.offset_to_position(offset);
+                    let position = index.offset_to_position(token.start + part.start());
                     lsp_tokens.push(SemanticToken {
                         delta_line: position.line - previous.line,
                         delta_start: if position.line == previous.line {
@@ -87,7 +85,6 @@ impl SemanticTokensProvider {
                     });
                     previous = position;
                 }
-                offset += part.len();
             }
         }
         Ok(lsp_tokens)

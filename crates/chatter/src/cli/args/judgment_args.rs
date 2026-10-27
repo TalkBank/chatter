@@ -4,15 +4,9 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use super::cli_types::JudgmentMode;
-
 /// Engine, provider connection, and optional context for `speaker-id`.
 #[derive(Args)]
 pub struct JudgmentArgs {
-    /// How the judgment is powered (deterministic or holistic LLM).
-    #[arg(long, value_enum, default_value_t = JudgmentMode::Deterministic)]
-    pub judgment: JudgmentMode,
-
     /// LLM endpoint base URL (OpenAI-compatible), e.g.
     /// http://localhost:8000/v1. Env: CHATTER_LLM_ENDPOINT. Required
     /// for --judgment holistic.

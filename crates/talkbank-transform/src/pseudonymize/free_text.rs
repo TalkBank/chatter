@@ -251,6 +251,9 @@ fn header_is_prose(header: &Header) -> bool {
         | Header::Begin
         | Header::End
         | Header::Languages { .. }
+        | Header::UnparsedLanguages(_)
+        | Header::UnparsedParticipants(_)
+        | Header::UnparsedID(_)
         | Header::Participants { .. }
         | Header::ID(_)
         | Header::Date { .. }
@@ -307,9 +310,18 @@ fn tier_is_prose(tier: &DependentTier) -> bool {
         | DependentTier::Modsyl(_)
         | DependentTier::Phosyl(_)
         | DependentTier::Phoaln(_)
+        | DependentTier::UnparsedPho(_)
+        | DependentTier::UnparsedMod(_)
+        | DependentTier::UnparsedSin(_)
+        | DependentTier::UnparsedWor(_)
+        | DependentTier::UnparsedPhoaln(_)
         | DependentTier::Xphoint(_)
+        | DependentTier::UnparsedText(_)
+        | DependentTier::UnparsedXphoint(_)
         | DependentTier::Tim(_)
         | DependentTier::Wor(_)
+        | DependentTier::UnparsedMor(_)
+        | DependentTier::UnparsedGra(_)
         | DependentTier::Unsupported(_) => false,
     }
 }

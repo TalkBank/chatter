@@ -30,7 +30,7 @@ The actual root is `source_file`, whose alternatives include `full_document`
 and selected fragments. A complete-document parse nests its headers and
 utterances under `full_document`; it does not produce a root named `document`.
 
-Use an authored [reference transcript](../corpus/reference/core/basic-conversation.cha)
+Use an authored [reference transcript](https://github.com/TalkBank/chatter/blob/main/corpus/reference/core/basic-conversation.cha)
 to inspect the current CST rather than copying a handwritten tree into tests.
 From this directory, after the development prerequisites are installed:
 
@@ -42,9 +42,9 @@ Inspect the output for its root, selected structure and recovery nodes.
 This command does not run Chatter's model validation. Whitespace is explicit
 in the grammar (`extras: []`), but not every source byte has a distinct named
 node. Keep the original source alongside the CST. The companion
-[`talkbank-parser`](../crates/talkbank-parser/README.md) lowers that evidence
+[`talkbank-parser`](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-parser/README.md) lowers that evidence
 into a typed model; see the [grammar architecture](GRAMMAR.md) and
-[parser/model contracts](../book/src/architecture/parser-model-contracts.md).
+[parser/model contracts](https://github.com/TalkBank/chatter/blob/main/book/src/architecture/parser-model-contracts.md).
 
 ## Bindings
 
@@ -104,8 +104,8 @@ Several files in this repository are generated and should not be edited by hand:
 Grammar edits also affect generated node types, traversal consumers and other
 derived artifacts. Use the consolidated `just regen` recipe from the repository
 root, with prerequisites and review steps from
-[Grammar Workflow](../book/src/contributing/grammar-workflow.md) and
-[Spec Workflow](../book/src/contributing/spec-workflow.md). Then verify the
+[Grammar Workflow](https://github.com/TalkBank/chatter/blob/main/book/src/contributing/grammar-workflow.md) and
+[Spec Workflow](https://github.com/TalkBank/chatter/blob/main/book/src/contributing/spec-workflow.md). Then verify the
 affected grammar/parser/model contracts. Running only `tree-sitter generate`
 and `tree-sitter test` does not establish consumer currency or release readiness.
 

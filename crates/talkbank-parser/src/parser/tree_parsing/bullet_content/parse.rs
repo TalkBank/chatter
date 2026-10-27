@@ -4,15 +4,13 @@ use crate::generated_traversal::{Absence, Never, NodeSlot};
 use crate::generated_traversal::{
     AsRawNode, BulletNode, InlinePicNode, Positioned, SourceBound, SourceBoundKind, SourceField,
     SourceRecovery, SourceSlotView, SpaceNode, TextSegmentNode, TextWithBulletsAndPicsChild0Choice,
-    TextWithBulletsAndPicsChild0ChoiceSourceView, TextWithBulletsAndPicsChild0MissingSourceView,
-    TextWithBulletsAndPicsChild1Choice, TextWithBulletsAndPicsChild1ChoiceSourceView,
-    TextWithBulletsAndPicsChild1MissingSourceView, TextWithBulletsChild0Choice,
-    TextWithBulletsChild0ChoiceSourceView, TextWithBulletsChild0MissingSourceView,
-    TextWithBulletsChild1Choice, TextWithBulletsChild1ChoiceSourceView,
-    TextWithBulletsChild1MissingSourceView,
+    TextWithBulletsAndPicsChild0ChoiceSourceView, TextWithBulletsAndPicsChild1Choice,
+    TextWithBulletsAndPicsChild1ChoiceSourceView, TextWithBulletsChild0Choice,
+    TextWithBulletsChild0ChoiceSourceView, TextWithBulletsChild1Choice,
+    TextWithBulletsChild1ChoiceSourceView,
 };
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
 use crate::parser::typed_cst::AnyKindSlot;
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
@@ -29,10 +27,10 @@ use super::{BulletTextNode, inline_bullet::parse_inline_bullet, inline_pic::pars
 pub fn parse_bullet_content(
     typed: BulletTextNode<'_, '_>,
     errors: &impl ErrorSink,
-) -> Result<BulletContent, crate::CstFailure> {
+) -> Result<ParseOutcome<BulletContent>, crate::CstFailure> {
     let mut sink = SegmentSink {
         errors,
-        segments: SmallVec::new(),
+        segments: ParseOutcome::Parsed(SmallVec::new()),
     };
     match typed {
         BulletTextNode::Text(node) => {
@@ -52,86 +50,36 @@ pub fn parse_bullet_content(
             sink.displaced(children.field_unexpected(), "text_with_bullets_and_pics");
         }
     }
-    Ok(BulletContent::new(sink.segments.into_vec()))
-}
-
-/// A bullet-text position's MISSING placeholder, by kind. tree-sitter inserts
-/// a MISSING node only for a terminal, and a choice owns a MISSING head only
-/// of a single-node alternative's kind; for all four bullet-text positions the
-/// generator found exactly these two. Until 2026-10-20 the placeholder was a
-/// raw node re-read as text, bullet, picture, continuation or space, with an
-/// "unexpected node" fallback; a MISSING picture or space is now matched at
-/// its own alternative's position instead, and a bullet is a rule tree-sitter
-/// never inserts MISSING.
-enum Placeholder<'value, 'tree, 'source> {
-    /// A MISSING text segment: its text is empty.
-    TextSegment(SourceField<'value, 'tree, 'source, TextSegmentNode<'tree>>),
-    /// A MISSING continuation.
-    Continuation,
-}
-
-/// A bullet-text position's generated missing view, read as a [`Placeholder`].
-/// One exhaustive conversion per position, so a kind added to a position's
-/// heads by a grammar change fails to compile here.
-trait IntoPlaceholder<'value, 'tree, 'source> {
-    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source>;
-}
-
-impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
-    for TextWithBulletsChild0MissingSourceView<'value, 'tree, 'source>
-{
-    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
-        match self {
-            Self::TextSegment(text) => Placeholder::TextSegment(text),
-            Self::Continuation(_) => Placeholder::Continuation,
-        }
-    }
-}
-
-impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
-    for TextWithBulletsChild1MissingSourceView<'value, 'tree, 'source>
-{
-    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
-        match self {
-            Self::TextSegment(text) => Placeholder::TextSegment(text),
-            Self::Continuation(_) => Placeholder::Continuation,
-        }
-    }
-}
-
-impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
-    for TextWithBulletsAndPicsChild0MissingSourceView<'value, 'tree, 'source>
-{
-    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
-        match self {
-            Self::TextSegment(text) => Placeholder::TextSegment(text),
-            Self::Continuation(_) => Placeholder::Continuation,
-        }
-    }
-}
-
-impl<'value, 'tree, 'source> IntoPlaceholder<'value, 'tree, 'source>
-    for TextWithBulletsAndPicsChild1MissingSourceView<'value, 'tree, 'source>
-{
-    fn into_placeholder(self) -> Placeholder<'value, 'tree, 'source> {
-        match self {
-            Self::TextSegment(text) => Placeholder::TextSegment(text),
-            Self::Continuation(_) => Placeholder::Continuation,
-        }
-    }
+    Ok(sink
+        .segments
+        .map(|segments| BulletContent::new(segments.into_vec())))
 }
 
 /// Owns the source-order segment accumulation; no intermediate flattened AST.
 struct SegmentSink<'errors, E> {
     errors: &'errors E,
-    segments: SmallVec<[BulletContentSegment; 4]>,
+    segments: ParseOutcome<SmallVec<[BulletContentSegment; 4]>>,
 }
 
 impl<E: ErrorSink> SegmentSink<'_, E> {
+    /// Rejection discards the incomplete assembly and cannot be reversed by
+    /// later siblings. Traversal continues so their diagnostics remain visible.
+    fn push(&mut self, segment: BulletContentSegment) {
+        match &mut self.segments {
+            ParseOutcome::Parsed(segments) => segments.push(segment),
+            ParseOutcome::Rejected => {}
+        }
+    }
+
+    fn missing(&mut self, node: Node<'_>, source: &str) {
+        check_not_missing(node, source, self.errors, "bullet_content");
+        self.segments = ParseOutcome::Rejected;
+    }
+
     fn text<'tree>(&mut self, typed: SourceBound<'tree, '_, TextSegmentNode<'tree>>) {
         let text = normalize_free_text_spacing(typed.text());
         if !text.is_empty() {
-            self.segments.push(BulletContentSegment::text(text));
+            self.push(BulletContentSegment::text(text));
         }
     }
 
@@ -139,15 +87,22 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
         &mut self,
         typed: SourceBound<'tree, '_, BulletNode<'tree>>,
     ) -> Result<(), crate::CstFailure> {
-        if let ParseOutcome::Parsed((start, end)) = parse_inline_bullet(typed, self.errors)? {
-            self.segments.push(BulletContentSegment::bullet(start, end));
-        }
+        let segment = match parse_inline_bullet(typed, self.errors)? {
+            ParseOutcome::Parsed((start, end)) => BulletContentSegment::bullet(start, end),
+            ParseOutcome::Rejected => {
+                BulletContentSegment::UnparsedBullet(talkbank_model::UnparsedBullet::new(
+                    crate::parser::node_span::span_of(typed.raw_node()),
+                    typed.text(),
+                ))
+            }
+        };
+        self.push(segment);
         Ok(())
     }
 
     fn picture<'tree>(&mut self, typed: SourceBound<'tree, '_, InlinePicNode<'tree>>) {
         if let ParseOutcome::Parsed(filename) = parse_inline_pic(typed, self.errors) {
-            self.segments.push(filename.into_segment());
+            self.push(filename.into_segment());
         }
     }
 
@@ -171,23 +126,6 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
         }
     }
 
-    /// A MISSING placeholder keeps its kind: an empty text segment (which
-    /// pushes nothing) or a continuation. The whole-tree backstop diagnoses
-    /// the recovery node. The continuation still becomes a model segment, as
-    /// it always did; `@Comment:\t` with an empty body reaches it. That is a
-    /// model value built for a recovery node, recorded with the coverage
-    /// drive to be decided from a spec example, not changed here.
-    fn placeholder(
-        &mut self,
-        placeholder: Placeholder<'_, '_, '_>,
-    ) -> Result<(), crate::CstFailure> {
-        match placeholder {
-            Placeholder::TextSegment(text) => self.text(text.read()?),
-            Placeholder::Continuation => self.segments.push(BulletContentSegment::continuation()),
-        }
-        Ok(())
-    }
-
     fn choice<'value, 'tree: 'value, 'source, T: 'value, M, A: Absence>(
         &mut self,
         slot: SourceField<'value, 'tree, 'source, NodeSlot<T, M, Node<'tree>, Never, A>>,
@@ -198,11 +136,11 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
     ) -> Result<(), crate::CstFailure>
     where
         M: SourceRecovery<'value, 'tree, 'source>,
-        M::View: IntoPlaceholder<'value, 'tree, 'source>,
+        M::View: AsRawNode<'tree>,
     {
         match slot.view() {
             SourceSlotView::Present(choice) => push(choice, self)?,
-            SourceSlotView::Missing(view) => self.placeholder(view.into_placeholder())?,
+            SourceSlotView::Missing(view) => self.missing(view.raw_node(), slot.source()),
             SourceSlotView::Error(node) => self.unexpected(node),
             SourceSlotView::Unexpected(never) => match never {},
             SourceSlotView::Absent(_) => {}
@@ -210,11 +148,8 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
         Ok(())
     }
 
-    /// Push a leaf slot's node, reading a MISSING placeholder of the leaf's
-    /// kind as that kind (its text is empty). Generic over the `Missing`
-    /// payload, bounded by exactly that reading: a placeholder whose source
-    /// view is a field of `T`, which a plain kind slot and a narrowed one read
-    /// under the broad kind proof both provide.
+    /// Only present leaves may contribute content. A missing terminal is
+    /// diagnostic evidence, never the empty spelling of that terminal.
     fn leaf<'value, 'tree: 'value, 'source, T: SourceBoundKind<'tree>, M, Recovery>(
         &mut self,
         slot: SourceField<'value, 'tree, 'source, AnyKindSlot<T, M, Recovery>>,
@@ -230,9 +165,8 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
             >,
     {
         match slot.view() {
-            SourceSlotView::Present(node) | SourceSlotView::Missing(node) => {
-                push(self, node.read()?)?;
-            }
+            SourceSlotView::Present(node) => push(self, node.read()?)?,
+            SourceSlotView::Missing(node) => self.missing(node.raw_node(), slot.source()),
             SourceSlotView::Error(node) => self.unexpected(node),
             SourceSlotView::Absent(_) => {}
         }
@@ -277,7 +211,7 @@ macro_rules! text_choices {
                     sink.leaf(group.field_child_0().slot(), SegmentSink::bullet)?;
                     sink.spaces(group.field_child_1().slot(), group.field_unexpected());
                 }
-                $view::Continuation(_) => sink.segments.push(BulletContentSegment::continuation()),
+                $view::Continuation(_) => sink.push(BulletContentSegment::continuation()),
                 $(
                     $view::$picture(group) => {
                         sink.leaf(group.field_child_0().slot(), |sink, picture| {

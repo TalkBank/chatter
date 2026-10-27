@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
-assertion_line: 92
 expression: result.unwrap()
 ---
 speaker:
@@ -63,7 +62,7 @@ tier_body:
         marker: "[//]"
         annotations: []
     - Word:
-        category: Nonword
+        category: nonword
         body:
           - Text: xi
         form_marker: ~
@@ -125,7 +124,7 @@ tier_body:
         annotations: []
         raw_text: 台子
   terminator:
-    Period: "."
+    type: period
   postcodes: []
   media_bullet:
     raw_text: "\u0015428510_429651\u0015"

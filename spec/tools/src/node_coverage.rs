@@ -12,10 +12,10 @@
 //!
 //! The exclusion list was `&[&str]` with its reasons in comment groups. That
 //! is fine for reading and useless for checking, and it hid a question nobody
-//! could ask: three of the missing types (`blank_line`, `illegal_curly_quote`,
-//! `sep_trailing_space`) are not gaps at all. They are nodes the grammar
+//! could ask: some missing types (`blank_line`, `illegal_curly_quote`,
+//! `repeated_form_marker`) are not gaps at all. They are nodes the grammar
 //! carries so the parser can DETECT invalid CHAT, and each has an error code
-//! (E747, E256, E758). A valid reference corpus cannot contain them.
+//! (E747, E256, E203). A valid reference corpus cannot contain them.
 //!
 //! Once that reason is data rather than prose, it implies a check that did not
 //! exist: if an invalid-by-construction node ever DOES appear in the reference
@@ -34,24 +34,37 @@ use walkdir::WalkDir;
 
 use crate::repo_paths::RepoRoot;
 
-/// Node types the grammar carries so the parser can DETECT invalid CHAT, with
-/// the code the validator reports. A VALID reference corpus cannot contain
-/// them, so an appearance is a defect in the corpus rather than new coverage.
-///
-/// Two slices rather than one list of `(name, ExclusionReason)`: the KIND is
-/// the only part any code reads, and which slice an entry sits in says it. The
-/// enum's `note` field was never read by anything, so eight identical
-/// "strict+catch-all generic variant" literals were compiled in as write-only
-/// data, which is exactly the prose-as-data this module's own doc argues
-/// against.
-const INVALID_BY_CONSTRUCTION: &[(&str, &str)] = &[
-    ("blank_line", "E747"),
-    ("illegal_curly_quote", "E256"),
-    // A word carrying two `@` runs (`hello@@c`). The grammar was widened to
-    // form the word so the validator can NAME the defect, rather than letting
-    // the utterance fall to ERROR-node recovery and a generic E316.
-    ("repeated_form_marker", "E203"),
-    ("sep_trailing_space", "E758"),
+/// Syntax whose occurrence is invalid independently of document options.
+/// Context-dependent rules cannot be reported through this closed vocabulary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum ForbiddenSyntax {
+    BlankLine,
+    CurlyQuote,
+    RepeatedFormMarker,
+}
+
+impl ForbiddenSyntax {
+    fn kind(self) -> &'static str {
+        match self {
+            Self::BlankLine => "blank_line",
+            Self::CurlyQuote => "illegal_curly_quote",
+            Self::RepeatedFormMarker => "repeated_form_marker",
+        }
+    }
+
+    fn code(self) -> &'static str {
+        match self {
+            Self::BlankLine => "E747",
+            Self::CurlyQuote => "E256",
+            Self::RepeatedFormMarker => "E203",
+        }
+    }
+}
+
+const INVALID_BY_CONSTRUCTION: &[ForbiddenSyntax] = &[
+    ForbiddenSyntax::BlankLine,
+    ForbiddenSyntax::CurlyQuote,
+    ForbiddenSyntax::RepeatedFormMarker,
 ];
 
 /// Nodes absent from the valid reference corpus, pending policy-aware review.
@@ -95,16 +108,29 @@ const NOT_YET_IN_CORPUS: &[&str] = &[
     "unsupported_tier_prefix",
 ];
 
-/// A node type that must not appear in a valid corpus, and did.
-///
-/// Carries its own evidence. As a bare `(String, &str)` tuple the consumer had
-/// to go back to a separate map for the file list and fall back to "unknown"
-/// when the lookup missed, so the finding could be reported without the one
-/// fact an operator needs.
+/// An unconditional syntax finding with at least one observed source file.
+/// Its diagnostic code is derived from the closed syntax kind, never paired
+/// independently or recovered from a second map with an empty fallback.
 pub struct InvalidNodePresent {
-    pub kind: &'static str,
-    pub code: &'static str,
-    pub files: Vec<String>,
+    syntax: ForbiddenSyntax,
+    first_file: String,
+    additional_files: Vec<String>,
+}
+
+impl std::fmt::Display for InvalidNodePresent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} ({}) in: {}",
+            self.syntax.kind(),
+            self.syntax.code(),
+            self.first_file
+        )?;
+        for file in &self.additional_files {
+            write!(f, ", {file}")?;
+        }
+        Ok(())
+    }
 }
 
 /// One entry from `node-types.json`.
@@ -236,12 +262,7 @@ impl Report {
                 self.invalid_present.len()
             ));
             for found in &self.invalid_present {
-                out.push_str(&format!(
-                    "\n  {} ({}) in: {}",
-                    found.kind,
-                    found.code,
-                    found.files.join(", ")
-                ));
+                out.push_str(&format!("\n  {found}"));
             }
         }
         if !self.stale_exclusions.is_empty() {
@@ -294,10 +315,9 @@ pub fn run(request: &Request) -> Result<Report, String> {
         ));
     }
 
-    let invalid: BTreeMap<&str, &str> = INVALID_BY_CONSTRUCTION.iter().copied().collect();
-    let excused: BTreeSet<&str> = invalid
-        .keys()
-        .copied()
+    let excused: BTreeSet<&str> = INVALID_BY_CONSTRUCTION
+        .iter()
+        .map(|syntax| syntax.kind())
         .chain(NOT_YET_IN_CORPUS.iter().copied())
         .collect();
 
@@ -317,7 +337,7 @@ pub fn run(request: &Request) -> Result<Report, String> {
     // the only ones any message names a file for. The predecessor indexed every
     // type against every file, with a linear scan per visit to dedupe, to serve
     // a branch that fires only when the corpus is broken.
-    let mut invalid_files: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
+    let mut invalid_files: BTreeMap<ForbiddenSyntax, InvalidNodePresent> = BTreeMap::new();
     let mut files_parsed = 0usize;
     let mut files_with_errors = 0usize;
 
@@ -354,11 +374,22 @@ pub fn run(request: &Request) -> Result<Report, String> {
                     path.display()
                 )
             })?;
-            if let Some((&canonical_kind, _)) = invalid.get_key_value(kind) {
-                invalid_files
-                    .entry(canonical_kind)
-                    .or_default()
-                    .push(file_name.clone());
+            if let Some(&syntax) = INVALID_BY_CONSTRUCTION
+                .iter()
+                .find(|syntax| syntax.kind() == kind)
+            {
+                match invalid_files.entry(syntax) {
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert(InvalidNodePresent {
+                            syntax,
+                            first_file: file_name.clone(),
+                            additional_files: Vec::new(),
+                        });
+                    }
+                    std::collections::btree_map::Entry::Occupied(mut entry) => {
+                        entry.get_mut().additional_files.push(file_name.clone());
+                    }
+                }
             }
         }
     }
@@ -388,15 +419,7 @@ pub fn run(request: &Request) -> Result<Report, String> {
         .cloned()
         .collect();
 
-    let invalid_present: Vec<InvalidNodePresent> = INVALID_BY_CONSTRUCTION
-        .iter()
-        .filter(|(kind, _)| exercised_names.contains(kind))
-        .map(|(kind, code)| InvalidNodePresent {
-            kind,
-            code,
-            files: invalid_files.get(kind).cloned().unwrap_or_default(),
-        })
-        .collect();
+    let invalid_present = invalid_files.into_values().collect();
 
     let stale_exclusions: Vec<&'static str> = NOT_YET_IN_CORPUS
         .iter()
@@ -522,7 +545,9 @@ mod tests {
     fn every_invalid_by_construction_code_is_registered() -> Result<(), String> {
         let root = RepoRoot::resolve(None).map_err(|why| why.to_string())?;
         let registry = root.code_registry().map_err(|why| why.to_string())?;
-        for (kind, code) in INVALID_BY_CONSTRUCTION {
+        for syntax in INVALID_BY_CONSTRUCTION {
+            let kind = syntax.kind();
+            let code = syntax.code();
             let parsed = SpecErrorCode::parse(code)
                 .ok_or_else(|| format!("{kind}: `{code}` is not a well-formed code token"))?;
             registry
@@ -538,9 +563,10 @@ mod tests {
     /// as "must not appear" and once as "appearance requires review".
     #[test]
     fn no_node_type_is_excused_twice() {
-        for (kind, _) in INVALID_BY_CONSTRUCTION {
+        for syntax in INVALID_BY_CONSTRUCTION {
+            let kind = syntax.kind();
             assert!(
-                !NOT_YET_IN_CORPUS.contains(kind),
+                !NOT_YET_IN_CORPUS.contains(&kind),
                 "{kind} is listed as both invalid-by-construction and not-yet-in-corpus"
             );
         }

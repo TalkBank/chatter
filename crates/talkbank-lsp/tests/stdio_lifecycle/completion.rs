@@ -9,6 +9,115 @@ const SOURCE: &str =
     include_str!("../../../../corpus/reference/content/postcodes-and-freecodes.cha");
 const URI: &str = "file:///completion-edits.cha";
 
+#[test]
+fn unfinished_speaker_and_tier_prefixes_offer_complete_edits() {
+    let mut editor = Editor::start();
+    editor.send(json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+        "params":{"processId":null,"rootUri":null,"capabilities":{}}}));
+    assert!(editor.response(1)["error"].is_null());
+    editor.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
+    let reference = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+    let mut id = 2;
+    for eol in ["\n", "\r\n", "\r"] {
+        for (draft, label, replacement) in [
+            ("*", "CHI", "*CHI:\t"),
+            ("*C", "CHI", "*CHI:\t"),
+            ("%", "com", "%com:\t"),
+            ("%co", "com", "%com:\t"),
+        ] {
+            let source = reference
+                .replace("@End", &format!("{draft}\n@End"))
+                .replace('\n', eol);
+            editor.send(
+                json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{
+                "textDocument":{"uri":URI,"languageId":"chat","version":id,"text":source}}}),
+            );
+            let start = source.rfind(draft).expect("inserted draft");
+            editor.send(json!({"jsonrpc":"2.0","id":id,"method":"textDocument/completion",
+                "params":{"textDocument":{"uri":URI},"position":offset_to_position(&source,start+draft.len())}}));
+            let response = editor.response(id);
+            assert!(response["error"].is_null(), "{response}");
+            let items: CompletionResponse = serde_json::from_value(response["result"].clone())
+                .unwrap_or_else(|error| panic!("draft {draft:?}: {error}: {response}"));
+            let CompletionResponse::Array(items) = items else {
+                panic!("completion array")
+            };
+            let item = items
+                .iter()
+                .find(|item| item.label == label)
+                .expect("prefix suggestion");
+            let Some(CompletionTextEdit::Edit(edit)) = &item.text_edit else {
+                panic!("explicit edit")
+            };
+            assert_eq!(position_to_offset(&source, edit.range.start), start);
+            assert_eq!(
+                position_to_offset(&source, edit.range.end),
+                start + draft.len()
+            );
+            assert_eq!(edit.new_text, replacement);
+            let body = if draft.starts_with('*') {
+                "hello ."
+            } else {
+                "comment"
+            };
+            let mut completed = source.clone();
+            completed.replace_range(
+                start..start + draft.len(),
+                &format!("{}{body}", edit.new_text),
+            );
+            id += 1;
+            editor.send(
+                json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+                "textDocument":{"uri":URI,"version":id},"contentChanges":[{
+                    "range":edit.range,"text":format!("{}{body}", edit.new_text)}]}}),
+            );
+            editor.send(
+                json!({"jsonrpc":"2.0","id":id,"method":"textDocument/diagnostic",
+                "params":{"textDocument":{"uri":URI}}}),
+            );
+            let diagnostics = editor.response(id);
+            assert!(diagnostics["error"].is_null(), "{diagnostics}");
+            assert_eq!(diagnostics["result"]["resultId"], id.to_string());
+            assert_eq!(diagnostics["result"]["items"], json!([]), "{completed}");
+            editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didClose",
+                "params":{"textDocument":{"uri":URI}}}));
+            id += 1;
+        }
+    }
+    // Prefix matching must not reinterpret content, indented continuations or
+    // unmatched names as permission to insert a different line prefix.
+    for draft in [
+        "*UNKNOWN",
+        "%unknown",
+        " *",
+        "\t%co",
+        "@Comment:\t*",
+        "*CHI:\t%co",
+    ] {
+        let source = reference.replace("@End", &format!("{draft}\n@End"));
+        let start = source.rfind(draft).expect("inserted draft");
+        editor.send(
+            json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{
+            "textDocument":{"uri":URI,"languageId":"chat","version":id,"text":source}}}),
+        );
+        editor.send(json!({"jsonrpc":"2.0","id":id,"method":"textDocument/completion",
+            "params":{"textDocument":{"uri":URI},"position":offset_to_position(&source,start+draft.len())}}));
+        let response = editor.response(id);
+        assert!(response["error"].is_null(), "{response}");
+        assert!(
+            response["result"].is_null() || response["result"] == json!([]),
+            "{draft:?}: {response}"
+        );
+        editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didClose",
+            "params":{"textDocument":{"uri":URI}}}));
+        id += 1;
+    }
+    editor.send(json!({"jsonrpc":"2.0","id":id,"method":"shutdown"}));
+    assert!(editor.response(id)["error"].is_null());
+    editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
+    editor.expect_exit(0);
+}
+
 fn postcode_edit(editor: &mut Editor, id: u64, source: &str) -> TextEdit {
     let start = source.find("[+ foo]").expect("reference postcode");
     let position = offset_to_position(source, start + 4);

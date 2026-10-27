@@ -47,8 +47,6 @@ impl<'a> PrefixToken<'a> {
 pub enum DependentBodyKind {
     /// Morphology with rejected-tier provenance.
     Mor,
-    /// Translation morphology with its existing text recovery.
-    Trn,
     /// Actual phonology.
     Pho,
     /// Model phonology.
@@ -88,6 +86,115 @@ impl<'a> DependentPrefixToken<'a> {
 
     /// Exact body grammar admitted by the lexer.
     pub fn kind(&self) -> DependentBodyKind {
+        self.kind
+    }
+}
+
+/// Header meaning selected by an exact lexer rule, never by a name substring.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeaderKind {
+    /// `@ID`.
+    Id,
+    /// `@Types`.
+    Types,
+    /// `@Comment`.
+    Comment,
+    /// `@Languages`.
+    Languages,
+    /// `@Participants`.
+    Participants,
+    /// `@Date`.
+    Date,
+    /// `@Media`.
+    Media,
+    /// `@Options`.
+    Options,
+    /// `@Recording Quality`.
+    RecordingQuality,
+    /// `@Transcription`.
+    Transcription,
+    /// `@Number`.
+    Number,
+    /// `@Location`.
+    Location,
+    /// `@Situation`.
+    Situation,
+    /// `@Activities`.
+    Activities,
+    /// `@Room Layout`.
+    RoomLayout,
+    /// `@Tape Location`.
+    TapeLocation,
+    /// `@Time Duration`.
+    TimeDuration,
+    /// `@Time Start`.
+    TimeStart,
+    /// `@Transcriber`.
+    Transcriber,
+    /// `@Warning`.
+    Warning,
+    /// `@Page`.
+    Page,
+    /// `@Videos`.
+    Videos,
+    /// `@Thumbnail`.
+    Thumbnail,
+    /// `@T`.
+    T,
+    /// `@Bck`.
+    Bck,
+    /// `@PID`.
+    Pid,
+    /// `@Font`.
+    Font,
+    /// `@Window`.
+    Window,
+    /// `@Color words`.
+    ColorWords,
+    /// `@Bg`.
+    BeginGem,
+    /// `@Eg`.
+    EndGem,
+    /// `@G`.
+    LazyGem,
+    /// The catch-all header rule preserves an unsupported name.
+    Unknown,
+}
+
+/// Header prefix retaining both source/separator evidence and lexical identity.
+///
+/// Callers can inspect the kind but cannot replace its lexer-owned identity.
+/// ```compile_fail
+/// use talkbank_parser_re2c::token::{HeaderKind, HeaderPrefixToken};
+/// fn relabel(prefix: &mut HeaderPrefixToken<'_>) {
+///     prefix.kind = HeaderKind::Options;
+/// }
+/// ```
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct HeaderPrefixToken<'a> {
+    #[serde(flatten)]
+    prefix: PrefixToken<'a>,
+    #[serde(skip)]
+    kind: HeaderKind,
+}
+
+impl<'a> HeaderPrefixToken<'a> {
+    pub(crate) fn from_lexed(prefix: PrefixToken<'a>, kind: HeaderKind) -> Self {
+        Self { prefix, kind }
+    }
+
+    /// Original prefix bytes, excluding trailing separator spaces.
+    pub fn text(&self) -> &'a str {
+        self.prefix.text()
+    }
+
+    /// Separator admitted by the matching lexer rule.
+    pub fn separator(&self) -> TierSeparator {
+        self.prefix.separator()
+    }
+
+    /// Exact header identity admitted by the lexer.
+    pub fn kind(&self) -> HeaderKind {
         self.kind
     }
 }

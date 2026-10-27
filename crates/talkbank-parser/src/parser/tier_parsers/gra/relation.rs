@@ -14,7 +14,7 @@ use crate::generated_traversal::{
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::GrammaticalRelation;
+use talkbank_model::model::{GrammaticalRelation, GrammaticalRelationType};
 use talkbank_model::{
     DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity,
 };
@@ -109,21 +109,24 @@ pub(super) fn parse_gra_relation<'tree>(
         return Ok(ParseOutcome::rejected());
     };
 
-    if relation_text.is_empty() {
-        errors.report(ParseError::new(
-            ErrorCode::MalformedGrammarRelation,
-            Severity::Error,
-            DiagnosticLocation::new(span_of(node)),
-            ErrorContext::new(source, relation_span, relation_text),
-            "Missing grammatical relation label".to_string(),
-        ));
-        return Ok(ParseOutcome::rejected());
-    }
+    let relation = match GrammaticalRelationType::new(relation_text) {
+        Ok(relation) => relation,
+        Err(error) => {
+            errors.report(ParseError::new(
+                ErrorCode::MalformedGrammarRelation,
+                Severity::Error,
+                DiagnosticLocation::new(span_of(node)),
+                ErrorContext::new(source, relation_span, relation_text),
+                error.to_string(),
+            ));
+            return Ok(ParseOutcome::rejected());
+        }
+    };
 
     Ok(ParseOutcome::parsed(GrammaticalRelation::new(
         index.get(),
         head,
-        relation_text,
+        relation,
     )))
 }
 

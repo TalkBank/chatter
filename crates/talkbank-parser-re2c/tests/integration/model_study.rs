@@ -238,11 +238,8 @@ fn main_tier_equivalence_simple() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let re2c_mt =
+        talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
@@ -258,11 +255,8 @@ fn main_tier_equivalence_retrace() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let re2c_mt =
+        talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
@@ -278,11 +272,8 @@ fn main_tier_equivalence_compound() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let re2c_mt =
+        talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
@@ -298,11 +289,8 @@ fn main_tier_equivalence_event() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let re2c_mt =
+        talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
@@ -318,11 +306,8 @@ fn main_tier_equivalence_pause() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let re2c_mt =
+        talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
@@ -338,11 +323,8 @@ fn main_tier_equivalence_trailing_off() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let re2c_mt =
+        talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
@@ -357,16 +339,9 @@ fn mor_tier_equivalence() {
     let input = "pro|I v|want n|cookie-PL .\n";
     let errors = talkbank_model::errors::ErrorCollector::new();
     let ts_result = ts().parse_mor_tier_fragment(input, 0, &errors);
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_mor_tier(input);
-    let re2c_source = talkbank_parser_re2c::source_text::SourceText::new(input);
-    let re2c_tier = match talkbank_parser_re2c::convert::mor_tier_to_model(
-        &re2c_parsed,
-        talkbank_model::Location::Located(re2c_source.whole()),
-        re2c_source,
-    ) {
-        Ok(t) => t,
-        Err(e) => panic!("re2c MorTier conversion failed: {:?}", e),
-    };
+    let re2c_tier = talkbank_parser_re2c::parser::parse_mor_tier(input)
+        .into_option()
+        .expect("native MOR tier parses directly to shared model");
     if let talkbank_model::ParseOutcome::Parsed(ts_tier) = ts_result {
         assert!(
             ts_tier.semantic_eq(&re2c_tier),
@@ -384,16 +359,9 @@ fn gra_tier_equivalence() {
     let input = "1|2|SUBJ 2|0|ROOT 3|2|OBJ\n";
     let errors = talkbank_model::errors::ErrorCollector::new();
     let ts_result = ts().parse_gra_tier_fragment(input, 0, &errors);
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_gra_tier(input)
-        .expect("a well formed %gra body parses");
-    // The lowering now takes the sink, because a `%gra` field the model cannot
-    // hold is reported and the relation dropped rather than defaulted to 0.
-    let re2c_tier = talkbank_parser_re2c::convert::gra_tier_to_model(
-        &re2c_parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(input),
-        &errors,
-    )
-    .tier_without_health(talkbank_model::Location::Unlocated);
+    let re2c_tier = talkbank_parser_re2c::parser::parse_gra_tier_with_errors(input, &errors)
+        .into_option()
+        .expect("a well formed GRA body parses");
     if let talkbank_model::ParseOutcome::Parsed(ts_tier) = ts_result {
         assert!(
             ts_tier.semantic_eq(&re2c_tier),
@@ -411,10 +379,7 @@ fn gra_tier_equivalence() {
 /// Parse a word using our re2c parser and convert to model Word.
 fn re2c_word(input: &str) -> talkbank_model::model::Word {
     let parsed = talkbank_parser_re2c::parser::parse_word(input).expect("re2c parse_word");
-    talkbank_parser_re2c::convert::word_from_parsed(
-        &parsed,
-        talkbank_parser_re2c::source_text::SourceText::new(input),
-    )
+    talkbank_parser_re2c::convert::word_from_parsed(&parsed)
 }
 
 /// Diff a single file's parse between TreeSitter and Re2c. Standard
@@ -527,11 +492,8 @@ fn multi_token_words_are_placed_too() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let re2c_mt =
+        talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     let spans = |mt: &talkbank_model::model::MainTier| -> Vec<talkbank_model::Location> {
         mt.content
@@ -638,11 +600,7 @@ fn word_body_markers_are_placed_at_their_lexemes() {
     let input = "*CHI:\tba::ll+y .\n";
     let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
     let conversion_errors = talkbank_model::ErrorCollector::new();
-    let mt = talkbank_parser_re2c::convert::main_tier_to_model(
-        &line.main_tier,
-        line.source,
-        &conversion_errors,
-    );
+    let mt = talkbank_parser_re2c::convert::main_tier_to_model(&line.main_tier, &conversion_errors);
     assert!(conversion_errors.into_vec().is_empty());
     let word = mt
         .content
@@ -683,46 +641,33 @@ fn word_body_markers_are_placed_at_their_lexemes() {
     assert!(seen_lengthening && seen_compound, "{:?}", word.content());
 }
 
-/// A word the lexer's rich word rule rejects is assembled from subtokens, and
-/// its text is its slice of the source, so it is placed like any other word.
-/// The rich rule admits a marker-initial word only when text follows the
-/// markers, so two bare pitch arrows lex as two `CaPitchUp` tokens and the
-/// parser assembles them; a body of two CA elements and no text is the proof
-/// the assembled path ran.
+/// Marker-only authored examples reject at the lexical word boundary.
 #[test]
-fn assembled_words_borrow_their_source_slice() {
-    let input = "*CHI:\tthe \u{2191}\u{2191} there .\n";
-    let line = talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
-    let words: Vec<&talkbank_parser_re2c::ast::WordWithAnnotations<'_>> = line
-        .main_tier
-        .tier()
-        .tier_body
-        .contents
+fn marker_only_specs_cannot_construct_lexical_words() {
+    let specs = talkbank_parser_tests::error_specs::load(
+        talkbank_parser_tests::repo_paths::workspace_root(),
+    )
+    .unwrap();
+    let spec = specs
         .iter()
-        .filter_map(|item| match item {
-            talkbank_parser_re2c::ast::ContentItem::Word(word) => Some(word),
-            _ => None,
-        })
-        .collect();
-    let assembled = words
-        .iter()
-        .find(|w| w.raw_text == "\u{2191}\u{2191}")
-        .unwrap_or_else(|| panic!("no assembled word in {words:?}"));
-    assert!(
-        assembled
-            .body
-            .iter()
-            .all(|item| matches!(item, talkbank_parser_re2c::ast::WordBodyItem::CaElement(..)))
-            && assembled.body.len() == 2,
-        "the arrows were not assembled from subtokens: {:?}",
-        assembled.body
-    );
-    for word in words {
-        let span = line
-            .source
-            .span_of(word.raw_text)
-            .unwrap_or_else(|| panic!("{:?} is not a slice of the source", word.raw_text));
-        assert_eq!(line.source.text_at(span), word.raw_text);
-        assert_eq!(&input[span.start()..span.end()], word.raw_text);
+        .find(|spec| spec.filename == "E316_marker_only.md")
+        .unwrap();
+    assert_eq!(spec.examples().len(), 4);
+    for example in spec.examples() {
+        let main = example
+            .chat
+            .as_str()
+            .lines()
+            .find(|line| line.starts_with('*'))
+            .unwrap();
+        assert!(
+            talkbank_parser_re2c::parser::parse_main_tier_with_source(main).is_none(),
+            "marker-only main tier admitted: {main}"
+        );
+        let body = main.split_once('\t').unwrap().1.strip_suffix(" .").unwrap();
+        assert!(
+            talkbank_parser_re2c::parser::parse_word(body).is_none(),
+            "marker-only word admitted: {body}"
+        );
     }
 }

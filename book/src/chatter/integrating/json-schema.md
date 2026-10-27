@@ -5,7 +5,7 @@
 
 This repository generates JSON Schema from Rust-owned types with
 [schemars](https://docs.rs/schemars) for the `ChatFile` transcript model used
-by `chatter to-json`.
+by `chatter convert to-json`.
 
 Keeping that schema generated from the Rust source of truth lets cross-language
 integrations consume the revision's model contract without re-deriving the
@@ -26,12 +26,12 @@ generated artifacts.
 
 ## Transcript schema: `ChatFile`
 
-`chatter to-json` converts CHAT transcripts into a structured JSON form backed
+`chatter convert to-json` converts CHAT transcripts into a structured JSON form backed
 by the same `ChatFile` model used by the parser, validator, and serializer.
 
-### How `chatter to-json` uses it
+### How `chatter convert to-json` uses it
 
-By default, `chatter to-json`:
+By default, `chatter convert to-json`:
 
 - validates the CHAT input,
 - checks dependent-tier alignment unless `--skip-alignment` is passed, and
@@ -54,12 +54,12 @@ options or discard the transcript name.
 Useful flags:
 
 ```bash
-chatter to-json input.cha --skip-validation
-chatter to-json input.cha --skip-alignment
-chatter to-json input.cha --skip-schema-validation
+chatter convert to-json input.cha --skip-validation
+chatter convert to-json input.cha --skip-alignment
+chatter convert to-json input.cha --skip-schema-validation
 ```
 
-`chatter from-json` deserializes JSON back into the internal `ChatFile` model
+`chatter convert from-json` deserializes JSON back into the internal `ChatFile` model
 and re-serializes it to CHAT format. It does not run JSON Schema validation
 or whole-document CHAT validation. Deserialization enforces the model's
 deserialization rules, not all transcript invariants. Validate imported JSON
@@ -71,8 +71,8 @@ admission is required.
 The CHAT-to-JSON-to-CHAT pipeline is intended to preserve the `ChatFile` model:
 
 ```bash
-chatter to-json input.cha -o intermediate.json
-chatter from-json intermediate.json -o output.cha
+chatter convert to-json input.cha -o intermediate.json
+chatter convert from-json intermediate.json -o output.cha
 diff input.cha output.cha
 ```
 

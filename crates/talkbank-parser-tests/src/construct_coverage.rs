@@ -18,9 +18,9 @@
 //!
 //! # What IS new here: pairs
 //!
-//! Node-kind coverage of the reference corpus is **92.3%**, which sounds nearly
-//! finished and is the wrong question, because every parser defect found on
-//! 2026-08-08 was a COMBINATION gap rather than a missing construct:
+//! The historical node-kind measurement was **92.3%**. That percentage did not
+//! answer the combination question: the parser defects examined on 2026-08-08
+//! involved combinations rather than missing individual constructs:
 //!
 //! - `long_feature_begin` appears in the reference corpus, but only at the top
 //!   level of a main tier. Nested inside a `group` it made `chatter validate`
@@ -36,34 +36,32 @@
 //! So this module measures parent-to-child pairs, the granularity that matches
 //! the defects.
 //!
-//! # The ratchet, and what 100% means
+//! # The finite combination ratchet
 //!
-//! `UNCOVERED_PAIRS` lists combinations real transcripts contain that the
-//! reference corpus does not. An entry that becomes covered FAILS, so the list
-//! cannot rot into a permanent excuse after somebody adds the fixture and
-//! forgets to prune it. The finish line is the list being empty, which is what
-//! "the reference corpus exercises every path" actually means, and which a
-//! percentage could never show.
+//! `PENDING_ATTESTATION` retains the nineteen combinations observed in a
+//! historical sample. All nineteen now have named authored controls. Evidence
+//! states remain distinct: authored examples do not
+//! discharge an attested-reference obligation. New structural coverage must be
+//! reviewed for support and document policy (separator padding is legal in CA
+//! but reports E758 otherwise).
 //!
-//! Only the retire direction is enforced here. Discovering a NEW uncovered pair
-//! needs the wild corpus, which a unit test does not have; that direction
-//! belongs to the corpus-differential runner, which does.
+//! Discovery of new combinations belongs to a separately authorized corpus
+//! investigation, not this finite test. Neither an empty pending list nor a
+//! passing incidence check proves complete grammar or implementation coverage.
 //!
-//! # Fixtures are mined from real data, never invented
+//! # Attestation remains a separate obligation
 //!
-//! An entry is retired by adding an ATTESTED fixture: find the construct in the
-//! wild corpus, trim it, record where it came from in the file itself. The
-//! reference corpus is synthesized, and that is precisely why it holds each
-//! construct only in its simplest form, so filling gaps from imagination would
-//! rebuild the same blind spot one level down.
-//! `corpus/reference/tiers/wor.cha`'s Cantonese `%wor` pair is the worked
-//! example.
+//! Retiring an entry requires a supported, legal, attested fixture with reviewed
+//! provenance and redistribution permission. Authored controls are useful for
+//! independently checking intended behavior but cannot supply that provenance.
+//! The Cantonese pair in `corpus/reference/tiers/wor.cha` is an existing example;
+//! it does not attest the independently authored ending-combination documents.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::gate::tree::RelPath;
-use crate::gate::{Gate, Outcome, ProbeSuite, ReadTree, Tier, Tree, UnprovenRule, listing};
+use crate::gate::{Gate, Outcome, ProbeSuite, ReadTree, Tier, Tree, UnprovenRule};
 use crate::test_error::TestError;
 
 /// Tree-sitter node-kind identity within one grammar.
@@ -206,44 +204,133 @@ fn cha_files_in(tree: &ReadTree, dir: &str) -> Result<Vec<RelPath>, String> {
     Ok(files)
 }
 
-/// Combinations real transcripts produce that the reference corpus does not.
+/// Historical combinations whose attested-reference obligations remain open.
 ///
-/// Measured against an unbiased 400-file sample of the wild corpus on
-/// 2026-08-08, ordered by how often real data contains them, because that is
-/// the order in which they are worth fixing. The leading entries are not
-/// exotic: an inline bullet inside content occurs 4,225 times in that sample,
-/// and terminators on `%mor` several thousand.
+/// The retained inventory records a 400-file sample dated 2026-08-08. This
+/// gate measures current structural witnesses; it does not repeat that sample
+/// or infer validity, provenance or redistribution permission from incidence.
 ///
-/// Derived from REAL DATA rather than from the grammar's full cross product.
-/// Most of that cross product is unwritable CHAT, so a gate demanding it could
-/// never close; a gate demanding everything real transcripts actually contain
-/// is the bar the tool has to meet.
-///
-/// This is a hand-copied measurement, which is a value mirroring a fact it
-/// cannot be derived from: when the corpus grows or a grammar node is renamed
-/// it goes stale silently. Regenerating it from the corpus-differential runner,
-/// with its sample size and date recorded beside it, is the recorded follow-up.
-const UNCOVERED_PAIRS: &[(&str, &str)] = &[
-    ("mor_contents", "trailing_off"),
-    ("mor_contents", "interruption"),
-    ("mor_contents", "self_interruption"),
-    ("main_tier", "sep_trailing_space"),
-    ("mor_contents", "trailing_off_question"),
-    ("mor_contents", "interrupted_question"),
-    ("mor_contents", "self_interrupted_question"),
-    ("wor_tier_body", "quoted_new_line"),
-    ("wor_tier_body", "self_interruption"),
-    ("wor_tier_body", "trailing_off"),
-    ("wor_tier_body", "interruption"),
-    ("wor_tier_body", "tag_marker"),
-    ("wor_tier_body", "interrupted_question"),
-    ("tier_sep", "sep_trailing_space"),
-    ("mor_contents", "broken_question"),
-    ("separator", "colon"),
-    ("wor_tier_body", "trailing_off_question"),
-    ("wor_tier_body", "self_interrupted_question"),
-    ("mor_contents", "break_for_coding"),
+/// Authored coverage and attestation are different evidence states.
+/// Fixed-size storage retains all nineteen historical obligations.
+const PENDING_ATTESTATION: [PendingAttestation; 19] = [
+    PendingAttestation::mor("trailing_off"),
+    PendingAttestation::mor("interruption"),
+    PendingAttestation::mor("self_interruption"),
+    PendingAttestation::padding("main_tier"),
+    PendingAttestation::mor("trailing_off_question"),
+    PendingAttestation::mor("interrupted_question"),
+    PendingAttestation::mor("self_interrupted_question"),
+    PendingAttestation::wor("quoted_new_line"),
+    PendingAttestation::wor("self_interruption"),
+    PendingAttestation::wor("trailing_off"),
+    PendingAttestation::wor("interruption"),
+    PendingAttestation::wor("tag_marker"),
+    PendingAttestation::wor("interrupted_question"),
+    PendingAttestation::padding("tier_sep"),
+    PendingAttestation::mor("broken_question"),
+    PendingAttestation::colon(),
+    PendingAttestation::wor("trailing_off_question"),
+    PendingAttestation::wor("self_interrupted_question"),
+    PendingAttestation::mor("break_for_coding"),
 ];
+
+#[derive(Clone, Copy)]
+enum AuthoredReference {
+    MorEndings,
+    WorEndings,
+    CaSeparators,
+    ColonSeparator,
+}
+
+impl AuthoredReference {
+    const fn path(self) -> &'static str {
+        match self {
+            Self::MorEndings => "corpus/reference/tiers/mor-ending-combinations.cha",
+            Self::WorEndings => "corpus/reference/tiers/wor-ending-combinations.cha",
+            Self::CaSeparators => "corpus/reference/ca/separator-padding.cha",
+            Self::ColonSeparator => "corpus/reference/content/colon-separator.cha",
+        }
+    }
+}
+
+/// Every historical obligation owns an authored witness, but none is attested.
+struct PendingAttestation {
+    pair: NamedConstructPair,
+    reference: AuthoredReference,
+}
+
+impl PendingAttestation {
+    const fn colon() -> Self {
+        Self {
+            pair: NamedConstructPair {
+                parent: "separator",
+                child: "colon",
+            },
+            reference: AuthoredReference::ColonSeparator,
+        }
+    }
+    const fn padding(parent: &'static str) -> Self {
+        Self {
+            pair: NamedConstructPair {
+                parent,
+                child: "sep_trailing_space",
+            },
+            reference: AuthoredReference::CaSeparators,
+        }
+    }
+    const fn mor(child: &'static str) -> Self {
+        Self {
+            pair: NamedConstructPair {
+                parent: "mor_contents",
+                child,
+            },
+            reference: AuthoredReference::MorEndings,
+        }
+    }
+    const fn wor(child: &'static str) -> Self {
+        Self {
+            pair: NamedConstructPair {
+                parent: "wor_tier_body",
+                child,
+            },
+            reference: AuthoredReference::WorEndings,
+        }
+    }
+}
+
+/// Measure each authored source once, without allowing another file to stand in.
+struct AuthoredCoverage {
+    mor: CoveredPairs,
+    wor: CoveredPairs,
+    ca_separators: CoveredPairs,
+    colon_separator: CoveredPairs,
+}
+
+impl AuthoredCoverage {
+    fn observe(tree: &ReadTree) -> Result<Self, String> {
+        Ok(Self {
+            mor: pairs_in(tree, &[RelPath::new(AuthoredReference::MorEndings.path())])?,
+            wor: pairs_in(tree, &[RelPath::new(AuthoredReference::WorEndings.path())])?,
+            ca_separators: pairs_in(
+                tree,
+                &[RelPath::new(AuthoredReference::CaSeparators.path())],
+            )?,
+            colon_separator: pairs_in(
+                tree,
+                &[RelPath::new(AuthoredReference::ColonSeparator.path())],
+            )?,
+        })
+    }
+
+    fn pairs(&self, reference: AuthoredReference) -> &CoveredPairs {
+        match reference {
+            AuthoredReference::MorEndings => &self.mor,
+            AuthoredReference::WorEndings => &self.wor,
+            AuthoredReference::CaSeparators => &self.ca_separators,
+            AuthoredReference::ColonSeparator => &self.colon_separator,
+        }
+    }
+}
 
 /// Reference-corpus combination coverage, as a registered gate.
 pub struct ConstructCoverageGate;
@@ -259,7 +346,7 @@ const REFERENCE_CORPUS: &str = "corpus/reference";
 const UNPROVEN: &[UnprovenRule] = &[
     UnprovenRule::new(
         "R4: a policy name that is not a grammar node kind",
-        "`resolve_named_kind` compares `UNCOVERED_PAIRS` against \
+        "`resolve_named_kind` compares `PENDING_ATTESTATION` against \
          `tree_sitter_talkbank::LANGUAGE`. Both are compile-time inputs: the \
          const is Rust source and the node-kind vocabulary is linked in from \
          the committed `grammar/src/parser.c`. No edit to any file the gate \
@@ -273,33 +360,21 @@ const UNPROVEN: &[UnprovenRule] = &[
     ),
     UnprovenRule::new(
         "R5's DISCOVERY direction, which the gate does not enforce",
-        "Deleting a still-uncovered entry from `UNCOVERED_PAIRS` leaves the gate \
-         green. Only the retire direction is ratcheted, so the list can rot by \
-         getting SHORTER. Discovery needs the wild corpus and belongs to the \
-         corpus-differential runner. This is the gate's real blind spot.",
+        "The historical list is compile-time policy. Input files cannot discover \
+         an omitted pair or justify deleting an obligation. Attestation retirement \
+         needs reviewed source evidence outside this structural gate.",
     ),
     UnprovenRule::new(
-        "the two numbers in the clean summary",
-        "`covered.len()` and `UNCOVERED_PAIRS.len()` are printed and compared to \
-         nothing, which is the shape `gate`'s own module doc says this trait \
-         exists to close, surviving on the Ok side. A probe cannot prove a \
-         check that does not exist; naming it is the only available action.",
-    ),
-    UnprovenRule::new(
-        "R5 for 18 of its 23 listed pairs",
-        "The content probes reach 5 instances. All 23 flow through one \
-         `contains_named` loop and one failure text, so per-instance probes \
-         would prove the same code path again; three of the rest would need \
-         materially different constructs planted (a mid-content bullet, a \
-         continuation inside a bullet-carrying tier, a `$pos` on a real word).",
+        "the summary counts",
+        "The covered-pair and authored counts summarize observations, \
+         not completeness. The nineteen-entry array preserves the historical \
+         obligation inventory; no numeric threshold establishes attestation.",
     ),
 ];
 
 /// The corpus file one probe writes invalid bytes into, and whose name that
 /// same probe requires the failure to carry.
-/// The one corpus file four probes reach for: three plant an edit into it and
-/// one writes invalid bytes into it, and that fourth probe also requires the
-/// failure to NAME it.
+/// The invalid-byte probe requires the failure to name it.
 ///
 /// One spelling, because a rename that missed the assertion would leave a probe
 /// asserting on a path nothing writes, which passes only when the gate fails
@@ -338,44 +413,42 @@ impl Gate for ConstructCoverageGate {
             Err(why) => return Outcome::failed(format!("cannot measure coverage: {why}")),
         };
 
-        let mut retired = Vec::new();
-        for &(parent, child) in UNCOVERED_PAIRS {
-            let pair = NamedConstructPair { parent, child };
-            match covered.contains_named(pair) {
-                Ok(true) => retired.push(pair),
-                Ok(false) => {}
+        let authored = match AuthoredCoverage::observe(&tree) {
+            Ok(authored) => authored,
+            Err(why) => {
+                return Outcome::failed(format!("cannot measure authored witnesses: {why}"));
+            }
+        };
+        for PendingAttestation { pair, reference } in &PENDING_ATTESTATION {
+            match authored.pairs(*reference).contains_named(*pair) {
+                Ok(true) => {}
+                Ok(false) => {
+                    return Outcome::failed(format!(
+                        "authored witness missing {pair} in {}",
+                        reference.path()
+                    ));
+                }
                 Err(why) => return Outcome::failed(why),
             }
         }
-
-        if retired.is_empty() {
-            return tree.clean(format!(
-                "{} construct pair(s) covered; {} combination gap(s) remaining",
-                covered.len(),
-                UNCOVERED_PAIRS.len(),
-            ));
-        }
-        Outcome::failed(listing(
-            "FAIL: listed as uncovered but the reference corpus DOES produce them.\n\
-             Delete them from UNCOVERED_PAIRS in the commit that covered them:",
-            &retired,
+        tree.clean(format!(
+            "{} construct pair(s) covered; {} named authored witness(es); {} attestation obligation(s) remain",
+            covered.len(), PENDING_ATTESTATION.len(), PENDING_ATTESTATION.len(),
         ))
     }
 
-    /// Five of these plant a listed pair INTO the corpus, which is the ratchet's
-    /// one rule; the other three are about refusing a measurement it cannot
-    /// make, and the last is about declining to make one at all. The three
-    /// chosen pairs each have a token with no equal-length competitor in its
-    /// position, so none of them can quietly fail to appear.
+    /// Remove the two authored separator-padding witnesses and
+    /// retain the measurement-refusal, absent-corpus and accepted-edit controls.
+    /// The padding tokens have no equal-length competitor in their positions.
     fn probes(&self) -> ProbeSuite {
         ProbeSuite::must_fail(
-            "a %mor tier terminated with +... (mor_contents -> trailing_off)",
-            "mor_contents -> trailing_off",
+            "the authored CA reference losing main-tier separator padding",
+            "authored witness missing main_tier -> sep_trailing_space",
             |edit| {
                 edit.replace_once(
-                    MOR_GRA_FIXTURE,
-                    "noun|cookie-Plur .",
-                    "noun|cookie-Plur +...",
+                    AuthoredReference::CaSeparators.path(),
+                    "*CHI:\t  dog .",
+                    "*CHI:\tdog .",
                 )
             },
         )
@@ -399,31 +472,53 @@ impl Gate for ConstructCoverageGate {
             },
         )
         .refusing(
-            "a tag marker inside a %wor body (wor_tier_body -> tag_marker)",
-            "wor_tier_body -> tag_marker",
+            "the authored CA reference losing dependent-tier separator padding",
+            "authored witness missing tier_sep -> sep_trailing_space",
             |edit| {
                 edit.replace_once(
-                    "corpus/reference/tiers/wor.cha",
-                    "\u{15}300_600\u{15} .",
-                    "\u{15}300_600\u{15} \u{201E} .",
+                    AuthoredReference::CaSeparators.path(),
+                    "%mor:\t  n|dog .",
+                    "%mor:\tn|dog .",
+                )?;
+                edit.replace_once(
+                    AuthoredReference::CaSeparators.path(),
+                    "%com:\t  tier text",
+                    "%com:\ttier text",
                 )
             },
         )
         .refusing(
-            "a trailing separator space on a main tier (main_tier -> sep_trailing_space)",
-            "main_tier -> sep_trailing_space",
+            "the authored colon reference losing its standalone separator",
+            "authored witness missing separator -> colon",
             |edit| {
                 edit.replace_once(
-                    MOR_GRA_FIXTURE,
-                    "\tit's I want cookies .",
-                    "\t it's I want cookies .",
+                    AuthoredReference::ColonSeparator.path(),
+                    "hello : world",
+                    "hello: world",
                 )
             },
         )
         .refusing(
-            "a trailing separator space on a dependent tier (tier_sep -> sep_trailing_space)",
-            "tier_sep -> sep_trailing_space",
-            |edit| edit.replace_once(MOR_GRA_FIXTURE, "%gra:\t1|4|NSUBJ", "%gra:\t 1|4|NSUBJ"),
+            "an authored MOR reference losing its declared trailing-off pair",
+            "authored witness missing mor_contents -> trailing_off",
+            |edit| {
+                edit.replace_once(
+                    AuthoredReference::MorEndings.path(),
+                    "%mor:\tco|hello +...\n",
+                    "%mor:\tco|hello .\n",
+                )
+            },
+        )
+        .refusing(
+            "an authored WOR reference losing its declared tag marker",
+            "authored witness missing wor_tier_body -> tag_marker",
+            |edit| {
+                edit.replace_once(
+                    AuthoredReference::WorEndings.path(),
+                    "%wor:\thello „ .\n",
+                    "%wor:\thello .\n",
+                )
+            },
         )
         .refusing(
             "the corpus directory is there and holds no .cha",

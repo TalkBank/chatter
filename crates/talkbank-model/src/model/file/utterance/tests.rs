@@ -12,8 +12,14 @@ use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 /// This is a smoke test for serde coverage on a nested replaced-word structure.
 #[test]
 fn demo_utterance_json_serialization() -> Result<(), String> {
-    let word = Word::simple(crate::Location::Unlocated, "hello");
-    let replacement = Replacement::from_word(Word::simple(crate::Location::Unlocated, "world"));
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("hello")),
+    );
+    let replacement = Replacement::from_word(Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("world")),
+    ));
     let replaced_word = ReplacedWord::new(crate::Location::Unlocated, word, replacement);
 
     let main = MainTier::new(

@@ -98,7 +98,7 @@ macro_rules! impl_new_terminator_choice {
 
 // Emit only the phases actually supplied by each embedding's producer. The
 // lexical MOR choice alone needs checked projection for its missing slot.
-impl_new_terminator_choice!(UtteranceEndChild0Choice, Raw);
+impl_new_terminator_choice!(UtteranceEndChild0Choice, Ranged);
 impl_new_terminator_choice!(TerminatorChoice, Raw);
 impl_new_terminator_choice!(WorTierBodyChild2Choice, Raw);
 impl_new_terminator_choice!(

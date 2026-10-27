@@ -88,7 +88,7 @@ pub(crate) fn parse_overlap_point_token<'tree>(
         }
     };
 
-    // Second character (optional): index digit 2-9
+    // Second character (optional): index digit 1-9
     let index = chars
         .next()
         .and_then(|digit_char| digit_char.to_digit(10).map(OverlapIndex::new));

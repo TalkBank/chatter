@@ -2,7 +2,26 @@
 
 use talkbank_model::{ChatFile, ErrorCode, ParseError, Severity, Span};
 use talkbank_parser::{ParseProduct, TreeSitterParser};
-use talkbank_parser_tests::test_error::strict_parse;
+use talkbank_parser_tests::test_error::{ParseProductTestExt, strict_parse};
+
+#[test]
+fn fixture_extraction_preserves_a_built_model_despite_diagnostics() {
+    let original = reference();
+    let product = ParseProduct::Built {
+        file: original.clone(),
+        diagnostics: vec![syntax(Severity::Error)],
+    };
+    assert_eq!(product.expect_built(), original);
+}
+
+#[test]
+#[should_panic(expected = "input finding")]
+fn fixture_extraction_reports_unbuildable_diagnostics() {
+    ParseProduct::Unbuildable {
+        diagnostics: vec![syntax(Severity::Error)],
+    }
+    .expect_built();
+}
 
 fn reference() -> ChatFile {
     let product = TreeSitterParser::new()

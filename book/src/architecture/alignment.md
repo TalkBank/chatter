@@ -22,6 +22,30 @@ GRA instead relates to MOR chunks, and Phon includes tier-to-tier checks.
 Lives in
 `crates/talkbank-model/src/alignment/`.
 
+### GRA structural evidence
+
+GRA validation analyzes authored dependency edges separately from MOR alignment.
+A graph builder interns positive word indices into private node identities and
+retains every parent edge, including competing edges for repeated indices.
+Selecting the first relation would hide cycles according to source order and
+break the monotone property used by recovery validation: deleting an edge cannot
+create a cycle. E721 separately checks sequential word indices.
+
+The finished graph has resolved endpoints. Iterative DFS consumes it into cycle
+evidence without recursive calls or repeated relation-list searches. A borrowed
+`GraStructure` retains that result and the root count for one unchanged tier.
+After reporting E723/E724, whole-tier admission consumes the same analysis into
+`WholeGra` when alignment evidence permits E721/E722. A detected cycle suppresses
+the consequent missing-root finding. None of these intermediate types certifies
+a valid dependency tree; raw model mutation requires a fresh analysis.
+
+Coordinated replacement blocks have a stricter boundary: `BoundedBlockGraph`
+checks dense ordering and in-range heads, then is consumed into
+`RootedBlockGraph` only when every chain reaches its unique root. The immutable
+result belongs to `SplicedBlock`. Iterative reachability caches completed paths,
+so each head is traversed once even for long chains. This complete-tree admission
+is distinct from the observed-edge evidence used for ordinary GRA diagnostics.
+
 ### TierDomain and PositionalDomain
 
 ```rust
@@ -313,7 +337,7 @@ convention, region has `end_at_word = None`,
 
 For whole-file analysis, in `overlap_groups.rs`. 1:N matching: one
 top region from speaker A can match multiple bottom regions from
-speakers B, C, etc. Used by E347 and `chatter debug overlap-audit`.
+speakers B, C, etc. Used by E347 and `chatter inspect overlaps`.
 
 When a turn contains multiple top regions with the same index, bottoms from
 the same responding speaker distribute among vacant sibling tops before
@@ -341,7 +365,7 @@ Onset-only marking is not by itself an E348 violation. Registry status and
 the retained legal control govern this boundary; do not enable a missing-end
 check just because a marker has no local closing partner.
 
-`chatter debug overlap-audit <path>` is exploratory. It prints TSV rows only
+`chatter inspect overlaps <path>` is exploratory. It prints TSV rows only
 for files whose recovered models contain overlaps. It currently parses with
 a null diagnostic sink and does not perform checked CHAT admission, so the
 report cannot certify input validity or a complete source inventory.
@@ -486,5 +510,5 @@ chunk 3 before the splice and 4 after it.
 | Validation | `talkbank-model` | Cross-tier checks (including E714/E715 and E725-E728), active overlap rules E347/E373/E704; E348 remains suppressed |
 | LSP hover | `talkbank-lsp` | Show aligned tier items for word under cursor |
 | Word extraction | `talkbank-transform` | NLP-ready words from utterances |
-| Overlap audit | `chatter` | `chatter debug overlap-audit` |
+| Overlap audit | `chatter` | `chatter inspect overlaps` |
 | `%wor` generation | `talkbank-model` | Build `%wor` tier from main tier |

@@ -29,6 +29,33 @@ use crate::common::{
     stdout_string, write_fixture,
 };
 
+/// Long version identifies its source stamp explicitly; short version remains
+/// the package version for existing scripts.
+#[test]
+fn version_display_distinguishes_source_stamp_from_package_version() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let short = harness.chatter_cmd().arg("-V").output()?;
+    assert_success(&short, "short version");
+    assert_eq!(
+        stdout_string(&short).trim(),
+        concat!("chatter ", env!("CARGO_PKG_VERSION"))
+    );
+    let long = harness.chatter_cmd().arg("--version").output()?;
+    assert_success(&long, "long version");
+    let text = stdout_string(&long);
+    let stamp = text
+        .trim()
+        .strip_suffix(')')
+        .and_then(|text| text.split_once("-source-").map(|(_, stamp)| stamp))
+        .expect("explicit source stamp");
+    let (fingerprint, seconds) = stamp.rsplit_once('-').expect("source and clock components");
+    assert_eq!(fingerprint.len(), 16);
+    assert!(fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert!(seconds.parse::<u64>().is_ok());
+    assert!(long.stderr.is_empty());
+    Ok(())
+}
+
 const VALID_CHAT: &str = "@UTF8
 @Begin
 @Languages:	eng
@@ -181,10 +208,15 @@ fn run_path_command(
     Ok(cmd.output()?)
 }
 
+pub(crate) enum CacheClearAction {
+    Preview,
+    Apply,
+}
+
 pub(crate) fn run_prefix_clear(
     harness: &CliHarness,
     prefix: &Path,
-    dry_run: bool,
+    mode: CacheClearAction,
 ) -> Result<Output, TestError> {
     let mut args = vec![
         OsString::from("cache"),
@@ -192,8 +224,9 @@ pub(crate) fn run_prefix_clear(
         OsString::from("--prefix"),
         prefix.as_os_str().to_os_string(),
     ];
-    if dry_run {
-        args.push(OsString::from("--dry-run"));
+    match mode {
+        CacheClearAction::Preview => {}
+        CacheClearAction::Apply => args.push(OsString::from("--apply")),
     }
     Ok(harness.chatter_cmd().args(args).output()?)
 }
@@ -210,7 +243,12 @@ fn debug_fix_s_rewrites_whole_utterance_switch_in_place() -> Result<(), TestErro
     let dir = tempdir()?;
     let file_path = write_fixture(dir.path(), "needs-fix.cha", WHOLE_UTTERANCE_SHORTCUT_CHAT)?;
 
-    let output = run_path_command(&harness, &["debug", "fix-s"], &file_path, &[])?;
+    let output = run_path_command(
+        &harness,
+        &["experimental", "transform", "language-runs", "--apply"],
+        &file_path,
+        &[],
+    )?;
     assert_success(&output, "debug fix-s rewrite");
 
     let rewritten = fs::read_to_string(&file_path)?;
@@ -231,7 +269,12 @@ fn debug_fix_s_leaves_already_correct_file_unmodified() -> Result<(), TestError>
     sleep(Duration::from_secs(1));
     let before_modified = fs::metadata(&file_path)?.modified()?;
 
-    let output = run_path_command(&harness, &["debug", "fix-s"], &file_path, &[])?;
+    let output = run_path_command(
+        &harness,
+        &["experimental", "transform", "language-runs", "--apply"],
+        &file_path,
+        &[],
+    )?;
     assert_success(&output, "debug fix-s no-op");
 
     let after_modified = fs::metadata(&file_path)?.modified()?;
@@ -254,7 +297,7 @@ fn validate_flags_single_word_language_switch_with_e255() -> Result<(), TestErro
         SINGLE_WORD_SWITCH_CHAT,
     )?;
 
-    let output = run_path_command(&harness, &["validate"], &file_path, &["--force"])?;
+    let output = run_path_command(&harness, &["validate"], &file_path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         text.contains("E255"),
@@ -275,7 +318,12 @@ fn debug_fix_s_rewrites_single_word_switch_to_precode() -> Result<(), TestError>
         SINGLE_WORD_SWITCH_CHAT,
     )?;
 
-    let output = run_path_command(&harness, &["debug", "fix-s"], &file_path, &[])?;
+    let output = run_path_command(
+        &harness,
+        &["experimental", "transform", "language-runs", "--apply"],
+        &file_path,
+        &[],
+    )?;
     assert_success(&output, "debug fix-s single-word rewrite");
 
     let rewritten = fs::read_to_string(&file_path)?;
@@ -297,7 +345,12 @@ fn debug_fix_s_appends_missing_explicit_language_to_languages_header() -> Result
         MISSING_EXPLICIT_LANGUAGE_HEADER_CHAT,
     )?;
 
-    let output = run_path_command(&harness, &["debug", "fix-s"], &file_path, &[])?;
+    let output = run_path_command(
+        &harness,
+        &["experimental", "transform", "language-runs", "--apply"],
+        &file_path,
+        &[],
+    )?;
     assert_success(&output, "debug fix-s append language header");
 
     let rewritten = fs::read_to_string(&file_path)?;
@@ -494,6 +547,121 @@ fn validate_matrix_audit_mode_writes_jsonl_without_cache_writes() -> Result<(), 
     Ok(())
 }
 
+/// A file-size limit makes the final buffered flush fail on Unix, including
+/// macOS where /dev/full is unavailable. Only this child inherits the limit.
+#[cfg(unix)]
+#[test]
+fn validate_matrix_audit_flush_failure_never_claims_report_completion() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let input = write_fixture(dir.path(), "bad.cha", INVALID_CHAT_MISSING_END)?;
+    let report = dir.path().join("audit.jsonl");
+    for previous in [None, Some("retained previous report")] {
+        if let Some(previous) = previous {
+            fs::write(&report, previous)?;
+        }
+        let base = harness.chatter_cmd();
+        let mut command = std::process::Command::new("/bin/sh");
+        command.args([
+            "-c",
+            "trap '' XFSZ; ulimit -f 0 || exit 90; exec \"$@\"",
+            "audit-limit",
+        ]);
+        command.arg(base.get_program());
+        for (name, value) in base.get_envs() {
+            match value {
+                Some(value) => {
+                    command.env(name, value);
+                }
+                None => {
+                    command.env_remove(name);
+                }
+            }
+        }
+        let output = command
+            .arg("validate")
+            .arg(&input)
+            .arg("--audit")
+            .arg(&report)
+            .output()?;
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{}",
+            combined_output(&output)
+        );
+        assert!(
+            stderr_string(&output).contains("could not be written"),
+            "{}",
+            combined_output(&output)
+        );
+        let stdout = stdout_string(&output);
+        assert!(!stdout.contains("Detailed errors written to"), "{stdout}");
+        assert!(!stdout.contains("VALIDATION AUDIT SUMMARY"), "{stdout}");
+        match previous {
+            Some(previous) => assert_eq!(fs::read_to_string(&report)?, previous),
+            None => assert!(
+                !report.exists(),
+                "failed staged output must remain unpublished"
+            ),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn validate_matrix_audit_stopped_run_preserves_report() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let corpus = dir.path().join("corpus");
+    fs::create_dir(&corpus)?;
+    for number in 0..20 {
+        write_fixture(
+            &corpus,
+            &format!("bad-{number}.cha"),
+            INVALID_CHAT_MISSING_END,
+        )?;
+    }
+    let report = dir.path().join("audit.jsonl");
+    fs::write(&report, "retained previous report")?;
+    let output = harness
+        .chatter_cmd()
+        .arg("validate")
+        .arg(&corpus)
+        .args(["--jobs", "1", "--max-errors", "1", "--audit"])
+        .arg(&report)
+        .output()?;
+    assert_failure(&output, "stopped audit");
+    assert!(
+        stderr_string(&output).contains("staged report was not published"),
+        "{}",
+        combined_output(&output)
+    );
+    assert_eq!(fs::read_to_string(report)?, "retained previous report");
+    assert!(!stdout_string(&output).contains("Detailed errors written to"));
+    Ok(())
+}
+
+#[test]
+fn validate_matrix_audit_nothing_found_leaves_report_absent() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let corpus = dir.path().join("empty");
+    fs::create_dir(&corpus)?;
+    let report = dir.path().join("audit.jsonl");
+    let output = harness
+        .chatter_cmd()
+        .arg("validate")
+        .arg(corpus)
+        .arg("--audit")
+        .arg(&report)
+        .output()?;
+    assert_failure(&output, "empty audit");
+    assert!(!report.exists());
+    assert!(!stdout_string(&output).contains("Detailed errors written to"));
+    Ok(())
+}
+
 #[test]
 fn cache_matrix_stats_and_clear_commands_track_state() -> Result<(), TestError> {
     assert_manifest_contracts(
@@ -553,7 +721,7 @@ fn cache_matrix_stats_and_clear_commands_track_state() -> Result<(), TestError> 
         "{last_modified}"
     );
 
-    let dry_run = run_prefix_clear(&harness, &corpus_a, true)?;
+    let dry_run = run_prefix_clear(&harness, &corpus_a, CacheClearAction::Preview)?;
     assert_success(&dry_run, "cache clear --prefix --dry-run");
     // The dry run counts what the prefix selects: corpus A's one entry.
     assert!(
@@ -564,13 +732,13 @@ fn cache_matrix_stats_and_clear_commands_track_state() -> Result<(), TestError> 
     let stats_after_dry_run = cache_stats_json(&harness)?;
     assert_eq!(stats_after_dry_run["total_entries"].as_u64(), Some(2));
 
-    let clear_prefix = run_prefix_clear(&harness, &corpus_a, false)?;
+    let clear_prefix = run_prefix_clear(&harness, &corpus_a, CacheClearAction::Apply)?;
     assert_success(&clear_prefix, "cache clear --prefix");
     assert!(stdout_string(&clear_prefix).contains("Cleared"));
     let stats_after_prefix = cache_stats_json(&harness)?;
     assert_eq!(stats_after_prefix["total_entries"].as_u64(), Some(1));
 
-    let clear_all = run_command(&harness, &["cache", "clear", "--all"])?;
+    let clear_all = run_command(&harness, &["cache", "clear", "--all", "--apply"])?;
     assert_success(&clear_all, "cache clear --all");
     let final_stats = cache_stats_json(&harness)?;
     assert_eq!(final_stats["total_entries"].as_u64(), Some(0));

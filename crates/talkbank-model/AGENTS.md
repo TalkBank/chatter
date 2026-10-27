@@ -11,6 +11,10 @@ The typed CHAT AST (`model/`), its validation (`validation/`), cross-tier
 alignment (`alignment/`), the diagnostic types (`errors/`), `WriteChat`
 serialization and the `ChatParser` trait (`parser_api/`). It depends on no
 parser. Both backends produce its values; every downstream crate reads them.
+Tree-sitter and re2c are peers and can both drive model changes, including
+malformed/recovery states. Follow
+[shared model ownership](../../book/src/architecture/parser-backends.md#equal-backends-one-shared-model);
+do not treat Tree-sitter's current lowering as a fixed model boundary.
 Architecture: [CHAT data model](../../book/src/architecture/chat-model/chat-model.md),
 [errors](../../book/src/architecture/errors-and-validation/chat-core-errors.md),
 [validation](../../book/src/architecture/errors-and-validation/validation.md),
@@ -18,6 +22,11 @@ Architecture: [CHAT data model](../../book/src/architecture/chat-model/chat-mode
 
 ## Construction
 
+- No silent defaults or sentinels in model data, ever. Preserve observed
+  missing/malformed states explicitly; never invent a normal payload to make a
+  constructor succeed. That causes spurious diagnostic cascades and silent
+  corruption. Follow the
+  [design principle](../../book/src/architecture/chat-model/chat-model.md#no-silent-defaults-or-sentinels).
 - Every value with a source position carries `location: Location`
   (`Located(Span)` or `Unlocated`) and takes it as its constructor's first
   argument. There is no setter, `Default` or placeholder span. A builder
@@ -29,8 +38,9 @@ Architecture: [CHAT data model](../../book/src/architecture/chat-model/chat-mode
   `TryFrom<Range<usize>>`. Combine locations with `Location::or`, `map`,
   `start_point` and `span()`; a consumer that needs geometry matches and
   states its unlocated policy.
-- Checked constructors (`NonEmptyString`, `Word::new`, `SpeakerCode`, the
-  index newtypes) are the only route to their types. `new_unchecked` and
+- Distinguish admitted `NonEmptyString` from `RecoveryText`, whose `Empty`
+  variant preserves observed emptiness for contextual validation. Never infer
+  admission from a constructor name: inspect serde and recovery paths too. `new_unchecked` and
   `from_checked_literal` are counted by the fabricated-AST ratchet; adding one
   is a reviewed exception, never a convenience.
 - `ChatFile` is the mutable AST; `validate_into` consumes it into a read-only
@@ -47,8 +57,9 @@ Architecture: [CHAT data model](../../book/src/architecture/chat-model/chat-mode
   which its parent narrowed with `with_field_location`; `Unlocated` is the
   honest answer when nothing narrowed, never `at_offset(0)`.
 - Two facts, never one: `ParseHealth` taint answers whether cross-tier
-  alignment is trustworthy; whether a tier lost content of its own is the
-  tier's business (`GraCompleteness`). Recovery is not validity.
+  alignment is trustworthy; a tier's own failed lowering remains explicit
+  rejection or an unparsed variant. GraLowering never constructs a partial
+  GraTier. Recovery is not validity.
 - Exhaustive matches over `UtteranceContent` and `BracketedItem`; "consecutive"
   on the main tier is `walk_words` order, never flat-index adjacency.
 - Fabricated values are banned: no `_ => Separator::Comma`, no
@@ -67,6 +78,15 @@ Architecture: [CHAT data model](../../book/src/architecture/chat-model/chat-mode
   `generated/` from `spec/`; never hand-write a list of a closed set here.
 - `errors/location.rs`, `errors/source_location.rs` and `errors/span_shift.rs`
   own `Location`, `DiagnosticLocation` and how both move after an edit.
+
+## Rendering boundary
+
+`WriteChat` implementations are generic over `ChatWriter` and return the sink's
+associated error. Emit text, characters and decimal integers directly; do not
+route through arbitrary `Display` formatting. Owned-string helpers use
+`ChatString::render`, whose error type is `Infallible`; never discard a
+`fmt::Result` or replace it with a panic. Existing `std::fmt::Write` sinks remain
+supported and their errors must propagate. Rendering does not certify validity.
 
 ## Testing boundary
 

@@ -41,22 +41,29 @@ pub enum OutputFormat {
 /// Which parser backend to use for CHAT parsing.
 ///
 /// Tree-sitter (default) supports incremental reparsing and is used by the LSP.
-/// Re2c is a DFA-based second implementation, kept as a specification oracle.
+/// Re2c is an independent DFA-based implementation for backend comparison.
 ///
-/// **The default backend is the authority on CHAT validity. Re2c is not, and
-/// as of 0.16.0 it is not ready to be.** It ACCEPTS constructs the default
-/// backend refuses, so a clean `--parser re2c` run is not evidence a file is
-/// valid.
+/// Use the default backend for production validity decisions. Neither
+/// implementation is a language oracle: adjudicate disagreements against the
+/// CHAT specification, and do not infer completeness from finite comparisons.
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
 pub enum ParserBackend {
-    /// Tree-sitter parser (default, supports incremental reparsing). The
-    /// authority on CHAT validity.
+    /// Tree-sitter parser (default, supports incremental reparsing).
+    /// Use for production validity decisions.
     #[default]
     TreeSitter,
-    /// Re2c DFA parser. NOT READY as a validity authority: it accepts some
-    /// input the default backend refuses. Use it as an oracle for comparing
-    /// two implementations, not to decide whether a file is valid.
+    /// Re2c DFA parser for backend comparison, not production validity
+    /// decisions. Check disagreements against the CHAT specification.
     Re2c,
+}
+
+impl From<ParserBackend> for talkbank_transform::ParserKind {
+    fn from(backend: ParserBackend) -> Self {
+        match backend {
+            ParserBackend::TreeSitter => Self::TreeSitter,
+            ParserBackend::Re2c => Self::Re2c,
+        }
+    }
 }
 
 /// Dependent tiers that `show-alignment` can filter on.
@@ -70,16 +77,4 @@ pub enum AlignmentTier {
     Pho,
     /// Syntax tier (%sin)
     Sin,
-}
-
-/// How the speaker-id judgment is powered. Orthogonal to the
-/// explicit/reference/override mapping-supply modes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
-pub enum JudgmentMode {
-    /// Deterministic Jaccard reference matching; no model. (Default.)
-    #[default]
-    Deterministic,
-    /// One holistic LLM judgment per session via the configured endpoint.
-    Holistic,
 }

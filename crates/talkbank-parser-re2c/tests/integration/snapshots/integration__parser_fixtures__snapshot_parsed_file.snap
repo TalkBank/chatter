@@ -17,40 +17,35 @@ lines:
           content: []
   - Header:
       header:
-        Other:
-          prefix:
-            HeaderPrefix:
-              text: "@Languages:\t"
-          content:
-            - LanguageCode: eng
+        Shared:
+          type: languages
+          codes:
+            - eng
   - Header:
       header:
-        Participants:
+        Shared:
+          type: participants
           entries:
-            - words:
-                - CHI
-                - Child
-            - words:
-                - MOT
-                - Mother
+            - speaker_code: CHI
+              details:
+                state: complete
+                name: ~
+                role: Child
+            - speaker_code: MOT
+              details:
+                state: complete
+                name: ~
+                role: Mother
   - Header:
       header:
-        Other:
-          prefix:
-            HeaderPrefix:
-              text: "@ID:\t"
-          content:
-            - IdFields:
-                language: eng
-                corpus: corpus
-                speaker: CHI
-                age: 3;00.
-                sex: ""
-                group: ""
-                ses: ""
-                role: Child
-                education: ""
-                custom: ""
+        Shared:
+          type: id
+          language:
+            - eng
+          corpus: corpus
+          speaker: CHI
+          age: 3;00.
+          role: Child
   - Utterance:
       main_tier:
         speaker:
@@ -69,20 +64,19 @@ lines:
                 annotations: []
                 raw_text: hello
           terminator:
-            Period: "."
+            type: period
           postcodes: []
           media_bullet: ~
       dependent_tiers:
         - tier:
             Mor:
+              tier_type: Mor
               items:
                 - main:
                     pos: n
                     lemma: hello
-                    features: []
-                  post_clitics: []
               terminator:
-                Period: "."
+                type: period
   - Header:
       header:
         Other:

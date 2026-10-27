@@ -2,7 +2,7 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 use crate::alignment::helpers::{ContentItem, walk_content};
-use crate::model::{Bullet, MainTier};
+use crate::model::{BulletState, MainTier};
 use crate::validation::ValidationContext;
 use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
@@ -16,7 +16,10 @@ enum ScopeState {
 }
 
 impl ScopeState {
-    fn check_bullet(self, bullet: &Bullet, errors: &impl ErrorSink) {
+    fn check_bullet(self, bullet: &BulletState, errors: &impl ErrorSink) {
+        let Some(bullet) = bullet.as_parsed() else {
+            return;
+        };
         match self {
             Self::AwaitingMaterial => errors.report(
                 ParseError::at_location(
@@ -52,7 +55,8 @@ pub(crate) fn check_leading_bullets(
         | ContentItem::OtherSpokenEvent(_)
         | ContentItem::NonvocalSimple(_) => state = ScopeState::Established,
         ContentItem::InternalBullet(bullet) => state.check_bullet(bullet, errors),
-        ContentItem::Freecode(_)
+        ContentItem::OrphanAnnotation(_)
+        | ContentItem::Freecode(_)
         | ContentItem::Separator(_)
         | ContentItem::OverlapPoint(_)
         | ContentItem::LongFeatureBegin(_)

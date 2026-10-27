@@ -10,7 +10,6 @@ use crate::ErrorSink;
 use crate::validation::{Validate, ValidationContext};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as FmtWrite;
 use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
@@ -132,7 +131,7 @@ impl Validate for PhoGroupWords {
 
 impl WriteChat for PhoItem {
     /// Serializes one `%pho` item (plain word or `‹...›` grouped words).
-    fn write_chat<W: FmtWrite>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             PhoItem::Word(word) => word.write_chat(w),
             PhoItem::Group(words) => {

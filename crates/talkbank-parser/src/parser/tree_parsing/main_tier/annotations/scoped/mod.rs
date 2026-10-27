@@ -1,9 +1,8 @@
 //! Scoped annotation parsing
 //!
 //! Handles parsing of base annotations like [*], [=], [+], etc.
-//! Retrace markers (`[/]`, `[//]`, `[///]`, `[/-]`, `[/?]`) are parsed
-//! separately from content annotations and returned as `RetraceKind` in
-//! `ParsedAnnotations`.
+//! Retrace markers remain in the ordered run beside content annotations;
+//! producer failures travel outside that run rather than erasing a marker.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -15,5 +14,5 @@ mod list;
 mod single;
 mod symbols;
 
-pub(crate) use list::parse_scoped_annotations;
+pub(in crate::parser) use list::parse_scoped_annotations;
 pub(crate) use single::ParsedAnnotation;

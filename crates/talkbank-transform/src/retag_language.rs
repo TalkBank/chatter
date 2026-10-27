@@ -57,6 +57,8 @@ pub enum RetagRefusal {
     /// rewrite. Retagging the other notations would leave the span behind and
     /// the file self-contradicting, so nothing is written.
     NamesCodeInSpan,
+    /// Language declaration is not authoritative; no partial retag is allowed.
+    Declaration(talkbank_model::model::LanguageDeclarationError),
 }
 
 /// Retag `from` as `to` everywhere in `chat_file`.
@@ -70,7 +72,9 @@ pub enum RetagRefusal {
 /// # Errors
 ///
 /// Returns [`RetagRefusal::NamesCodeInSpan`] and changes NOTHING when the file
-/// names `from` in a span notation this cannot rewrite.
+/// names `from` in a span notation this cannot rewrite. Returns
+/// [`RetagRefusal::Declaration`] before mutation if the language declaration
+/// is unavailable. An identity retag remains an unchanged success.
 pub fn retag_language(
     chat_file: &mut ChatFile,
     from: &LanguageCode,
@@ -79,6 +83,9 @@ pub fn retag_language(
     if from == to {
         return Ok(RetagStats::default());
     }
+    chat_file
+        .language_declaration()
+        .map_err(RetagRefusal::Declaration)?;
     if names_code_in_span(chat_file, from) {
         return Err(RetagRefusal::NamesCodeInSpan);
     }
@@ -114,7 +121,6 @@ pub fn retag_language(
 
     // The file-level view mirrors the header, so it moves with it. Both go
     // through the same named operation on the owner.
-    chat_file.languages.retag(from, to);
 
     Ok(stats)
 }

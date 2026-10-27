@@ -29,10 +29,12 @@
 mod contextual_fragments;
 mod empty_containers;
 mod fragments;
+mod header_population;
 mod model;
 mod native_locations;
 mod remaining_fragments;
 mod spec_corpus;
+mod tier_population;
 
 use talkbank_model::ErrorCollector;
 use talkbank_parser::TreeSitterParser;
@@ -99,17 +101,11 @@ fn audit_variant(corpus: &SpecCorpus, ending: LineEnding) -> Result<String, Stri
                 "{}; required by {} at {:?}",
                 measured.detail(),
                 finding.diagnostic().code,
-                finding
-                    .diagnostic()
-                    .location
-                    .span()
-                    .expect("located diagnostic")
+                finding.diagnostic().location
             )),
             Detection::ToolFailure { backend, finding } => failures.push(format!(
                 "{}: {backend} tool failure {} at {:?}",
-                measured.label,
-                finding.code,
-                finding.location.span().expect("located diagnostic")
+                measured.label, finding.code, finding.location
             )),
         }
     }
@@ -219,12 +215,12 @@ fn participants_recovery_preserves_entries_and_fragment_locations() {
     let comma = offset + header.rfind(',').unwrap();
     let parser = talkbank_parser_re2c::Re2cParser::new();
     let errors = ErrorCollector::new();
-    let ParseOutcome::Parsed(Header::Participants { entries }) =
+    let ParseOutcome::Parsed(Header::UnparsedParticipants(raw)) =
         parser.parse_header(header, offset, &errors)
     else {
-        panic!("trailing-comma recovery must retain a participant header");
+        panic!("trailing-comma recovery must retain rejected participant source");
     };
-    assert_eq!(entries.len(), 2);
+    assert_eq!(raw.source().trim_end_matches(['\r', '\n']), header);
     let diagnostic = errors
         .into_vec()
         .into_iter()

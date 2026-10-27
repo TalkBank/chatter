@@ -34,6 +34,10 @@ impl MethodCollision {
     fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {
         panic!("inherent shift selected instead of SpanShift")
     }
+
+    fn try_map_spans<E>(self, _map: &mut impl FnMut(Span) -> Result<Span, E>) -> Result<Self, E> {
+        panic!("inherent map selected instead of SpanShift")
+    }
 }
 
 #[derive(Equality, Shift)]
@@ -343,4 +347,58 @@ fn truncation_restores_caller_path_and_context_after_selected_span() {
         crate::Location::Located(Span::new(1, 3))
     );
     assert_eq!(left.speaker_span, Span::new(20, 22));
+}
+
+#[test]
+fn consuming_map_dispatch_cannot_select_an_inherent_field_method() {
+    let source = talkbank_model::FragmentSource::new("01234567890123456789", 5).expect("source");
+    let value = source
+        .rebase(CollisionStruct {
+            payload: collision("payload"),
+        })
+        .expect("contained");
+    assert_eq!(value.payload.span, Span::new(15, 25));
+    for value in collision_variants("payload") {
+        let mapped = source.rebase(value).expect("contained");
+        let payload = match mapped {
+            CollisionEnum::Tuple(value) | CollisionEnum::Named { payload: value } => value,
+        };
+        assert_eq!(payload.span, Span::new(15, 25));
+    }
+}
+
+/// Neither this payload nor its aggregate can be cloned or span-mapped.
+#[derive(Debug, PartialEq)]
+struct OwnedPayload(String);
+
+#[derive(Debug, Shift)]
+struct OwnedSpans<T> {
+    first: Span,
+    second: Option<Box<Span>>,
+    #[span_shift(skip)]
+    payload: T,
+}
+
+#[test]
+fn checked_mapping_moves_opaque_ownership_and_rejects_later_invalid_spans() {
+    let source = talkbank_model::FragmentSource::new("abcd", 10).expect("source");
+    let make = |end| OwnedSpans {
+        first: Span::new(0, 1),
+        second: Some(Box::new(Span::new(2, end))),
+        payload: OwnedPayload("retained".into()),
+    };
+    let mapped = source.rebase(make(4)).expect("contained spans");
+    assert_eq!(mapped.first, Span::new(10, 11));
+    assert_eq!(mapped.second.as_deref(), Some(&Span::new(12, 14)));
+    assert_eq!(mapped.payload, OwnedPayload("retained".into()));
+    let failure = source
+        .rebase(make(5))
+        .expect_err("no partly mapped aggregate");
+    assert_eq!(
+        failure,
+        talkbank_model::FragmentRebaseError::OutsideInput {
+            span: Span::new(2, 5),
+            input: Span::new(0, 4),
+        }
+    );
 }

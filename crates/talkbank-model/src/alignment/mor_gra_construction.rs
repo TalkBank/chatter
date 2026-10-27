@@ -90,7 +90,7 @@ mod tests {
             terminator: Terminator::Period {
                 location: crate::Location::Unlocated,
             },
-            relation: GrammaticalRelation::new(index, head, "PUNCT"),
+            relation: GrammaticalRelation::new(index, head, "PUNCT".try_into().unwrap()),
         }
     }
 
@@ -99,8 +99,8 @@ mod tests {
     fn aligned_inputs_succeed() {
         let mors = vec![simple_mor("pron", "I"), simple_mor("verb", "go")];
         let item_relations = vec![
-            GrammaticalRelation::new(1, 2, "NSUBJ"),
-            GrammaticalRelation::new(2, 0, "ROOT"),
+            GrammaticalRelation::new(1, 2, "NSUBJ".try_into().unwrap()),
+            GrammaticalRelation::new(2, 0, "ROOT".try_into().unwrap()),
         ];
         let (mor, gra) = try_align_mor_gra(
             mors,
@@ -118,8 +118,8 @@ mod tests {
     fn mismatched_counts_fail() {
         let mors = vec![simple_mor("pron", "I")];
         let item_relations = vec![
-            GrammaticalRelation::new(1, 0, "ROOT"),
-            GrammaticalRelation::new(2, 0, "EXTRA"),
+            GrammaticalRelation::new(1, 0, "ROOT".try_into().unwrap()),
+            GrammaticalRelation::new(2, 0, "EXTRA".try_into().unwrap()),
         ];
         let err = try_align_mor_gra(
             mors,
@@ -144,8 +144,8 @@ mod tests {
         let it = Mor::new(MorWord::new(PosCategory::new("pron"), "it"))
             .with_post_clitic(MorWord::new(PosCategory::new("aux"), "be"));
         let item_relations = vec![
-            GrammaticalRelation::new(1, 0, "ROOT"),
-            GrammaticalRelation::new(2, 1, "AUX"),
+            GrammaticalRelation::new(1, 0, "ROOT".try_into().unwrap()),
+            GrammaticalRelation::new(2, 1, "AUX".try_into().unwrap()),
         ];
         let (mor, gra) = try_align_mor_gra(
             vec![it],
@@ -179,8 +179,8 @@ mod tests {
         // item_relations alongside the proper chunk-relation. Two
         // entries vs one mor chunk, function rejects.
         let item_relations = vec![
-            GrammaticalRelation::new(1, 0, "ROOT"),
-            GrammaticalRelation::new(2, 1, "PUNCT"),
+            GrammaticalRelation::new(1, 0, "ROOT".try_into().unwrap()),
+            GrammaticalRelation::new(2, 1, "PUNCT".try_into().unwrap()),
         ];
         let err = try_align_mor_gra(
             mors,

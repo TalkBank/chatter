@@ -48,7 +48,7 @@ fn long_main_tier_does_not_crash() {
     std::fs::write(&path, long_tier_doc(4000)).expect("write fixture");
 
     let output = harness
-        .run_validate(&path, &["--force"])
+        .run_validate(&path, &["--refresh-cache"])
         .expect("validate runs");
 
     assert!(

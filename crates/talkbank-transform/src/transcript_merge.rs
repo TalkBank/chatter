@@ -56,16 +56,8 @@ pub enum MergeInput {
     Donor,
 }
 
-/// A declaration cannot be replaced by an inferred empty language set.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LanguageDeclarationProblem {
-    /// No language header exists.
-    Missing,
-    /// More than one header exists; choosing one would discard evidence.
-    Repeated,
-    /// The sole header contains no language codes.
-    Empty,
-}
+/// Shared declaration admission failure, retained in the merge's input context.
+pub use talkbank_model::model::LanguageDeclarationError as LanguageDeclarationProblem;
 
 /// Errors that can arise from the merge operation.
 ///
@@ -80,6 +72,18 @@ pub enum LanguageDeclarationProblem {
 /// out-of-transform consumer needs it.
 #[derive(Debug, thiserror::Error)]
 pub enum MergeError {
+    /// A declaration has no observed role and cannot supply merge metadata.
+    #[error("speaker '{speaker}' has no declared participant role")]
+    MissingParticipantRole {
+        /// Speaker whose declaration must be repaired.
+        speaker: SpeakerCode,
+    },
+    /// An occupied media position contains rejected source, not a timeline value.
+    #[error("selected utterance {origin:?} contains unparsed timing")]
+    UnparsedTiming {
+        /// Source identity of the rejected utterance.
+        origin: MergeOrigin,
+    },
     /// Language subset comparison requires actual, unambiguous declarations.
     #[error("{input:?} language declaration is {problem:?}")]
     InvalidLanguageDeclaration {
@@ -214,6 +218,15 @@ pub enum MergeError {
         /// File 2's declared `@Languages` code list (empty if the file
         /// had no `@Languages` header at all).
         file2: LanguageCodes,
+    },
+
+    /// An input lacks readable participant identity headers.
+    #[error("Cannot merge {input:?}: {reason}")]
+    SpeakerHeaders {
+        /// Input whose declaration was unavailable.
+        input: MergeInput,
+        /// Shared speaker-rewrite admission failure.
+        reason: crate::SpeakerRewriteError,
     },
 
     /// A speaker code outside the retain set appears in both files.
@@ -667,6 +680,12 @@ impl BulletEdit {
 /// Why [`MergeDraft::set_terminal_bullet`] refused an edit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum BulletEditError {
+    /// The occupied terminal slot is rejected source, not editable timing.
+    #[error("output utterance {output} has unparsed terminal timing")]
+    UnparsedTerminalBullet {
+        /// The zero-based output utterance ordinal.
+        output: usize,
+    },
     /// The draft has no output utterance with this ordinal.
     #[error("the merged draft has no output utterance {output}")]
     NoSuchUtterance {
@@ -734,7 +753,10 @@ impl MergeDraft {
             None => Err(BulletEditError::NoSuchUtterance { output }),
             Some(utterance) => match utterance.main.content.bullet.as_mut() {
                 None => Err(BulletEditError::NoTerminalBullet { output }),
-                Some(existing) => {
+                Some(talkbank_model::BulletState::Unparsed { .. }) => {
+                    Err(BulletEditError::UnparsedTerminalBullet { output })
+                }
+                Some(talkbank_model::BulletState::Parsed(existing)) => {
                     let assembled = self
                         .bullet_edits
                         .get(&output)
@@ -870,6 +892,20 @@ fn merge_with_placement(
     let reference_languages = DeclaredLanguages::admit(f1, MergeInput::Reference)?;
     DeclaredLanguages::admit(f2, MergeInput::Donor)?.require_subset_of(&reference_languages)?;
 
+    let reference = crate::speaker_headers::SpeakerRewriteInput::admit(f1).map_err(|reason| {
+        MergeError::SpeakerHeaders {
+            input: MergeInput::Reference,
+            reason,
+        }
+    })?;
+    let donor = crate::speaker_headers::SpeakerRewriteInput::admit(f2).map_err(|reason| {
+        MergeError::SpeakerHeaders {
+            input: MergeInput::Donor,
+            reason,
+        }
+    })?;
+    let (f1, f2) = (reference.file(), donor.file());
+
     let in_retain = |speaker: &SpeakerCode| retain.iter().any(|s| s == speaker);
 
     // Precondition: File 1 must declare at least one utterance for
@@ -947,12 +983,24 @@ fn merge_with_placement(
                 }
                 if let Some(f1_entry) = f1_declared.get(&donor_entry.speaker_code) {
                     let vestigial = utterance_count_for(f1, &donor_entry.speaker_code) == 0;
-                    let roles_match = f1_entry.role == donor_entry.role;
+                    let file1_role =
+                        f1_entry
+                            .role()
+                            .ok_or_else(|| MergeError::MissingParticipantRole {
+                                speaker: f1_entry.speaker_code.clone(),
+                            })?;
+                    let donor_role =
+                        donor_entry
+                            .role()
+                            .ok_or_else(|| MergeError::MissingParticipantRole {
+                                speaker: donor_entry.speaker_code.clone(),
+                            })?;
+                    let roles_match = file1_role == donor_role;
                     // Name is part of the dedupe metadata only when BOTH
                     // sides actually declare one; if either side has no
                     // name there is nothing to compare on that dimension,
                     // so it must not by itself force a refusal.
-                    let names_match = match (&f1_entry.name, &donor_entry.name) {
+                    let names_match = match (f1_entry.name(), donor_entry.name()) {
                         (Some(f1_name), Some(donor_name)) => f1_name == donor_name,
                         (None, _) | (_, None) => true,
                     };
@@ -960,8 +1008,8 @@ fn merge_with_placement(
                     if !vestigial || !metadata_matches {
                         return Err(MergeError::ParticipantAlreadyDeclared {
                             speaker: donor_entry.speaker_code.clone(),
-                            file1_role: f1_entry.role.clone(),
-                            donor_role: donor_entry.role.clone(),
+                            file1_role: file1_role.clone(),
+                            donor_role: donor_role.clone(),
                         });
                     }
                     dedupe_codes.insert(donor_entry.speaker_code.clone());
@@ -1007,45 +1055,21 @@ fn merge_with_placement(
 
 /// Nonempty declaration borrowed from the exact input. No constructor accepts
 /// bare codes, so subset comparison cannot interpret absence as a declaration.
-struct DeclaredLanguages<'a>(&'a LanguageCodes);
+struct DeclaredLanguages<'a>(talkbank_model::DeclaredLanguagesRef<'a>);
 
 impl<'a> DeclaredLanguages<'a> {
     fn admit(file: &'a ChatFile, input: MergeInput) -> Result<Self, MergeError> {
-        let mut declarations = file.headers().filter_map(|header| match header {
-            Header::Languages { codes } => Some(codes),
-            _ => None,
-        });
-        let codes = declarations
-            .next()
-            .ok_or(MergeError::InvalidLanguageDeclaration {
-                input,
-                problem: LanguageDeclarationProblem::Missing,
-            })?;
-        if declarations.next().is_some() {
-            return Err(MergeError::InvalidLanguageDeclaration {
-                input,
-                problem: LanguageDeclarationProblem::Repeated,
-            });
-        }
-        if codes.as_slice().is_empty() {
-            return Err(MergeError::InvalidLanguageDeclaration {
-                input,
-                problem: LanguageDeclarationProblem::Empty,
-            });
-        }
+        let codes = file
+            .language_declaration()
+            .map_err(|problem| MergeError::InvalidLanguageDeclaration { input, problem })?;
         Ok(Self(codes))
     }
 
     fn require_subset_of(&self, reference: &Self) -> Result<(), MergeError> {
-        if self
-            .0
-            .as_slice()
-            .iter()
-            .any(|code| !reference.0.as_slice().contains(code))
-        {
+        if self.0.iter().any(|code| !reference.0.contains(code)) {
             return Err(MergeError::LanguageMismatch {
-                file1: reference.0.clone(),
-                file2: self.0.clone(),
+                file1: LanguageCodes::new(reference.0.to_vec()),
+                file2: LanguageCodes::new(self.0.to_vec()),
             });
         }
         Ok(())

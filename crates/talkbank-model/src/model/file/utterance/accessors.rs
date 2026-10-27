@@ -18,7 +18,7 @@ use crate::model::{Bullet, UtteranceContent};
 use super::Utterance;
 
 impl Utterance {
-    /// Return the first `%mor` tier, if present.
+    /// Return the first parsed `%mor` tier. Unparsed recovery is not morphology.
     pub fn mor_tier(&self) -> Option<&MorTier> {
         self.dependent_tiers.iter().find_map(|t| match &t.tier {
             DependentTier::Mor(tier) => Some(tier),
@@ -272,11 +272,15 @@ impl Utterance {
 
     /// Return the record's media bullet (the `*SPK:` line bullet), if any.
     ///
-    /// Prefers the explicit terminator bullet, falling back to an internal
-    /// bullet token recovered from the main-tier content.
+    /// Returns usable timing from the occupied terminal slot, or from the first
+    /// internal bullet only when no terminal slot exists. A rejected occupied
+    /// slot returns no numeric timing and never promotes another bullet. Inspect
+    /// `main.content.bullet` to distinguish absence from rejected source.
     pub fn media_bullet(&self) -> Option<&Bullet> {
-        self.main.content.bullet.as_ref().or_else(|| {
-            self.main
+        match self.main.content.bullet.as_ref() {
+            Some(bullet) => bullet.as_parsed(),
+            None => self
+                .main
                 .content
                 .content
                 .iter()
@@ -284,7 +288,8 @@ impl Utterance {
                     UtteranceContent::InternalBullet(bullet) => Some(bullet),
                     _ => None,
                 })
-        })
+                .and_then(crate::model::BulletState::as_parsed),
+        }
     }
 
     // ---------------------------------------------------------------------

@@ -1,12 +1,8 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
-assertion_line: 98
 expression: snapshot
 ---
 {
-  "languages": [
-    "hrv"
-  ],
   "lines": [
     {
       "header": {
@@ -33,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Target_Child",
+            "details": {
+              "name": null,
+              "role": "Target_Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Investigator",
+            "details": {
+              "name": null,
+              "role": "Investigator",
+              "state": "complete"
+            },
             "speaker_code": "INV"
           }
         ],
@@ -1162,40 +1164,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "9;06.",
-        "corpus": "corpus",
-        "language": [
-          "hrv"
-        ],
-        "role": "Target_Child",
-        "sex": "female",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Target_Child"
-    },
-    "INV": {
-      "birth_date": null,
-      "code": "INV",
-      "id": {
-        "age": "22;",
-        "corpus": "corpus",
-        "language": [
-          "hrv"
-        ],
-        "role": "Investigator",
-        "sex": "female",
-        "speaker": "INV"
-      },
-      "name": null,
-      "role": "Investigator"
-    }
-  }
+  ]
 }

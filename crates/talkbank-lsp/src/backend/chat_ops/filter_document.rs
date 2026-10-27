@@ -7,8 +7,8 @@ use talkbank_model::model::{ChatFile, Line};
 use crate::backend::execute_commands::FilterDocumentRequest;
 use crate::backend::state::Backend;
 
-use super::line_index::LineIndex;
 use super::shared::get_document_and_chat_file;
+use crate::backend::utils::LineIndex;
 
 /// Handle `talkbank/filterDocument`.
 pub(crate) fn handle_filter_document(
@@ -29,7 +29,9 @@ pub(crate) fn handle_filter_document(
 /// Render a filtered copy of the document containing only selected speakers.
 fn filter_by_speakers(chat_file: &ChatFile, text: &str, selected: &HashSet<&str>) -> String {
     let line_index = LineIndex::new(text);
-    let lines: Vec<&str> = text.lines().collect();
+    let lines: Vec<&str> = crate::backend::utils::protocol_lines(text)
+        .map(|line| line.text())
+        .collect();
     let mut output: Vec<String> = Vec::new();
 
     for model_line in &chat_file.lines {

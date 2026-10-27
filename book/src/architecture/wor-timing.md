@@ -22,6 +22,15 @@ parsed display token from cleaned text. The selective-name and pseudonymizer
 source/expected references exercise this distinction through fragment,
 round-trip, normalization and downstream transform contracts.
 
+WOR does not carry main-tier scoped error, explanation, replacement or retracing
+annotations. The [CHAT manual's word-level diarization section](https://talkbank.org/0info/manuals/CHAT.html#Wor_Tier)
+excludes comments and retracing marks from echoed words. Both parsers reject
+these annotated tiers as timing models and retain complete original source as
+`UnparsedWor` at the file boundary. They must not consume an annotation and then
+serialize a plain word in its place. A bare action `0` cannot become an empty
+word; omission words such as `0dog` retain their bodies. Word-internal structure remains supported;
+this is distinct from generating cleaned display words from a main tier.
+
 Actual timing presence is a separate typed question from correspondence.
 `WorTier::timing_evidence()` returns `Absent` or a `RecordedWorTiming` carrying
 the first real word-level bullet. Media validation uses this state directly.
@@ -30,6 +39,14 @@ remains timing evidence even when counts drift. Alignment processing is not
 required to observe a bullet already in the typed CHAT model. A `%wor` tier
 cannot carry a trailing tier-level bullet: the grammar does not permit that
 state, and `WorTier` cannot construct or serialize it.
+
+Each parsed bullet consumes the immediately preceding untimed word. A leading
+bullet, a bullet after a separator, or a second bullet cannot be associated
+without loss. Both file parsers retain such a tier as `UnparsedWor`, with its
+complete original source, and refuse it as timing evidence. Numerically
+unrepresentable timing also rejects the whole parsed tier; valid sibling timing
+remains in the retained source. Fragment APIs requiring `WorTier` reject these
+inputs. Untimed words remain supported. Recovery is not a partial timing model.
 
 Complete CHAT admission rejects a word bullet that ends at or before it starts
 (E362). Untimed words remain legal partial timing, and there is

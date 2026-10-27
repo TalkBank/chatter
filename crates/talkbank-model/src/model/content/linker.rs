@@ -74,7 +74,7 @@ pub enum LinkerKind {
 
 impl WriteChat for LinkerKind {
     /// Serializes the canonical CHAT token for this linker kind.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             LinkerKind::LazyOverlapPrecedes => w.write_str("+<"),
             LinkerKind::OtherCompletion => w.write_str("++"),
@@ -123,7 +123,7 @@ impl Linker {
 
 impl WriteChat for Linker {
     /// Serializes the canonical CHAT token for this linker.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         self.kind.write_chat(w)
     }
 }

@@ -6,10 +6,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
-use crate::generated_traversal::{AsRawNode, FreecodeNode};
+use crate::generated_traversal::{AsRawNode, FreecodeNode, SourceBound};
 use crate::model::{Freecode, UtteranceContent};
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
 
 /// Parse freecode node [^ text] into UtteranceContent.
@@ -21,37 +20,25 @@ use talkbank_model::ParseOutcome;
 ///
 /// The node is now a single leaf token. Extract the code by stripping
 /// the `[^ ` prefix and `]` suffix, then trimming trailing whitespace.
-pub fn parse_freecode(
-    typed: FreecodeNode<'_>,
-    source: &str,
+pub fn parse_freecode<'tree>(
+    typed: SourceBound<'tree, '_, FreecodeNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
-    let ParseOutcome::Parsed(text) = extract_utf8_text(node, source, errors, "freecode") else {
-        return ParseOutcome::rejected();
+    let source = typed.source();
+    let text = typed.text();
+    let value = match text.strip_prefix("[^ ").and_then(|s| s.strip_suffix(']')) {
+        Some(payload) => Freecode::from_lexed(span_of(node), payload, text),
+        None => Freecode::unparsed(span_of(node), text),
     };
-
-    // Strip "[^ " prefix and "]" suffix
-    let code = text
-        .strip_prefix("[^ ")
-        .and_then(|s| s.strip_suffix(']'))
-        .map(|s| s.trim_end());
-
-    match code {
-        Some(c) if !c.is_empty() => {
-            let span = span_of(node);
-            let freecode = Freecode::new(span, c);
-            ParseOutcome::parsed(UtteranceContent::Freecode(freecode))
-        }
-        _ => {
-            errors.report(ParseError::new(
-                ErrorCode::EmptyUtterance,
-                Severity::Error,
-                DiagnosticLocation::new(span_of(node)),
-                ErrorContext::new(source, span_of(node), "freecode"),
-                "Empty freecode content",
-            ));
-            ParseOutcome::rejected()
-        }
+    if value.text().is_none() {
+        errors.report(ParseError::new(
+            ErrorCode::UnparsableContent,
+            Severity::Error,
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), "freecode"),
+            "Freecode is missing required content",
+        ));
     }
+    ParseOutcome::parsed(UtteranceContent::Freecode(value))
 }

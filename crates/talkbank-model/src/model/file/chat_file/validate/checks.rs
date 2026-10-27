@@ -208,10 +208,9 @@ pub(super) fn check_timing_has_media(
 pub(super) fn check_utterance_language_declared(file: &ChatFile, errors: &impl crate::ErrorSink) {
     use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
-    let declared = file.languages.as_slice();
-    if declared.is_empty() {
+    let Ok(declared) = file.language_declaration() else {
         return;
-    }
+    };
     for utterance in file.utterances() {
         let Some(code) = &utterance.main.content.language_code else {
             continue;
@@ -586,13 +585,17 @@ pub(super) fn check_cross_header_consistency(
     use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ParseError, Severity};
 
     // Collect declared languages from @Languages header
-    let declared_languages: HashSet<&LanguageCode> = file.languages.as_slice().iter().collect();
+    let declared_languages: Result<HashSet<&LanguageCode>, _> = file
+        .language_declaration()
+        .map(|codes| codes.iter().collect());
 
     for (header, span) in headers {
         if let Header::ID(id_header) = header {
             // CHECK 122: @ID language not in @Languages
             for id_lang in id_header.language.as_slice() {
-                if !declared_languages.is_empty() && !declared_languages.contains(id_lang) {
+                if let Ok(declared_languages) = &declared_languages
+                    && !declared_languages.contains(id_lang)
+                {
                     let lang_str = id_lang.as_str();
                     let err = ParseError::new(
                         ErrorCode::InvalidLanguageCode,
@@ -622,24 +625,25 @@ pub(super) fn check_cross_header_consistency(
             if !id_speaker.is_empty()
                 && !id_role.is_empty()
                 && let Some(participant) = file
-                    .participants
-                    .get(&crate::model::SpeakerCode::from(id_speaker.as_str()))
+                    .declared_speakers()
+                    .find(|participant| participant.code() == id_speaker)
+                && let Some(role) = participant.role()
+                && !role.as_str().is_empty()
+                && role.as_str() != id_role
             {
-                let participant_role = participant.role.as_str();
-                if !participant_role.is_empty() && participant_role != id_role {
-                    let err = ParseError::new(
-                        ErrorCode::InvalidParticipantRole,
-                        Severity::Error,
-                        DiagnosticLocation::from(*span),
-                        ErrorContext::new(id_role, crate::Span::new(0, id_role.len()), "id_role"),
-                        format!(
-                            "Speaker '{}' has role '{}' on @ID but '{}' on @Participants",
-                            id_speaker, id_role, participant_role
-                        ),
-                    )
-                    .with_suggestion("Ensure @ID role matches @Participants role for each speaker");
-                    errors.report(err);
-                }
+                let participant_role = role.as_str();
+                let err = ParseError::new(
+                    ErrorCode::InvalidParticipantRole,
+                    Severity::Error,
+                    DiagnosticLocation::from(*span),
+                    ErrorContext::new(id_role, crate::Span::new(0, id_role.len()), "id_role"),
+                    format!(
+                        "Speaker '{}' has role '{}' on @ID but '{}' on @Participants",
+                        id_speaker, id_role, participant_role
+                    ),
+                )
+                .with_suggestion("Ensure @ID role matches @Participants role for each speaker");
+                errors.report(err);
             }
         }
     }

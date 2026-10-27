@@ -21,30 +21,10 @@ import { pathToFileURL } from "node:url";
 
 const RELEASE_ASSET_BASE = "https://github.com";
 
-// Map a Rust target triple to the Tauri updater platform key (`<os>-<arch>`,
-// os in darwin/windows/linux, arch in x86_64/aarch64). This key must match the
-// platform string the updater computes at runtime, so it is the most
-// drift-prone piece of the pipeline; it lives here (unit-tested) instead of
-// inline in the release workflow's three OS jobs. Throws on an unsupported
-// triple rather than emitting a key that would silently never match a client.
-export function targetToPlatformKey(target) {
-  const os = target.includes("apple-darwin")
-    ? "darwin"
-    : target.includes("windows")
-      ? "windows"
-      : target.includes("linux")
-        ? "linux"
-        : null;
-  const arch = target.startsWith("x86_64")
-    ? "x86_64"
-    : target.startsWith("aarch64")
-      ? "aarch64"
-      : null;
-  if (os === null || arch === null) {
-    throw new Error(`unsupported target triple for updater platform key: ${target}`);
-  }
-  return `${os}-${arch}`;
-}
+// Producer and recovery verification share the exact supported population.
+export { targetToPlatformKey } from "../../../scripts/release/updater-platforms.mjs";
+import { CompleteUpdaterPlatforms } from "../../../scripts/release/updater-platforms.mjs";
+import { ReleaseTag } from "../../../scripts/release/cli-installer-compatibility.mjs";
 
 /// Build the `latest.json` object from platform entries and release metadata.
 ///
@@ -53,33 +33,25 @@ export function targetToPlatformKey(target) {
 /// missing fields, or duplicate platform keys: a malformed manifest would
 /// strand every installed client, so fail loudly rather than emit junk.
 export function buildLatestJson(entries, meta) {
-  if (!Array.isArray(entries) || entries.length === 0) {
-    throw new Error("latest.json: no platform entries provided");
-  }
+  const admitted = CompleteUpdaterPlatforms.admit(entries);
   for (const field of ["version", "tag", "repo", "pubDate"]) {
     if (!meta?.[field]) {
       throw new Error(`latest.json: missing release metadata '${field}'`);
     }
   }
+  const identity = new ReleaseTag(meta.tag);
+  identity.assertVersion(meta.version);
 
   const platforms = {};
-  for (const entry of entries) {
-    for (const field of ["key", "file", "signature"]) {
-      if (!entry?.[field]) {
-        throw new Error(`latest.json: entry missing '${field}': ${JSON.stringify(entry)}`);
-      }
-    }
-    if (platforms[entry.key]) {
-      throw new Error(`latest.json: duplicate platform key '${entry.key}'`);
-    }
+  for (const entry of admitted.entries) {
     platforms[entry.key] = {
       signature: entry.signature,
-      url: `${RELEASE_ASSET_BASE}/${meta.repo}/releases/download/${meta.tag}/${entry.file}`,
+      url: `${RELEASE_ASSET_BASE}/${meta.repo}/releases/download/${identity.value}/${entry.file}`,
     };
   }
 
   return {
-    version: meta.version,
+    version: identity.version,
     notes: meta.notes ?? "",
     pub_date: meta.pubDate,
     platforms,

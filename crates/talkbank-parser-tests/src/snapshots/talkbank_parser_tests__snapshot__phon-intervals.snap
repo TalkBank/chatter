@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng"
-  ],
   "lines": [
     {
       "header": {
@@ -39,13 +36,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": "Narrator",
-            "role": "Investigator",
+            "details": {
+              "name": "Narrator",
+              "role": "Investigator",
+              "state": "complete"
+            },
             "speaker_code": "NAR"
           },
           {
-            "name": null,
-            "role": "Target_Child",
+            "details": {
+              "name": null,
+              "role": "Target_Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           }
         ],
@@ -696,40 +699,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "media": {
-    "filename": "phon-intervals",
-    "media_type": "audio"
-  },
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "corpus": "jabberwocky",
-        "language": [
-          "eng"
-        ],
-        "role": "Target_Child",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Target_Child"
-    },
-    "NAR": {
-      "birth_date": null,
-      "code": "NAR",
-      "id": {
-        "corpus": "jabberwocky",
-        "language": [
-          "eng"
-        ],
-        "role": "Investigator",
-        "speaker": "NAR"
-      },
-      "name": "Narrator",
-      "role": "Investigator"
-    }
-  }
+  ]
 }

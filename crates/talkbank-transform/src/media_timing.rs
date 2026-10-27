@@ -137,7 +137,6 @@ pub fn reconcile_media_timing(mut file: ChatFile) -> Result<MediaTimingState, Me
         }
     }
 
-    file.media = Some(Box::new(media.clone()));
     Ok(MediaTimingState::Timed(LinkedMediaChatFile(file)))
 }
 

@@ -66,6 +66,7 @@ fn seg_tag(seg: &BulletContentSegment) -> String {
         BulletContentSegment::Bullet(_) => "Bullet".to_string(),
         BulletContentSegment::Picture(_) => "Picture".to_string(),
         BulletContentSegment::Continuation => "Continuation".to_string(),
+        BulletContentSegment::UnparsedBullet(_) => "UnparsedBullet".to_string(),
     }
 }
 

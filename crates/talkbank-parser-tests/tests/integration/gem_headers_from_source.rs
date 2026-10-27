@@ -45,6 +45,60 @@ fn label(text: &str) -> Option<GemLabel> {
     Some(GemLabel::new(text))
 }
 
+#[test]
+fn paired_gems_retain_source_locations_and_unlocated_wire_state() -> Result<(), TestError> {
+    use talkbank_model::Location;
+    use talkbank_model::model::{ChatFile, GemEvent, GemState};
+
+    const SOURCE: &str =
+        include_str!("../../../../corpus/reference/edge-cases/multiline-paired-gems.cha");
+    let file = parsed_document(SOURCE, &[], Rules::Default)?;
+    let wire = serde_json::to_string(&file).expect("AST wire");
+    let decoded: ChatFile = serde_json::from_str(&wire).expect("AST wire readback");
+    enum ExpectedLocations {
+        Source,
+        Unlocated,
+    }
+    for (source_file, expected) in [
+        (&file, ExpectedLocations::Source),
+        (&decoded, ExpectedLocations::Unlocated),
+    ] {
+        let mut state = GemState::new();
+        let mut pairs = Vec::new();
+        for (header, location) in source_file.headers_with_locations() {
+            match state.observe(header, location) {
+                None | Some(GemEvent::Opened) => {}
+                Some(GemEvent::Closed(pair)) => pairs.push(pair),
+                event => panic!("clean reference has an unexpected gem event: {event:?}"),
+            }
+        }
+        assert_eq!(state.finish().count(), 0);
+        assert_eq!(pairs.len(), 1);
+        let pair = &pairs[0];
+        assert_eq!(
+            pair.label().map(|label| label.as_str()),
+            Some("morning café play")
+        );
+        match expected {
+            ExpectedLocations::Source => {
+                assert_eq!(
+                    pair.begin().span().expect("parsed begin").start(),
+                    SOURCE.find("@Bg:").unwrap()
+                );
+                assert_eq!(
+                    pair.end().span().expect("parsed end").start(),
+                    SOURCE.find("@Eg:").unwrap()
+                );
+            }
+            ExpectedLocations::Unlocated => {
+                assert_eq!(pair.begin(), Location::Unlocated);
+                assert_eq!(pair.end(), Location::Unlocated);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// A gem label is the typed `free_text` read and nothing else: a header
 /// with no label text has `None`, never a label sliced from raw text.
 #[test]

@@ -113,7 +113,7 @@ impl FlagMode for talkbank_transform::JsonSchemaPolicy {
 }
 
 impl FlagMode for crate::commands::CacheRefreshMode {
-    const LONG: &'static str = "force";
+    const LONG: &'static str = "refresh-cache";
     const HELP: &'static str =
         "Force fresh validation (clears and updates cache for specified path)";
     fn absent() -> Self {
@@ -125,7 +125,7 @@ impl FlagMode for crate::commands::CacheRefreshMode {
 }
 
 impl FlagMode for crate::commands::json::JsonRefresh {
-    const LONG: &'static str = "force";
+    const LONG: &'static str = "rebuild";
     const HELP: &'static str = "Force full rebuild (ignore mtime, reconvert all files)";
     fn absent() -> Self {
         Self::Incremental
@@ -159,13 +159,13 @@ impl FlagMode for talkbank_model::LinkerChecks {
 }
 
 impl FlagMode for crate::commands::debug::Commit {
-    const LONG: &'static str = "dry-run";
-    const HELP: &'static str = "Show what would be joined without modifying any files";
+    const LONG: &'static str = "apply";
+    const HELP: &'static str = "Publish the proposed edits (default: preview without writing)";
     fn absent() -> Self {
-        Self::Write
+        Self::DryRun
     }
     fn present() -> Self {
-        Self::DryRun
+        Self::Write
     }
 }
 

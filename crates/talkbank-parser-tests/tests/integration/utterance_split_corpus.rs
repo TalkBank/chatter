@@ -68,7 +68,15 @@ fn corroborated_word_timing_measures_each_child() {
     let bullets: Vec<_> = outcome
         .children()
         .iter()
-        .map(|child| child.main.content.bullet.as_ref().expect("measured child"))
+        .map(|child| {
+            child
+                .main
+                .content
+                .bullet
+                .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
+                .expect("measured child")
+        })
         .collect();
     assert_eq!(
         bullets[0],
@@ -250,19 +258,18 @@ fn replacement_word_timing_partitions_spoken_originals_not_replacement_targets()
         assert!(outcome.invalidated_tiers().is_empty());
         assert_eq!(
             outcome.children()[0].main.content.bullet,
-            Some(Bullet::new(
-                talkbank_model::Location::Unlocated,
-                start,
-                start + 200
-            ))
+            Some(Bullet::new(talkbank_model::Location::Unlocated, start, start + 200).into())
         );
         assert_eq!(
             outcome.children()[1].main.content.bullet,
-            Some(Bullet::new(
-                talkbank_model::Location::Unlocated,
-                start + 200,
-                start + 400
-            ))
+            Some(
+                Bullet::new(
+                    talkbank_model::Location::Unlocated,
+                    start + 200,
+                    start + 400
+                )
+                .into()
+            )
         );
         let last = &outcome.children()[1];
         assert_eq!(
@@ -340,9 +347,12 @@ fn timeline(turns: &[(&str, u64, u64)]) -> DiarizationTimeline {
     DiarizationTimeline::new(
         turns
             .iter()
-            .map(|(track, start, end)| DiarizationTurn {
-                track: talkbank_model::SpeakerCode::new(*track),
-                span: TimeSpanMs::new(*start, *end).expect("control interval"),
+            .map(|(track, start, end)| {
+                DiarizationTurn::new(
+                    talkbank_model::SpeakerCode::new(*track),
+                    TimeSpanMs::new(*start, *end).expect("control interval"),
+                )
+                .expect("control track")
             })
             .collect(),
     )
@@ -367,6 +377,7 @@ fn speaker_runs_can_return_to_an_earlier_track_without_reordering_words() {
                 .content
                 .bullet
                 .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
                 .expect("measured child hull");
             (
                 child.main.speaker.as_str(),

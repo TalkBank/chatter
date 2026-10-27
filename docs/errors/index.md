@@ -27,6 +27,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E220](E220.md) | Bare numerals are not language-specific tone notation | Invalidity | word | ✅ |
 | [E220](E220.md) | Currency symbols do not license digits in English lexical words | Invalidity | utterance | ✅ |
 | [E220](E220.md) | English numeric cardinal, ordinal and decade spellings | Invalidity | word | ✅ |
+| [E220](E220.md) | Interposed words retain ordinary word validation | Invalidity | word | ✅ |
 | [E220](E220.md) | Numeric overflow does not license digit words | Invalidity | word | ✅ |
 | [E220](E220.md) | Unsupported Spanish number generation preserves digit words | Invalidity | word | ✅ |
 | [E230](E230.md) | Unbalanced CA delimiter | Invalidity | word, utterance | ✅ |
@@ -59,7 +60,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E251](E251.md) | Empty word content text | Invalidity |  | ✅ |
 | [E252](E252.md) | Syntax error - caret at word start | Invalidity | word | ✅ |
 | [E252](E252.md) | Leading and trailing pauses remain invalid among structural markers | Invalidity | utterance | ✅ |
-| [E253](E253.md) | Empty word content | Invalidity | word | ✅ |
+| [E253](E253.md) | Empty word content | Invalidity | word, utterance | ✅ |
 | [E255](E255.md) | Whole-utterance language switch should use precode | Invalidity | utterance | ✅ |
 | [E256](E256.md) | Illegal curly single quote | Invalidity | word | ✅ |
 | [E258](E258.md) | Consecutive commas | Invalidity | utterance, tier | ✅ |
@@ -92,12 +93,18 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E314](E314.md) | Incomplete annotation | Invalidity | utterance | ✅ |
 | [E315](E315.md) | Invalid control character | Invalidity | utterance, tier, file | ✅ |
 | [E316](E316.md) | Unparsable content | Invalidity | utterance, tier, header, file | ✅ |
+| [E316](E316.md) | Word and base annotation admission positions | Invalidity | utterance | ✅ |
 | [E316](E316.md) | Malformed body and ending recovery | Invalidity | utterance | ✅ |
+| [E316](E316.md) | Freecode without content | Invalidity | utterance | ✅ |
 | [E316](E316.md) | Malformed inline picture reference | Invalidity | tier | ✅ |
 | [E316](E316.md) | Main-tier recovery preserves source-owned neighboring turns | Invalidity | utterance | ✅ |
+| [E316](E316.md) | Unparsable content | Invalidity | word | ✅ |
 | [E316](E316.md) | Structured metadata header boundaries | Invalidity | header | ✅ |
 | [E316](E316.md) | Malformed precode and hostless annotation positions | Invalidity | utterance | ✅ |
+| [E316](E316.md) | Registry-owned word boundaries | Invalidity | utterance | ✅ |
 | [E316](E316.md) | Missing main-tier speaker colon | Invalidity | utterance | ✅ |
+| [E316](E316.md) | Main-tier annotations on word timing | Invalidity | tier | ✅ |
+| [E316](E316.md) | Unassociated word timing | Invalidity | tier | ✅ |
 | [E319](E319.md) | UnparsableLine | Invalidity | utterance | ✅ |
 | [E320](E320.md) | UnparsableHeader | Invalidity | utterance | ✅ |
 | [E321](E321.md) | UnparsableUtterance | Invalidity | utterance | ✅ |
@@ -112,6 +119,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E340](E340.md) | UnknownBaseContent | Invalidity |  | ✅ |
 | [E341](E341.md) | UnbalancedQuotationCrossUtterance | Invalidity | utterance, file | 🔧 |
 | [E342](E342.md) | Missing required element (recovery placeholder) | Invalidity | word, utterance, tier, header | ✅ |
+| [E342](E342.md) | Word suffixes require a word body after omission zero | Invalidity | utterance | ✅ |
 | [E342](E342.md) | Empty scoped content | Invalidity | utterance | ✅ |
 | [E342](E342.md) | Nested group requires its own annotation | Invalidity | utterance | ✅ |
 | [E344](E344.md) | Quotation-precedes terminator without a quoted linker | Invalidity | utterance, file | 🔧 |
@@ -218,7 +226,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E550](E550.md) | Trailing comma in @Participants | Invalidity | header | ✅ |
 | [E551](E551.md) | @Options header out of order | Invalidity | header | ✅ |
 | [E552](E552.md) | @Media declares unlinked but transcript carries timing | Invalidity | file | ✅ |
-| [E600](E600.md) | Tier alignment skipped due to parse errors | Invalidity | tier | ✅ |
+| [E600](E600.md) | Tier alignment skipped due to parse errors | Invalidity | utterance, tier | ✅ |
 | [E601](E601.md) | Invalid dependent tier content | Invalidity | tier | ✅ |
 | [E602](E602.md) | Malformed dependent tier header | Invalidity | tier | ✅ |
 | [E603](E603.md) | Invalid %tim Tier Format | Unmodeled | utterance | ✅ |

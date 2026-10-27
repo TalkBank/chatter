@@ -56,21 +56,33 @@ use crate::validation::utterance::{CADelimiterRole, analyze_ca_delimiter_roles};
 /// subject is an internal function's output, not a verdict about a file.
 #[test]
 fn test_ca_delimiter_role_analysis_across_words() {
-    let word1 = Word::new_unchecked(crate::Location::Unlocated, "soft").with_content(vec![
+    let word1 = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("soft")),
+    )
+    .with_content(vec![
         WordContent::CADelimiter(CADelimiter::new(
             crate::Location::Unlocated,
             CADelimiterType::Softer,
         )),
         WordContent::Text(WordText::from(non_empty_literal!("soft"))),
     ]);
-    let word2 = Word::new_unchecked(crate::Location::Unlocated, "more").with_content(vec![
+    let word2 = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("more")),
+    )
+    .with_content(vec![
         WordContent::Text(WordText::from(non_empty_literal!("more"))),
         WordContent::CADelimiter(CADelimiter::new(
             crate::Location::Unlocated,
             CADelimiterType::Softer,
         )),
     ]);
-    let word3 = Word::new_unchecked(crate::Location::Unlocated, "fast").with_content(vec![
+    let word3 = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("fast")),
+    )
+    .with_content(vec![
         WordContent::CADelimiter(CADelimiter::new(
             crate::Location::Unlocated,
             CADelimiterType::Faster,

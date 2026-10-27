@@ -9,15 +9,14 @@
 //! - `talkbank/formatBulletLine`, construct a timing bullet and new utterance line
 //! - `talkbank/scopedFind`, semantically scoped search across tiers and speakers
 
+use super::LspBackendError;
 use serde_json::Value;
-use tower_lsp::jsonrpc::Result as LspResult;
 
 use super::execute_commands::ChatOpsCommandRequest;
 use super::state::Backend;
 
 mod filter_document;
 mod format_bullet;
-mod line_index;
 mod scoped_find;
 mod shared;
 mod speakers;
@@ -40,36 +39,17 @@ impl ChatOpsCommandService {
         &self,
         backend: &Backend,
         request: ChatOpsCommandRequest,
-    ) -> LspResult<Option<Value>> {
+    ) -> Result<Value, LspBackendError> {
         match request {
-            ChatOpsCommandRequest::GetSpeakers(request) => {
-                command_response(handle_get_speakers(backend, &request), "Speaker error")
-            }
+            ChatOpsCommandRequest::GetSpeakers(request) => handle_get_speakers(backend, &request),
             ChatOpsCommandRequest::FilterDocument(request) => {
-                command_response(handle_filter_document(backend, &request), "Filter error")
+                handle_filter_document(backend, &request)
             }
             ChatOpsCommandRequest::GetUtterances(request) => {
-                command_response(handle_get_utterances(backend, &request), "Utterance error")
+                handle_get_utterances(backend, &request)
             }
-            ChatOpsCommandRequest::FormatBulletLine(request) => {
-                command_response(handle_format_bullet_line(&request), "Format error")
-            }
-            ChatOpsCommandRequest::ScopedFind(request) => {
-                command_response(handle_scoped_find(backend, &request), "Search error")
-            }
+            ChatOpsCommandRequest::FormatBulletLine(request) => handle_format_bullet_line(&request),
+            ChatOpsCommandRequest::ScopedFind(request) => handle_scoped_find(backend, &request),
         }
-    }
-}
-
-fn command_response(
-    result: Result<Value, crate::backend::LspBackendError>,
-    prefix: &str,
-) -> LspResult<Option<Value>> {
-    match result {
-        Ok(json) => Ok(Some(json)),
-        // Stringify at the LSP wire boundary; the JSON-RPC response
-        // carries the `Display`-formatted message so the TS client
-        // sees the same user-facing text the untyped path produced.
-        Err(error) => Ok(Some(Value::String(format!("{prefix}: {error}")))),
     }
 }

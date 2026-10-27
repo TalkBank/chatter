@@ -218,6 +218,25 @@ pub fn parse_languages_header<'tree>(
     typed: SourceBound<'tree, '_, LanguagesHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<Header, CstFailure> {
+    let raw = talkbank_model::model::UnparsedLanguageHeader::new(
+        span_of(typed.raw_node()),
+        typed.text(),
+        talkbank_model::model::LanguageHeaderFailure::List,
+    );
+    let findings = talkbank_model::ErrorCollector::new();
+    let result = parse_languages_payload(typed, &findings);
+    let rejected = findings.has_errors();
+    errors.report_all(findings.into_vec());
+    match result {
+        Ok(_) if rejected => Ok(Header::UnparsedLanguages(raw)),
+        result => result,
+    }
+}
+
+fn parse_languages_payload<'tree>(
+    typed: SourceBound<'tree, '_, LanguagesHeaderNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<Header, CstFailure> {
     let node = typed.raw_node();
     let source = typed.source();
     let mut codes = Vec::new();
@@ -323,4 +342,31 @@ pub fn parse_languages_header<'tree>(
     Ok(Header::Languages {
         codes: codes.into(),
     })
+}
+
+/// Retain a single rejected header whose prefix survived as a generated typed
+/// node. Never infer header identity from ERROR text, and never absorb a
+/// multi-line recovery region into a single header.
+pub(crate) fn recover_languages_header(
+    source: crate::generated_traversal::SourceSlice<'_, '_>,
+) -> Result<Option<Header>, CstFailure> {
+    let body = source.text().trim_end_matches(['\r', '\n']);
+    if body.contains(['\r', '\n']) {
+        return Ok(None);
+    }
+    for descendant in source.descendants() {
+        let descendant = descendant?;
+        if let Some(prefix) = descendant.typed::<crate::generated_traversal::LanguagesPrefixNode>()
+            && prefix.raw_node().start_byte() == source.raw_node().start_byte()
+        {
+            return Ok(Some(Header::UnparsedLanguages(
+                talkbank_model::model::UnparsedLanguageHeader::new(
+                    span_of(source.raw_node()),
+                    source.text(),
+                    talkbank_model::model::LanguageHeaderFailure::Syntax,
+                ),
+            )));
+        }
+    }
+    Ok(None)
 }

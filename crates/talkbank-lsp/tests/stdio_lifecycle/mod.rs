@@ -12,6 +12,12 @@ use serde_json::{Value, json};
 
 mod completion;
 mod diagnostics;
+mod execute_commands;
+mod gem_navigation;
+mod line_endings;
+mod scoped_find;
+mod speakers;
+mod workspace_symbols;
 
 const DEADLINE: Duration = Duration::from_secs(10);
 

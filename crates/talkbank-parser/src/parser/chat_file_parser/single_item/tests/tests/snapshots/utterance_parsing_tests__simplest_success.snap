@@ -30,8 +30,10 @@ Ok(
                                     [
                                         Text(
                                             WordText(
-                                                NonEmptyString(
-                                                    "hello",
+                                                NonEmpty(
+                                                    NonEmptyString(
+                                                        "hello",
+                                                    ),
                                                 ),
                                             ),
                                         ),
@@ -68,14 +70,14 @@ Ok(
                 location: Located(
                     Span {
                         start: 5,
-                        end: 14,
+                        end: 13,
                     },
                 ),
             },
             location: Located(
                 Span {
                     start: 0,
-                    end: 14,
+                    end: 13,
                 },
             ),
             speaker_location: Located(

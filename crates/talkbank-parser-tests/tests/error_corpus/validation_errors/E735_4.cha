@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	(4294967296.5) (71582788:16.0) cat .
+%mod:	(4294967296.5) (71582788:16.0) kæt
+%xmodsyl:	(4294967296.5) (71582788:16.0) k:Oæ:Nt:C
+%pho:	(4294967296.5) (71582788:16.0) kæt
+%xphosyl:	(4294967296.5) (71582788:16.0) k:Oæ:Nt:C
+@End

@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
+assertion_line: 89
 expression: result.unwrap()
 ---
 speaker:
@@ -16,14 +17,15 @@ tier_body:
         lang: ~
         pos_tag: ~
         annotations:
-          - Scoped:
-              Paralinguistic: cries
+          - annotation:
+              type: paralinguistic
+              text: cries
+            lexeme: "[=! cries]"
         raw_text: "no"
   terminator:
-    Period: "."
+    type: period
   postcodes:
-    - content:
-        Present: SR
+    - payload: SR
   media_bullet:
     raw_text: "\u0015171921_173802\u0015"
     start_time: "171921"

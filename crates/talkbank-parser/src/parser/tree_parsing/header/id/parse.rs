@@ -226,7 +226,9 @@ pub fn parse_id_header<'tree>(
     let (ParseOutcome::Parsed(language), ParseOutcome::Parsed(speaker), ParseOutcome::Parsed(role)) =
         (language, speaker, role)
     else {
-        return Ok(unknown_id_header("ID header contains malformed fields"));
+        return Ok(Header::UnparsedID(
+            talkbank_model::model::UnparsedIDHeader::new(span_of(node), &source[node.byte_range()]),
+        ));
     };
 
     // No Rust-side trimming needed, the grammar's optional($.whitespaces)
@@ -259,16 +261,4 @@ pub fn parse_id_header<'tree>(
     }
 
     Ok(Header::ID(id_header))
-}
-
-/// Build `Header::Unknown` for malformed `@ID` input.
-fn unknown_id_header(parse_reason: impl Into<String>) -> Header {
-    Header::Unknown {
-        text: "@ID".into(),
-        parse_reason: Some(parse_reason.into()),
-        suggested_fix: Some(
-            "Expected @ID format: @ID:\\tlang|corpus|speaker|age|sex|group|ses|role|education|custom|"
-                .to_string(),
-        ),
-    }
 }

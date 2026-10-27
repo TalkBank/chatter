@@ -52,12 +52,10 @@
 #[doc(hidden)]
 pub mod ast;
 #[doc(hidden)]
-pub mod chat_lines;
 #[doc(hidden)]
 pub mod chat_parser_impl;
 #[doc(hidden)]
 pub mod convert;
-pub mod error;
 #[doc(hidden)]
 pub mod parser;
 pub mod source_text;
@@ -66,85 +64,22 @@ pub mod token;
 
 pub use chat_parser_impl::Re2cParser;
 
-/// Test support utilities (fixture loading, etc.)
-#[doc(hidden)]
-pub mod tests_support {
-    /// The entries of one checked-in fixture, or a failure.
-    ///
-    /// # Never an empty Vec, and that is the whole point
-    ///
-    /// Both this and its duplicate in `tests/integration/fixture_utils.rs`
-    /// used to answer an unreadable file with `vec![]`, one of them after
-    /// printing "Skipping fixture". Every consumer then ran its loop zero
-    /// times and passed, so a fixture renamed, moved or emptied turned every
-    /// test over it into a green no-op, and the only trace was a line in
-    /// output nobody reads. Three of the 39 checked-in fixtures are EMPTY
-    /// today (`header_recording_quality`, `tier_flo`, `tier_xcod`); they have
-    /// no consumers, so nothing passes vacuously right now, and this is what
-    /// stops the day one gets one.
-    ///
-    /// Fixtures are checked in, so absence is a defect in the checkout rather
-    /// than a condition to tolerate. Panicking IS the report here: this is
-    /// test support, and a test whose input vanished must fail, not skip.
-    ///
-    /// # Panics
-    ///
-    /// When the fixture cannot be read, or yields no entries.
-    #[allow(
-        clippy::panic,
-        reason = "test support: a checked-in fixture that cannot be read must fail the test that asked for it, never let it run its loop zero times and pass"
-    )]
-    pub fn load_fixture(name: &str) -> Vec<String> {
-        let path = format!("{}/tests/fixtures/{name}.txt", env!("CARGO_MANIFEST_DIR"));
-        let content = match std::fs::read_to_string(&path) {
-            Ok(content) => content,
-            Err(err) => panic!(
-                "fixture `{name}` is checked in and could not be read: {err}\n\
-                 Every test over it would run its loop zero times and pass."
-            ),
-        };
-        let mut entries = Vec::new();
-        let mut current = String::new();
-        for line in content.lines() {
-            if line.starts_with('#') {
-                continue;
-            }
-            if line.is_empty() {
-                if !current.is_empty() {
-                    entries.push(std::mem::take(&mut current));
-                }
-            } else {
-                if !current.is_empty() {
-                    current.push('\n');
-                }
-                current.push_str(line);
-            }
-        }
-        if !current.is_empty() {
-            entries.push(current);
-        }
-        assert!(
-            !entries.is_empty(),
-            "fixture `{name}` yielded no entries, so every test over it would \
-             pass over nothing. Mine entries for it, or delete it and its \
-             consumers."
-        );
-        entries
-    }
-}
-
 // Re-export talkbank-model for consumers.
 pub use talkbank_model;
 
 use token::LexResult;
 
 /// Lex a line starting from a given condition. Returns `LexResult`
-/// with tokens and error-checking utilities.
+/// with tokens and error-checking utilities. Embedded NUL bytes are errors,
+/// not terminators; lexing continues through the complete input.
 ///
-/// Tokens borrow the caller's source without copying or retaining it.
-pub fn lex_line(input: &str, condition: usize) -> LexResult<'_> {
-    let tokens = lexer::Lexer::new(input, condition).collect();
-    LexResult { tokens }
+/// Tokens and reports borrow the caller's source without copying it.
+/// Arbitrary generated state numbers are not valid entry points:
+/// ```compile_fail
+/// let _ = talkbank_parser_re2c::lex_line("", usize::MAX);
+/// ```
+pub fn lex_line(input: &str, condition: lexer::StartCondition) -> LexResult<'_> {
+    LexResult::lex(input, condition)
 }
 
 /// Lex a complete line from INITIAL condition.
@@ -153,6 +88,25 @@ pub fn lex(input: &str) -> LexResult<'_> {
 }
 
 /// Include generated lexer.
+///
+/// Only the lexer advances its source coordinates:
+/// ```compile_fail
+/// use talkbank_parser_re2c::lexer::{Lexer, COND_INITIAL};
+/// let mut lexer = Lexer::new("abc", COND_INITIAL);
+/// lexer.cursor = 1;
+/// ```
+/// Its source cannot be replaced after construction:
+/// ```compile_fail
+/// use talkbank_parser_re2c::lexer::{Lexer, COND_INITIAL};
+/// let mut lexer = Lexer::new("abc", COND_INITIAL);
+/// let _ = lexer.input;
+/// ```
+/// Internal DFA state cannot be injected:
+/// ```compile_fail
+/// use talkbank_parser_re2c::lexer::{Lexer, COND_INITIAL};
+/// let mut lexer = Lexer::new("abc", COND_INITIAL);
+/// lexer.condition = usize::MAX;
+/// ```
 pub mod lexer {
     // This DFA is generated explicitly with the pinned re2rust tool; build.rs
     // only copies the vendored artifact into OUT_DIR. The generator emits an
@@ -160,6 +114,11 @@ pub mod lexer {
     // Keep the allowance around the generated include rather than hand-editing
     // generated sites. This permission is not a proof of lexer panic freedom.
     #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+
+    mod input;
+    use input::LexerInput;
+    mod start;
+    pub use start::StartCondition;
 
     // Generated lexer.rs will use crate::token::Token directly.
     const NONE: usize = usize::MAX;
@@ -170,37 +129,37 @@ pub mod lexer {
     // Consumers can start the lexer in a specific condition to parse
     // isolated tiers (e.g., %mor body, %gra body, main tier content).
     /// Start condition for top-level line classification (`@`, `*`, `%`).
-    pub const COND_INITIAL: usize = YYC_INITIAL;
+    pub const COND_INITIAL: StartCondition = StartCondition::Initial;
     /// Start condition for main-tier (`*SPK:`) content.
-    pub const COND_MAIN_CONTENT: usize = YYC_MAIN_CONTENT;
+    pub const COND_MAIN_CONTENT: StartCondition = StartCondition::MainContent;
     /// Start condition for `%mor` tier content.
-    pub const COND_MOR_CONTENT: usize = YYC_MOR_CONTENT;
+    pub const COND_MOR_CONTENT: StartCondition = StartCondition::MorContent;
     /// Start condition for `%gra` tier content.
-    pub const COND_GRA_CONTENT: usize = YYC_GRA_CONTENT;
+    pub const COND_GRA_CONTENT: StartCondition = StartCondition::GraContent;
     /// Start condition for `%pho` tier content.
-    pub const COND_PHO_CONTENT: usize = YYC_PHO_CONTENT;
+    pub const COND_PHO_CONTENT: StartCondition = StartCondition::PhoContent;
     /// Start condition for `%sin` tier content.
-    pub const COND_SIN_CONTENT: usize = YYC_SIN_CONTENT;
+    pub const COND_SIN_CONTENT: StartCondition = StartCondition::SinContent;
     /// %wor uses MAIN_CONTENT, same word rules as main tier.
-    pub const COND_WOR_CONTENT: usize = YYC_MAIN_CONTENT;
+    pub const COND_WOR_CONTENT: StartCondition = StartCondition::MainContent;
     /// Start condition for generic dependent-tier text content.
-    pub const COND_TIER_CONTENT: usize = YYC_TIER_CONTENT;
+    pub const COND_TIER_CONTENT: StartCondition = StartCondition::TierContent;
     /// %com: text_with_bullets_and_pics (adds inline_pic to TIER_CONTENT).
-    pub const COND_COM_CONTENT: usize = YYC_COM_CONTENT;
+    pub const COND_COM_CONTENT: StartCondition = StartCondition::ComContent;
     /// User-defined tiers (%x*): text_with_bullets.
-    pub const COND_USER_TIER_CONTENT: usize = YYC_USER_TIER_CONTENT;
+    pub const COND_USER_TIER_CONTENT: StartCondition = StartCondition::UserTierContent;
     /// Start condition for generic structured-header content.
-    pub const COND_HEADER_CONTENT: usize = YYC_HEADER_CONTENT;
+    pub const COND_HEADER_CONTENT: StartCondition = StartCondition::HeaderContent;
     /// Start condition for `@ID` header content.
-    pub const COND_ID_CONTENT: usize = YYC_ID_CONTENT;
+    pub const COND_ID_CONTENT: StartCondition = StartCondition::IdContent;
     /// Start condition for `@Types` header content.
-    pub const COND_TYPES_CONTENT: usize = YYC_TYPES_CONTENT;
+    pub const COND_TYPES_CONTENT: StartCondition = StartCondition::TypesContent;
     /// Start condition for `@Languages` header content.
-    pub const COND_LANGUAGES_CONTENT: usize = YYC_LANGUAGES_CONTENT;
+    pub const COND_LANGUAGES_CONTENT: StartCondition = StartCondition::LanguagesContent;
     /// Start condition for `@Participants` header content.
-    pub const COND_PARTICIPANTS_CONTENT: usize = YYC_PARTICIPANTS_CONTENT;
+    pub const COND_PARTICIPANTS_CONTENT: StartCondition = StartCondition::ParticipantsContent;
     /// Start condition for `@Media` header content.
-    pub const COND_MEDIA_CONTENT: usize = YYC_MEDIA_CONTENT;
+    pub const COND_MEDIA_CONTENT: StartCondition = StartCondition::MediaContent;
 }
 
 /// Build-time fingerprint of this crate's own complete source tree.
@@ -219,3 +178,6 @@ mod fragment_range_tests;
 
 #[cfg(test)]
 mod header_recovery_tests;
+
+#[cfg(test)]
+mod word_language_tests;

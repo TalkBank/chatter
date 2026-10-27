@@ -56,7 +56,7 @@ fn force_refresh_scales_to_corpus_sized_input() -> Result<(), TestError> {
 
     // Forced pass: clears every warmed entry, then revalidates.
     let started = Instant::now();
-    let forced = harness.run_validate(dir.path(), &["--force"])?;
+    let forced = harness.run_validate(dir.path(), &["--refresh-cache"])?;
     let elapsed = started.elapsed();
     assert_success(&forced, "forced validate over generated corpus");
 

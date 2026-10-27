@@ -7,7 +7,6 @@
 use super::WriteChat;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as FmtWrite;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 /// Type of phonological tier.
@@ -76,7 +75,7 @@ pub enum PhoTierType {
 
 impl WriteChat for PhoTierType {
     /// Write tier type prefix to CHAT format
-    fn write_chat<W: FmtWrite>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             PhoTierType::Pho => w.write_str("%pho"),
             PhoTierType::Mod => w.write_str("%mod"),

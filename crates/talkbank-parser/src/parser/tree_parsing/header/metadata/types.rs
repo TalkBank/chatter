@@ -14,25 +14,41 @@ use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::{GeneratedPosition, report_cst_failure};
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{Header, TypesHeader};
+use talkbank_model::model::{
+    ActivityType, DesignType, GroupType, Header, InvalidTypesField, TypesHeader,
+};
 
 /// The field's generated kind owns its position; callers supply no selector.
 trait RequiredTypesField<'tree>: SourceBoundKind<'tree> + NamedKind {
     /// The generated carrier and field of this required position, named in
     /// a producer-fault report when the walk leaves it empty.
     const POSITION: GeneratedPosition;
+    type Value;
+    fn admit(text: &str) -> Result<Self::Value, InvalidTypesField>;
 }
 
 impl<'tree> RequiredTypesField<'tree> for TypesDesignNode<'tree> {
     const POSITION: GeneratedPosition = GeneratedPosition::new("TypesHeaderChildren.child_2");
+    type Value = DesignType;
+    fn admit(text: &str) -> Result<Self::Value, InvalidTypesField> {
+        DesignType::from_text(text)
+    }
 }
 
 impl<'tree> RequiredTypesField<'tree> for TypesActivityNode<'tree> {
     const POSITION: GeneratedPosition = GeneratedPosition::new("TypesHeaderChildren.child_6");
+    type Value = ActivityType;
+    fn admit(text: &str) -> Result<Self::Value, InvalidTypesField> {
+        ActivityType::from_text(text)
+    }
 }
 
 impl<'tree> RequiredTypesField<'tree> for TypesGroupNode<'tree> {
     const POSITION: GeneratedPosition = GeneratedPosition::new("TypesHeaderChildren.child_10");
+    type Value = GroupType;
+    fn admit(text: &str) -> Result<Self::Value, InvalidTypesField> {
+        GroupType::from_text(text)
+    }
 }
 
 /// Parse Types header from tree-sitter node
@@ -85,7 +101,7 @@ pub fn parse_types_header<'tree>(
             node,
             source,
             "Expected @Types:\tdesign, activity, group",
-            "Missing design field in @Types header",
+            "Invalid or missing design field in @Types header",
         );
     };
 
@@ -102,7 +118,7 @@ pub fn parse_types_header<'tree>(
             node,
             source,
             "Expected @Types:\tdesign, activity, group",
-            "Missing activity field in @Types header",
+            "Invalid or missing activity field in @Types header",
         );
     };
 
@@ -119,7 +135,7 @@ pub fn parse_types_header<'tree>(
             node,
             source,
             "Expected @Types:\tdesign, activity, group",
-            "Missing group field in @Types header",
+            "Invalid or missing group field in @Types header",
         );
     };
 
@@ -155,11 +171,27 @@ fn read_types_field<'tree, T: RequiredTypesField<'tree>>(
     slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
     header: SourceBound<'tree, '_, TypesHeaderNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<ParseOutcome<String>, crate::CstFailure> {
+) -> Result<ParseOutcome<T::Value>, crate::CstFailure> {
     let node = header.raw_node();
     let source = header.source();
     match slot.view() {
-        SourceSlotView::Present(field) => Ok(ParseOutcome::parsed(field.read()?.text().to_owned())),
+        SourceSlotView::Present(field) => {
+            let field = field.read()?;
+            match T::admit(field.text()) {
+                Ok(value) => Ok(ParseOutcome::parsed(value)),
+                Err(reason) => {
+                    let span = span_of(field.raw_node());
+                    errors.report(ParseError::new(
+                        ErrorCode::UnparsableContent,
+                        Severity::Error,
+                        DiagnosticLocation::new(span),
+                        ErrorContext::new(source, span, T::KIND.name()),
+                        reason.to_string(),
+                    ));
+                    Ok(ParseOutcome::rejected())
+                }
+            }
+        }
         // The pre-migration `find_child_text` returned `None` for any
         // non-present field child (absent, missing, error or unexpected),
         // funnelling all of them to the SAME "Missing <label> in @Types

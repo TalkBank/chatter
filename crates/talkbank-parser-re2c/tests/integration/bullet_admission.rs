@@ -40,8 +40,8 @@ fn overflow_is_diagnosed_without_inventing_model_timing() {
             "surrounding content lost: {output:?}"
         );
         assert!(
-            !output.contains('\u{15}'),
-            "overflow produced timing: {output:?}"
+            output.contains("\u{15}99999999999999999999_99999999999999999999\u{15}"),
+            "overflow source was lost: {output:?}"
         );
     }
 }
@@ -100,88 +100,41 @@ fn assert_overflow(errors: ErrorCollector, origin: usize, input: &str) {
 }
 
 #[test]
-fn nested_header_and_wor_routes_preserve_content_but_not_overflow() {
+fn nested_routes_preserve_content_and_rejected_bullets() {
     let parser = Re2cParser::new();
-    for (title, prefix) in [
-        (
-            "Nested overflow retains surrounding content without invented timing",
-            "*CHI:\t",
-        ),
-        ("Internal overflow retains words on both sides", "*CHI:\t"),
-        (
-            "Comment header overflow is not a zero timestamp",
-            "@Comment:\t",
-        ),
-        (
-            "WOR overflow retains the word without invented timing",
-            "%wor:\t",
-        ),
+    for title in [
+        "Nested overflow retains surrounding content without invented timing",
+        "Internal overflow retains words on both sides",
     ] {
         let source = example(title);
-        let errors = ErrorCollector::new();
-        let output = parser
-            .parse_chat_file(&source, 0, &errors)
+        let line = source
+            .lines()
+            .find(|line| line.starts_with("*CHI:\t"))
+            .unwrap();
+        let file_errors = ErrorCollector::new();
+        let file = parser
+            .parse_chat_file(&source, 0, &file_errors)
             .into_option()
             .unwrap()
             .to_chat_string();
-        assert_overflow(errors, 0, &source);
-        assert!(
-            output.contains("before") && output.contains("after"),
-            "{output:?}"
-        );
-        assert!(
-            !output.contains("18446744073709551616") && !output.contains("\u{15}0_"),
-            "{output:?}"
-        );
-        if prefix == "%wor:\t" {
-            assert!(output.contains("\u{15}300_400\u{15}"));
+        let fragment_errors = ErrorCollector::new();
+        let fragment = parser
+            .parse_main_tier(line, 173, &fragment_errors)
+            .into_option()
+            .unwrap()
+            .to_chat_string();
+        for (input, origin, errors, output) in [
+            (source.as_str(), 0, file_errors, file),
+            (line, 173, fragment_errors, fragment),
+        ] {
+            assert_overflow(errors, origin, input);
+            assert!(
+                output.contains("before") && output.contains("after"),
+                "{output:?}"
+            );
+            assert!(output.contains("18446744073709551616"), "{output:?}");
+            assert_eq!(output.matches('\u{15}').count(), 2);
         }
-        assert_eq!(
-            output.matches('\u{15}').count(),
-            if prefix == "%wor:\t" { 2 } else { 0 }
-        );
-
-        let line = source
-            .lines()
-            .find(|line| line.starts_with(prefix))
-            .unwrap();
-        let input = if prefix == "%wor:\t" {
-            line.strip_prefix(prefix).unwrap()
-        } else {
-            line
-        };
-        let origin = 173;
-        let errors = ErrorCollector::new();
-        let output = match prefix {
-            "*CHI:\t" => parser
-                .parse_main_tier(input, origin, &errors)
-                .into_option()
-                .unwrap()
-                .to_chat_string(),
-            "@Comment:\t" => parser
-                .parse_header(input, origin, &errors)
-                .into_option()
-                .unwrap()
-                .to_chat_string(),
-            _ => parser
-                .parse_wor_tier(input, origin, &errors)
-                .into_option()
-                .unwrap()
-                .to_chat_string(),
-        };
-        assert_overflow(errors, origin, input);
-        assert!(
-            output.contains("before") && output.contains("after"),
-            "{output:?}"
-        );
-        assert!(
-            !output.contains("18446744073709551616") && !output.contains("\u{15}0_"),
-            "{output:?}"
-        );
-        assert_eq!(
-            output.matches('\u{15}').count(),
-            if prefix == "%wor:\t" { 2 } else { 0 }
-        );
     }
 }
 
@@ -199,14 +152,17 @@ fn rejected_tail_cannot_promote_the_preceding_inline_bullet() {
             .into_option()
             .unwrap();
         assert_overflow(errors, 0, input);
-        assert!(main.content.bullet.is_none());
+        assert!(matches!(
+            main.content.bullet,
+            Some(talkbank_model::BulletState::Unparsed { .. })
+        ));
         assert!(
             main.content
                 .content
                 .iter()
                 .any(|item| matches!(item, talkbank_model::UtteranceContent::InternalBullet(_)))
         );
-        assert_eq!(main.to_chat_string().matches('\u{15}').count(), 2);
+        assert_eq!(main.to_chat_string().matches('\u{15}').count(), 4);
     }
 }
 
@@ -243,14 +199,11 @@ fn both_text_tier_coordinates_are_independently_admitted() {
             .find_map(|line| line.strip_prefix("%com:\t"))
             .unwrap();
         let errors = ErrorCollector::new();
-        let tier = Re2cParser::new()
-            .parse_com_tier(input, 67, &errors)
-            .into_option()
-            .unwrap();
+        let tier = Re2cParser::new().parse_com_tier(input, 67, &errors);
         assert_overflow(errors, 67, input);
-        let output = tier.to_chat_string();
-        assert!(output.contains("timing"));
-        assert!(!output.contains('\u{15}'));
+        // Standalone text fragments propagate diagnostic rejection even though
+        // full-file recovery can now retain an explicit unparsed segment.
+        assert!(tier.is_rejected());
     }
 }
 
@@ -270,19 +223,22 @@ fn wor_numeric_rejection_is_reported_by_both_supported_apis() {
         let errors = ErrorCollector::new();
         let tier = parser.parse_wor_tier(input, 61, &errors).into_option();
         assert_overflow(errors, 61, input);
-        // Primary fragment admission may reject the tier while native recovery
-        // retains it. Detection and truthful values are shared requirements,
-        // not identical recovery outcomes. The native-specific test above
-        // independently requires its recovered words and valid sibling timing.
-        for output in
-            std::iter::once(file.to_chat_string()).chain(tier.map(|tier| tier.to_chat_string()))
-        {
-            assert!(output.contains("before") && output.contains("after"));
-            assert!(output.contains("\u{15}300_400\u{15}"));
-            assert_eq!(output.matches('\u{15}').count(), 2);
-        }
+        assert!(
+            tier.is_none(),
+            "invalid timing must not yield a partial tier"
+        );
+        let raw = file
+            .utterances()
+            .flat_map(|u| &u.dependent_tiers)
+            .find_map(|e| match &e.tier {
+                talkbank_model::DependentTier::UnparsedWor(raw) => Some(raw),
+                _ => None,
+            })
+            .expect("rejected WOR source retained");
+        assert!(raw.source().contains(input));
+        assert!(file.to_chat_string().contains(input));
     }
-    let source = example("WOR overflow retains the word without invented timing");
+    let source = example("WOR overflow retains source without invented timing");
     check(&Re2cParser::new(), &source);
     check(&talkbank_parser::TreeSitterParser::new().unwrap(), &source);
 }

@@ -1,20 +1,18 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: tier
 ---
+tier_type: Mor
 items:
   - main:
       pos: cconj
       lemma: en
-      features: []
-    post_clitics: []
   - main:
       pos: pron
       lemma: ze
       features:
         - Prs
         - S3
-    post_clitics: []
   - main:
       pos: verb
       lemma: gelen
@@ -22,35 +20,27 @@ items:
         - Fin
         - Pres
         - S
-    post_clitics: []
   - main:
       pos: det
       lemma: het
       features:
         - Def
-    post_clitics: []
   - main:
       pos: noun
       lemma: water
       features:
         - Neut
         - Acc
-    post_clitics: []
   - main:
       pos: adp
       lemma: over
-      features: []
-    post_clitics: []
   - main:
       pos: det
       lemma: de
       features:
         - Def
-    post_clitics: []
   - main:
       pos: noun
       lemma: bloem
-      features: []
-    post_clitics: []
 terminator:
-  Period: "."
+  type: period

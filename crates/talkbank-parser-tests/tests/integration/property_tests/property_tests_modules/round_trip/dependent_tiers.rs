@@ -11,8 +11,8 @@ use talkbank_model::model::{
 #[test]
 fn gra_tier_round_trip_simple() {
     let relations = vec![
-        GrammaticalRelation::new(1, 2, "SUBJ"),
-        GrammaticalRelation::new(2, 0, "ROOT"),
+        GrammaticalRelation::new(1, 2, "SUBJ".try_into().unwrap()),
+        GrammaticalRelation::new(2, 0, "ROOT".try_into().unwrap()),
     ];
 
     let tier = GraTier::new_gra(talkbank_model::Location::Unlocated, relations);

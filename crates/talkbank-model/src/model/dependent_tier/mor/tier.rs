@@ -48,7 +48,7 @@ impl WriteChat for MorTierType {
     ///
     /// Keeping this on `MorTierType` lets callers format tier prefixes without
     /// constructing a full [`MorTier`] value first.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             MorTierType::Mor => w.write_str("%mor"),
         }
@@ -82,9 +82,9 @@ impl WriteChat for MorTierType {
 ///
 /// # Terminator
 ///
-/// Standard `%mor:` tiers end with a typed [`Terminator`] that matches the
-/// main tier. In CA-mode, or for specialized fragments, the terminator may be
-/// omitted if the main tier has no terminator.
+/// This parsed representation requires an observed typed [`Terminator`].
+/// If parsing cannot supply one, retain `UnparsedTier` or reject the
+/// fragment; never invent a period to satisfy this constructor.
 ///
 /// # References
 ///
@@ -315,7 +315,7 @@ impl MorTier {
     ///
     /// This writes prefix, items, and optional terminator in canonical order.
     /// It is the non-allocating path used by `WriteChat`.
-    pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self.tier_type {
             MorTierType::Mor => w.write_str("%mor:\t")?,
         }
@@ -340,16 +340,14 @@ impl MorTier {
     /// Prefer [`Self::write_chat`] when writing into existing buffers to avoid
     /// transient allocation.
     pub fn to_chat(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_chat(w))
     }
 
     /// Write tier content only (items and terminator), without the tier prefix (%mor:\t).
     ///
     /// This is used for roundtrip testing against golden data that contains
     /// content-only, and for the TreeSitterParser API which expects content-only input.
-    pub fn write_content<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_content<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         for (i, item) in self.items.iter().enumerate() {
             if i > 0 {
                 w.write_char(' ')?;
@@ -370,9 +368,7 @@ impl MorTier {
     /// This mirrors [`Self::write_content`] and is mainly a convenience for
     /// tests and debugging output.
     pub fn to_content(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_content(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_content(w))
     }
 }
 
@@ -388,7 +384,7 @@ impl MorTier {
 
 impl WriteChat for MorTier {
     /// Serializes the full `%mor` line (prefix, items, optional terminator).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         MorTier::write_chat(self, w)
     }
 }
@@ -655,10 +651,10 @@ mod tests {
         let gra = GraTier::new_gra(
             crate::Location::Unlocated,
             vec![
-                GrammaticalRelation::new(1, 2, "EXPL"),
-                GrammaticalRelation::new(2, 0, "ROOT"),
-                GrammaticalRelation::new(3, 2, "DEP"),
-                GrammaticalRelation::new(4, 2, "PUNCT"),
+                GrammaticalRelation::new(1, 2, "EXPL".try_into().unwrap()),
+                GrammaticalRelation::new(2, 0, "ROOT".try_into().unwrap()),
+                GrammaticalRelation::new(3, 2, "DEP".try_into().unwrap()),
+                GrammaticalRelation::new(4, 2, "PUNCT".try_into().unwrap()),
             ],
         );
 
@@ -678,8 +674,8 @@ mod tests {
         let mut gra = GraTier::new_gra(
             crate::Location::Unlocated,
             vec![
-                GrammaticalRelation::new(1, 0, "ROOT"),
-                GrammaticalRelation::new(2, 1, "PUNCT"),
+                GrammaticalRelation::new(1, 0, "ROOT".try_into().unwrap()),
+                GrammaticalRelation::new(2, 1, "PUNCT".try_into().unwrap()),
             ],
         );
 
@@ -688,7 +684,7 @@ mod tests {
             0,
             SplicedBlock::new(
                 vec![make_mor(make_word("noun", "woof"))],
-                vec![GrammaticalRelation::new(1, 0, "NMOD")],
+                vec![GrammaticalRelation::new(1, 0, "NMOD".try_into().unwrap())],
             )
             .expect("one-chunk block"),
             SpanRoot::UtteranceRoot,
@@ -715,9 +711,9 @@ mod tests {
         let mut gra = GraTier::new_gra(
             crate::Location::Unlocated,
             vec![
-                GrammaticalRelation::new(1, 0, "ROOT"),
-                GrammaticalRelation::new(2, 1, "NMOD"),
-                GrammaticalRelation::new(3, 1, "PUNCT"),
+                GrammaticalRelation::new(1, 0, "ROOT".try_into().unwrap()),
+                GrammaticalRelation::new(2, 1, "NMOD".try_into().unwrap()),
+                GrammaticalRelation::new(3, 1, "PUNCT".try_into().unwrap()),
             ],
         );
 
@@ -726,7 +722,7 @@ mod tests {
             0..1,
             SplicedBlock::new(
                 vec![make_mor(make_word("noun", "new"))],
-                vec![GrammaticalRelation::new(1, 0, "NMOD")],
+                vec![GrammaticalRelation::new(1, 0, "NMOD".try_into().unwrap())],
             )
             .expect("one-chunk block"),
             SpanRoot::UtteranceRoot,

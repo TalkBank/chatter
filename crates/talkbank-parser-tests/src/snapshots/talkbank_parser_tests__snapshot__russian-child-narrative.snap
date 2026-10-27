@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "rus"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Investigator",
+            "details": {
+              "name": null,
+              "role": "Investigator",
+              "state": "complete"
+            },
             "speaker_code": "EX1"
           },
           {
-            "name": null,
-            "role": "Target_Child",
+            "details": {
+              "name": null,
+              "role": "Target_Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           }
         ],
@@ -626,42 +629,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "media": {
-    "filename": "russian-child-narrative",
-    "media_type": "audio"
-  },
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "4;07.03",
-        "corpus": "corpus",
-        "language": [
-          "rus"
-        ],
-        "role": "Target_Child",
-        "sex": "male",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Target_Child"
-    },
-    "EX1": {
-      "birth_date": null,
-      "code": "EX1",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "rus"
-        ],
-        "role": "Investigator",
-        "speaker": "EX1"
-      },
-      "name": null,
-      "role": "Investigator"
-    }
-  }
+  ]
 }

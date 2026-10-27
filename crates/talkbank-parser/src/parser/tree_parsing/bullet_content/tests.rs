@@ -48,7 +48,9 @@ fn parse_test_file(filename: &str) -> Result<(BulletContent, Vec<ParseError>), S
         content_node.ok_or_else(|| "Should find a source-bound act content slot".to_string())?;
 
     let error_sink = ErrorCollector::new();
-    let content = parse_bullet_content(content_node, &error_sink).expect("producer reconstruction");
+    let content = parse_bullet_content(content_node, &error_sink)
+        .expect("producer reconstruction")
+        .ok_or_else(|| "reference bullet body rejected".to_string())?;
     Ok((content, error_sink.into_vec()))
 }
 

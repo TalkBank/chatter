@@ -1,10 +1,7 @@
 //! File output for the generated schema.
 //!
-//! The canonical schema lives at the workspace root `schema/<stem>.json`, which
-//! `talkbank_transform::SCHEMA_JSON` embeds via `include_str!`. The test's
-//! working directory is this crate's manifest dir, not the workspace root, so
-//! the path is resolved from `CARGO_MANIFEST_DIR` up two levels rather than
-//! relative to the CWD.
+//! The model generates both the workspace publication artifact and the crate's
+//! embedded artifact. Paths are anchored at CARGO_MANIFEST_DIR, never the CWD.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,12 +21,21 @@ pub enum IoError {
     },
 }
 
-/// Canonical schema path for one stem (e.g. `chat-file.schema`), resolved to
-/// the workspace `schema/` directory regardless of the test's CWD.
-pub fn schema_path_for(schema_stem: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../schema")
-        .join(format!("{schema_stem}.json"))
+/// Both distribution locations of the same model-generated schema.
+pub fn schema_paths() -> [PathBuf; 2] {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    [
+        root.join("../../schema/chat-file.schema.json"),
+        root.join("schema/chat-file.schema.json"),
+    ]
+}
+
+/// Read an artifact for the model-currency check; missing is an error.
+pub fn read_schema_file(path: &Path) -> Result<String, IoError> {
+    fs::read_to_string(path).map_err(|source| IoError::Read {
+        path: path.display().to_string(),
+        source,
+    })
 }
 
 /// Writes a changed or missing schema; preserves identical files and their mtime.
@@ -45,6 +51,15 @@ pub fn write_schema_file(path: &Path, schema_json: &str) -> Result<(), IoError> 
             });
         }
     }
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|source| IoError::Write {
+            path: parent.display().to_string(),
+            source,
+        })?;
+    }
     fs::write(path, schema_json).map_err(|source| IoError::Write {
         path: path.display().to_string(),
         source,
@@ -54,7 +69,7 @@ pub fn write_schema_file(path: &Path, schema_json: &str) -> Result<(), IoError> 
 /// Prints summary.
 pub fn print_summary(path: &Path, length: usize) {
     println!("\n========== GENERATED JSON SCHEMA ==========");
-    println!("Canonical: {}", path.display());
+    println!("Artifact: {}", path.display());
     println!("Length: {length} bytes");
     println!("==========================================\n");
 }

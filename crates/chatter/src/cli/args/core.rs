@@ -1,38 +1,26 @@
-use clap::Subcommand;
+use crate::cli::catalog::{Contract, Shape, command_tree};
 use std::path::PathBuf;
-
-use talkbank_transform::sanity_scan::SanityScanThreshold;
-use talkbank_transform::speaker_id::ConfidenceThreshold;
 
 use super::cache_commands::CacheCommands;
 use super::cli_types::{AlignmentTier, OutputFormat, ParserBackend};
 use super::debug_commands::DebugCommands;
 use super::flag_modes::{Flag, NormalizeCheckArgs, ToJsonCheckArgs};
-use super::judgment_args::JudgmentArgs;
 
-/// Top-level `talkbank` subcommands.
-#[derive(Subcommand)]
-#[allow(clippy::large_enum_variant)] // Clap owns one command per process; keep its declarative argument layout.
+command_tree! {
 pub enum Commands {
     /// Validate CHAT file(s)
     Validate {
-        /// Path(s) to CHAT file(s) or directory(ies).
-        ///
-        /// Not required when `--list-checks` is supplied, since that mode
-        /// exits before reading any files.
-        #[arg(required_unless_present = "list_checks")]
+        /// Paths to CHAT files or directories.
+        #[arg(required = true)]
         path: Vec<PathBuf>,
 
-        /// Print every validation check and its Active/Opt-in/Planned status, then exit.
-        ///
-        /// Does not read any files. The list is derived from the
-        /// generated `ErrorCode` registry, which owns each code's enforcement status.
-        #[arg(
-            long,
-            conflicts_with = "path",
-            help = "List all validation checks with Active/Opt-in/Planned status, then exit"
-        )]
-        list_checks: bool,
+        /// Terminal UI policy.
+        #[arg(long, value_enum, default_value_t)]
+        tui_mode: super::TuiMode,
+
+        /// Color theme for terminal validation.
+        #[arg(long, value_enum)]
+        theme: Option<crate::ui::ThemePreset>,
 
         /// Output format: text (default) or json
         #[arg(short, long, value_enum, default_value_t = OutputFormat::Text, help = "Validation output style (text|json)")]
@@ -42,7 +30,7 @@ pub enum Commands {
         #[command(flatten)]
         alignment: Flag<talkbank_model::validation::AlignmentValidation>,
 
-        /// `--force`, parsed into the cache refresh it selects.
+        /// `--refresh-cache`, parsed into the cache refresh it selects.
         #[command(flatten)]
         cache_refresh: Flag<crate::commands::CacheRefreshMode>,
 
@@ -81,7 +69,7 @@ pub enum Commands {
             long,
             help = "Stream errors to JSONL file (bulk audit mode)",
             value_name = "OUTPUT_FILE",
-            conflicts_with_all = ["format", "quiet", "force"]
+            conflicts_with_all = ["format", "quiet", "refresh-cache"]
         )]
         audit: Option<PathBuf>,
 
@@ -122,322 +110,13 @@ pub enum Commands {
         )]
         suppress: Vec<crate::commands::error_codes::SuppressionSelector>,
 
-        /// Deprecated no-op. Phon `%x` validation now runs by default, so this
-        /// flag is unnecessary; passing it prints a deprecation note. To silence
-        /// Phon `%x` diagnostics, use `--suppress xphon` instead.
-        #[arg(
-            long = "check-xphon",
-            hide = true,
-            help = "Deprecated: Phon %x validation runs by default (no-op)"
-        )]
-        check_xphon: bool,
-    },
+    } => Shape::Leaf(Contract::Validate),
 
-    /// EXPERIMENTAL. Assign CHAT-conformant speaker codes to an anonymously-labeled
-    /// CHAT file. Supports explicit-mapping mode (via `--mapping`) and
-    /// reference mode (via `--reference` + `--anchor` +
-    /// `--inserted-role`). See `book/src/chatter/user-guide/speaker-id.md`.
-    SpeakerId {
-        /// Input CHAT file with anonymous speaker codes (e.g. PAR0,
-        /// PAR1, …) to be relabeled.
-        input: PathBuf,
-
-        /// Explicit-mapping specification, comma-separated
-        /// assignments of the form `OLD=drop` or `OLD=CODE:ROLE`.
-        /// Unmapped speakers currently pass through unchanged.
-        /// Mutually exclusive with `--reference`.
-        #[arg(long, conflicts_with = "reference")]
-        mapping: Option<String>,
-
-        /// Reference-mode: path to a CHAT file containing the
-        /// authoritative anchor speaker. The donor speaker whose
-        /// content best matches the anchor by multiset-Jaccard text
-        /// similarity is dropped; remaining donor speakers are
-        /// renamed per `--inserted-role`.
-        #[arg(long, requires = "anchor", requires = "inserted_role")]
-        reference: Option<PathBuf>,
-
-        /// Reference-mode: speaker code in `--reference` whose
-        /// content represents the donor speaker to drop.
-        #[arg(long)]
-        anchor: Option<String>,
-
-        /// Reference-mode: role spec for non-anchor donor speakers,
-        /// formatted `CODE:ROLE` (e.g. `INV:Investigator`).
-        #[arg(long = "inserted-role")]
-        inserted_role: Option<String>,
-
-        /// Reference-mode: minimum winner→runner-up Jaccard margin
-        /// for the auto-decision to stand. Default 2.0×; below
-        /// threshold the command refuses (exit 4) and prints
-        /// per-speaker scores to stderr.
-        #[arg(long, default_value = "2.0")]
-        confidence_threshold: ConfidenceThreshold,
-
-        /// Reference-mode: write the complete lexical-support report used by
-        /// the decision to a new JSON file. Refuses to overwrite an existing
-        /// file.
-        #[arg(long = "write-match-report", requires = "reference")]
-        write_match_report: Option<PathBuf>,
-
-        /// Reference-mode: when the auto-decide succeeds, append the
-        /// decision to this override file (created if absent). The
-        /// file is the durable audit trail of the batch run, see
-        /// `book/src/chatter/integrating/merge-overrides.md`.
-        #[arg(long = "write-override")]
-        write_override: Option<PathBuf>,
-
-        /// Reference-mode: when the auto-decide refuses on low
-        /// confidence, append a pending-adjudication entry to this
-        /// file (created if absent). The orchestrator hands the
-        /// resulting file to `chatter adjudicate` for human review.
-        #[arg(long = "write-pending")]
-        write_pending: Option<PathBuf>,
-
-        /// Override-file mode: replay a prior adjudication recorded
-        /// in this override file. Mutually exclusive with `--mapping`
-        /// and `--reference`. Requires `--session-id` (or defaults
-        /// to the input file's basename stem).
-        #[arg(
-            long = "override-file",
-            conflicts_with = "mapping",
-            conflicts_with = "reference"
-        )]
-        override_file: Option<PathBuf>,
-
-        /// Override-file mode: the session ID whose entry to apply
-        /// from `--override-file`. Defaults to the input file's
-        /// basename stem when omitted.
-        #[arg(long = "session-id")]
-        session_id: Option<String>,
-
-        /// Judgment engine + LLM connection + session context (shared
-        /// for speaker identity assessment).
-        #[command(flatten)]
-        judgment: JudgmentArgs,
-
-        /// Output path (prints to stdout if omitted).
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
-
-    /// EXPERIMENTAL. Re-attribute utterance speakers from an external
-    /// diarization. Each utterance with a media time bullet is assigned
-    /// to the diarization track with the greatest time overlap; the
-    /// words are kept byte-stable. Repairs transcripts whose ASR
-    /// under-counted or mixed speakers. See
-    /// `book/src/chatter/user-guide/rediarize.md`.
-    Rediarize {
-        /// Input CHAT file whose utterances carry time bullets.
-        input: PathBuf,
-
-        /// Turns JSON from the external diarizer:
-        /// `{"source": "...", "turns": [{"track": "PAR0",
-        /// "start_ms": 0, "end_ms": 1200}, ...]}`. Format contract:
-        /// the rediarize book page.
-        #[arg(long)]
-        turns: PathBuf,
-
-        /// Output path (prints to stdout if omitted).
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-
-        /// Also write a machine-readable outcome summary (counts plus
-        /// the full flagged list) as JSON to this path. Shape contract:
-        /// the rediarize book page.
-        #[arg(long)]
-        summary_json: Option<PathBuf>,
-
-        /// Report an utterance as CONTESTED when the runner-up track holds at
-        /// least this share (0.0 to 1.0) of its overlapped time.
-        ///
-        /// NO DEFAULT, deliberately: omit it and nothing is reported as
-        /// contested. What share makes an utterance genuinely mixed has not
-        /// been measured against human listening, and a default here would
-        /// hand every user a number wearing this tool's authority. Contested
-        /// utterances are still reattributed to their winning track; this
-        /// makes the mixed population visible, it does not change placement.
-        #[arg(long, value_name = "SHARE")]
-        contested_at: Option<f64>,
-    },
-
-    /// EXPERIMENTAL. Adjudicate pending speaker-id (and future) decisions and
-    /// write the resolved entries to an override file. See
-    /// `book/src/architecture/adjudication-workflow.md`.
-    Adjudicate {
-        /// Path to the pending-adjudications TOML file. Rewritten
-        /// on success to remove the resolved entries.
-        pending: PathBuf,
-
-        /// Override file to append resolved decisions to. Created
-        /// if absent.
-        #[arg(long = "override-file")]
-        override_file: PathBuf,
-
-        /// Pre-canned operator decisions in TOML form, see the
-        /// adjudication workflow doc for the format. Mutually
-        /// exclusive with `--interactive`.
-        #[arg(long, conflicts_with = "interactive")]
-        scripted: Option<PathBuf>,
-
-        /// Prompt the operator interactively (one stdin line per
-        /// pending entry). Decisions: `accept` (take the suggestion),
-        /// `choose SPK:CODE:TAG ...` (pick a mapping), or `override
-        /// SPK:CODE:TAG ... SPK=action ...` (mapping plus per-speaker
-        /// actions). Choose/override accept a trailing note; accept does not.
-        #[arg(long)]
-        interactive: bool,
-
-        /// Operator identifier recorded in the override entries.
-        /// Defaults to `$USER` (`"unknown"` if unset).
-        #[arg(long)]
-        operator: Option<String>,
-    },
-
-    /// EXPERIMENTAL. Post-merge sanity scan: detect sessions whose pass-1 auto-
-    /// decision looks suspicious by an out-of-band heuristic (mean
-    /// utterance word count asymmetry between anchor and inserted
-    /// speakers). Flagged sessions become
-    /// `sanity-scan-misclassification` pending entries the operator
-    /// resolves via `chatter adjudicate`. See
-    /// `book/src/architecture/adjudication-workflow.md`.
-    SanityScan {
-        /// Directory of CHAT files to inspect. Each file's basename stem
-        /// is treated as its session ID.
-        merged_dir: PathBuf,
-
-        /// Override file from pass-1. Sessions are matched by
-        /// session ID; auto-decided entries are eligible for
-        /// scanning, explicit-mode entries are skipped (operator
-        /// already signed off).
-        #[arg(long = "override-file")]
-        override_file: PathBuf,
-
-        /// Anchor speaker code in the merged files (typically
-        /// `CHI`).
-        #[arg(long)]
-        anchor: String,
-
-        /// Ratio threshold for the mean-word-count heuristic
-        /// (finite and positive; default 1.5×). A session is flagged when
-        /// `anchor_mean >= inserted_mean * threshold`.
-        #[arg(long, default_value_t = SanityScanThreshold::DEFAULT)]
-        threshold: SanityScanThreshold,
-
-        /// Pending-adjudications file to append flagged sessions
-        /// to. Created if absent. Required, flagged sessions
-        /// without a pending file would be discarded.
-        #[arg(long = "write-pending")]
-        write_pending: PathBuf,
-    },
-
-    /// Normalize CHAT file to canonical format
-    Normalize {
-        /// Input CHAT file path
-        input: PathBuf,
-
-        /// Output CHAT file path (if not specified, prints to stdout)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-
-        /// `--validate` and `--skip-alignment`, parsed into one check level.
-        #[command(flatten)]
-        checks: NormalizeCheckArgs,
-    },
-
-    /// Convert CHAT file to JSON
-    #[command(long_about = "Convert CHAT transcript(s) to JSON.\n\n\
-        Output conforms to the TalkBank CHAT JSON Schema:\n\
-        https://talkbank.org/schemas/v0.1/chat-file.json\n\n\
-        Single file: prints JSON to stdout or writes to --output.\n\
-        Directory: requires --output-dir. Walks recursively, preserving structure.\n\
-        Incremental by default: skips files whose JSON is already up-to-date (mtime check).\n\
-        Use --force to rebuild all. Use --prune to remove orphaned .json files.")]
-    ToJson {
-        /// Input CHAT file or directory path
-        input: PathBuf,
-
-        /// Output JSON file path (single-file mode; prints to stdout if omitted)
-        #[arg(short, long, conflicts_with = "output_dir")]
-        output: Option<PathBuf>,
-
-        /// Output directory (directory mode; preserves relative structure)
-        #[arg(long)]
-        output_dir: Option<PathBuf>,
-
-        /// `--compact`, parsed into the layout it selects.
-        #[command(flatten)]
-        layout: Flag<talkbank_transform::JsonLayout>,
-
-        /// `--force`, parsed into the rebuild it selects.
-        #[command(flatten)]
-        refresh: Flag<crate::commands::json::JsonRefresh>,
-
-        /// `--prune`, parsed into what happens to orphaned JSON.
-        #[command(flatten)]
-        orphans: Flag<crate::commands::json::OrphanJson>,
-
-        /// Number of parallel workers for directory mode (default: number of
-        /// CPUs). At least 1: `--jobs 0` is a usage error.
-        #[arg(short, long)]
-        jobs: Option<std::num::NonZeroUsize>,
-
-        /// `--skip-validation` and `--skip-alignment`, parsed into one
-        /// check level.
-        #[command(flatten)]
-        checks: ToJsonCheckArgs,
-
-        /// `--skip-schema-validation`, parsed into the schema policy.
-        #[command(flatten)]
-        schema: Flag<talkbank_transform::JsonSchemaPolicy>,
-    },
-
-    /// Convert JSON file to CHAT
-    #[command(long_about = "Convert a JSON file back to CHAT format.\n\n\
-        The input should conform to the TalkBank CHAT JSON Schema:\n\
-        https://talkbank.org/schemas/v0.1/chat-file.json\n\n\
-        Use `chatter schema` to print the full schema.")]
-    FromJson {
-        /// Input JSON file path
-        input: PathBuf,
-
-        /// Output CHAT file path (if not specified, prints to stdout)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
-
-    /// Show alignment visualization for debugging
-    ShowAlignment {
-        /// Input CHAT file path
-        input: PathBuf,
-
-        /// Show alignment for specific tier types (mor, gra, pho, sin)
-        /// If not specified, shows all available alignments
-        #[arg(short, long, value_enum)]
-        tier: Option<AlignmentTier>,
-
-        /// `-c`/`--compact`, parsed into the view it selects.
-        #[command(flatten)]
-        view: Flag<crate::commands::alignment::AlignmentView>,
-    },
-
-    /// Watch CHAT file(s) for changes and continuously validate
-    Watch {
-        /// Path to CHAT file or directory to watch
-        path: PathBuf,
-
-        /// `--skip-alignment`, parsed into the coverage it selects.
-        #[command(flatten)]
-        alignment: Flag<talkbank_model::validation::AlignmentValidation>,
-
-        /// Clear terminal before each validation run
-        #[arg(short, long)]
-        clear: bool,
-    },
 
     /// Apply catalog fixes to CHAT file(s) at exact byte spans
     Fix {
         /// Paths to CHAT files or directories
+        #[arg(required = true)]
         paths: Vec<PathBuf>,
 
         /// `--apply` writes; without it fix only reports. Parsed straight
@@ -453,24 +132,26 @@ pub enum Commands {
         /// `--skip-alignment`, parsed into the coverage it selects.
         #[command(flatten)]
         alignment: Flag<talkbank_model::validation::AlignmentValidation>,
-    },
+    } => Shape::Leaf(Contract::Fix),
 
-    /// Show cleaned text for each word in utterances (debugging aid)
-    Clean {
+
+    /// Normalize CHAT file to canonical format
+    Format {
         /// Input CHAT file path
-        path: PathBuf,
+        input: PathBuf,
 
-        /// Only show words where raw text differs from cleaned text
-        #[arg(long)]
-        diff_only: bool,
+        /// Output CHAT file path (if not specified, prints to stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
 
-        /// Output format
-        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
-        format: OutputFormat,
-    },
+        /// `--validate` and `--skip-alignment`, parsed into one check level.
+        #[command(flatten)]
+        checks: NormalizeCheckArgs,
+    } => Shape::Leaf(Contract::Format),
+
 
     /// Create a new minimal valid CHAT file
-    NewFile {
+    New {
         /// Output file path (prints to stdout if not specified)
         #[arg(short, long)]
         output: Option<PathBuf>,
@@ -494,18 +175,39 @@ pub enum Commands {
         /// Initial utterance content (optional)
         #[arg(short, long)]
         utterance: Option<String>,
-    },
+    } => Shape::Leaf(Contract::New),
+
+
+    /// Watch CHAT file(s) for changes and continuously validate
+    Watch {
+        /// Path to CHAT file or directory to watch
+        path: PathBuf,
+
+        /// Parser backend for initial validation and every subsequent change.
+        #[arg(long, value_enum, default_value_t)]
+        parser: ParserBackend,
+
+        /// `--skip-alignment`, parsed into the coverage it selects.
+        #[command(flatten)]
+        alignment: Flag<talkbank_model::validation::AlignmentValidation>,
+
+        /// Clear terminal before each validation run
+        #[arg(short, long)]
+        clear: bool,
+    } => Shape::Leaf(Contract::Watch),
+
 
     /// Cache management operations
     Cache {
         #[command(subcommand)]
         command: CacheCommands,
-    },
+    } => Shape::Namespace(CacheCommands::shapes),
+
 
     /// Print the CHAT JSON Schema
     #[command(long_about = "Print the CHAT JSON Schema to stdout.\n\n\
         The schema describes the structure of CHAT transcripts serialized to JSON \
-        by `chatter to-json`. It is auto-generated from the Rust data model \
+        by `chatter convert to-json`. It is auto-generated from the Rust data model \
         and conforms to JSON Schema 2020-12.\n\n\
         Canonical URL: https://talkbank.org/schemas/v0.1/chat-file.json")]
     Schema {
@@ -515,7 +217,159 @@ pub enum Commands {
             help = "Print only the canonical URL (https://talkbank.org/schemas/v0.1/chat-file.json)"
         )]
         url: bool,
-    },
+    } => Shape::Leaf(Contract::Schema),
+    /// Convert between CHAT and model JSON.
+    Convert { #[command(subcommand)] command: ConvertCommands } => Shape::Namespace(ConvertCommands::shapes),
+    /// Inspect transcript structure without changing it.
+    Inspect { #[command(subcommand)] command: InspectCommands } => Shape::Namespace(InspectCommands::shapes),
+    /// Discover validation diagnostics and repair policies.
+    Checks { #[command(subcommand)] command: CheckCommands } => Shape::Namespace(CheckCommands::shapes),
+    /// Experimental speaker workflows and specialist transformations.
+    Experimental { #[command(subcommand)] command: ExperimentalCommands } => Shape::Namespace(ExperimentalCommands::shapes),
+    /// Discover executable commands, options, output and side effects.
+    #[command(name = "commands")]
+    Discovery { #[command(subcommand)] command: DiscoveryCommands } => Shape::Namespace(DiscoveryCommands::shapes),
+
+}
+}
+command_tree! {
+pub enum ConvertCommands {
+
+    /// Convert CHAT file to JSON
+    #[command(long_about = "Convert CHAT transcript(s) to JSON.\n\n\
+        Output conforms to the TalkBank CHAT JSON Schema:\n\
+        https://talkbank.org/schemas/v0.1/chat-file.json\n\n\
+        Single file: prints JSON to stdout or writes to --output.\n\
+        Directory: requires --output-dir. Walks recursively, preserving structure.\n\
+        Incremental by default: skips files whose JSON is already up-to-date (mtime check).\n\
+        Use --rebuild to rebuild all. Use --prune to remove orphaned .json files.")]
+    ToJson {
+        /// Input CHAT file or directory path
+        input: PathBuf,
+
+        /// Output JSON file path (single-file mode; prints to stdout if omitted)
+        #[arg(short, long, conflicts_with = "output_dir")]
+        output: Option<PathBuf>,
+
+        /// Output directory (directory mode; preserves relative structure)
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+
+        /// `--compact`, parsed into the layout it selects.
+        #[command(flatten)]
+        layout: Flag<talkbank_transform::JsonLayout>,
+
+        /// `--rebuild`, parsed into the rebuild it selects.
+        #[command(flatten)]
+        refresh: Flag<crate::commands::json::JsonRefresh>,
+
+        /// `--prune`, parsed into what happens to orphaned JSON.
+        #[command(flatten)]
+        orphans: Flag<crate::commands::json::OrphanJson>,
+
+        /// Number of parallel workers for directory mode (default: number of
+        /// CPUs). At least 1: `--jobs 0` is a usage error.
+        #[arg(short, long)]
+        jobs: Option<std::num::NonZeroUsize>,
+
+        /// `--skip-validation` and `--skip-alignment`, parsed into one
+        /// check level.
+        #[command(flatten)]
+        checks: ToJsonCheckArgs,
+
+        /// `--skip-schema-validation`, parsed into the schema policy.
+        #[command(flatten)]
+        schema: Flag<talkbank_transform::JsonSchemaPolicy>,
+    } => Shape::Leaf(Contract::ToJson),
+
+
+    /// Convert JSON file to CHAT
+    #[command(long_about = "Convert a JSON file back to CHAT format.\n\n\
+        The input should conform to the TalkBank CHAT JSON Schema:\n\
+        https://talkbank.org/schemas/v0.1/chat-file.json\n\n\
+        Use `chatter schema` to print the full schema.")]
+    FromJson {
+        /// Input JSON file path
+        input: PathBuf,
+
+        /// Output CHAT file path (if not specified, prints to stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    } => Shape::Leaf(Contract::FromJson),
+}
+}
+command_tree! {
+pub enum InspectCommands {
+
+    /// Show alignment visualization for debugging
+    Alignment {
+        /// Input CHAT file path
+        input: PathBuf,
+
+        /// Show alignment for specific tier types (mor, gra, pho, sin)
+        /// If not specified, shows all available alignments
+        #[arg(short, long, value_enum)]
+        tier: Option<AlignmentTier>,
+
+        /// `-c`/`--compact`, parsed into the view it selects.
+        #[command(flatten)]
+        view: Flag<crate::commands::alignment::AlignmentView>,
+    } => Shape::Leaf(Contract::Alignment),
+
+
+    /// Show cleaned text for each word in utterances (debugging aid)
+    Words {
+        /// Input CHAT file path
+        path: PathBuf,
+
+        /// Only show words where raw text differs from cleaned text
+        #[arg(long)]
+        diff_only: bool,
+
+        /// Output format
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    } => Shape::Leaf(Contract::Words),
+    /// Analyze CA overlap markers (⌈⌉⌊⌋): pairing, temporal consistency, orphans
+    Overlaps {
+        /// Path to CHAT file(s) or directory
+        path: Vec<PathBuf>,
+
+        /// Write a new JSON-lines report (one object per file with overlaps).
+        /// Refuses existing paths. Failed runs may retain a partial report.
+        #[arg(long, value_name = "PATH")]
+        database: Option<PathBuf>,
+    } => Shape::Leaf(Contract::Overlaps),
+
+    /// Audit linker and special terminator usage across a corpus
+    ///
+    /// Analyzes cross-utterance pairing correctness for linkers (+<, ++, +^,
+    /// +", +,, +≋, +≈) and special terminators (+..., +/., +//., +"/.etc.).
+    /// Reports frequency tables, pairing violations, orphaned terminators,
+    /// and +< overlap block patterns.
+    Linkers {
+        /// Path to CHAT file(s) or directory
+        path: Vec<PathBuf>,
+
+        /// Write per-anomaly JSON lines to a new file, refusing existing paths.
+        /// Records carry an utterance index, context and a suggested fix.
+        /// Failed runs may retain a partial report; suggestions require review.
+        #[arg(long, value_name = "PATH")]
+        anomalies: Option<PathBuf>,
+    } => Shape::Leaf(Contract::Linkers),
+
+
+}
+}
+
+command_tree! {
+pub enum ExperimentalCommands {
+    /// Assign speaker identities or inspect diarization.
+    Speakers { #[command(subcommand)] command: super::speaker_commands::SpeakerCommands } => Shape::Namespace(super::speaker_commands::SpeakerCommands::shapes),
+    /// Resolve pending decisions using an explicit source.
+    Review { #[command(subcommand)] command: super::speaker_commands::ReviewCommands } => Shape::Namespace(super::speaker_commands::ReviewCommands::shapes),
+    /// Preview specialist transcript transformations.
+    Transform { #[command(subcommand)] command: DebugCommands } => Shape::Namespace(DebugCommands::shapes),
 
     /// Update chatter to the latest release
     #[command(
@@ -528,16 +382,39 @@ pub enum Commands {
         manager or from source, update the same way you installed it. The \
         self-update facility is experimental."
     )]
-    Update,
+    Update => Shape::Leaf(Contract::Update),
+}
+}
 
-    /// Developer/debugging tools for CHAT analysis
-    #[command(about = "Developer tools for inspecting and debugging CHAT files")]
-    Debug {
-        #[command(subcommand)]
-        command: DebugCommands,
-    },
+command_tree! {
+pub enum CheckCommands {
+    /// List diagnostics and their enforcement status.
+    List => Shape::Leaf(Contract::Checks),
+    /// Explain one diagnostic from the generated registry.
+    Explain {
+        #[arg(value_parser = crate::commands::error_codes::parse_error_code)]
+        code: talkbank_model::ErrorCode,
+    } => Shape::Leaf(Contract::Checks),
+}
 }
 
 #[cfg(test)]
 #[path = "core_tests.rs"]
 mod tests;
+
+command_tree! {
+pub enum DiscoveryCommands {
+    /// List every executable command; JSON is schema chatter.commands.v1.
+    List {
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    } => Shape::Leaf(Contract::Discovery),
+    /// Show a command or namespace, including options and effects.
+    Show {
+        #[arg(required = true)]
+        path: Vec<String>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    } => Shape::Leaf(Contract::Discovery),
+}
+}

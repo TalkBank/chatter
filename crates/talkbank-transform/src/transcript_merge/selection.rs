@@ -51,6 +51,18 @@ enum HeaderRegion {
     Body,
 }
 
+fn terminal_bullet(
+    row: &talkbank_model::Utterance,
+) -> Result<Option<&talkbank_model::Bullet>, MergeError> {
+    match row.main.content.bullet.as_ref() {
+        None => Ok(None),
+        Some(talkbank_model::BulletState::Parsed(bullet)) => Ok(Some(bullet)),
+        Some(talkbank_model::BulletState::Unparsed { .. }) => {
+            Err(MergeError::InvalidDonorSelection)
+        }
+    }
+}
+
 impl<'a> SourceBoundDonorSelection<'a> {
     /// Bind every selected utterance to a nondecreasing original parent.
     /// Headers must survive unchanged, in order and at their source boundary.
@@ -81,11 +93,10 @@ impl<'a> SourceBoundDonorSelection<'a> {
             // timed parent. Header brackets come from the original timeline; a
             // child timed outside its parent would be placed against brackets
             // that do not describe it.
-            if let (Some(parent_bullet), Some(child_bullet)) = (
-                source.main.content.bullet.as_ref(),
-                child.main.content.bullet.as_ref(),
-            ) && (child_bullet.timing.start_ms < parent_bullet.timing.start_ms
-                || child_bullet.timing.end_ms > parent_bullet.timing.end_ms)
+            if let (Some(parent_bullet), Some(child_bullet)) =
+                (terminal_bullet(source)?, terminal_bullet(child)?)
+                && (child_bullet.timing.start_ms < parent_bullet.timing.start_ms
+                    || child_bullet.timing.end_ms > parent_bullet.timing.end_ms)
             {
                 return Err(MergeError::InvalidDonorSelection);
             }
@@ -96,7 +107,7 @@ impl<'a> SourceBoundDonorSelection<'a> {
         for (index, line) in original.lines.iter().enumerate().rev() {
             next_bullets[index] = next;
             if let Line::Utterance(row) = line {
-                next = row.main.content.bullet.as_ref().or(next);
+                next = terminal_bullet(row)?.or(next);
             }
         }
         let mut projected_headers = selected
@@ -127,7 +138,7 @@ impl<'a> SourceBoundDonorSelection<'a> {
                     {
                         selected_count += 1;
                     }
-                    if let Some(bullet) = &row.main.content.bullet {
+                    if let Some(bullet) = terminal_bullet(row)? {
                         if previous
                             .is_some_and(|before| bullet.timing.start_ms < before.timing.start_ms)
                         {

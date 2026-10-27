@@ -12,38 +12,96 @@ use talkbank_derive::{SemanticEq, SpanShift, ValidationTagged};
 /// Age string recorded in `@ID` (field 4, format `years;months.days`).
 ///
 /// Successfully parsed ages store typed numeric components; malformed ages
-/// are preserved as `Unsupported` so the validator can report actionable errors.
+/// retain an unsupported state so validation can report actionable errors.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Age_Field>
+///
+/// Parsed components cannot be paired with unrelated serialized text.
+///
+/// ```compile_fail
+/// use talkbank_model::model::AgeValue;
+/// let contradictory = AgeValue::Valid {
+///     years: 1, months: Some(0), days: None, raw: "60;00.".into(),
+/// };
+/// ```
+#[derive(Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
+pub struct AgeValue {
+    state: AgeState,
+}
+
+/// Numeric components admitted from the same text that an age serializes.
+/// Presence is distinct from zero; representable out-of-range values remain
+/// available for contextual validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
+pub struct AgeComponents {
+    #[span_shift(skip)]
+    years: u16,
+    #[span_shift(skip)]
+    months: Option<u8>,
+    #[span_shift(skip)]
+    days: Option<u8>,
+}
+
+impl AgeComponents {
+    /// Declared whole years.
+    pub fn years(&self) -> u16 {
+        self.years
+    }
+    /// Declared months, or absence when the component was empty.
+    pub fn months(&self) -> Option<u8> {
+        self.months
+    }
+    /// Declared days, or absence when the component was empty.
+    pub fn days(&self) -> Option<u8> {
+        self.days
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum AgeSpelling {
+    YearsOnly,
+    MonthsOnly,
+    MonthsAndDays {
+        month_width: usize,
+        day_width: usize,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift, ValidationTagged)]
-pub enum AgeValue {
-    /// Successfully parsed age.
+enum AgeState {
     Valid {
-        /// Years component.
+        components: AgeComponents,
+        #[semantic_eq(skip)]
         #[span_shift(skip)]
-        years: u16,
-        /// Months component. Conventionally 0-11, and deliberately NOT
-        /// range-checked at parse time: `13` is preserved as `13` so the
-        /// validator, not the parser, decides what to say about it.
-        ///
-        /// REPRESENTABILITY is a different question from range, and is
-        /// checked: a value above `u8::MAX` cannot be preserved here at all,
-        /// so the whole age becomes [`AgeValue::Unsupported`] rather than
-        /// some other number. Until 2026-08-26 it became `0`.
-        #[span_shift(skip)]
-        months: Option<u8>,
-        /// Days component. Conventionally 0-30, with the same split between
-        /// range (not checked, preserved) and representability (checked) as
-        /// [`Self::Valid::months`].
-        #[span_shift(skip)]
-        days: Option<u8>,
-        /// Original text preserved for exact roundtrip.
+        spelling: AgeSpelling,
         #[semantic_eq(skip)]
         #[span_shift(skip)]
         raw: SmolStr,
     },
-    /// Unrecognized value preserved for validation.
     Unsupported(String),
+}
+
+impl std::fmt::Debug for AgeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.state {
+            AgeState::Valid {
+                components, raw, ..
+            } => f
+                .debug_struct("Valid")
+                .field("years", &components.years)
+                .field("months", &components.months)
+                .field("days", &components.days)
+                .field("raw", raw)
+                .finish(),
+            AgeState::Unsupported(raw) => f.debug_tuple("Unsupported").field(raw).finish(),
+        }
+    }
+}
+
+impl crate::model::ValidationTagged for AgeValue {
+    fn validation_tag(&self) -> crate::model::ValidationTag {
+        crate::model::ValidationTagged::validation_tag(&self.state)
+    }
 }
 
 /// An age component whose digits do not fit the field that must hold them.
@@ -62,7 +120,7 @@ struct Unrepresentable;
 /// `u8::MAX`, is `Err(Unrepresentable)` and must sink the whole age.
 ///
 /// The two error cases are deliberately one variant. They differ in cause but
-/// not in consequence: neither can be stored, and [`AgeValue::Unsupported`]
+/// not in consequence: neither can be stored, and the unsupported age state
 /// keeps the original text byte for byte either way, so nothing a caller
 /// could act on is lost by joining them.
 fn age_component(text: &str) -> Result<Option<u8>, Unrepresentable> {
@@ -77,44 +135,70 @@ fn age_component(text: &str) -> Result<Option<u8>, Unrepresentable> {
     text.parse::<u8>().map(Some).map_err(|_| Unrepresentable)
 }
 
-impl AgeValue {
-    /// Parse a CHAT age string (`years;months.days`).
-    ///
-    /// Returns `Valid` for well-formed ages, `Unsupported` otherwise.
-    pub fn from_text(value: &str) -> Self {
+impl AgeState {
+    fn from_text(value: &str) -> Self {
         let Some((years_str, rest)) = value.split_once(';') else {
             return Self::Unsupported(value.to_string());
         };
-
         if years_str.is_empty() || !years_str.bytes().all(|b| b.is_ascii_digit()) {
             return Self::Unsupported(value.to_string());
         }
-
         let Ok(years) = years_str.parse::<u16>() else {
             return Self::Unsupported(value.to_string());
         };
-
-        let (months, days) = match rest.split_once('.') {
+        let (months, days, spelling) = match rest.split_once('.') {
             Some((months_str, days_str)) => {
                 match (age_component(months_str), age_component(days_str)) {
-                    (Ok(months), Ok(days)) => (months, days),
+                    (Ok(months), Ok(days)) => (
+                        months,
+                        days,
+                        AgeSpelling::MonthsAndDays {
+                            month_width: months_str.len(),
+                            day_width: days_str.len(),
+                        },
+                    ),
                     _ => return Self::Unsupported(value.to_string()),
                 }
             }
-            // No period: everything after the semicolon is the months field,
-            // and an empty `rest` (`1;`) is the legal no-months form, which
-            // `age_component` reports as `Ok(None)`.
             None => match age_component(rest) {
-                Ok(months) => (months, None),
+                Ok(months) => (
+                    months,
+                    None,
+                    if rest.is_empty() {
+                        AgeSpelling::YearsOnly
+                    } else {
+                        AgeSpelling::MonthsOnly
+                    },
+                ),
                 Err(Unrepresentable) => return Self::Unsupported(value.to_string()),
             },
         };
-
         Self::Valid {
-            years,
-            months,
-            days,
+            components: AgeComponents {
+                years,
+                months,
+                days,
+            },
+            spelling,
             raw: SmolStr::from(value),
+        }
+    }
+}
+
+impl AgeValue {
+    /// Admit numeric components and spelling together, retaining unsupported
+    /// input without inventing numeric values. Range validation is separate.
+    pub fn from_text(value: &str) -> Self {
+        Self {
+            state: AgeState::from_text(value),
+        }
+    }
+
+    /// Read admitted components; unsupported input has no numeric projection.
+    pub fn components(&self) -> Option<&AgeComponents> {
+        match &self.state {
+            AgeState::Valid { components, .. } => Some(components),
+            AgeState::Unsupported(_) => None,
         }
     }
 
@@ -122,9 +206,9 @@ impl AgeValue {
     ///
     /// Returns the original text for both valid and unsupported ages.
     pub fn as_str(&self) -> &str {
-        match self {
-            Self::Valid { raw, .. } => raw.as_str(),
-            Self::Unsupported(s) => s.as_str(),
+        match &self.state {
+            AgeState::Valid { raw, .. } => raw.as_str(),
+            AgeState::Unsupported(s) => s.as_str(),
         }
     }
 
@@ -154,46 +238,17 @@ impl AgeValue {
     /// `Unsupported` to avoid double-reporting. The two checks are
     /// chained in `check_id_header`.
     pub fn violates_depfile_pattern(&self) -> bool {
-        let Self::Valid { raw, .. } = self else {
+        let AgeState::Valid { spelling, .. } = &self.state else {
             return false;
         };
-
-        let raw = raw.as_str();
-        let Some((years, rest)) = raw.split_once(';') else {
-            return true;
-        };
-        if years.is_empty() || !years.bytes().all(|b| b.is_ascii_digit()) {
-            return true;
+        match spelling {
+            AgeSpelling::YearsOnly => false,
+            AgeSpelling::MonthsOnly => true,
+            AgeSpelling::MonthsAndDays {
+                month_width,
+                day_width,
+            } => *month_width != 2 || !matches!(day_width, 0 | 2),
         }
-
-        // Matches `yy;`, year plus semicolon, nothing after.
-        if rest.is_empty() {
-            return false;
-        }
-
-        // Anything non-empty after the semicolon must contain a period,
-        // depfile.cut has no template for `yy;mm` without trailing dot.
-        let Some((months, days)) = rest.split_once('.') else {
-            return true;
-        };
-
-        // `mm` must be exactly two digits.
-        if months.len() != 2 || !months.bytes().all(|b| b.is_ascii_digit()) {
-            return true;
-        }
-
-        // Matches `yy;mm.`, year, two-digit month, trailing period.
-        if days.is_empty() {
-            return false;
-        }
-
-        // `dd` (when present) must be exactly two digits.
-        if days.len() != 2 || !days.bytes().all(|b| b.is_ascii_digit()) {
-            return true;
-        }
-
-        // Matches `yy;mm.dd`.
-        false
     }
 
     /// Backward-compatible constructor matching the old `string_newtype` API.
@@ -209,7 +264,7 @@ impl std::fmt::Display for AgeValue {
 }
 
 impl crate::model::WriteChat for AgeValue {
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.as_str())
     }
 }
@@ -278,54 +333,66 @@ mod tests {
     #[test]
     fn a_component_too_large_for_its_type_is_unsupported_not_zero() {
         for text in ["2;300.", "2;300", "3;06.999", "1;256.", "1;06.256"] {
-            match AgeValue::from_text(text) {
-                AgeValue::Unsupported(raw) => assert_eq!(raw, text, "text preserved verbatim"),
-                other => panic!("{text} parsed as {other:?}, expected Unsupported"),
-            }
+            let age = AgeValue::from_text(text);
+            assert!(age.components().is_none(), "{text}");
+            assert_eq!(age.as_str(), text);
         }
     }
 
-    /// The boundary the case above turns on, so a future widening of the
-    /// component type cannot quietly move it: 255 fits and 256 does not.
     #[test]
     fn the_largest_representable_component_still_parses() {
-        match AgeValue::from_text("1;255.255") {
-            AgeValue::Valid {
-                years,
-                months,
-                days,
-                ..
-            } => {
-                assert_eq!((years, months, days), (1, Some(255), Some(255)));
-            }
-            other => panic!("expected Valid, got {other:?}"),
-        }
+        let age = AgeValue::from_text("1;255.255");
+        let components = age.components().unwrap();
+        assert_eq!(
+            (components.years(), components.months(), components.days()),
+            (1, Some(255), Some(255))
+        );
     }
 
-    /// The ordinary forms keep working, including the three shapes
-    /// `depfile.cut` declares legal. Pins that the fix above did not make the
-    /// parser stricter about anything except representability.
     #[test]
     fn conventional_ages_are_unaffected() {
-        let cases = [
-            ("3;06.15", 3u16, Some(6u8), Some(15u8)),
+        for (text, y, m, d) in [
+            ("3;06.15", 3, Some(6), Some(15)),
             ("2;08.", 2, Some(8), None),
             ("1;", 1, None, None),
             ("0;11.30", 0, Some(11), Some(30)),
-        ];
-        for (text, y, m, d) in cases {
-            match AgeValue::from_text(text) {
-                AgeValue::Valid {
-                    years,
-                    months,
-                    days,
-                    raw,
-                } => {
-                    assert_eq!((years, months, days), (y, m, d), "{text}");
-                    assert_eq!(raw.as_str(), text, "roundtrip text for {text}");
-                }
-                other => panic!("{text} parsed as {other:?}, expected Valid"),
-            }
+        ] {
+            let age = AgeValue::from_text(text);
+            let components = age.components().unwrap();
+            assert_eq!(
+                (components.years(), components.months(), components.days()),
+                (y, m, d)
+            );
+            assert_eq!(age.as_str(), text);
+        }
+    }
+    #[test]
+    fn admitted_spelling_keeps_the_depfile_policy_and_wire() {
+        for text in ["1;", "2;08.", "3;06.15", "0003;00.00"] {
+            let age = AgeValue::from_text(text);
+            assert!(age.components().is_some(), "{text}");
+            assert!(!age.violates_depfile_pattern(), "{text}");
+            let restored: AgeValue =
+                serde_json::from_str(&serde_json::to_string(&age).unwrap()).unwrap();
+            assert_eq!(restored, age);
+        }
+        for text in [
+            "1;.", "1;.03", "3;0", "2;06", "3;0.15", "3;06.5", "3;006.", "3;06.005",
+        ] {
+            let age = AgeValue::from_text(text);
+            assert!(age.components().is_some(), "representable spelling: {text}");
+            assert!(age.violates_depfile_pattern(), "{text}");
+            let restored: AgeValue =
+                serde_json::from_str(&serde_json::to_string(&age).unwrap()).unwrap();
+            assert_eq!(restored, age);
+        }
+        for text in ["", ";", "x;", "1;x.", "1;00.x", "1;00.00.", "65536;"] {
+            let age = AgeValue::from_text(text);
+            assert!(age.components().is_none(), "{text}");
+            assert_eq!(age.as_str(), text);
+            let restored: AgeValue =
+                serde_json::from_str(&serde_json::to_string(&age).unwrap()).unwrap();
+            assert_eq!(restored, age);
         }
     }
 }

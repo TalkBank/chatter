@@ -112,3 +112,24 @@ test('copying admits both built inputs before writing and refuses retained desti
   assert.throws(() => compatibility.copyCurrent(source, destination), /retained installer/);
   assert.deepEqual(readFileSync(join(destination, installerPairs[1].current)), retained);
 });
+
+test('release identity rejects malformed SemVer even when producer fields agree', () => {
+  for (const version of ['01.2.3', '1.02.3', '1.2.03', '1.2.3-.', '1.2.3-alpha..1',
+    '1.2.3-alpha.', '1.2.3-01', '1.2.3-alpha.01', '1.2.3\n', '1.2.3\r', '1.2.3\u2028']) {
+    const candidate = structuredClone(manifest);
+    candidate.announcement_tag = `v${version}`;
+    candidate.releases[0].app_version = version;
+    assert.throws(() => admitInstallerCompatibility(candidate), /exact version tag/, JSON.stringify(version));
+  }
+});
+
+test('release identity preserves valid prerelease identifiers exactly', () => {
+  for (const version of ['0.0.0', '1.2.3-0', '1.2.3-alpha.1', '1.2.3-01a', '1.2.3-x-y-z.--']) {
+    const candidate = structuredClone(manifest);
+    candidate.announcement_tag = `v${version}`;
+    candidate.releases[0].app_version = version;
+    const admitted = admitInstallerCompatibility(candidate);
+    assert.equal(admitted.tag.version, version);
+    assert.equal(admitted.tag.value, `v${version}`);
+  }
+});

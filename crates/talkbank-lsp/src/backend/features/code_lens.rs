@@ -3,11 +3,14 @@
 //! Displays a lens like "CHI: 42 utterances" above the `@Participants` header,
 //! giving annotators an at-a-glance summary of transcript composition.
 
-use talkbank_model::model::ChatFile;
+use crate::backend::diagnostics::DocumentAnalysis;
+use crate::backend::utils::LineIndex;
+use talkbank_model::model::Header;
 use tower_lsp::lsp_types::*;
 
 /// Generates code lenses showing utterance count per speaker above @Participants.
-pub fn code_lens(chat_file: &ChatFile, doc: &str) -> Option<Vec<CodeLens>> {
+pub(crate) fn code_lens(analysis: &DocumentAnalysis) -> Option<Vec<CodeLens>> {
+    let chat_file = analysis.file();
     // Count utterances per speaker.
     //
     // Iterate the DECLARED roster, not `chat_file.participants`: that map is
@@ -29,11 +32,13 @@ pub fn code_lens(chat_file: &ChatFile, doc: &str) -> Option<Vec<CodeLens>> {
     }
 
     // Find the @Participants header line.
-    let participants_line = find_participants_line(doc)?;
-    let position = Position {
-        line: participants_line,
-        character: 0,
-    };
+    let location = chat_file
+        .headers_with_locations()
+        .find_map(|(header, location)| {
+            matches!(header, Header::Participants { .. }).then_some(location)
+        })?;
+    let span = location.span()?;
+    let position = LineIndex::new(analysis.source()).offset_to_position(span.start());
     let range = Range {
         start: position,
         end: position,
@@ -61,26 +66,17 @@ pub fn code_lens(chat_file: &ChatFile, doc: &str) -> Option<Vec<CodeLens>> {
     Some(lenses)
 }
 
-/// Finds the 0-indexed line number of the `@Participants:` header.
-fn find_participants_line(doc: &str) -> Option<u32> {
-    for (i, line) in doc.lines().enumerate() {
-        if line.starts_with("@Participants:") {
-            return Some(i as u32);
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_fixtures::parse_chat;
+    use crate::test_fixtures::document_analysis;
+    const BASIC: &str = include_str!("../../../../../corpus/reference/core/basic-conversation.cha");
 
     #[test]
     fn test_code_lens_shows_utterance_counts() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|||||Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thello .\n*MOT:\thi .\n*CHI:\tmore .\n@End\n";
-        let chat_file = parse_chat(input);
-        let lenses = code_lens(&chat_file, input);
+        let input = BASIC;
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), input);
+        let lenses = code_lens(&analysis);
         assert!(lenses.is_some());
 
         let lenses = lenses.unwrap();
@@ -94,21 +90,21 @@ mod tests {
                 .title
                 .contains("CHI: 2 utterances")
         }));
-        // MOT has 1 utterance
+        // MOT has 2 utterances
         assert!(lenses.iter().any(|l| {
             l.command
                 .as_ref()
                 .unwrap()
                 .title
-                .contains("MOT: 1 utterance")
+                .contains("MOT: 2 utterances")
         }));
     }
 
     #[test]
     fn test_code_lens_none_without_participants() {
-        let input = "@UTF8\n@Begin\n*CHI:\thello .\n@End\n";
-        let chat_file = parse_chat(input);
-        let lenses = code_lens(&chat_file, input);
+        let input = BASIC.replace("@Participants:\tCHI Child, MOT Mother\n", "");
+        let analysis = document_analysis(&Url::parse("file:///reference.cha").unwrap(), &input);
+        let lenses = code_lens(&analysis);
         assert!(lenses.is_none());
     }
 }

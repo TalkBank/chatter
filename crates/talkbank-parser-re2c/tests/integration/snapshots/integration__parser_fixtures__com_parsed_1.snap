@@ -1,6 +1,8 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
+assertion_line: 823
 expression: tier
 ---
 segments:
-  - Text: "|BC|2|0|0|XM|NT|FI|"
+  - type: text
+    text: "|BC|2|0|0|XM|NT|FI|"

@@ -79,8 +79,14 @@ pub(super) fn plan<'input>(
                     DependentTier::Modsyl(_)
                     | DependentTier::Phosyl(_)
                     | DependentTier::Phoaln(_)
-                    | DependentTier::Xphoint(_) => PronunciationEvidence::CompanionReview,
-                    DependentTier::Mor(_)
+                    | DependentTier::UnparsedPho(_)
+                    | DependentTier::UnparsedMod(_)
+                    | DependentTier::UnparsedSin(_)
+                    | DependentTier::UnparsedPhoaln(_)
+                    | DependentTier::Xphoint(_)
+                    | DependentTier::UnparsedXphoint(_) => PronunciationEvidence::CompanionReview,
+                    DependentTier::UnparsedText(_)
+                    | DependentTier::Mor(_)
                     | DependentTier::Gra(_)
                     | DependentTier::Sin(_)
                     | DependentTier::Act(_)
@@ -104,7 +110,10 @@ pub(super) fn plan<'input>(
                     | DependentTier::Par(_)
                     | DependentTier::Tim(_)
                     | DependentTier::Wor(_)
+                    | DependentTier::UnparsedWor(_)
                     | DependentTier::UserDefined(_)
+                    | DependentTier::UnparsedMor(_)
+                    | DependentTier::UnparsedGra(_)
                     | DependentTier::Unsupported(_) => continue,
                 };
                 refusals.push(PronunciationRefusal {

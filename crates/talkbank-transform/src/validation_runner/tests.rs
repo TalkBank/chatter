@@ -1177,3 +1177,100 @@ fn a_file_named_twice_in_a_file_list_is_validated_once() {
     assert_eq!(files[0].path, file, "the first spelling given");
     assert_eq!(expect_complete(ending).total_files().get(), 1);
 }
+
+#[test]
+fn rejection_cannot_validate_serialize_or_cache_a_replacement_model() {
+    use super::cancel::{CancelSignal, ErrorBudget};
+    use super::worker::{ParserDispatch, WorkerContext, worker_loop_with_parser};
+    use talkbank_model::{ErrorCode, ParseError, Severity, Span};
+
+    for diagnostics in [
+        vec![],
+        vec![ParseError::at_span(
+            ErrorCode::SyntaxError,
+            Severity::Warning,
+            Span::at(0),
+            "rejected",
+        )],
+        vec![ParseError::at_span(
+            ErrorCode::SyntaxError,
+            Severity::Error,
+            Span::at(0),
+            "rejected",
+        )],
+    ] {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("rejected.cha");
+        let input = include_str!("../../../../corpus/reference/languages/eng-conversation.cha");
+        fs::write(&path, input).unwrap();
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+        let (_canceller, cancel_rx) = crossbeam_channel::unbounded();
+        let cache = std::sync::Arc::new(RecordingCache::new());
+        let run_cache = RunCache::ReadWrite(cache.clone());
+        let cancel = CancelSignal::new(cancel_rx);
+        let budget = ErrorBudget::new(super::ErrorLimit::Unlimited);
+        let config = ValidationConfig {
+            roundtrip: RoundtripCheck::Run,
+            presentation: crate::PresentationPolicy::new()
+                .disable(ErrorCode::SyntaxError)
+                .disable(ErrorCode::ParseFailed),
+            ..ValidationConfig::default()
+        };
+        let tally = worker_loop_with_parser(
+            std::iter::once(crate::paths::StoredTranscript::resolve(&path).unwrap()),
+            &WorkerContext {
+                event_tx: &event_tx,
+                cancel: &cancel,
+                budget: &budget,
+                cache: &run_cache,
+                config: &config,
+            },
+            ParserDispatch::Rejected(diagnostics.clone()),
+        );
+        let events: Vec<_> = event_rx.try_iter().collect();
+        let [ValidationEvent::FileComplete(event)] = events.as_slice() else {
+            panic!("unexpected events: {events:?}");
+        };
+        let FileStatus::Invalid {
+            diagnostics: rejected,
+        } = &event.status
+        else {
+            panic!("rejection must remain invalid: {event:?}");
+        };
+        let shown = event.status.shown().unwrap();
+        assert_eq!(shown.source, input);
+        assert_eq!(&shown.errors[..diagnostics.len()], diagnostics.as_slice());
+        assert!(
+            shown
+                .errors
+                .iter()
+                .all(|error| matches!(error.code, ErrorCode::SyntaxError | ErrorCode::ParseFailed))
+        );
+        assert_eq!(rejected.error_count().get(), 1);
+        assert!(cache.outcomes().is_empty());
+        assert!(cache.roundtrips.lock().unwrap().is_empty());
+        let stats = tally.snapshot(NonZeroUsize::MIN);
+        assert_eq!(stats.invalid_files(), 1);
+        assert_eq!(stats.valid_files() + stats.internal_failures(), 0);
+        assert_eq!(stats.roundtrip_passed() + stats.roundtrip_failed(), 0);
+    }
+}
+
+#[test]
+fn rejected_roundtrip_has_no_second_serialization_or_fabricated_diff() {
+    use super::roundtrip::{RoundtripFailure, RoundtripResult, run_roundtrip};
+    use super::worker::ParserDispatch;
+    use talkbank_model::{ChatParser, ErrorCollector, ParseOutcome};
+    let parser = talkbank_parser::TreeSitterParser::new().unwrap();
+    let input = include_str!("../../../../corpus/reference/languages/eng-conversation.cha");
+    let sink = ErrorCollector::new();
+    let ParseOutcome::Parsed(file) = ChatParser::parse_chat_file(&parser, input, 0, &sink) else {
+        panic!("reference must build a model");
+    };
+    let result = run_roundtrip(&file, &ParserDispatch::Rejected(vec![])).unwrap();
+    let RoundtripResult::Failed(failure @ RoundtripFailure::Reparse { .. }) = result else {
+        panic!("expected explicit rejected reparse: {result:?}");
+    };
+    assert!(failure.diff().is_none());
+    assert!(failure.reason().contains("reparse rejected"));
+}

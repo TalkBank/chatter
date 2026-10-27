@@ -28,6 +28,9 @@ mod walk_view_contracts;
 #[path = "bullet_body_corpus.rs"]
 mod bullet_body_contracts;
 
+#[path = "scoped_marker_corpus.rs"]
+mod scoped_marker_contracts;
+
 #[path = "event_display_corpus.rs"]
 mod event_display_contracts;
 
@@ -197,7 +200,7 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                         match group {
                             GroupRef::Angle(view) => {
                                 assert_eq!(group.kind(), GroupKind::Angle);
-                                assert_eq!(group.location(), Some(view.location));
+                                assert_eq!(group.location(), view.location);
                                 let original = view.group;
                                 let mut rebuilt = Group::new(original.location, content.clone())
                                     .with_trailing_space("");
@@ -217,7 +220,7 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                             }
                             GroupRef::Quotation(view) => {
                                 assert_eq!(group.kind(), GroupKind::Quotation);
-                                assert_eq!(group.location(), Some(view.location));
+                                assert_eq!(group.location(), view.location);
                                 let rebuilt = Quotation::new(
                                     talkbank_model::Location::Unlocated,
                                     content.clone(),
@@ -237,8 +240,8 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                             }
                             GroupRef::Pho(original) => {
                                 assert_eq!(group.kind(), GroupKind::Pho);
-                                assert_eq!(group.location(), None);
-                                let rebuilt = PhoGroup::new(content.clone());
+                                assert_eq!(group.location(), original.location);
+                                let rebuilt = PhoGroup::new(original.location, content.clone());
                                 assert_eq!(rebuilt.len(), count);
                                 assert_eq!(rebuilt.is_empty(), count == 0);
                                 assert_eq!(rebuilt.to_chat_string(), original.to_chat_string());
@@ -247,8 +250,8 @@ fn reference_group_construction_preserves_payload_spans_and_output() {
                             }
                             GroupRef::Sin(original) => {
                                 assert_eq!(group.kind(), GroupKind::Sin);
-                                assert_eq!(group.location(), None);
-                                let rebuilt = SinGroup::new(content.clone());
+                                assert_eq!(group.location(), original.location);
+                                let rebuilt = SinGroup::new(original.location, content.clone());
                                 assert_eq!(rebuilt.len(), count);
                                 assert_eq!(rebuilt.is_empty(), count == 0);
                                 assert_eq!(rebuilt.to_chat_string(), original.to_chat_string());
@@ -750,6 +753,11 @@ fn canonical_replacement_display_preserves_payload_and_writer_refusal() {
 }
 
 fn assert_writer_refusals(parsed: &impl WriteChat, path: &std::path::Path) -> usize {
+    let mut streamed = String::new();
+    parsed
+        .write_chat(&mut streamed)
+        .expect("accepting destination");
+    assert_eq!(parsed.to_chat_string(), streamed, "{}", path.display());
     assert_output_refusals(|mut writer| parsed.write_chat(&mut writer), path)
 }
 
@@ -903,12 +911,6 @@ fn canonical_phonology_and_dependency_content_preserve_prefix_and_sink_refusal()
                             assert!(restored.semantic_eq(tier));
                             assert_eq!(restored.to_content(), content);
                             assert_eq!(restored.to_chat(), tier.to_chat());
-                            // A wire roundtrip retains content, not the parser's
-                            // completeness provenance.
-                            assert!(matches!(
-                                restored.completeness(),
-                                talkbank_model::model::GraCompleteness::Unknown
-                            ));
                             families[2] += 1;
                         }
                         _ => {}

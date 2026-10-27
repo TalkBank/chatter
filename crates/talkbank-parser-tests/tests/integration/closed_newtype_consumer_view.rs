@@ -51,6 +51,10 @@ const NOT_ON_THE_MACRO: &[(&str, &str)] = &[
         "ReplacementWords",
         "nonempty admission forbids take and retain",
     ),
+    (
+        "MultipleLanguageCodes",
+        "at least two codes; length-changing access would erase cardinality evidence",
+    ),
     // Admission evidence must not permit mutation that changes its verdict.
     // Consuming access discards that evidence; rebuilding requires admission.
     (
@@ -127,6 +131,8 @@ fn every_closed_collection_newtype_offers_the_consumer_api() {
     assert_consumer_api!(BracketedItems, BracketedItem);
     assert_consumer_api!(ParticipantEntries, ParticipantEntry);
     assert_consumer_api!(LanguageCodes, LanguageCode);
+    let _read_multiple: fn(&MultipleLanguageCodes) -> &[LanguageCode] =
+        MultipleLanguageCodes::as_slice;
     assert_consumer_api!(ChatOptionFlags, ChatOptionFlag);
     assert_consumer_api!(SinGroupGestures, SinToken);
 

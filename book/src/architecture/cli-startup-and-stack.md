@@ -19,11 +19,26 @@ construction overflowing on Windows before argument parsing began.
    command tree, parse arguments and call `cli::run`.
 3. The main thread joins it. If the program thread unwinds, `resume_unwind`
    propagates its panic payload. If thread creation fails, startup prints an
-   error and exits with status 1.
+   error and returns the internal-failure status 3.
 
-The join describes normal return and unwinding, not every termination path:
-argument handling or commands can exit the process directly. An abort is not
-a recoverable worker result.
+Every ordinary handler returns `CommandResult<T>` through the dispatcher.
+`CommandStop` distinguishes already-rendered domain failures, usage diagnostics
+and human or machine output failures. The main thread consumes that result and
+returns `ExitCode`; handlers and signal callbacks do not terminate the process.
+Help and version are successful writes, and OS-native arguments avoid a Unicode
+conversion panic before clap can report usage.
+
+Text macros and JSON record writers propagate a failed write immediately. No
+later command mutation follows it. A failed validation renderer requests worker
+cancellation and releases its receiver; an unfinished audit writer is joined
+and its unpublished regular-file stage is discarded. The second Ctrl-C sends a
+forced-stop event to the validation loop, which returns status 130. The TUI owns
+terminal restoration through setup, rendering and input failures as well as
+normal and forced completion.
+
+An abort, an external kill or an uncaught panic is not a recoverable command
+result. Files already published before a later failure remain published; this
+boundary does not turn a multi-file command into a transaction.
 
 `PROGRAM_STACK_BYTES` aliases
 `talkbank_transform::worker_pool::CHAT_THREAD_STACK_BYTES`, currently 16 MiB.

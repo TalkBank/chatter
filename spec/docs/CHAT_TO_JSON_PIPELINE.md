@@ -226,7 +226,7 @@ Review the relevant semantic and byte-roundtrip contracts separately.
 
 ## CLI
 
-The `chatter to-json` and `chatter from-json` commands are implemented in
+The `chatter convert to-json` and `chatter convert from-json` commands are implemented in
 `crates/chatter/src/commands/json.rs`. `to-json` selects the requested parsing,
 validation, alignment, pretty-printing, and schema-validation behavior;
 `from-json` deserializes `ChatFile` and uses typed CHAT serialization. It does

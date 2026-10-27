@@ -16,12 +16,11 @@
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, Never, NoChild, ReadableRecovery, ReadableSlot, SlotView, SourceBound,
-    SourceBoundKind, SourceSlice, UnsupportedDependentTierNode, UnsupportedTierPrefixNode,
-    XDependentTierNode, XTierPrefixNode,
+    AsRawNode, Never, NoChild, ReadableRecovery, ReadableSlot, SlotView, SourceBound, SourceSlice,
+    UnsupportedDependentTierNode, UnsupportedTierPrefixNode, XDependentTierNode,
 };
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
-use crate::model::{NonEmptyString, Utterance};
+use crate::model::{RecoveryText, Utterance};
 use crate::node_types::{
     UNSUPPORTED_DEPENDENT_TIER, UNSUPPORTED_TIER_PREFIX, X_DEPENDENT_TIER, X_TIER_PREFIX,
 };
@@ -34,35 +33,6 @@ use crate::parser::tree_parsing::parser_helpers::{
 };
 use crate::parser::typed_cst::{CstFailure, GeneratedPosition, report_cst_failure};
 use tree_sitter::Node;
-
-/// A tier prefix token: one of the two generated lexical kinds whose text
-/// names a tier, with the words the reports about it use. Implemented on the
-/// node kinds themselves, so a prefix is always read with its own marker; the
-/// old pair of `const` records could be handed to either reader.
-trait PrefixToken {
-    /// The marker the token begins with, stripped to leave the name.
-    const MARKER: &'static str;
-    /// The tier rule, named in the recovery reports.
-    const RULE: &'static str;
-    /// The prefix, as the reports about the token itself call it.
-    const WHAT: &'static str;
-    /// The prefix node's kind, for the report's context.
-    const NODE_KIND: &'static str;
-}
-
-impl PrefixToken for XTierPrefixNode<'_> {
-    const MARKER: &'static str = "%x";
-    const RULE: &'static str = X_DEPENDENT_TIER;
-    const WHAT: &'static str = "User-defined tier prefix";
-    const NODE_KIND: &'static str = X_TIER_PREFIX;
-}
-
-impl PrefixToken for UnsupportedTierPrefixNode<'_> {
-    const MARKER: &'static str = "%";
-    const RULE: &'static str = UNSUPPORTED_DEPENDENT_TIER;
-    const WHAT: &'static str = "Unsupported tier prefix";
-    const NODE_KIND: &'static str = UNSUPPORTED_TIER_PREFIX;
-}
 
 /// The name an unsupported tier's prefix declares: the text of the PRESENT
 /// prefix token past its marker, non-empty by the grammar's own token
@@ -101,7 +71,7 @@ fn tier_name<'tree, 'source, E: ReadableRecovery<View = SourceSlice<'tree, 'sour
     >,
     tier: SourceSlice<'tree, 'source>,
     errors: &impl ErrorSink,
-) -> Option<NonEmptyString> {
+) -> Option<RecoveryText> {
     let input = tier.source();
     let tier_node = tier.raw_node();
     let prefix = match slot.view() {
@@ -123,7 +93,7 @@ fn tier_name<'tree, 'source, E: ReadableRecovery<View = SourceSlice<'tree, 'sour
                 missing.raw_node(),
                 missing.source(),
                 errors,
-                UnsupportedTierPrefixNode::RULE,
+                UNSUPPORTED_DEPENDENT_TIER,
             );
             return None;
         }
@@ -131,7 +101,7 @@ fn tier_name<'tree, 'source, E: ReadableRecovery<View = SourceSlice<'tree, 'sour
             errors.report(unexpected_node_error(
                 bad.raw_node(),
                 bad.source(),
-                UnsupportedTierPrefixNode::RULE,
+                UNSUPPORTED_DEPENDENT_TIER,
             ));
             return None;
         }
@@ -139,28 +109,25 @@ fn tier_name<'tree, 'source, E: ReadableRecovery<View = SourceSlice<'tree, 'sour
     prefix_name(prefix, errors)
 }
 
-/// Decode a present lexical prefix without erasing its source owner. Both
-/// refusals below guard what the grammar's own token regexes
-/// (`/%x[a-zA-Z][a-zA-Z0-9]*/`, `/%[a-zA-Z][a-zA-Z0-9]*/`) already exclude,
-/// and are reached by no file; they stay because the slot's text type does
-/// not carry the regex.
-fn prefix_name<'tree, T: SourceBoundKind<'tree> + PrefixToken>(
-    prefix: SourceBound<'tree, '_, T>,
+/// Decode an unsupported prefix without erasing its source owner.
+/// The readable token does not itself carry a proof of its lexical spelling.
+fn prefix_name<'tree>(
+    prefix: SourceBound<'tree, '_, UnsupportedTierPrefixNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Option<NonEmptyString> {
+) -> Option<RecoveryText> {
     let input = prefix.source();
-    let Some(name) = prefix.text().strip_prefix(T::MARKER) else {
+    let Some(name) = prefix.text().strip_prefix('%') else {
         let raw = prefix.raw_node();
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
             DiagnosticLocation::new(span_of(raw)),
-            ErrorContext::new(prefix.source(), span_of(raw), T::NODE_KIND),
-            format!("{} does not begin with '{}'", T::WHAT, T::MARKER),
+            ErrorContext::new(prefix.source(), span_of(raw), UNSUPPORTED_TIER_PREFIX),
+            "Unsupported tier prefix does not begin with '%'",
         ));
         return None;
     };
-    match NonEmptyString::new(name) {
+    match RecoveryText::new(name) {
         Ok(name) => Some(name),
         Err(_) => {
             let prefix = prefix.raw_node();
@@ -168,8 +135,8 @@ fn prefix_name<'tree, T: SourceBoundKind<'tree> + PrefixToken>(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
                 DiagnosticLocation::new(span_of(prefix)),
-                ErrorContext::new(input, span_of(prefix), T::NODE_KIND),
-                format!("{} declares no name after '{}'", T::WHAT, T::MARKER),
+                ErrorContext::new(input, span_of(prefix), UNSUPPORTED_TIER_PREFIX),
+                "Unsupported tier prefix declares no name after '%'",
             ));
             None
         }
@@ -179,7 +146,7 @@ fn prefix_name<'tree, T: SourceBoundKind<'tree> + PrefixToken>(
 /// Handle user-defined %x* tiers (%xfoo, %xpho, %xmod, etc.).
 ///
 /// The grammar uses a single greedy token for the full prefix (e.g. "%xfoo"),
-/// so the label is extracted by stripping the "%x" prefix from the token text.
+/// so the model admits the full label after the percent sign.
 ///
 /// Driven by the generated typed visitor: `extract_x_dependent_tier` yields the
 /// prefix (`child_0`, an `x_tier_prefix`) and the body (`child_2`, a
@@ -235,22 +202,31 @@ pub(super) fn apply_x_tier<'tree>(
                 missing.raw_node(),
                 missing.source(),
                 errors,
-                XTierPrefixNode::RULE,
+                X_DEPENDENT_TIER,
             );
             return;
         }
     };
-    let Some(name) = prefix_name(prefix, errors) else {
-        return;
+    // The model owns custom-label admission, including structured-label
+    // exclusions. A mismatch here is a grammar/lowering fault.
+    let stored_label = match prefix
+        .text()
+        .strip_prefix('%')
+        .ok_or(crate::model::InvalidUserDefinedDependentTierLabel::InvalidSyntax)
+        .and_then(crate::model::UserDefinedDependentTierLabel::new)
+    {
+        Ok(label) => label,
+        Err(error) => {
+            errors.report(ParseError::new(
+                ErrorCode::TreeParsingError,
+                Severity::Error,
+                DiagnosticLocation::new(span_of(prefix.raw_node())),
+                ErrorContext::new(input, span_of(prefix.raw_node()), X_TIER_PREFIX),
+                format!("Invalid generated custom-tier prefix: {error}"),
+            ));
+            return;
+        }
     };
-    let tier_label = name.as_str();
-
-    // For UserDefined tiers the stored label keeps the leading 'x' to avoid
-    // colliding with built-in tiers (`%xmor` stores "xmor", not "mor"). Built
-    // once: both the empty-body path below and the content path at the end of
-    // this function need the identical value, and building it twice is how the
-    // two drift. The `x` is the proof of non-emptiness, so nothing is checked.
-    let stored_label = NonEmptyString::from_head_and_tail('x', tier_label);
 
     // Empty user-defined tier. Every free-text tier rule now marks its body
     // `optional(...)`, so the generated visitor types this body slot as
@@ -294,7 +270,7 @@ pub(super) fn apply_x_tier<'tree>(
         ReadableSlot::Present(n) => *n,
         ReadableSlot::Error(n) => {
             errors.report(analyze_dependent_tier_error(n.raw_node(), n.source()));
-            report_missing_x_content(tier_node, tier_label, input, errors);
+            report_missing_x_content(tier_node, stored_label.as_str(), input, errors);
             return;
         }
         ReadableSlot::Missing(missing) => match missing.0 {},
@@ -305,7 +281,7 @@ pub(super) fn apply_x_tier<'tree>(
     // Content must be non-empty. The grammar's `text_with_bullets` is never
     // empty (its first child is required), so this refusal is reached by no
     // file and stays because the slot's text type does not say so.
-    let content = match NonEmptyString::new(content_text) {
+    let content = match RecoveryText::new(content_text) {
         Ok(c) => c,
         Err(_) => {
             errors.report(ParseError::new(
@@ -313,7 +289,7 @@ pub(super) fn apply_x_tier<'tree>(
                 Severity::Error,
                 DiagnosticLocation::new(span_of(tier_node)),
                 ErrorContext::new(input, span_of(tier_node), ""),
-                format!("Empty content in user-defined tier %x{}", tier_label),
+                format!("Empty content in user-defined tier %{stored_label}"),
             ));
             return;
         }
@@ -344,7 +320,7 @@ fn report_missing_x_content(
         Severity::Error,
         DiagnosticLocation::new(span_of(tier_node)),
         ErrorContext::new(input, span_of(tier_node), ""),
-        format!("Missing content in user-defined tier %x{tier_label}"),
+        format!("Missing content in user-defined tier %{tier_label}"),
     ));
 }
 
@@ -423,9 +399,9 @@ pub(super) fn apply_unsupported_tier<'tree>(
     // "this line declares nothing" rule belongs. Dropping it also lost the
     // label, and left this parser disagreeing with the re2c one, which kept a
     // fabricated tier instead.
-    let content = NonEmptyString::new(body.trim()).ok();
+    let content = RecoveryText::new(body.trim()).ok();
     let span = span_of(tier_node);
-    let tier = DependentTier::Unsupported(crate::model::UserDefinedDependentTier {
+    let tier = DependentTier::Unsupported(crate::model::UnsupportedDependentTier {
         label,
         content,
         location: span.into(),

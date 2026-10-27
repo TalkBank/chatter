@@ -75,23 +75,11 @@ pub fn build_chat(desc: &TranscriptDescription) -> Result<ChatFile, BuildChatErr
         Header::End,
     ));
 
-    // `with_participants`, NOT `new`. `ChatFile::new` leaves the participant
-    // map EMPTY -- its doc says it is for "when participant metadata has not
-    // been assembled yet", i.e. mid-parse -- and validating such a file reports
-    // E522, "speaker used on main tier but not declared in @Participants",
-    // against a file whose `@Participants` line is right there, because the
-    // check reads the MAP. Every producer of a `ChatFile` except this one ran
-    // the join.
-    //
-    // `report_into` is the only way to reach the map and it takes the sink, so
-    // possession of the map is proof the join's diagnostics were reported. They
-    // are surfaced as a build failure here: an `@ID` and an `@Participants`
-    // entry that do not reconcile is a fault in the DESCRIPTION, which is this
-    // function's input, not something to hand downstream.
+    // An inconsistent declaration/ID join is a fault in the description.
+    // Report it before returning the assembled mutable model.
     let join_errors = talkbank_model::errors::ErrorCollector::new();
-    let participants =
-        talkbank_model::model::participant::join::build_participants_from_lines(&lines)
-            .report_into(&join_errors);
+    talkbank_model::model::participant::join::build_participants_from_lines(&lines)
+        .report_diagnostics(&join_errors);
     if join_errors.has_errors() {
         return Err(BuildChatError::Build(
             join_errors
@@ -103,5 +91,5 @@ pub fn build_chat(desc: &TranscriptDescription) -> Result<ChatFile, BuildChatErr
         ));
     }
 
-    Ok(ChatFile::with_participants(lines, participants))
+    Ok(ChatFile::new(lines))
 }

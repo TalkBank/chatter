@@ -435,13 +435,12 @@ fn classify_x_tier_label<'tree>(
     let prefix = match prefix.read() {
         Ok(prefix) => prefix,
         Err(error) => {
-            crate::parser::typed_cst::report_cst_failure(
+            return Err(crate::parser::typed_cst::ReportedCstFailure::report(
                 prefix.raw_node(),
                 prefix.source(),
                 error,
                 errors,
-            );
-            return Err(crate::parser::typed_cst::ReportedCstFailure);
+            ));
         }
     };
     Ok((prefix.text() == "%xmod").then_some(ParseHealthTier::Mod))

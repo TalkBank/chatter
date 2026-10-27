@@ -6,8 +6,8 @@ use talkbank_model::model::{DependentTier, Line};
 use crate::backend::execute_commands::DocumentUriRequest;
 use crate::backend::state::Backend;
 
-use super::line_index::LineIndex;
 use super::shared::get_document_and_chat_file;
+use crate::backend::utils::LineIndex;
 
 /// Minimal utterance information returned to coder mode.
 #[derive(Serialize)]
@@ -34,7 +34,7 @@ pub(crate) fn handle_get_utterances(
 /// Extract zero-based line, speaker, and `%cod` presence for each utterance.
 fn extract_utterances(
     chat_file: &talkbank_model::model::ChatFile,
-    line_index: &LineIndex,
+    line_index: &LineIndex<'_>,
 ) -> Vec<UtteranceInfo> {
     chat_file
         .lines

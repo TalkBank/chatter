@@ -9,6 +9,8 @@
 /// Errors that can occur in pipeline functions
 #[derive(Debug)]
 pub enum PipelineError {
+    /// A speaker rewrite cannot establish readable participant identity headers.
+    SpeakerRewrite(crate::SpeakerRewriteError),
     /// The tool failed without establishing CHAT validity.
     InternalFailure(talkbank_model::InternalFailure),
     /// I/O error (file reading/writing)
@@ -37,6 +39,7 @@ impl std::fmt::Display for PipelineError {
     /// Render a concise pipeline error summary.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PipelineError::SpeakerRewrite(reason) => write!(f, "{reason}"),
             PipelineError::InternalFailure(failure) => write!(f, "{failure}"),
             PipelineError::Io(err) => write!(f, "I/O error: {}", err),
             PipelineError::ParserCreation(msg) => write!(f, "Parser creation failed: {}", msg),
@@ -68,7 +71,8 @@ impl PipelineError {
             PipelineError::Parse(errors) => Some(&errors.errors),
             PipelineError::Validation(errors) => Some(errors),
             PipelineError::IncompleteValidation(failure) => Some(failure.diagnostics()),
-            PipelineError::Io(_)
+            PipelineError::SpeakerRewrite(_)
+            | PipelineError::Io(_)
             | PipelineError::ParserCreation(_)
             | PipelineError::JsonSerialization(_)
             | PipelineError::DroppedContent(_) => None,
@@ -113,5 +117,11 @@ impl From<super::validated::ValidatedParseError> for PipelineError {
                 }
             }
         }
+    }
+}
+
+impl From<crate::SpeakerRewriteError> for PipelineError {
+    fn from(reason: crate::SpeakerRewriteError) -> Self {
+        Self::SpeakerRewrite(reason)
     }
 }

@@ -3,6 +3,8 @@
 //! Shared CLI integration-test harness for `chatter`.
 
 pub mod command_surface;
+#[cfg(unix)]
+pub mod terminal;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -146,9 +148,13 @@ impl CliHarness {
     /// `TALKBANK_CHAT_CACHE_DIR` is the explicit override that makes
     /// the isolation deterministic on every platform.
     pub fn chatter_cmd(&self) -> assert_cmd::Command {
-        let mut cmd = TestProgram::selected()
-            .expect("admitted CLI test program")
-            .command();
+        assert_cmd::Command::from_std(self.streaming_command())
+    }
+
+    /// Build an isolated command for tests that interact with a running child.
+    pub fn streaming_command(&self) -> std::process::Command {
+        let program = TestProgram::selected().expect("admitted CLI test program");
+        let mut cmd = std::process::Command::new(program.0);
         cmd.env("HOME", self.home_dir());
         cmd.env("XDG_CACHE_HOME", self.xdg_cache_home());
         cmd.env("TALKBANK_CHAT_CACHE_DIR", self.cache_dir());

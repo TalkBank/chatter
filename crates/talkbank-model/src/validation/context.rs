@@ -74,10 +74,12 @@ pub(crate) enum ShortcutLanguage<'a> {
 }
 
 impl<'a> ShortcutLanguage<'a> {
-    pub(crate) fn classify(current: &LanguageCode, declared: &'a [LanguageCode]) -> Self {
-        let Some((primary, rest)) = declared.split_first() else {
-            return Self::Undeclared;
-        };
+    pub(crate) fn classify(
+        current: &LanguageCode,
+        declared: crate::model::DeclaredLanguagesRef<'a>,
+    ) -> Self {
+        let primary = declared.primary();
+        let rest = declared.additional();
         if current.as_str() == primary.as_str() {
             return match rest.first() {
                 Some(secondary) => Self::Alternate(secondary),
@@ -114,8 +116,8 @@ impl<'a> ShortcutLanguage<'a> {
 ///, only the `Arc` pointer is copied instead of the `HashSet`, `Vec`, etc.
 #[derive(Clone, Debug)]
 pub struct SharedValidationData {
-    /// Valid participant IDs from @Participants header
-    pub participant_ids: HashSet<SpeakerCode>,
+    /// Declaration evidence from @Participants, independent of ID metadata.
+    pub participant_roster: crate::model::ParticipantRoster,
 
     /// Default language code (affects character validation)
     /// This is typically the primary language from @Languages header
@@ -123,7 +125,16 @@ pub struct SharedValidationData {
 
     /// All declared languages from @Languages header (in order)
     /// First is primary, second is secondary, rest are tertiary
-    pub declared_languages: Vec<LanguageCode>,
+    /// Successful evidence cannot contain an empty raw list.
+    ///
+    /// ```compile_fail,E0308
+    /// use talkbank_model::validation::SharedValidationData;
+    /// fn forge_empty_success(data: &mut SharedValidationData) {
+    ///     data.declared_languages = Ok(Vec::new());
+    /// }
+    /// ```
+    pub declared_languages:
+        Result<crate::model::DeclaredLanguages, crate::model::LanguageDeclarationError>,
 
     /// Whether this file is in Conversation Analysis mode (from @Options: CA)
     /// In CA mode, terminators are optional
@@ -141,9 +152,9 @@ impl Default for SharedValidationData {
     /// Builds empty file-level defaults before headers are applied.
     fn default() -> Self {
         Self {
-            participant_ids: HashSet::new(),
+            participant_roster: crate::model::ParticipantRoster::unscoped(),
             default_language: None,
-            declared_languages: Vec::new(),
+            declared_languages: Err(crate::model::LanguageDeclarationError::Absent),
             ca_mode: false,
             enable_quotation_validation: false,
         }
@@ -259,7 +270,8 @@ impl ValidationContext {
     ///
     /// Any `*SPK:` line not in this set is eligible for speaker-id diagnostics.
     pub fn with_participant_ids(mut self, ids: HashSet<SpeakerCode>) -> Self {
-        Arc::make_mut(&mut self.shared).participant_ids = ids;
+        Arc::make_mut(&mut self.shared).participant_roster =
+            crate::model::ParticipantRoster::from_codes(ids);
         self
     }
 
@@ -274,9 +286,11 @@ impl ValidationContext {
     /// Sets all declared languages from `@Languages`, in source order.
     ///
     /// Ordering matters because shortcut markers (for example `@s`) depend on
-    /// primary-vs-secondary position.
+    /// primary-vs-secondary position. An empty supplied list records the explicit
+    /// `LanguageDeclarationError::Empty` state rather than a successful declaration.
     pub fn with_declared_languages(mut self, langs: Vec<LanguageCode>) -> Self {
-        Arc::make_mut(&mut self.shared).declared_languages = langs;
+        Arc::make_mut(&mut self.shared).declared_languages =
+            crate::model::DeclaredLanguages::new(langs);
         self
     }
 
@@ -368,18 +382,49 @@ impl ValidationContext {
     /// - If in tertiary language → returns None (error - @s not allowed)
     ///
     /// This implements the canonical other-language resolution logic.
-    pub fn get_other_language(&self, current_lang: &LanguageCode) -> Option<LanguageCode> {
-        ShortcutLanguage::classify(current_lang, &self.shared.declared_languages).alternate()
+    pub fn get_other_language(
+        &self,
+        current_lang: &LanguageCode,
+    ) -> Result<Option<LanguageCode>, crate::model::LanguageDeclarationError> {
+        match &self.shared.declared_languages {
+            Ok(codes) => Ok(ShortcutLanguage::classify(current_lang, codes.as_ref()).alternate()),
+            Err(error) => Err(*error),
+        }
     }
 
     /// Returns whether a language is tertiary in the declared-language order.
     ///
     /// Tertiary languages cannot use the bare `@s` shortcut and must be named
     /// explicitly (`@s:code`) to avoid ambiguous fallback behavior.
-    pub fn is_tertiary_language(&self, lang: &LanguageCode) -> bool {
-        matches!(
-            ShortcutLanguage::classify(lang, &self.shared.declared_languages),
-            ShortcutLanguage::Tertiary
-        )
+    pub fn is_tertiary_language(
+        &self,
+        lang: &LanguageCode,
+    ) -> Result<bool, crate::model::LanguageDeclarationError> {
+        match &self.shared.declared_languages {
+            Ok(codes) => Ok(matches!(
+                ShortcutLanguage::classify(lang, codes.as_ref()),
+                ShortcutLanguage::Tertiary
+            )),
+            Err(error) => Err(*error),
+        }
+    }
+}
+
+#[cfg(test)]
+mod declaration_admission_tests {
+    use super::*;
+
+    #[test]
+    fn empty_declared_languages_are_unavailable_not_successful_evidence() {
+        let context = ValidationContext::new().with_declared_languages(Vec::new());
+        let current = LanguageCode::new("eng").unwrap();
+        assert_eq!(
+            context.get_other_language(&current),
+            Err(crate::model::LanguageDeclarationError::Empty)
+        );
+        assert_eq!(
+            context.is_tertiary_language(&current),
+            Err(crate::model::LanguageDeclarationError::Empty)
+        );
     }
 }

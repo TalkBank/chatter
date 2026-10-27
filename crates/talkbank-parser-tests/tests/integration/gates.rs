@@ -123,11 +123,7 @@ const UNPROVEN_RECORD: &[(&str, &str)] = &[
     ),
     (
         "reference-corpus combination coverage",
-        "the two numbers in the clean summary",
-    ),
-    (
-        "reference-corpus combination coverage",
-        "R5 for 18 of its 23 listed pairs",
+        "the summary counts",
     ),
     (
         "content-enum catch-alls (design rule 3)",

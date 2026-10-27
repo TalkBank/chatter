@@ -32,7 +32,7 @@ impl VersionedEdits {
     }
 }
 
-/// Advertise quick fixes only when the client can enforce their revision binding.
+/// Advertise quick fixes and rename only when the client can enforce revision binding.
 pub(super) fn build_initialize_result(edits: Option<&VersionedEdits>) -> InitializeResult {
     InitializeResult {
         capabilities: ServerCapabilities {
@@ -74,10 +74,13 @@ pub(super) fn build_initialize_result(edits: Option<&VersionedEdits>) -> Initial
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(false),
             }),
-            rename_provider: Some(OneOf::Right(RenameOptions {
-                prepare_provider: Some(true),
-                work_done_progress_options: Default::default(),
-            })),
+            rename_provider: Some(match edits {
+                Some(_) => OneOf::Right(RenameOptions {
+                    prepare_provider: Some(true),
+                    work_done_progress_options: Default::default(),
+                }),
+                None => OneOf::Left(false),
+            }),
             selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
             linked_editing_range_provider: Some(LinkedEditingRangeServerCapabilities::Simple(true)),
             document_on_type_formatting_provider: Some(DocumentOnTypeFormattingOptions {

@@ -13,16 +13,20 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use talkbank_model::model::{ChatFile, WriteChat};
 use talkbank_transform::paths::{FoundTranscript, Links, walk_files};
+use talkbank_transform::report_destination::{
+    ReportDestinationError, ReportInputs, StagedReportDestination,
+};
 use tracing::{Level, debug, info, span, warn};
 
 use talkbank_model::{CheckLevel, ParseValidateOptions};
 use talkbank_transform::{JsonLayout, JsonSchemaPolicy};
 
 /// Whether a directory conversion rewrites JSON that is already newer than
-/// its transcript (`--force`).
+/// its transcript (`--rebuild`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JsonRefresh {
     /// Skip a transcript whose JSON is newer (the default).
@@ -56,7 +60,7 @@ pub enum ToJsonTarget {
     Directory {
         /// `--output-dir`.
         output_dir: PathBuf,
-        /// `--force`.
+        /// `--rebuild`.
         refresh: JsonRefresh,
         /// `--prune`.
         orphans: OrphanJson,
@@ -125,7 +129,7 @@ impl ToJsonTarget {
             InputKind::File => {
                 let given: Vec<&str> = [
                     output_dir.is_some().then_some("--output-dir"),
-                    matches!(refresh, JsonRefresh::Rebuild).then_some("--force"),
+                    matches!(refresh, JsonRefresh::Rebuild).then_some("--rebuild"),
                     matches!(orphans, OrphanJson::Prune).then_some("--prune"),
                     jobs.is_some().then_some("--jobs"),
                 ]
@@ -171,7 +175,7 @@ pub fn chat_to_json(
     output: Option<&PathBuf>,
     layout: JsonLayout,
     checks: ToJsonChecks,
-) {
+) -> crate::exit_codes::CommandResult {
     let _span = span!(Level::INFO, "chat_to_json", input = %input.display()).entered();
     info!("Converting CHAT to JSON");
     let stored = match talkbank_transform::paths::StoredTranscript::resolve(input) {
@@ -181,7 +185,7 @@ pub fn chat_to_json(
                 "Cannot resolve transcript name {}: {error}",
                 input.display()
             );
-            std::process::exit(1);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -196,7 +200,7 @@ pub fn chat_to_json(
             Err(e) => {
                 warn!("Failed to read file: {}", e);
                 eprintln!("Error reading file {:?}: {}", input, e);
-                std::process::exit(1);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         }
     };
@@ -230,7 +234,7 @@ pub fn chat_to_json(
             }
             Err(e) => {
                 crate::output::report_pipeline_failure(input, &content, &e);
-                std::process::exit(1);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         }
     };
@@ -238,10 +242,10 @@ pub fn chat_to_json(
     // Write or print JSON
     if let Some(output_path) = output {
         let _span = span!(Level::DEBUG, "write_output").entered();
-        if let Err(e) = fs::write(output_path, &json) {
+        if let Err(e) = write_conversion(input, output_path, &json) {
             warn!("Failed to write output: {}", e);
             eprintln!("Error writing JSON to {:?}: {}", output_path, e);
-            std::process::exit(1);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
         info!("Converted {} to {}", input.display(), output_path.display());
         eprintln!(
@@ -252,6 +256,21 @@ pub fn chat_to_json(
     } else {
         outln!("{}", json);
     }
+    Ok(())
+}
+
+/// Admit the destination identity, then stage complete bytes before replacement.
+/// Identity admission protects aliases as well as equal paths.
+fn write_conversion(
+    input: &Path,
+    output: &Path,
+    content: &str,
+) -> Result<(), ReportDestinationError> {
+    let destination = StagedReportDestination::admit(output, [input])?;
+    let mut writer = destination.into_writer()?;
+    writer.write_all(content.as_bytes())?;
+    writer.finish()?.publish()?;
+    Ok(())
 }
 
 /// Convert a JSON representation back into canonical CHAT text.
@@ -259,7 +278,7 @@ pub fn chat_to_json(
 /// The deserialization/serialization cycle mirrors the chat format described in the manual's
 /// File Format and Dependent Tier sections, and errors bubble up so callers receive clear
 /// CHAT-aligned diagnostics when the JSON is malformed or cannot be emitted.
-pub fn json_to_chat(input: &PathBuf, output: Option<&PathBuf>) {
+pub fn json_to_chat(input: &PathBuf, output: Option<&PathBuf>) -> crate::exit_codes::CommandResult {
     let _span = span!(Level::INFO, "json_to_chat", input = %input.display()).entered();
     info!("Converting JSON to CHAT");
 
@@ -274,7 +293,7 @@ pub fn json_to_chat(input: &PathBuf, output: Option<&PathBuf>) {
             Err(e) => {
                 warn!("Failed to read file: {}", e);
                 eprintln!("Error reading file {:?}: {}", input, e);
-                std::process::exit(1);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         }
     };
@@ -290,7 +309,7 @@ pub fn json_to_chat(input: &PathBuf, output: Option<&PathBuf>) {
             Err(e) => {
                 warn!("JSON parse error: {}", e);
                 eprintln!("Error parsing JSON: {}", e);
-                std::process::exit(1);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         }
     };
@@ -306,10 +325,10 @@ pub fn json_to_chat(input: &PathBuf, output: Option<&PathBuf>) {
     // Write or print CHAT
     if let Some(output_path) = output {
         let _span = span!(Level::DEBUG, "write_output").entered();
-        if let Err(e) = fs::write(output_path, &chat_text) {
+        if let Err(e) = write_conversion(input, output_path, &chat_text) {
             warn!("Failed to write output: {}", e);
             eprintln!("Error writing CHAT to {:?}: {}", output_path, e);
-            std::process::exit(1);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
         info!("Converted {} to {}", input.display(), output_path.display());
         eprintln!(
@@ -320,6 +339,7 @@ pub fn json_to_chat(input: &PathBuf, output: Option<&PathBuf>) {
     } else {
         out!("{}", chat_text);
     }
+    Ok(())
 }
 
 /// Convert all CHAT files in a directory to JSON, preserving directory structure.
@@ -337,7 +357,7 @@ pub fn chat_to_json_directory(
     refresh: JsonRefresh,
     orphans: OrphanJson,
     jobs: Option<std::num::NonZeroUsize>,
-) {
+) -> crate::exit_codes::CommandResult {
     let _span =
         span!(Level::INFO, "chat_to_json_directory", input = %input_dir.display()).entered();
 
@@ -346,11 +366,10 @@ pub fn chat_to_json_directory(
     // one. An entry that cannot be read, or an input with no transcript (an
     // empty tree, an unmounted mount point), refuses the run before anything
     // is converted or pruned.
-    let transcripts =
-        super::inputs::readable_transcripts_under(input_dir).unwrap_or_else(|refusal| {
-            eprintln!("ERROR: {refusal}");
-            std::process::exit(1);
-        });
+    let transcripts = super::inputs::readable_transcripts_under(input_dir).map_err(|refusal| {
+        eprintln!("ERROR: {refusal}");
+        crate::exit_codes::CommandStop::Reported(crate::exit_codes::ReportedFailure::Input)
+    })?;
 
     let total = transcripts.count().get();
     eprintln!("Found {total} .cha files in {}", input_dir.display());
@@ -362,7 +381,14 @@ pub fn chat_to_json_directory(
         OrphanJson::Prune => Some(OwnedJson::of(&transcripts)),
     };
 
+    let inputs = ReportInputs::discover(transcripts.iter().map(FoundTranscript::path)).map_err(
+        |refusal| {
+            eprintln!("ERROR: {refusal}");
+            crate::exit_codes::CommandStop::Reported(crate::exit_codes::ReportedFailure::Input)
+        },
+    )?;
     let settings = ConvertSettings {
+        inputs: &inputs,
         output_dir,
         layout,
         checks,
@@ -435,8 +461,9 @@ pub fn chat_to_json_directory(
         eprintln!("ERROR: {} pruning step(s) failed", prune_report.failures);
     }
     if fail > 0 || pool_failed || !covered || prune_report.failures > 0 {
-        std::process::exit(1);
+        return Err(crate::exit_codes::ReportedFailure::Input.into());
     }
+    Ok(())
 }
 
 /// Print a progress line every thousand files, before file `index` is fed.
@@ -448,6 +475,7 @@ fn report_progress(index: usize, total: usize) {
 
 /// The settings every file of one directory conversion shares.
 struct ConvertSettings<'a> {
+    inputs: &'a ReportInputs,
     output_dir: &'a Path,
     layout: JsonLayout,
     checks: ToJsonChecks,
@@ -460,7 +488,7 @@ struct ConvertSettings<'a> {
 enum FileConversion {
     /// The JSON was written.
     Converted,
-    /// The JSON was already newer than the transcript, and `--force` was off.
+    /// The JSON was already newer than the transcript, and `--rebuild` was off.
     UpToDate,
     /// The transcript could not be converted or its JSON not written; the
     /// reason has been printed.
@@ -507,6 +535,7 @@ fn convert_one_file(
     settings: &ConvertSettings<'_>,
 ) -> FileConversion {
     let ConvertSettings {
+        inputs,
         output_dir,
         layout,
         checks,
@@ -518,6 +547,16 @@ fn convert_one_file(
     let json_path = output_dir
         .join(transcript.relative())
         .with_extension("json");
+
+    // Refuse aliases even when timestamps would otherwise skip conversion.
+    // Retain the admitted identity through staged publication.
+    let destination = match inputs.existing_staged(&json_path) {
+        Ok(destination) => destination,
+        Err(error) => {
+            eprintln!("ERROR: cannot admit {}: {error}", json_path.display());
+            return FileConversion::Failed;
+        }
+    };
 
     match refresh {
         JsonRefresh::Rebuild => {}
@@ -557,7 +596,17 @@ fn convert_one_file(
                 eprintln!("ERROR: cannot create directory {}: {e}", parent.display());
                 return FileConversion::Failed;
             }
-            if let Err(e) = fs::write(&json_path, &json_str) {
+            let write = || -> Result<(), ReportDestinationError> {
+                let destination = match destination {
+                    Some(destination) => destination,
+                    None => inputs.staged_destination(&json_path)?,
+                };
+                let mut writer = destination.into_writer()?;
+                writer.write_all(json_str.as_bytes())?;
+                writer.finish()?.publish()?;
+                Ok(())
+            };
+            if let Err(e) = write() {
                 eprintln!("ERROR: cannot write {}: {e}", json_path.display());
                 return FileConversion::Failed;
             }
@@ -568,6 +617,7 @@ fn convert_one_file(
             // Remove the stale JSON of an earlier successful run, so the
             // output never holds a conversion of different content. None to
             // remove is the ordinary case; failing to remove one is said.
+            drop(destination);
             match fs::remove_file(&json_path) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -723,7 +773,7 @@ mod target_tests {
                 jobs,
             ),
             Err(ToJsonUsage::DirectoryOptionsForFile {
-                flags: "--output-dir, --force, --prune, --jobs".to_owned()
+                flags: "--output-dir, --rebuild, --prune, --jobs".to_owned()
             })
         );
         assert_eq!(

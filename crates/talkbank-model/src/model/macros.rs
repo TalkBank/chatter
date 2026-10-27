@@ -32,7 +32,7 @@ macro_rules! string_newtype_read_impls {
 
         impl $crate::model::WriteChat for $name {
             /// Writes the wrapped string content directly as CHAT text.
-            fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+            fn write_chat<W: $crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
                 w.write_str(&self.0)
             }
         }
@@ -174,7 +174,7 @@ macro_rules! interned_newtype {
 
         impl $crate::model::WriteChat for $name {
             /// Writes the interned string content directly as CHAT text.
-            fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+            fn write_chat<W: $crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
                 w.write_str(&self.0)
             }
         }

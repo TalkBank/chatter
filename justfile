@@ -346,7 +346,9 @@ breaking-changelog ref=`git describe --tags --abbrev=0`:
 
 # Dependency policy.
 deps-check:
-    cargo deny --locked check
+    cargo deny --locked check advisories licenses sources
+    cargo deny --locked check -D warnings bans
+    cargo run --locked -q -p xtask -- check-dependencies
 
 # Point git at the tracked hooks. Run once per clone.
 #

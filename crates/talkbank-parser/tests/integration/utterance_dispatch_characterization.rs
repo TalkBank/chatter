@@ -97,7 +97,7 @@ fn valid_utterances_with_dependent_tiers_parse_to_expected_model() {
             "each utterance must carry both dependent tiers (%mor, %gra)"
         );
         assert!(utt.mor_tier().is_some(), "%mor tier must be attached");
-        assert!(utt.gra_tier().is_some(), "%gra tier must be attached");
+        assert!(utt.gra_tier().is_some(), "valid %gra tier must be attached");
         assert!(
             matches!(utt.parse_health(), ParseHealthState::Clean),
             "a valid utterance must have a clean parse-health, got: {:?}",
@@ -134,7 +134,12 @@ fn malformed_gra_emits_exact_diagnostic_and_taints_only_gra() {
         1,
         "the malformed %gra tier is still attached to the built main tier"
     );
-    assert!(utt.gra_tier().is_some(), "%gra tier must be attached");
+    assert!(utt.gra_tier().is_none(), "no parsed graph for rejected GRA");
+    let talkbank_model::DependentTier::UnparsedGra(raw) = &utt.dependent_tiers[0].tier else {
+        panic!("raw grammar recovery required");
+    };
+    let span = raw.location().span().expect("source range");
+    assert_eq!(raw.source(), &MALFORMED_GRA[span.start()..span.end()]);
 
     // Parse-health: the dependent-tier branch taints ONLY the Gra alignment
     // domain; the main tier stays clean.

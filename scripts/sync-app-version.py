@@ -50,8 +50,12 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import stat
 import sys
-from dataclasses import dataclass
+import tempfile
+import tomllib
+from contextlib import ExitStack
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
@@ -61,30 +65,168 @@ PACKAGE_JSON = REPO / "apps" / "chatter-desktop" / "package.json"
 PACKAGE_LOCK = PACKAGE_JSON.with_name("package-lock.json")
 CHANGELOG = REPO / "CHANGELOG.md"
 
-# The canonical `[workspace.package] version` line in the root Cargo.toml.
-WORKSPACE_VERSION_RE = re.compile(
-    r'(?ms)(\[workspace\.package\].*?^version\s*=\s*")[^"]+(")'
-)
 
-# An internal path-dep pin in `[workspace.dependencies]`:
-# `name = { path = "crates/...", version = "X.Y.Z" }`. These stay literal for
-# crates.io publication readiness and must track the workspace version.
-PATH_DEP_PIN_RE = re.compile(r'(path = "crates/[^"]+", version = ")[^"]+(")')
-
-# A release version: three dot-separated integers, no leading `v`.
-SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+class VersionIdentityError(ValueError):
+    """A requested or stored identity cannot authorize version-file writes."""
 
 
-def canonical_version() -> str:
-    """The single source of truth: `[workspace.package] version` in Cargo.toml."""
-    text = CARGO.read_text()
-    section = re.search(r"\[workspace\.package\](.*?)(?:\n\[|\Z)", text, re.DOTALL)
-    if not section:
-        sys.exit("error: no [workspace.package] section in Cargo.toml")
-    ver = re.search(r'^\s*version\s*=\s*"([^"]+)"', section.group(1), re.MULTILINE)
-    if not ver:
-        sys.exit("error: no version in [workspace.package]")
-    return ver.group(1)
+@dataclass(frozen=True)
+class AppVersion:
+    """The command's normal X.Y.Z release version, admitted without normalization."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", self.value) is None:
+            raise VersionIdentityError(
+                f"expected X.Y.Z with ASCII digits and no leading zeros, got {self.value!r}"
+            )
+
+
+@dataclass(frozen=True)
+class VersionIdentity:
+    """An admitted version agreeing with the optional caller-supplied release tag."""
+
+    version: AppVersion
+    release_tag: str | None
+
+    def __post_init__(self) -> None:
+        if self.release_tag is not None:
+            tag_version = AppVersion(self.release_tag.removeprefix("v"))
+            if tag_version != self.version:
+                raise VersionIdentityError(
+                    f"release tag {self.release_tag} != version {self.version.value}"
+                )
+
+
+class SyncMode(Enum):
+    CHECK = "check"
+    FIX = "fix"
+    BUMP = "bump"
+
+
+@dataclass(frozen=True)
+class VersionFieldCandidate:
+    """A candidate literal span; the complete edit must still pass TOML comparison."""
+
+    key: tuple[str, ...]
+    start: int
+    end: int
+
+
+def table_body(source: str, name: str) -> tuple[int, str]:
+    """Locate the supported explicit table spelling without crossing a table."""
+    headers = list(re.finditer(
+        rf"(?m)^[ \t]*\[{re.escape(name)}\][ \t]*(?:#[^\r\n]*)?\r?$", source,
+    ))
+    if len(headers) != 1:
+        raise VersionIdentityError(f"expected one explicit [{name}] table in Cargo.toml")
+    start = headers[0].end()
+    following = re.search(r"(?m)^[ \t]*\[", source[start:])
+    end = start + following.start() if following is not None else len(source)
+    return start, source[start:end]
+
+
+def literal_field(
+    key: tuple[str, ...], offset: int, text: str, pattern: str, value: str,
+) -> VersionFieldCandidate:
+    """Require one source literal agreeing with the parsed field's value."""
+    matches = list(re.finditer(pattern, text, re.MULTILINE))
+    if len(matches) != 1 or matches[0].group("value") != value:
+        raise VersionIdentityError(f"unsupported or ambiguous literal layout for {'.'.join(key)}")
+    match = matches[0]
+    return VersionFieldCandidate(key, offset + match.start("value"), offset + match.end("value"))
+
+
+@dataclass(frozen=True)
+class CargoVersionDocument:
+    """Parsed Cargo input and candidate source locations for its owned keys."""
+
+    source: str
+    version: AppVersion = field(init=False)
+    fields: tuple[VersionFieldCandidate, ...] = field(init=False)
+
+    @classmethod
+    def read(cls, path: Path) -> CargoVersionDocument:
+        """Preserve source line endings rather than normalizing through text I/O."""
+        try:
+            source = path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeError) as error:
+            raise VersionIdentityError(f"cannot read canonical Cargo.toml: {error}") from error
+        return cls(source)
+
+    def __post_init__(self) -> None:
+        try:
+            document = tomllib.loads(self.source)
+            version = document["workspace"]["package"]["version"]
+        except (tomllib.TOMLDecodeError, KeyError, TypeError) as error:
+            raise VersionIdentityError(f"invalid canonical Cargo.toml: {error}") from error
+        if not isinstance(version, str):
+            raise VersionIdentityError("workspace.package.version must be a string")
+        object.__setattr__(self, "version", AppVersion(version))
+        offset, body = table_body(self.source, "workspace.package")
+        fields = [literal_field(
+            ("workspace", "package", "version"), offset, body,
+            r'''^[ \t]*version[ \t]*=[ \t]*(?P<quote>["'])(?P<value>[^"'\r\n]*)(?P=quote)[ \t]*(?:#[^\r\n]*)?\r?$''',
+            version,
+        )]
+        dependencies = document["workspace"].get("dependencies")
+        if dependencies is not None:
+            if not isinstance(dependencies, dict):
+                raise VersionIdentityError("workspace.dependencies must be a table")
+            for name, dependency in dependencies.items():
+                if not isinstance(dependency, dict):
+                    continue
+                path = dependency.get("path")
+                if path is None:
+                    continue
+                if not isinstance(path, str):
+                    raise VersionIdentityError(f"dependency {name} has a non-string path")
+                if not path.startswith("crates/"):
+                    continue
+                pin = dependency.get("version")
+                if not isinstance(pin, str):
+                    raise VersionIdentityError(f"internal dependency {name} needs a literal version")
+                offset, body = table_body(self.source, "workspace.dependencies")
+                entries = list(re.finditer(
+                    rf"(?m)^[ \t]*{re.escape(name)}[ \t]*=[ \t]*(?P<entry>\{{[^\r\n]*\}})[ \t]*(?:#[^\r\n]*)?\r?$", body,
+                ))
+                if len(entries) != 1:
+                    raise VersionIdentityError(f"unsupported inline dependency layout for {name}")
+                entry = entries[0]
+                fields.append(literal_field(
+                    ("workspace", "dependencies", name, "version"),
+                    offset + entry.start("entry"), entry.group("entry"),
+                    r'''(?:\{|,)[ \t]*version[ \t]*=[ \t]*(?P<quote>["'])(?P<value>[^"'\r\n]*)(?P=quote)''',
+                    pin,
+                ))
+        object.__setattr__(self, "fields", tuple(fields))
+
+
+@dataclass(frozen=True)
+class CargoVersionUpdate:
+    """An edit checked against the parsed keys it is allowed to change."""
+
+    original: CargoVersionDocument
+    identity: VersionIdentity
+    text: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        expected = tomllib.loads(self.original.source)
+        updated = self.original.source
+        for location in sorted(self.original.fields, key=lambda item: item.start, reverse=True):
+            updated = updated[:location.start] + self.identity.version.value + updated[location.end:]
+            parent = expected
+            for key in location.key[:-1]:
+                parent = parent[key]
+            parent[location.key[-1]] = self.identity.version.value
+        try:
+            actual = tomllib.loads(updated)
+        except tomllib.TOMLDecodeError as error:
+            raise VersionIdentityError(f"version edit would invalidate Cargo.toml: {error}") from error
+        if actual != expected:
+            raise VersionIdentityError("version edit would change unrelated Cargo.toml fields")
+        object.__setattr__(self, "text", updated)
 
 
 class Fixability(Enum):
@@ -113,33 +255,69 @@ class Drift:
 
 
 @dataclass(frozen=True)
-class JsonVersionFile:
-    """One npm document and the version fields it owns, read and written together."""
+class PreparedFileWrite:
+    """Bytes produced by admitted version-file preparation, with no later parsing."""
+
+    path: Path
+    contents: bytes
+
+
+def unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    document: dict[str, object] = {}
+    for key, value in pairs:
+        if key in document:
+            raise VersionIdentityError(f"duplicate JSON key {key!r}")
+        document[key] = value
+    return document
+
+
+def reject_json_constant(value: str) -> None:
+    raise VersionIdentityError(f"invalid JSON constant {value}")
+
+
+@dataclass(frozen=True)
+class JsonVersionUpdate:
+    """An entirely admitted npm document; partial preparation cannot write it."""
 
     path: Path
     locations: tuple[tuple[str, ...], ...]
+    version: AppVersion
+    writes: tuple[PreparedFileWrite, ...] = field(init=False)
+    drift: tuple[Drift, ...] = field(init=False)
 
-    def synchronize(self, version: str, fix: bool) -> list[Drift]:
-        document = json.loads(self.path.read_text())
+    def __post_init__(self) -> None:
+        try:
+            document = json.loads(
+                self.path.read_text(), object_pairs_hook=unique_json_object,
+                parse_constant=reject_json_constant,
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise VersionIdentityError(f"cannot read {self.path.name}: {error}") from error
         drift: list[Drift] = []
         for location in self.locations:
             parent = document
             for key in location[:-1]:
+                if not isinstance(parent, dict) or key not in parent:
+                    raise VersionIdentityError(f"{self.path.name}: missing object at {location!r}")
                 parent = parent[key]
-            field = location[-1]
-            have = parent[field]
-            if have != version:
+            key = location[-1]
+            if not isinstance(parent, dict) or key not in parent or not isinstance(parent[key], str):
+                raise VersionIdentityError(f"{self.path.name}: expected version string at {location!r}")
+            have = AppVersion(parent[key])
+            if have != self.version:
                 drift.append(Drift(
-                    f"{self.path.relative_to(REPO)} {location!r}  {have} -> {version}",
+                    f"{self.path.relative_to(REPO)} {location!r}  {have.value} -> {self.version.value}",
                     Fixability.AUTO,
                 ))
-                parent[field] = version
-        if fix and drift:
-            self.path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
-        return drift
+                parent[key] = self.version.value
+        writes = (PreparedFileWrite(
+            self.path, (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+        ),) if drift else ()
+        object.__setattr__(self, "writes", writes)
+        object.__setattr__(self, "drift", tuple(drift))
 
 
-def changelog_gaps(version: str) -> list[str]:
+def changelog_gaps(version: AppVersion) -> list[str]:
     """Everything wrong with the CHANGELOG, as human-readable phrases.
 
     ONE invariant, checked in both directions: every release named anywhere in
@@ -165,7 +343,7 @@ def changelog_gaps(version: str) -> list[str]:
     text = CHANGELOG.read_text()
     headings = set(re.findall(r"^## \[([^\]]+)\]", text, re.MULTILINE)) - {"Unreleased"}
     definitions = set(re.findall(r"^\[([^\]]+)\]: \S", text, re.MULTILINE)) - {"Unreleased"}
-    required = headings | definitions | {version}
+    required = headings | definitions | {version.value}
 
     gaps: list[str] = []
     for missing in sorted(required - headings):
@@ -175,37 +353,101 @@ def changelog_gaps(version: str) -> list[str]:
     return gaps
 
 
-def bump_canonical(version: str) -> None:
-    """Set `[workspace.package] version` and every internal path-dep pin.
+@dataclass(frozen=True)
+class PreparedVersionSync:
+    """All version inputs and changelog observations admitted before any write."""
 
-    The path-dep pins live in the same Cargo.toml, so one read-modify-write
-    covers both; the remaining literal copies (npm manifest and lockfile) then follow via
-    the ordinary fix pass against the new canonical version.
-    """
-    if not SEMVER_RE.match(version):
-        sys.exit(f"error: --bump takes X.Y.Z (no leading v), got {version!r}")
-    text = CARGO.read_text()
-    text, n_ws = WORKSPACE_VERSION_RE.subn(rf"\g<1>{version}\g<2>", text, count=1)
-    if n_ws != 1:
-        sys.exit("error: no [workspace.package] version line in Cargo.toml")
-    text, n_pins = PATH_DEP_PIN_RE.subn(rf"\g<1>{version}\g<2>", text)
-    CARGO.write_text(text)
-    print(f"canonical version -> {version} (workspace + {n_pins} path-dep pins)")
+    original: CargoVersionDocument
+    identity: VersionIdentity
+    writes: tuple[PreparedFileWrite, ...] = field(init=False)
+    drift: tuple[Drift, ...] = field(init=False)
+    gaps: tuple[str, ...] = field(init=False)
+
+    def __post_init__(self) -> None:
+        cargo = CargoVersionUpdate(self.original, self.identity)
+        drift: list[Drift] = []
+        document = tomllib.loads(self.original.source)
+        for location in self.original.fields:
+            have = document
+            for key in location.key:
+                have = have[key]
+            if have != self.identity.version.value:
+                drift.append(Drift(
+                    f"Cargo.toml {'.'.join(location.key)}  {have} -> {self.identity.version.value}",
+                    Fixability.AUTO,
+                ))
+        writes = [PreparedFileWrite(CARGO, cargo.text.encode("utf-8"))] if drift else []
+        for update in (
+            JsonVersionUpdate(PACKAGE_JSON, (("version",),), self.identity.version),
+            JsonVersionUpdate(PACKAGE_LOCK, (("version",), ("packages", "", "version")), self.identity.version),
+        ):
+            writes.extend(update.writes)
+            drift.extend(update.drift)
+        try:
+            gaps = changelog_gaps(self.identity.version)
+        except (OSError, UnicodeError) as error:
+            raise VersionIdentityError(f"cannot read CHANGELOG.md: {error}") from error
+        object.__setattr__(self, "writes", tuple(writes))
+        object.__setattr__(self, "drift", tuple(drift))
+        object.__setattr__(self, "gaps", tuple(gaps))
 
 
-def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = False) -> int:
-    want = canonical_version()
-    drift: list[Drift] = []
+class VersionWriteError(ValueError):
+    """A staging or publication failure, distinct from invalid input."""
 
-    for document in (
-        JsonVersionFile(PACKAGE_JSON, (("version",),)),
-        JsonVersionFile(PACKAGE_LOCK, (("version",), ("packages", "", "version"))),
-    ):
-        drift.extend(document.synchronize(want, fix))
 
-    gaps = changelog_gaps(want)
+@dataclass(frozen=True)
+class StagedFileWrite:
+    destination: Path
+    replacement: Path
+
+
+@dataclass(frozen=True)
+class StagedVersionSync:
+    """Complete, closed replacement files owned by the caller's cleanup scope."""
+
+    writes: tuple[StagedFileWrite, ...] = field(init=False)
+
+    def __init__(self, prepared: PreparedVersionSync, owner: ExitStack) -> None:
+        staged: list[StagedFileWrite] = []
+        for write in prepared.writes:
+            try:
+                metadata = write.path.lstat()
+                if not stat.S_ISREG(metadata.st_mode):
+                    raise VersionWriteError(f"cannot stage {write.path}: expected a regular file")
+                directory = owner.enter_context(tempfile.TemporaryDirectory(
+                    prefix=".version-sync-", dir=write.path.parent,
+                ))
+                replacement = Path(directory) / write.path.name
+                # Closing the file must succeed before it enters the staged state.
+                replacement.write_bytes(write.contents)
+                replacement.chmod(stat.S_IMODE(metadata.st_mode))
+            except OSError as error:
+                raise VersionWriteError(f"cannot stage {write.path}: {error}") from error
+            staged.append(StagedFileWrite(write.path, replacement))
+        object.__setattr__(self, "writes", tuple(staged))
+
+    def publish(self) -> None:
+        for write in self.writes:
+            try:
+                write.replacement.replace(write.destination)
+            except OSError as error:
+                raise VersionWriteError(
+                    f"cannot replace {write.destination}: {error}; "
+                    "earlier replacements may have completed; inspect the version files before retrying"
+                ) from error
+
+
+def process(prepared: PreparedVersionSync, mode: SyncMode) -> int:
+    identity = prepared.identity
+    want = identity.version
+    drift = list(prepared.drift)
+    if mode in (SyncMode.FIX, SyncMode.BUMP):
+        with ExitStack() as owner:
+            StagedVersionSync(prepared, owner).publish()
+    gaps = prepared.gaps
     if gaps:
-        if changelog_reminder_only:
+        if mode is SyncMode.BUMP:
             # `--bump` runs BEFORE the human writes the section; the `--check`
             # gate (CI, and the tag script) still enforces it afterwards.
             print(f"next: write {' and '.join(gaps)} in CHANGELOG.md")
@@ -214,26 +456,18 @@ def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = 
             for gap in gaps:
                 drift.append(Drift(f"CHANGELOG.md  missing {gap}", Fixability.MANUAL))
 
-    if release_tag is not None:
-        tag_version = release_tag[1:] if release_tag.startswith("v") else release_tag
-        if tag_version != want:
-            drift.append(
-                Drift(f"release tag {release_tag} ({tag_version}) != version {want}", Fixability.MANUAL)
-            )
-
     if not drift:
-        scope = f", tag {release_tag} ok" if release_tag else ""
-        print(f"app version in sync: {want}{scope}")
+        scope = f", tag {identity.release_tag} ok" if identity.release_tag is not None else ""
+        print(f"app version in sync: {want.value}{scope}")
         return 0
 
-    verb = "fixed" if fix else "DRIFTED"
-    print(f"{verb} ({len(drift)}): canonical version = {want}")
+    verb = "DRIFTED" if mode is SyncMode.CHECK else "fixed"
+    print(f"{verb} ({len(drift)}): canonical version = {want.value}")
     for d in drift:
         print(f"  {d.message}")
-    # CHANGELOG and release-tag drift cannot be auto-fixed, so `--fix` still fails
-    # when either is wrong; otherwise a successful rewrite is success.
+    # Changelog prose still requires its author; admitted identity cannot drift here.
     unfixable = any(d.fixability is Fixability.MANUAL for d in drift)
-    return 1 if (not fix or unfixable) else 0
+    return 1 if (mode is SyncMode.CHECK or unfixable) else 0
 
 
 def main() -> int:
@@ -252,11 +486,21 @@ def main() -> int:
         help="also assert this release tag equals the canonical version",
     )
     args = ap.parse_args()
-    if args.bump:
-        bump_canonical(args.bump)
-        return process(fix=True, release_tag=args.release_tag, changelog_reminder_only=True)
-    # Default to check semantics so an accidental bare run never mutates files.
-    return process(fix=args.fix, release_tag=args.release_tag)
+    try:
+        if args.bump is not None:
+            mode = SyncMode.BUMP
+            version = AppVersion(args.bump)
+        else:
+            # A bare invocation remains read-only.
+            mode = SyncMode.FIX if args.fix else SyncMode.CHECK
+        original = CargoVersionDocument.read(CARGO)
+        if mode is not SyncMode.BUMP:
+            version = original.version
+        identity = VersionIdentity(version, args.release_tag)
+        return process(PreparedVersionSync(original, identity), mode)
+    except (VersionIdentityError, VersionWriteError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

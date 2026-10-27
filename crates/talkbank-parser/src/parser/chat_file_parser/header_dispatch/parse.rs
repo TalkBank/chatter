@@ -99,7 +99,7 @@ impl TreeSitterParser {
         let try_parse =
             |fragment: &WrappedFragment<'_>, header_index: usize| -> ParseResult<Header> {
                 self.lower_wrapped_header(fragment, header_index, HeaderCoverage::WholeLine)
-                    .map(|header| fragment.rebase(header))
+                    .and_then(|header| fragment.rebase(header))
             };
 
         let pre_err = match try_parse(&pre_begin_wrapped, 1) {

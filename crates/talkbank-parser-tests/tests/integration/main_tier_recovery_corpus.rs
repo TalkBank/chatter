@@ -210,6 +210,7 @@ mod admitted {
                         .content
                         .bullet
                         .as_ref()
+                        .and_then(talkbank_model::BulletState::as_parsed)
                         .expect("admitted terminal bullet");
                     (token.location, token.to_chat_string())
                 }

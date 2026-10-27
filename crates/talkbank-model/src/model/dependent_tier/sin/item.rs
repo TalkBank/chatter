@@ -6,13 +6,12 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as FmtWrite;
 use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 use super::super::WriteChat;
 use crate::ErrorSink;
-use crate::model::NonEmptyString;
+use crate::model::RecoveryText;
 use crate::validation::{Validate, ValidationContext};
 
 /// Gesture/sign tier content item
@@ -96,7 +95,7 @@ pub enum SinItem {
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Tier>
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct SinToken(NonEmptyString);
+pub struct SinToken(RecoveryText);
 
 impl SinToken {
     /// Create a new token, returning `EmptyText` if the text is empty.
@@ -104,7 +103,7 @@ impl SinToken {
     /// This constructor is useful for user-input paths where empty values are
     /// expected and should be handled without panics.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
-        NonEmptyString::new(text).map(Self)
+        RecoveryText::new(text).map(Self)
     }
 }
 
@@ -126,7 +125,7 @@ impl AsRef<str> for SinToken {
 
 impl WriteChat for SinToken {
     /// Writes the token verbatim (for example `g:ball:dpoint` or `0`).
-    fn write_chat<W: FmtWrite>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.as_ref())
     }
 }
@@ -209,7 +208,7 @@ impl Validate for SinItem {
 
 impl WriteChat for SinItem {
     /// Serializes one `%sin` item, including tortoise-shell brackets for grouped gestures.
-    fn write_chat<W: FmtWrite>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             SinItem::Token(token) => token.write_chat(w),
             SinItem::SinGroup(gestures) => {

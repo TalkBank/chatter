@@ -1,65 +1,80 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
+assertion_line: 706
 expression: result
 ---
-entries:
-  - words:
-      - SIL
-      - Silence
-      - LENA
-  - words:
-      - MAN
-      - Male_Adult_Near
-      - Male
-  - words:
-      - MAF
-      - Male_Adult_Far
-      - Male
-  - words:
-      - FAN
-      - Female_Adult_Near
-      - Female
-  - words:
-      - FAF
-      - Female_Adult_Far
-      - Female
-  - words:
-      - CHN
-      - Key_Child_Clear
-      - Target_Child
-  - words:
-      - CHF
-      - Key_Child_Unclear
-      - Target_Child
-  - words:
-      - CXN
-      - Other_Child_Near
-      - Child
-  - words:
-      - CXF
-      - Other_Child_Far
-      - Child
-  - words:
-      - NON
-      - Noise_Near
-      - LENA
-  - words:
-      - NOF
-      - Noise_Far
-      - LENA
-  - words:
-      - OLN
-      - Overlap_Near
-      - LENA
-  - words:
-      - OLF
-      - Overlap_Far
-      - LENA
-  - words:
-      - TVN
-      - Electronic_Sound_Near
-      - Media
-  - words:
-      - TVF
-      - Electronic_Sound_Far
-      - Media
+- speaker_code: SIL
+  details:
+    state: complete
+    name: Silence
+    role: LENA
+- speaker_code: MAN
+  details:
+    state: complete
+    name: Male_Adult_Near
+    role: Male
+- speaker_code: MAF
+  details:
+    state: complete
+    name: Male_Adult_Far
+    role: Male
+- speaker_code: FAN
+  details:
+    state: complete
+    name: Female_Adult_Near
+    role: Female
+- speaker_code: FAF
+  details:
+    state: complete
+    name: Female_Adult_Far
+    role: Female
+- speaker_code: CHN
+  details:
+    state: complete
+    name: Key_Child_Clear
+    role: Target_Child
+- speaker_code: CHF
+  details:
+    state: complete
+    name: Key_Child_Unclear
+    role: Target_Child
+- speaker_code: CXN
+  details:
+    state: complete
+    name: Other_Child_Near
+    role: Child
+- speaker_code: CXF
+  details:
+    state: complete
+    name: Other_Child_Far
+    role: Child
+- speaker_code: NON
+  details:
+    state: complete
+    name: Noise_Near
+    role: LENA
+- speaker_code: NOF
+  details:
+    state: complete
+    name: Noise_Far
+    role: LENA
+- speaker_code: OLN
+  details:
+    state: complete
+    name: Overlap_Near
+    role: LENA
+- speaker_code: OLF
+  details:
+    state: complete
+    name: Overlap_Far
+    role: LENA
+- speaker_code: TVN
+  details:
+    state: complete
+    name: Electronic_Sound_Near
+    role: Media
+- speaker_code: TVF
+  details:
+    state: complete
+    name: Electronic_Sound_Far
+    role: Media

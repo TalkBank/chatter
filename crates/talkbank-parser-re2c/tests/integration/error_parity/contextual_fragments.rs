@@ -2,7 +2,10 @@
 //! diagnostics. Recovered models need not agree across parser architectures.
 //! Checked-range arithmetic and whole-file validity retain their own receipts.
 
+mod annotation_positions;
 mod deck;
+mod document_options;
+mod text_endings;
 mod word_context;
 
 use super::model::{
@@ -102,7 +105,7 @@ fn rebases<T: PartialEq + SpanShift>(
 ) -> bool {
     match (base, placed) {
         (ParseOutcome::Parsed(base), ParseOutcome::Parsed(placed)) => {
-            source.rebase(base) == *placed
+            source.rebase(base).is_ok_and(|rebased| rebased == *placed)
         }
         (ParseOutcome::Rejected, ParseOutcome::Rejected) => true,
         (ParseOutcome::Parsed(_), ParseOutcome::Rejected)

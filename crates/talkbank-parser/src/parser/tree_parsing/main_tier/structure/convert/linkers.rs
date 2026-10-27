@@ -2,85 +2,122 @@
 //!
 //! CHAT reference: <https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers>
 
-use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
+use crate::CstFailure;
+use crate::error::{
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, Span,
+};
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, KindSlot, KindSlotValue, LinkerChoice, LinkersChild0Child0Choice,
-    LinkersChild1Child0Choice, LinkersNode, NoChild, SlotView, WhitespacesNode, extract_linkers,
+    AsRawNode, KindSlot, LinkerChoice, LinkerChoiceBoundView, LinkersChild0Child0Choice,
+    LinkersChild1Child0Choice, LinkersNode, NoChild, Ranged, ReadableSlot, SlotView, SourceBound,
+    SourceSlice, WhitespacesNode,
 };
 use crate::model::{Linker, LinkerKind};
 use crate::parser::node_span::span_of;
-use tree_sitter::Node;
 
 /// The model kind and source span come from the same generated alternative.
-trait LinkerToken<'tree>: AsRawNode<'tree> + FromNodeKind<'tree> + Clone {
-    fn to_linker(&self) -> Linker;
+trait LinkerToken {
+    fn to_located_linker(&self) -> LocatedLinker;
 }
 
-macro_rules! linker_tokens {
-    ($($choice:ident),* $(,)?) => {
-        $(
-            impl<'tree> LinkerToken<'tree> for $choice<'tree> {
-                fn to_linker(&self) -> Linker {
-                    let kind = match self {
-                        Self::LinkerLazyOverlap(_) => LinkerKind::LazyOverlapPrecedes,
-                        Self::LinkerQuickUptake(_) => LinkerKind::OtherCompletion,
-                        Self::LinkerQuickUptakeOverlap(_) => LinkerKind::QuickUptakeOverlap,
-                        Self::LinkerQuotationFollows(_) => LinkerKind::QuotationFollows,
-                        Self::LinkerSelfCompletion(_) => LinkerKind::SelfCompletion,
-                        Self::CaTechnicalBreakLinker(_) => LinkerKind::TcuContinuation,
-                        Self::CaNoBreakLinker(_) => LinkerKind::NoBreakTcuContinuation,
-                    };
-                    Linker::new(span_of(self.raw_node()), kind)
-                }
-            }
-        )*
+/// A parser token keeps its mandatory span until source ordering is complete.
+/// The broader model's unlocated state cannot enter the ordering buffer.
+struct LocatedLinker {
+    span: Span,
+    kind: LinkerKind,
+}
+
+macro_rules! located_linker {
+    ($choice:ident, $value:expr) => {
+        match $value {
+            $choice::LinkerLazyOverlap(node) => LocatedLinker {
+                span: span_of(node.raw_node()),
+                kind: LinkerKind::LazyOverlapPrecedes,
+            },
+            $choice::LinkerQuickUptake(node) => LocatedLinker {
+                span: span_of(node.raw_node()),
+                kind: LinkerKind::OtherCompletion,
+            },
+            $choice::LinkerQuickUptakeOverlap(node) => LocatedLinker {
+                span: span_of(node.raw_node()),
+                kind: LinkerKind::QuickUptakeOverlap,
+            },
+            $choice::LinkerQuotationFollows(node) => LocatedLinker {
+                span: span_of(node.raw_node()),
+                kind: LinkerKind::QuotationFollows,
+            },
+            $choice::LinkerSelfCompletion(node) => LocatedLinker {
+                span: span_of(node.raw_node()),
+                kind: LinkerKind::SelfCompletion,
+            },
+            $choice::CaTechnicalBreakLinker(node) => LocatedLinker {
+                span: span_of(node.raw_node()),
+                kind: LinkerKind::TcuContinuation,
+            },
+            $choice::CaNoBreakLinker(node) => LocatedLinker {
+                span: span_of(node.raw_node()),
+                kind: LinkerKind::NoBreakTcuContinuation,
+            },
+        }
     };
 }
-linker_tokens!(
-    LinkerChoice,
-    LinkersChild0Child0Choice,
-    LinkersChild1Child0Choice
-);
+
+impl<'tree, 'source> LinkerToken for LinkerChoiceBoundView<'tree, 'source> {
+    fn to_located_linker(&self) -> LocatedLinker {
+        located_linker!(LinkerChoiceBoundView, self)
+    }
+}
+
+impl<'tree, 'source> LinkerToken for LinkersChild0Child0Choice<'tree, Ranged<'source>> {
+    fn to_located_linker(&self) -> LocatedLinker {
+        located_linker!(LinkersChild0Child0Choice, self)
+    }
+}
+
+impl<'tree, 'source> LinkerToken for LinkersChild1Child0Choice<'tree, Ranged<'source>> {
+    fn to_located_linker(&self) -> LocatedLinker {
+        located_linker!(LinkersChild1Child0Choice, self)
+    }
+}
 
 /// Source order is independent of when a generated sink exposes a token.
 /// Only typed linker tokens enter; their model kind and span stay paired.
-struct SourceOrderedLinkers(Vec<Linker>);
+struct SourceOrderedLinkers(Vec<LocatedLinker>);
 
 impl SourceOrderedLinkers {
-    fn push<'tree>(&mut self, token: &impl LinkerToken<'tree>) {
-        let linker = token.to_linker();
+    fn push(&mut self, token: &impl LinkerToken) {
+        let linker = token.to_located_linker();
         // Normal traversal appends in constant time. Only displaced recovery
         // can require insertion among already-read tokens.
-        // Linkers come from tokens and are located; `Option` ordering keeps an
-        // unlocated one (which this parser does not produce) sorting first.
-        let start = |linker: &Linker| linker.location.span().map(|span| span.start());
         if self
             .0
             .last()
-            .is_none_or(|last| start(last) <= start(&linker))
+            .is_none_or(|last| last.span.start() <= linker.span.start())
         {
             self.0.push(linker);
         } else {
             let position = self
                 .0
-                .partition_point(|prior| start(prior) <= start(&linker));
+                .partition_point(|prior| prior.span.start() <= linker.span.start());
             self.0.insert(position, linker);
         }
     }
 
     fn finish(self) -> Vec<Linker> {
         self.0
+            .into_iter()
+            .map(|linker| Linker::new(linker.span, linker.kind))
+            .collect()
     }
 }
 
 /// The current grammar exposes concrete linker kinds, not a legacy linker
 /// wrapper. Required/repeated groups retain their recovery states and sinks.
-pub(super) fn parse_linkers(
-    typed: LinkersNode<'_>,
-    source: &str,
+pub(super) fn parse_linkers<'tree>(
+    typed: SourceBound<'tree, '_, LinkersNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Vec<Linker> {
-    let children = extract_linkers(typed);
+) -> Result<Vec<Linker>, CstFailure> {
+    let admitted = typed.extract().admit_ranges()?;
+    let children = admitted.children();
     let mut linkers = SourceOrderedLinkers(Vec::new());
 
     // First and repeated groups have distinct generated carrier types but the
@@ -89,65 +126,62 @@ pub(super) fn parse_linkers(
         ($slot:expr) => {
             match $slot.view() {
                 SlotView::Present(group) => {
-                    push_linker(group.child_0.slot(), source, errors, &mut linkers);
-                    match group.child_1.slot().view() {
+                    push_linker(&group.child_0.slot, errors, &mut linkers);
+                    match group.child_1.slot.view() {
                         SlotView::Present(_) | SlotView::Missing(_) | SlotView::Absent(NoChild) => {
                         }
-                        SlotView::Error(node) => report_unexpected(node, source, errors),
+                        SlotView::Error(node) => report_unexpected(node, errors),
                     }
                     for node in &group.unexpected {
-                        push_displaced(*node, source, errors, &mut linkers);
+                        push_displaced(*node, errors, &mut linkers);
                     }
                 }
-                SlotView::Error(node) => report_unexpected(node, source, errors),
+                SlotView::Error(node) => report_unexpected(node, errors),
                 SlotView::Absent(_) => {}
             }
         };
     }
-    group!(children.child_0.slot());
-    for element in children.child_1.slot() {
-        group!(element.slot());
+    group!(&children.child_0.slot);
+    for element in &children.child_1.slot {
+        group!(&element.slot);
     }
     for node in &children.unexpected {
-        push_displaced(*node, source, errors, &mut linkers);
+        push_displaced(*node, errors, &mut linkers);
     }
-    linkers.finish()
+    Ok(linkers.finish())
 }
 
-fn push_linker<'tree, T: LinkerToken<'tree>>(
-    slot: &KindSlot<'tree, T>,
-    source: &str,
+fn push_linker<'tree, 'source, T: LinkerToken>(
+    slot: &KindSlot<'tree, T, Ranged<'source>>,
     errors: &impl ErrorSink,
     linkers: &mut SourceOrderedLinkers,
 ) {
-    match slot.known_or_placeholder() {
-        // Preserve kind-admitted MISSING tokens and their zero-width spans;
+    match slot {
+        // Preserve lexical placeholders and their actual zero-width spans;
         // the whole-tree backstop owns the missing-token diagnostic.
-        KindSlotValue::Present(token) | KindSlotValue::Placeholder(token) => linkers.push(&token),
-        KindSlotValue::Error(node) => {
-            push_displaced(node, source, errors, linkers);
-        }
-        KindSlotValue::Absent(NoChild) => {}
+        ReadableSlot::Present(token) | ReadableSlot::Missing(token) => linkers.push(token),
+        ReadableSlot::Error(node) => push_displaced(*node, errors, linkers),
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => {}
     }
 }
 
-/// A recoverable concrete linker can be displaced out of a generated group.
-/// Keep it as the former flat walk did; classify only this recovery boundary
-/// through the generated supertype, never a second hand-written kind list.
+/// Classify only this generated recovery boundary, retaining its source owner.
 fn push_displaced(
-    node: Node<'_>,
-    source: &str,
+    node: SourceSlice<'_, '_>,
     errors: &impl ErrorSink,
     linkers: &mut SourceOrderedLinkers,
 ) {
-    if let Some(token) = LinkerChoice::from_node(node) {
-        linkers.push(&token);
-    } else if WhitespacesNode::from_node(node).is_none() {
-        report_unexpected(node, source, errors);
+    if let Some(token) = node.typed::<LinkerChoice>() {
+        linkers.push(&token.view());
+    } else if node.typed::<WhitespacesNode>().is_none() {
+        report_unexpected(node, errors);
     }
 }
 
-fn report_unexpected(node: Node<'_>, source: &str, errors: &impl ErrorSink) {
+fn report_unexpected(node: SourceSlice<'_, '_>, errors: &impl ErrorSink) {
+    let source = node.source();
+    let node = node.raw_node();
     errors.report(ParseError::new(
         ErrorCode::StructuralOrderError,
         Severity::Error,
@@ -178,14 +212,17 @@ mod tests {
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
-        let mut pending = vec![parsed.root_node()];
+        let mut pending = vec![parsed.root().expect("source-bound root")];
         let mut linkers = SourceOrderedLinkers(Vec::new());
         while let Some(node) = pending.pop() {
-            let mut cursor = node.walk();
+            let mut cursor = node.raw_node().walk();
             // A stack visits the last source child first, intentionally.
-            pending.extend(node.children(&mut cursor));
-            if let Some(token) = LinkerChoice::from_node(node) {
-                linkers.push(&token);
+            pending.extend(
+                node.children(&mut cursor)
+                    .map(|child| child.expect("bound child")),
+            );
+            if let Some(token) = node.typed::<LinkerChoice>() {
+                linkers.push(&token.view());
             }
         }
         let linkers = linkers.finish();

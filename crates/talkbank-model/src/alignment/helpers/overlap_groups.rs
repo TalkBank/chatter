@@ -143,6 +143,7 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
                 .content
                 .bullet
                 .as_ref()
+                .and_then(crate::model::BulletState::as_parsed)
                 .map(|b| (b.timing.start_ms, b.timing.end_ms));
             per_utterance.push(PerUtteranceOverlap {
                 utterance_location: utt.main.location,

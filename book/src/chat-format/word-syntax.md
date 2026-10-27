@@ -157,6 +157,14 @@ a full turn line:
 ```
 
 This says CHI was speaking and MOT briefly said "careful" mid-turn.
+The interposed payload is an ordinary word: it can carry prefixes such as
+`&*MOT:&-um` (filler), `&*MOT:&~hmm` (nonword), `&*MOT:&+sh` (fragment),
+or `&*MOT:0is` (omission), as well as form, language and part-of-speech
+suffixes. An adjacent utterance terminator remains outside the word.
+The payload receives ordinary word validation, including language-dependent
+digit checks. It is stored as a structured word in AST JSON (`word`, replacing
+the former unchecked `text` field), but is excluded from the main speaker's
+dependent-tier alignment sequence.
 If the intervention is substantial enough to constitute its own turn,
 transcribe it as a separate `*MOT:` utterance instead. Model:
 `crates/talkbank-model/src/model/content/other_spoken.rs`.

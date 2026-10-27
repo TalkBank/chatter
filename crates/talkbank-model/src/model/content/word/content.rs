@@ -46,7 +46,7 @@
 //! - [Overlap](https://talkbank.org/0info/manuals/CHAT.html#Overlap)
 //! - [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)
 
-use crate::model::{NonEmptyString, OverlapPoint, WriteChat};
+use crate::model::{OverlapPoint, RecoveryText, WriteChat};
 use crate::validation::{Validate, ValidationContext};
 use crate::{ErrorCode, ErrorSink};
 use schemars::JsonSchema;
@@ -142,7 +142,7 @@ pub enum WordContent {
 
 impl WriteChat for WordContent {
     /// Serializes a word-internal element using its CHAT surface form.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             WordContent::Text(text) => w.write_str(text),
             WordContent::Phonetic(form) => w.write_str(form),
@@ -194,7 +194,7 @@ impl Validate for WordContent {
 
 /// A plain text segment within a word.
 ///
-/// Wraps a [`NonEmptyString`]. Checked construction rejects empty text;
+/// Wraps a [`RecoveryText`]. Checked construction rejects empty text;
 /// deserialized values require validation. Dereferences to `&str` for access.
 ///
 /// # Reference
@@ -202,13 +202,13 @@ impl Validate for WordContent {
 /// - [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct WordText(NonEmptyString);
+pub struct WordText(RecoveryText);
 
 impl From<WordShortening> for WordText {
     /// A shortening's text, promoted to plain text.
     ///
-    /// Infallible on purpose, and allowed to be: both types wrap a
-    /// `NonEmptyString`, so the invariant transfers unchanged and there is
+    /// Infallible on purpose, and allowed to be: both types wrap
+    /// `RecoveryText`, so the recovery state transfers unchanged and there is
     /// nothing to re-check. This exists because the CA-omission normalizer
     /// needs the conversion, and used to get it by destructuring both newtypes'
     /// public fields, which is the access that made those fields `pub` in the
@@ -218,9 +218,15 @@ impl From<WordShortening> for WordText {
     }
 }
 
-impl From<NonEmptyString> for WordText {
-    /// Proven text is word text: the invariant transfers, nothing is re-checked.
-    fn from(text: NonEmptyString) -> Self {
+impl From<crate::model::NonEmptyString> for WordText {
+    fn from(text: crate::model::NonEmptyString) -> Self {
+        Self(text.into())
+    }
+}
+
+impl From<RecoveryText> for WordText {
+    /// Retain text and its explicit recovery state without reinterpreting it.
+    fn from(text: RecoveryText) -> Self {
         Self(text)
     }
 }
@@ -241,26 +247,21 @@ impl WordText {
     /// [`crate::model::EmptyText`] if `text` is empty. Deserialization remains
     /// lenient, so values admitted through serde still require validation.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
-        NonEmptyString::new(text).map(Self)
-    }
-
-    /// Builds `WordText` without runtime emptiness checks.
-    pub fn new_unchecked(text: impl AsRef<str>) -> Self {
-        Self(NonEmptyString::new_unchecked(text))
+        RecoveryText::new(text).map(Self)
     }
 }
 
 impl std::ops::Deref for WordText {
     type Target = str;
 
-    /// Borrows the inner non-empty text as `&str`.
+    /// Borrows the observed text as `&str`.
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl AsRef<str> for WordText {
-    /// Borrows the inner non-empty text as `&str`.
+    /// Borrows the observed text as `&str`.
     fn as_ref(&self) -> &str {
         &self.0
     }
@@ -286,11 +287,17 @@ impl Validate for WordText {
 /// 2026-07-14, docs/design UNIBET modeling). Only non-emptiness is enforced.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct WordPhonetic(NonEmptyString);
+pub struct WordPhonetic(RecoveryText);
 
-impl From<NonEmptyString> for WordPhonetic {
-    /// Proven text is a phonetic form: the invariant transfers, nothing is re-checked.
-    fn from(text: NonEmptyString) -> Self {
+impl From<crate::model::NonEmptyString> for WordPhonetic {
+    fn from(text: crate::model::NonEmptyString) -> Self {
+        Self(text.into())
+    }
+}
+
+impl From<RecoveryText> for WordPhonetic {
+    /// Retain phonetic text and its explicit recovery state.
+    fn from(text: RecoveryText) -> Self {
         Self(text)
     }
 }
@@ -311,12 +318,7 @@ impl WordPhonetic {
     /// [`crate::model::EmptyText`] if `text` is empty. Deserialization remains
     /// lenient, so values admitted through serde still require validation.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
-        NonEmptyString::new(text).map(Self)
-    }
-
-    /// Builds `WordPhonetic` without runtime emptiness checks.
-    pub fn new_unchecked(text: impl AsRef<str>) -> Self {
-        Self(NonEmptyString::new_unchecked(text))
+        RecoveryText::new(text).map(Self)
     }
 }
 
@@ -351,18 +353,24 @@ impl Validate for WordPhonetic {
 /// An omitted sound within a word, written in parentheses in CHAT format.
 ///
 /// Represents the elided portion of a word, e.g., `(be)` in `(be)cause`.
-/// Wraps a [`NonEmptyString`] and dereferences to `&str`.
+/// Wraps a [`RecoveryText`] and dereferences to `&str`.
 ///
 /// # Reference
 ///
 /// - [Shortenings](https://talkbank.org/0info/manuals/CHAT.html#Shortenings)
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
-pub struct WordShortening(NonEmptyString);
+pub struct WordShortening(RecoveryText);
 
-impl From<NonEmptyString> for WordShortening {
-    /// Proven text is shortening text: the invariant transfers, nothing is re-checked.
-    fn from(text: NonEmptyString) -> Self {
+impl From<crate::model::NonEmptyString> for WordShortening {
+    fn from(text: crate::model::NonEmptyString) -> Self {
+        Self(text.into())
+    }
+}
+
+impl From<RecoveryText> for WordShortening {
+    /// Retain shortening text and its explicit recovery state.
+    fn from(text: RecoveryText) -> Self {
         Self(text)
     }
 }
@@ -383,12 +391,7 @@ impl WordShortening {
     /// [`crate::model::EmptyText`] if `text` is empty. Deserialization remains
     /// lenient, so values admitted through serde still require validation.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
-        NonEmptyString::new(text).map(Self)
-    }
-
-    /// Builds shortening text without runtime emptiness checks.
-    pub fn new_unchecked(text: impl AsRef<str>) -> Self {
-        Self(NonEmptyString::new_unchecked(text))
+        RecoveryText::new(text).map(Self)
     }
 }
 
@@ -491,7 +494,7 @@ impl WordStressMarker {
 
 impl WriteChat for WordStressMarker {
     /// Writes the primary (`ˈ`) or secondary (`ˌ`) stress marker.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self.marker_type {
             WordStressMarkerType::Primary => w.write_char('\u{02C8}'),
             WordStressMarkerType::Secondary => w.write_char('\u{02CC}'),
@@ -566,7 +569,7 @@ impl WordLengthening {
 
 impl WriteChat for WordLengthening {
     /// Writes the syllable lengthening marker(s).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         for _ in 0..self.count.get() {
             w.write_char(':')?;
         }
@@ -619,7 +622,7 @@ impl WordSyllablePause {
 
 impl WriteChat for WordSyllablePause {
     /// Writes the syllable pause marker (`^`).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('^')
     }
 }
@@ -669,7 +672,7 @@ impl WordCompoundMarker {
 
 impl WriteChat for WordCompoundMarker {
     /// Writes the compound boundary marker (`+`).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('+')
     }
 }
@@ -706,7 +709,7 @@ impl WordCliticBoundary {
 
 impl WriteChat for WordCliticBoundary {
     /// Writes the clitic boundary marker (`~`).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('~')
     }
 }

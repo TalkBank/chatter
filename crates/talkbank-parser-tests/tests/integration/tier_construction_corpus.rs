@@ -19,16 +19,21 @@ where
         + std::fmt::Debug
         + PartialEq
         + WriteChat
-        + From<String>
-        + for<'a> From<&'a str>
+        + TryFrom<String>
+        + for<'a> TryFrom<&'a str>
         + serde::Serialize
         + serde::de::DeserializeOwned,
+    <T as TryFrom<String>>::Error: std::fmt::Debug,
+    for<'a> <T as TryFrom<&'a str>>::Error: std::fmt::Debug,
 {
     assert_eq!(original.as_ref(), text);
     assert_eq!(&**original, text);
     assert_eq!(original.to_string(), text);
     assert_eq!(original.to_chat_string(), text);
-    for rebuilt in [T::from(text), T::from(text.to_owned())] {
+    for rebuilt in [
+        T::try_from(text).unwrap(),
+        T::try_from(text.to_owned()).unwrap(),
+    ] {
         assert_eq!(&rebuilt, original);
         let wire = serde_json::to_value(&rebuilt).expect("lexical JSON");
         assert_eq!(wire, serde_json::Value::String(text.to_owned()));
@@ -41,7 +46,7 @@ where
 /// converting these open lexical values does not certify CHAT validity.
 #[test]
 fn reference_morphology_views_preserve_pos_and_feature_identity() {
-    use talkbank_model::model::{MorFeature, MorWord};
+    use talkbank_model::model::MorFeature;
     use talkbank_parser_tests::repo_paths::workspace_root;
 
     let parser = TreeSitterParser::new().expect("parser");
@@ -60,16 +65,6 @@ fn reference_morphology_views_preserve_pos_and_feature_identity() {
             let mor = utterance.mor_tier().expect("authored morphology");
             for item in mor.items() {
                 for word in std::iter::once(&item.main).chain(item.post_clitics.iter()) {
-                    // Secondary-analysis rollback deliberately demotes only the
-                    // selected word's analysis. It is not CHAT admission.
-                    let mut fallback = word.clone();
-                    fallback.reset_to_l2_placeholder();
-                    let constructed = MorWord::l2_placeholder();
-                    assert_eq!(fallback, constructed);
-                    assert_eq!(fallback.pos.as_str(), "L2");
-                    assert_eq!(fallback.lemma.as_str(), "xxx");
-                    assert!(fallback.features.is_empty());
-                    assert_eq!(fallback.to_chat_string(), "L2|xxx");
                     let pos = &word.pos;
                     if path.ends_with("jpn-mlue-postcode.cha") {
                         assert_eq!(pos.as_str(), "n:let");
@@ -224,10 +219,12 @@ fn reference_header_text_adapters_preserve_authored_payloads() {
             match header.as_ref() {
                 Header::Participants { entries } => {
                     for entry in entries {
-                        if let Some(name) = &entry.name {
+                        if let Some(name) = entry.name() {
                             check!(ParticipantName, name);
                         }
-                        check!(ParticipantRole, &entry.role);
+                        if let Some(role) = entry.role() {
+                            check!(ParticipantRole, role);
+                        }
                     }
                 }
                 Header::ID(id) => {
@@ -256,7 +253,14 @@ fn reference_header_text_adapters_preserve_authored_payloads() {
                 Header::Warning { text } => check!(WarningText, text),
                 Header::Activities { activities } => check!(ActivitiesDescription, activities),
                 Header::Bck { bck } => check!(BackgroundDescription, bck),
-                Header::Page { page } => check!(PageNumber, page),
+                Header::Page { page } => {
+                    assert_lexical_adapters(page, page.as_str());
+                    assert_eq!(
+                        talkbank_model::model::PageNumber::new(page.as_str()).unwrap(),
+                        *page
+                    );
+                    witnessed.insert("PageNumber");
+                }
                 Header::Videos { videos } => check!(VideoSpec, videos),
                 Header::T { text } => check!(TDescription, text),
                 Header::Font { font } => check!(FontSpec, font),
@@ -387,11 +391,12 @@ fn reference_types_header_preserves_fields_and_refuses_nonstring_json() {
         ],
         ["long", "toyplay", "TD"],
     );
-    let rebuilt = TypesHeader::new(
+    let rebuilt = TypesHeader::parse(
         original.design.as_str(),
         original.activity.as_str(),
         original.group.as_str(),
-    );
+    )
+    .expect("reference Types atoms");
     assert_eq!(&rebuilt, original);
     assert_eq!(rebuilt.to_chat_string(), "@Types:\tlong, toyplay, TD");
     let wire = serde_json::to_value(&rebuilt).expect("header JSON");
@@ -403,14 +408,42 @@ fn reference_types_header_preserves_fields_and_refuses_nonstring_json() {
         serde_json::from_value::<TypesHeader>(wire.clone()).expect("header JSON roundtrip"),
         rebuilt
     );
+    let schema = serde_json::to_value(schemars::schema_for!(TypesHeader)).expect("Types schema");
+    let validator = jsonschema::validator_for(&schema).expect("valid Types schema");
+    assert!(validator.is_valid(&wire));
     for field in ["design", "activity", "group"] {
-        for invalid in [json!(null), json!(true), json!(1), json!([]), json!({})] {
+        for invalid in [
+            json!(null),
+            json!(true),
+            json!(1),
+            json!([]),
+            json!({}),
+            json!(""),
+            json!("toy play"),
+            json!("T-D"),
+            json!("TDé"),
+            json!("TD\n"),
+            json!("TD\t"),
+            json!("１"),
+        ] {
             let mut corrupted = wire.clone();
             corrupted[field] = invalid;
             assert!(
-                serde_json::from_value::<TypesHeader>(corrupted).is_err(),
-                "{field} must remain a string at the wire boundary"
+                !validator.is_valid(&corrupted),
+                "schema admitted {field}: {corrupted}"
             );
+            assert!(
+                serde_json::from_value::<TypesHeader>(corrupted).is_err(),
+                "{field} must remain a nonempty ASCII alphanumeric atom"
+            );
+        }
+        for custom in ["Custom42", "L2", "0007"] {
+            let mut admitted = wire.clone();
+            admitted[field] = json!(custom);
+            assert!(validator.is_valid(&admitted));
+            let decoded =
+                serde_json::from_value::<TypesHeader>(admitted.clone()).expect("custom atom");
+            assert_eq!(serde_json::to_value(decoded).unwrap(), admitted);
         }
     }
 }
@@ -442,8 +475,9 @@ fn reference_tiers_preserve_payload_through_public_construction_and_json() {
                 // Importers may construct from borrowed or owned payloads;
                 // neither path may normalize the authored nonvocal label.
                 for rebuilt in [
-                    talkbank_model::model::NonvocalLabel::new(label.as_str()),
-                    talkbank_model::model::NonvocalLabel::new(label.as_str().to_owned()),
+                    talkbank_model::model::NonvocalLabel::new(label.as_str()).unwrap(),
+                    talkbank_model::model::NonvocalLabel::try_from(label.as_str().to_owned())
+                        .unwrap(),
                 ] {
                     assert_eq!(&rebuilt, label);
                     assert_eq!(rebuilt.to_chat_string(), label.as_str());

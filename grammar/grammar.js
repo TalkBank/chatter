@@ -31,12 +31,14 @@ import {
   PAIRED_STRETCH_SYMBOLS,
   WORD_ATTACHED_SYMBOLS,
   ALL_MARKER_SYMBOLS,
+  SCOPED_MARKER_LABEL_SYMBOLS,
   EVENT_SEGMENT_FORBIDDEN_BASE,
   EVENT_SEGMENT_FORBIDDEN_COMMON,
   WORD_SEGMENT_FORBIDDEN_START_BASE,
   WORD_SEGMENT_FORBIDDEN_REST_BASE,
   WORD_SEGMENT_FORBIDDEN_COMMON,
 } from './src/generated_symbol_sets.js';
+import { PHON_TIER_PREFIXES } from './src/generated_phon_tier_labels.js';
 
 // Event descriptions should stop before CA symbols so constructs like &=smack°uh
 // are tokenized as event + CA-marked speech, not one giant event token.
@@ -1462,7 +1464,7 @@ export default grammar({
     // Label token for long features and nonvocal markers
     // Allows alphanumeric plus @ % _ - symbols
     // Used in: long_feature_begin, long_feature_end, nonvocal_begin, nonvocal_end, nonvocal_simple
-    long_feature_label: $ => /[A-Za-z0-9@%_-]+/,
+    long_feature_label: $ => new RegExp(`[${SCOPED_MARKER_LABEL_SYMBOLS}]+`),
 
     // Event description text after `&=`. Stops before characters in EVENT_SEGMENT_FORBIDDEN
     // (CA symbols, brackets, bullets, newlines) so that constructs like `&=smack°uh` are
@@ -2560,10 +2562,10 @@ export default grammar({
     // x-prefixed extension names Phon actually emits (%xmodsyl, ...). prec(2)
     // outranks the generic x_dependent_tier regex (prec(1)) at equal length, so
     // these route to their structured tier kinds instead of a generic %x tier.
-    modsyl_tier_prefix: $ => token(prec(2, choice('%modsyl', '%xmodsyl'))),
-    phosyl_tier_prefix: $ => token(prec(2, choice('%phosyl', '%xphosyl'))),
-    phoaln_tier_prefix: $ => token(prec(2, choice('%phoaln', '%xphoaln'))),
-    xphoint_tier_prefix: $ => token(prec(2, choice('%phoint', '%xphoint'))),
+    modsyl_tier_prefix: $ => token(prec(2, choice(...PHON_TIER_PREFIXES.modsyl))),
+    phosyl_tier_prefix: $ => token(prec(2, choice(...PHON_TIER_PREFIXES.phosyl))),
+    phoaln_tier_prefix: $ => token(prec(2, choice(...PHON_TIER_PREFIXES.phoaln))),
+    xphoint_tier_prefix: $ => token(prec(2, choice(...PHON_TIER_PREFIXES.xphoint))),
     par_tier_prefix: $ => token('%par'),
     spa_tier_prefix: $ => token('%spa'),
 

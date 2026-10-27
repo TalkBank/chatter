@@ -35,9 +35,15 @@ use crate::model::{
 /// Generates wor tier produces flat words with timing.
 #[test]
 fn generate_wor_tier_produces_flat_words_with_timing() -> Result<(), String> {
-    let mut timed = Word::simple(crate::Location::Unlocated, "hello");
+    let mut timed = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("hello")),
+    );
     timed.inline_bullet = Some(Bullet::new(crate::Location::Unlocated, 100, 200));
-    let plain = Word::simple(crate::Location::Unlocated, "world");
+    let plain = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("world")),
+    );
 
     let main = MainTier::new(
         crate::MainTierLocations::UNLOCATED,
@@ -72,7 +78,10 @@ fn generate_wor_tier_produces_flat_words_with_timing() -> Result<(), String> {
 /// Generates wor tier extracts words from groups.
 #[test]
 fn generate_wor_tier_extracts_words_from_groups() -> Result<(), String> {
-    let mut timed = Word::simple(crate::Location::Unlocated, "hello");
+    let mut timed = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("hello")),
+    );
     timed.inline_bullet = Some(Bullet::new(crate::Location::Unlocated, 50, 150));
 
     let group = Group::new(

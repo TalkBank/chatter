@@ -132,15 +132,13 @@ impl CodTier {
 
     /// Allocating helper that writes `%cod:\t...` into a `String`.
     pub fn to_chat(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_chat(w))
     }
 }
 
 impl WriteChat for CodTier {
     /// Serializes one full `%cod` line.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str("%cod:\t")?;
         self.content.write_chat(w)
     }

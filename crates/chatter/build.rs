@@ -1,41 +1,18 @@
-// Build scripts run at build time, not runtime. Panics here fail
-// `cargo build`, which is the intended behaviour for missing files
-// or invalid embedded data.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
-//! Build script, generates `BUILD_HASH` at compile time.
+//! Source-bound diagnostic stamp for the CLI version display.
 //!
-//! `BUILD_HASH` changes on every rebuild (even when `CARGO_PKG_VERSION`
-//! stays the same), enabling stale-binary detection during development.
+//! This identifies the CLI source tree and build-script time. It is not an
+//! executable checksum, dependency-closure identity, or Git provenance claim.
 
-fn main() {
-    let version = env!("CARGO_PKG_VERSION");
-
-    // Best-effort git describe, empty string if git is not available.
-    let git_describe = std::process::Command::new("git")
-        .args(["describe", "--always", "--dirty"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default();
-
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let root = std::path::PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").ok_or("missing CARGO_MANIFEST_DIR")?,
+    );
+    let source = talkbank_build::SourceFingerprint::read_tree(&root.join("src"))?;
     let epoch = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
+        .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
-
-    let build_hash = if git_describe.is_empty() {
-        format!("{version}-{epoch}")
-    } else {
-        format!("{version}-{git_describe}-{epoch}")
-    };
-
-    println!("cargo:rustc-env=BUILD_HASH={build_hash}");
-
-    // Rebuild when git state changes (commit, stage, checkout).
-    // These paths are relative to the manifest dir; we go up to the repo root.
-    for path in ["../../.git/HEAD", "../../.git/index"] {
-        println!("cargo:rerun-if-changed={path}");
-    }
+    let version = env!("CARGO_PKG_VERSION");
+    println!("cargo:rustc-env=BUILD_HASH={version}-source-{source}-{epoch}");
+    println!("cargo:rerun-if-changed=src");
+    Ok(())
 }

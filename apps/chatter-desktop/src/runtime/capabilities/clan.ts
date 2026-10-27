@@ -17,6 +17,7 @@ export function createClanCapability(
           line: sourceContext.location.line,
           col: sourceContext.location.column,
           byteOffset: sourceContext.location.start,
+          sourceRevision: sourceContext.sourceRevision,
           // Bare message, matching the CLI/TUI: CLAN locates the highlight
           // from this text.
           msg: error.message,

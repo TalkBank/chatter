@@ -15,13 +15,16 @@ Cargo compiles and runs that source; the book renders it without a second
 manually maintained copy. The surrounding explanations still require review
 when APIs or policies change.
 
-**Important:** some legacy tree-sitter fragment helpers are synthetic
-rather than semantically honest. They can inject fragment input into
-boilerplate CHAT text and parse the resulting synthetic file. Prefer
-full-file parsing for real tree-sitter use, and do not treat legacy
-fragment helpers as the long-term fragment API. For direct-parser
-fragment semantics, use direct-parser-native tests instead of treating
-synthetic wrappers as the oracle.
+**Fragment parsing:** both backends expose fragment operations through
+`ChatParser`. Tree-sitter parses standalone words directly; some dependent-tier
+helpers still place the input inside a minimal CHAT wrapper. That wrapper
+supplies parsing context, not evidence about the enclosing document. Use
+full-file parsing when you need document-level validation. For embedded words,
+`parse_word_with_context` accepts a `FragmentSemanticContext` for semantic
+options and a byte offset for source locations. Retain its diagnostics and
+handle `ParseOutcome::Rejected` explicitly. Fragment parsing alone does not
+produce the validated-document capability shown below, and a wrapper-based
+result is not an independent oracle for the other backend.
 
 ## Adding Dependencies
 
@@ -35,6 +38,7 @@ not yet published on crates.io, so depend on them from the public repo via git
 talkbank-model = { path = "../chatter/crates/talkbank-model" }
 talkbank-transform = { path = "../chatter/crates/talkbank-transform" }
 talkbank-parser = { path = "../chatter/crates/talkbank-parser" }
+talkbank-parser-re2c = { path = "../chatter/crates/talkbank-parser-re2c" }
 ```
 
 Registry publication is a [separate acceptance workflow](../../contributing/crates-io-publication.md).
@@ -51,7 +55,7 @@ project alongside it:
 cargo new --lib chat-example
 ```
 
-Add the three path dependencies above to its `Cargo.toml`. Paths are relative
+Add the four path dependencies above to its `Cargo.toml`. Paths are relative
 to that manifest, not the shell's current directory. Replace the generated
 `src/lib.rs` contents with the shared imports and sample inputs below, followed
 by the recipe functions you want to try. These are `#[test]` functions rather
@@ -69,8 +73,8 @@ From `chat-example`, run:
 cargo test -- --nocapture
 ```
 
-The first recipe below prints `Speaker: CHI` and passes. Copying all six recipes
-gives six passing tests; copying fewer can leave unused-import/sample warnings.
+The first recipe below prints `Speaker: CHI` and passes. Copying all eight recipes
+gives eight passing tests; copying fewer can leave unused-import/sample warnings.
 Use these synthetic inputs before trying research data. For a real file, read
 its UTF-8 text with `std::fs::read_to_string(path)?` in a result-returning
 function and pass that string to the same API. Do not overwrite the input as
@@ -186,6 +190,24 @@ this is not a claim that every optional policy or tier-alignment check ran.
 `parse_and_validate` returns a mutable `ChatFile` and may skip validation
 according to its options. Use `parse_validated_with_parser` for an immutable
 `ValidChatFile` whose policy cannot skip validation.
+Both `parse_validated_with_parser` and `parse_source_with_parser` accept either
+backend through `ChatParser`. Tree-sitter and re2c share the admission policy,
+`ParseProduct` recovery carrier and `ValidChatFile` result; neither backend
+owns these types. Custom `ChatParser` implementations must honor the trait's
+source, diagnostic and provenance contracts; accepting the trait does not prove
+a third-party parser implements CHAT correctly. The policy in this recipe
+includes tier alignment:
+
+```rust,ignore
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_peer_admission}}
+```
+
+`TranscriptName::Anonymous` is appropriate for these inline samples. Supply the
+actual transcript identity for file-derived text so name-dependent checks run.
+A successful admission retains warnings; the recipe prints them rather than
+silently discarding them. It does not assert identical diagnostics across
+backends. `TreeSitterParser::new()` is fallible; `Re2cParser::new()` is not.
+
 For an existing model, `talkbank_model::validate_chat_file_with_options` runs
 only the selected validation phase. It does not parse or certify recovery-free
 input: `Ok(())` can mean validation was skipped, and any emitted diagnostic
@@ -200,18 +222,53 @@ original bytes with their immutable model proof; `into_owned` keeps the binding
 across asynchronous storage. No constructor accepts separate text and model
 evidence. `into_product` relinquishes admission authority for recovery work,
 and `into_valid_file` relinquishes the original-byte binding before editing.
+The following test recipe demonstrates both source preservation and explicit
+parse refusal through both backends. The malformed sample loses its speaker
+marker; refusal retains diagnostics and any model the parser built. In an
+application, report that refusal and let the user repair the source. Do not
+substitute an empty document or a plausible default. The assertions and panic
+below are test expectations, not a production error handler.
+
+```rust,ignore
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_source_admission}}
+```
+
 Removing and regenerating tiers requires the separate replacement admission
 below; an unchanged source cannot claim a removal exemption.
 `chat_file.utterances()` returns an iterator over `&Utterance` derived
 from the file's `lines` (utterances are interleaved with headers and
 comments in source order).
 
-For batch workflows where parser construction overhead matters, reuse a
-single `TreeSitterParser` and call `parse_and_validate_with_parser`:
+The optional-validation `_with_parser` and `_named` APIs also accept either
+backend through `ChatParser`. Reuse a parser for a batch, as below. Convenience
+entry points that construct their own parser still select Tree-sitter; this is
+a default choice, not ownership of validity:
 
 ```rust,ignore
 {{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_reuse_parser}}
 ```
+
+These optional APIs return mutable `ChatFile` values and have distinct policies:
+
+| Entry point and options | Result policy |
+| --- | --- |
+| `parse_and_validate_with_parser`, parse-only | Reject parse errors; model validation is skipped. |
+| `parse_and_validate_streaming_with_parser`, parse-only | Return a model the parser recovered, while forwarding diagnostics. Recovery does not establish validity. |
+| Either optional API with validation enabled | Require the selected model checks; errors refuse the result even when the caller discards diagnostics. |
+| `parse_validated_with_parser` | Retain an immutable `ValidChatFile` and its required validation policy. |
+
+The named variants use the same policies and retain the supplied transcript
+identity. Internal producer failures and inability to build a model always
+refuse, including in streaming recovery mode. A parse rejection is not a
+parser-construction failure and never becomes an empty successful document.
+
+For diagnostic-preserving recovery without optional validation, use
+`ParseProduct::parse_streaming(&parser, source, &sink)`. It forwards diagnostics
+and keeps them in the returned product, including when the sink discards them.
+This is diagnostic streaming, not incremental input parsing. It retains
+in-memory diagnostics, and does not provide cancellation. Required-validation
+pipeline calls collect parse diagnostics before admission rather than promising
+immediate delivery of every parse diagnostic.
 
 `ParseValidateOptions` also exposes `with_alignment()` (implies
 `with_validation()`, additionally validates cross-tier alignment for
@@ -221,7 +278,7 @@ level directly (`CheckLevel::ParseOnly` or
 and
 `with_strict_linkers()` (enables the
 opt-in cross-utterance quotation and completion checks; `chatter
-validate --list-checks` marks each code it turns on as `[Opt-in]`).
+checks list` marks each code it turns on as `[Opt-in]`).
 
 ## Admission for dependent-tier regeneration
 
@@ -296,10 +353,10 @@ eligible for this adaptive state.
 
 ## Working with the Model
 
-`ChatFile` stores participants and language metadata as top-level fields
-populated from `@Participants` / `@ID` / `@Languages` headers during
-parsing. Utterances live in `lines` and are iterated via
-`chat_file.utterances()`.
+`ChatFile` derives participant and language metadata from its current typed
+headers. Use `declared_speakers()` for the roster, `all_participants()` for
+borrowed declaration/ID pairs and `language_declaration()` for the language
+header. Utterances live in `lines` and are iterated via `chat_file.utterances()`.
 
 ```rust,ignore
 {{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_model}}
@@ -376,7 +433,8 @@ implement `ErrorSink` directly for everything else.
 | Need | Crate |
 |------|-------|
 | Data model types, error types, `WriteChat`, `ErrorSink` | `talkbank-model` |
-| Tree-sitter CHAT parsing (low-level) | `talkbank-parser` |
+| Tree-sitter CHAT parsing (low-level, incremental support) | `talkbank-parser` |
+| re2c CHAT parsing (low-level, batch) | `talkbank-parser-re2c` |
 | Full pipeline (parse + validate + JSON, schema validation) | `talkbank-transform` |
 
 `talkbank-model` is the foundation, every other crate depends on it. If
@@ -391,10 +449,10 @@ surface is usually:
 
 | Batchalign3 need | Prefer |
 |------------------|--------|
-| Canonical full-file parsing | `talkbank-parser` |
+| Full-file parsing with retained diagnostics | `talkbank_model::ParseProduct::parse` with either backend |
 | Parse/validate contracts and typed model access | `talkbank-model` |
 | Alignment-aware downstream consumers (`align`, `compare`, `benchmark`) | `talkbank-model` alignment helpers plus the model AST |
-| Whole-pipeline parse+validate+convert | `talkbank-transform` |
+| Checked source/model admission with either backend | `talkbank-transform` |
 
 For batch workflows, keep parser instances reusable and keep alignment
 logic separate from parse semantics.

@@ -24,10 +24,21 @@ request uses a fixed buffer and can truncate long messages.
 Do not issue overlapping Windows sends: they share one `CLAN_Message.txt`
 without coordination, including across processes. Caller-local serialization
 does not prevent another process from replacing that file. The timeout parameter
-controls selected platform waits, not an end-to-end deadline; in particular,
-Windows `SendMessageA` has no timeout in this implementation.
+controls selected platform waits, not an end-to-end deadline. Windows window
+lookup and `SendMessageTimeoutA` share one post-publication budget (30 seconds
+for nonpositive values); launch waits separately. Positive durations exceeding
+4,294,967 seconds are rejected before publication, possibly after launch.
+Notification is attempted once with the remaining budget. Windows ignores the
+API timeout for a target on the calling thread's queue, so this is not a universal
+deadline. Timeout or transport failure does not establish whether CLAN acted.
 
 Availability and capability results are hints, not launch/delivery proofs.
+Windows message-file destinations must fit completely: an oversized
+`USERPROFILE` or Wine fallback is rejected before opening the message file.
+This refusal can follow the launch attempt; it does not make sends transactional.
+The bridge notifies the Windows CLAN window only after the message write and
+close both succeed. A failed write is still closed and reported as send failure;
+the destination may contain partial bytes, and no retry safety is implied.
 On Windows the bridge admits the registered `InstallPath` (status, `REG_SZ`
 type, termination, embedded NULs and `MAX_PATH` capacity) before probing or
 launching anything, and falls back to the default path only when no TalkBank

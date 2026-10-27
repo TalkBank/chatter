@@ -28,6 +28,8 @@
 
 mod accessors;
 mod core;
+mod languages;
+pub use languages::{DeclaredLanguages, DeclaredLanguagesRef, LanguageDeclarationError};
 pub mod transcript_name;
 mod validate;
 mod write;

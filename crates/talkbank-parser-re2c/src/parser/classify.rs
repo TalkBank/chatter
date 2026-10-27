@@ -7,179 +7,6 @@
 use crate::ast::*;
 use crate::token::{Token, TokenDiscriminants};
 
-/// Convert a `WordWithAnnotations` to the appropriate `ContentItem`.
-///
-/// The marker run is a LEFT-ASSOCIATIVE CHAIN: each marker scopes over
-/// everything to its left. So `dog [* p:w] [/]` is a retrace of an
-/// error-marked word, `dog [/] [* p:w]` is an error-marked retrace, and
-/// `a [//] [/]` is a retrace of a retrace. Folding one wrapper per marker is
-/// the meaning of the surface rather than an encoding of it.
-///
-/// This used to find the FIRST marker and split around it, which silently
-/// dropped every marker after it: `a [//] [/] a` lowered as if the `[/]` were
-/// not written. The tree-sitter side folds
-/// (`talkbank-parser`'s `content/marker_chain.rs`), so the two backends
-/// disagreed, and the parity oracle could not see it because it runs over the
-/// reference corpus, which is valid CHAT by construction, and this shape is
-/// invalid. Covered now by `equivalence_marker_chain`.
-pub fn word_to_content_item<'a>(word: WordWithAnnotations<'a>) -> ContentItem<'a> {
-    if !word.annotations.iter().any(|a| a.is_retrace()) {
-        return ContentItem::Word(word);
-    }
-    let mut word = word;
-    // grammar.js gives `word_with_optional_annotations` a replacement field
-    // separate from `base_annotations`, so a replacement is part of the word
-    // wherever it was written and never travels up the chain.
-    //
-    // `extract_if` rather than `partition`: it pulls the replacements OUT and
-    // leaves the marker run in the buffer it already owns, so the common
-    // `dog [/]` shape allocates nothing extra. `partition` allocated a fresh
-    // Vec for the markers on every word-attached retrace, which is ~1.9M of
-    // them corpus-wide, about 0.8% of the parse phase's total allocations.
-    let mut markers = std::mem::take(&mut word.annotations);
-    word.annotations = markers
-        .extract_if(.., |a| matches!(a, ParsedAnnotation::Replacement(_)))
-        .collect();
-
-    Chain::Word(word).fold(markers).into_content_item()
-}
-
-/// What a marker fold has built so far.
-///
-/// One accumulator for the seeds a marker run can start from (a word, an
-/// event, a bracketed group or quotation), rather than folding over `ContentItem`, whose
-/// other variants a marker run can never reach. That keeps `annotated_with`
-/// total with no catch-all.
-///
-/// Shared by the fold sites in this crate. They were separate
-/// algorithms: the word path folded, the event path partitioned markers out
-/// and so lost the annotation/marker interleaving, and the group path still
-/// split at the FIRST marker and dropped the rest, which is the exact bug the
-/// word path had been fixed for. Covered by `equivalence_marker_chain`.
-pub(crate) enum Chain<'a> {
-    /// A word, with whatever annotations have attached so far.
-    Word(WordWithAnnotations<'a>),
-    /// An event, with its annotations.
-    Event(crate::token::Extracted<'a>, Vec<ParsedAnnotation<'a>>),
-    /// A standalone `0` (an action), with its annotations. It joins the fold
-    /// so a retrace marker after it wraps it, as the tree-sitter backend
-    /// does; until 2026-10-19 the action kept its whole run as annotations
-    /// and the lowering, which reads only scoped ones, dropped the marker.
-    Action(&'a str, Vec<ParsedAnnotation<'a>>),
-    /// A bracketed group (its brackets, its contents), with its annotations.
-    Group(
-        Enclosure<'a>,
-        Vec<ContentItem<'a>>,
-        Vec<ParsedAnnotation<'a>>,
-    ),
-    /// A quotation, with its annotations.
-    Quotation(Quotation<'a>),
-    /// At least one retrace marker has wrapped the chain.
-    Wrapped(Retrace<'a>),
-}
-
-impl<'a> Chain<'a> {
-    /// Fold an ordered marker run onto this seed, one wrapper per marker.
-    pub(crate) fn fold(self, markers: impl IntoIterator<Item = ParsedAnnotation<'a>>) -> Self {
-        markers
-            .into_iter()
-            .fold(self, |chain, marker| match marker.retrace() {
-                Some((kind, lexeme)) => chain.retraced(kind, lexeme),
-                None => chain.annotated_with(marker),
-            })
-    }
-
-    /// Attach a non-retrace annotation to whatever the chain currently is.
-    fn annotated_with(self, annotation: ParsedAnnotation<'a>) -> Self {
-        match self {
-            Chain::Word(mut word) => {
-                word.annotations.push(annotation);
-                Chain::Word(word)
-            }
-            Chain::Event(event, mut annotations) => {
-                annotations.push(annotation);
-                Chain::Event(event, annotations)
-            }
-            Chain::Action(zero, mut annotations) => {
-                annotations.push(annotation);
-                Chain::Action(zero, annotations)
-            }
-            Chain::Group(enclosure, contents, mut annotations) => {
-                annotations.push(annotation);
-                Chain::Group(enclosure, contents, annotations)
-            }
-            Chain::Quotation(mut quotation) => {
-                quotation.annotations.push(annotation);
-                Chain::Quotation(quotation)
-            }
-            Chain::Wrapped(mut retrace) => {
-                retrace.annotations.push(annotation);
-                Chain::Wrapped(retrace)
-            }
-        }
-    }
-
-    /// Wrap the chain in a retrace whose marker was written as `marker`.
-    fn retraced(self, kind: RetraceKindParsed, marker: &'a str) -> Self {
-        // A group with no annotations of its own hands its brackets to the
-        // retrace, which is what `enclosure` records. Nesting it instead would
-        // serialize `<<a b>> [/]`, a bracket pair nobody wrote.
-        //
-        // SHARED SEMANTICS, written twice. `talkbank-parser`'s
-        // `content::marker_chain::retrace` decides the same thing on the model
-        // type, so no constructor can own it for both. Drift here is silent and
-        // corrupts output, so the enforcement is the cross-parser test
-        // `equivalence_marker_chain`; change one of these two and run it.
-        if let Chain::Group(enclosure, contents, annotations) = self {
-            if annotations.is_empty() {
-                return Chain::Wrapped(Retrace {
-                    body: RetraceBody::Enclosed(enclosure, contents),
-                    kind,
-                    marker,
-                    annotations: Vec::new(),
-                });
-            }
-            return Chain::Wrapped(Retrace {
-                body: RetraceBody::Single(Box::new(ContentItem::Group(Group {
-                    enclosure,
-                    contents,
-                    annotations,
-                }))),
-                kind,
-                marker,
-                annotations: Vec::new(),
-            });
-        }
-        Chain::Wrapped(Retrace {
-            body: RetraceBody::Single(Box::new(self.into_content_item())),
-            kind,
-            marker,
-            annotations: Vec::new(),
-        })
-    }
-
-    pub(crate) fn into_content_item(self) -> ContentItem<'a> {
-        match self {
-            Chain::Word(word) => ContentItem::Word(word),
-            Chain::Event(event, annotations) => {
-                if annotations.is_empty() {
-                    ContentItem::Event(event)
-                } else {
-                    ContentItem::AnnotatedEvent { event, annotations }
-                }
-            }
-            Chain::Action(zero, annotations) => ContentItem::Action { zero, annotations },
-            Chain::Group(enclosure, contents, annotations) => ContentItem::Group(Group {
-                enclosure,
-                contents,
-                annotations,
-            }),
-            Chain::Quotation(quotation) => ContentItem::Quotation(quotation),
-            Chain::Wrapped(retrace) => ContentItem::Retrace(retrace),
-        }
-    }
-}
-
 /// Convert an annotation token to a typed `ParsedAnnotation`, or `None`.
 ///
 /// THE list of which token is an annotation. It used to end in a `panic!`,
@@ -188,8 +15,21 @@ impl<'a> Chain<'a> {
 /// bound the two, so an annotation token added to the lexer and missed in one
 /// of them either panicked the parser or admitted a token the converters
 /// mishandle. `Option` says the same thing without a panic in a parser, and
-/// `is_annotation` is derived from it rather than repeating it.
-pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation<'a>> {
+/// consumers use its result rather than repeating it.
+pub(crate) fn token_to_parsed_annotation<'a>(
+    tok: Token<'a>,
+    source: crate::source_text::SourceText<'a>,
+) -> Option<ParsedAnnotation<'a>> {
+    use talkbank_model::model::{
+        CodeSwitchSpan, ContentAnnotation as A, ScopedAlternative, ScopedError, ScopedExplanation,
+        ScopedOverlapBegin, ScopedOverlapEnd, ScopedParalinguistic, ScopedPercentComment,
+    };
+    let scoped = |annotation, lexeme| {
+        Some(ParsedAnnotation::Scoped(ScopedAnnotationParsed::new(
+            annotation,
+            source.bind_slice(lexeme)?,
+        )))
+    };
     Some(match tok {
         Token::RetracePartial(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Partial, s),
         Token::RetraceComplete(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Complete, s),
@@ -197,50 +37,69 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
         Token::RetraceReformulation(s) => {
             ParsedAnnotation::Retrace(RetraceKindParsed::Reformulation, s)
         }
-        Token::UnknownAnnotation(_) => return None,
-        Token::ScopedStressing(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Stressing(s))
-        }
-        Token::ScopedContrastiveStressing(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::ContrastiveStressing(s))
-        }
-        Token::ScopedUncertain(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Uncertain(s))
-        }
-        Token::ExcludeMarker(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Exclude(s))
-        }
-        Token::CodeSwitchShortcut(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::CodeSwitchShortcut(s))
-        }
+        Token::ScopedStressing(s) => scoped(A::Stressing, s)?,
+        Token::ScopedContrastiveStressing(s) => scoped(A::ContrastiveStressing, s)?,
+        Token::ScopedUncertain(s) => scoped(A::Uncertain, s)?,
+        Token::ExcludeMarker(s) => scoped(A::Exclude, s)?,
+        Token::CodeSwitchShortcut(s) => scoped(A::CodeSwitch(CodeSwitchSpan::Shortcut), s)?,
         Token::CodeSwitchExplicit(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::CodeSwitchExplicit(s))
+            let Ok(code) = talkbank_model::LanguageCode::new(s.text()) else {
+                return None;
+            };
+            scoped(A::CodeSwitch(CodeSwitchSpan::Explicit(code)), s.lexeme())?
         }
-        Token::ErrorMarkerAnnotation(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Error(s))
-        }
+        Token::ErrorMarkerAnnotation(s) => scoped(
+            A::Error(ScopedError {
+                code: if s.text().is_empty() {
+                    None
+                } else {
+                    Some(s.text().into())
+                },
+            }),
+            s.lexeme(),
+        )?,
         Token::OverlapPrecedes(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapPrecedes(
-                crate::ast::ScopedOverlapIndex::from_lexer(s)?,
-            ))
+            let index = ScopedOverlapIndex::from_lexer(s)?;
+            scoped(
+                A::OverlapBegin(ScopedOverlapBegin {
+                    index: index.index(),
+                }),
+                index.lexeme(),
+            )?
         }
         Token::OverlapFollows(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapFollows(
-                crate::ast::ScopedOverlapIndex::from_lexer(s)?,
-            ))
+            let index = ScopedOverlapIndex::from_lexer(s)?;
+            scoped(
+                A::OverlapEnd(ScopedOverlapEnd {
+                    index: index.index(),
+                }),
+                index.lexeme(),
+            )?
         }
-        Token::ExplanationAnnotation(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Explanation(s))
-        }
-        Token::ParaAnnotation(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Paralinguistic(s))
-        }
-        Token::AltAnnotation(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Alternative(s))
-        }
-        Token::PercentAnnotation(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::PercentComment(s))
-        }
+        Token::ExplanationAnnotation(s) => scoped(
+            A::Explanation(ScopedExplanation {
+                text: s.text().into(),
+            }),
+            s.lexeme(),
+        )?,
+        Token::ParaAnnotation(s) => scoped(
+            A::Paralinguistic(ScopedParalinguistic {
+                text: s.text().into(),
+            }),
+            s.lexeme(),
+        )?,
+        Token::AltAnnotation(s) => scoped(
+            A::Alternative(ScopedAlternative {
+                text: s.text().into(),
+            }),
+            s.lexeme(),
+        )?,
+        Token::PercentAnnotation(s) => scoped(
+            A::PercentComment(ScopedPercentComment {
+                text: s.text().into(),
+            }),
+            s.lexeme(),
+        )?,
         Token::Langcode(s) => ParsedAnnotation::Langcode(s),
         Token::Postcode(s) => ParsedAnnotation::Postcode(s),
         _ => return None,
@@ -249,97 +108,111 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
 
 // ── Token classification (from grammar.js rule definitions) ─────
 
-pub fn is_terminator(d: Option<TokenDiscriminants>) -> bool {
-    d.and_then(crate::ast::TerminatorKindParsed::from_discriminant)
-        .is_some()
+pub(crate) fn is_terminator(discriminant: TokenDiscriminants) -> bool {
+    terminator_constructor(discriminant).is_some()
 }
 
-pub fn is_linker(d: Option<TokenDiscriminants>) -> bool {
-    matches!(
-        d,
-        Some(
-            TokenDiscriminants::LinkerLazyOverlap
-                | TokenDiscriminants::LinkerQuickUptake
-                | TokenDiscriminants::LinkerQuickUptakeOverlap
-                | TokenDiscriminants::LinkerQuotationFollows
-                | TokenDiscriminants::LinkerSelfCompletion
-                | TokenDiscriminants::CaNoBreakLinker
-                | TokenDiscriminants::CaTechnicalBreakLinker
-        )
-    )
+/// One lexical dispatch table produces shared terminators, requiring an actual
+/// span. Classification inspects the constructor without minting a placeholder
+/// model value or maintaining a parallel semantic enum.
+pub(crate) fn terminator_constructor(
+    discriminant: TokenDiscriminants,
+) -> Option<fn(talkbank_model::Span) -> talkbank_model::Terminator> {
+    use TokenDiscriminants as D;
+    use talkbank_model::Terminator;
+    Some(match discriminant {
+        D::Period => |span| Terminator::Period {
+            location: span.into(),
+        },
+        D::Question => |span| Terminator::Question {
+            location: span.into(),
+        },
+        D::Exclamation => |span| Terminator::Exclamation {
+            location: span.into(),
+        },
+        D::TrailingOff => |span| Terminator::TrailingOff {
+            location: span.into(),
+        },
+        D::Interruption => |span| Terminator::Interruption {
+            location: span.into(),
+        },
+        D::SelfInterruption => |span| Terminator::SelfInterruption {
+            location: span.into(),
+        },
+        D::InterruptedQuestion => |span| Terminator::InterruptedQuestion {
+            location: span.into(),
+        },
+        D::BrokenQuestion => |span| Terminator::BrokenQuestion {
+            location: span.into(),
+        },
+        D::QuotedNewLine => |span| Terminator::QuotedNewLine {
+            location: span.into(),
+        },
+        D::QuotedPeriodSimple => |span| Terminator::QuotedPeriodSimple {
+            location: span.into(),
+        },
+        D::SelfInterruptedQuestion => |span| Terminator::SelfInterruptedQuestion {
+            location: span.into(),
+        },
+        D::TrailingOffQuestion => |span| Terminator::TrailingOffQuestion {
+            location: span.into(),
+        },
+        D::BreakForCoding => |span| Terminator::BreakForCoding {
+            location: span.into(),
+        },
+        _ => return None,
+    })
 }
 
-pub fn is_pause(d: TokenDiscriminants) -> bool {
-    matches!(
-        d,
-        TokenDiscriminants::PauseLong
-            | TokenDiscriminants::PauseMedium
-            | TokenDiscriminants::PauseShort
-            | TokenDiscriminants::PauseTimed
-    )
+/// Resolve linker membership and meaning together at grammar admission.
+pub(crate) fn linker_kind(discriminant: TokenDiscriminants) -> Option<talkbank_model::LinkerKind> {
+    use talkbank_model::LinkerKind;
+    Some(match discriminant {
+        TokenDiscriminants::LinkerLazyOverlap => LinkerKind::LazyOverlapPrecedes,
+        TokenDiscriminants::LinkerQuickUptake => LinkerKind::OtherCompletion,
+        TokenDiscriminants::LinkerQuickUptakeOverlap => LinkerKind::QuickUptakeOverlap,
+        TokenDiscriminants::LinkerQuotationFollows => LinkerKind::QuotationFollows,
+        TokenDiscriminants::LinkerSelfCompletion => LinkerKind::SelfCompletion,
+        TokenDiscriminants::CaNoBreakLinker => LinkerKind::NoBreakTcuContinuation,
+        TokenDiscriminants::CaTechnicalBreakLinker => LinkerKind::TcuContinuation,
+        _ => return None,
+    })
 }
 
-pub fn is_word_start(d: TokenDiscriminants) -> bool {
-    matches!(
-        d,
-        TokenDiscriminants::WordSegment
-            | TokenDiscriminants::Zero
-            | TokenDiscriminants::PrefixFiller
-            | TokenDiscriminants::PrefixNonword
-            | TokenDiscriminants::PrefixFragment
-            | TokenDiscriminants::Shortening
-            | TokenDiscriminants::StressPrimary
-            | TokenDiscriminants::StressSecondary
-            | TokenDiscriminants::Ampersand
-            // CA markers can start a word (standalone or preceding text)
-            | TokenDiscriminants::CaBlockedSegments | TokenDiscriminants::CaConstriction
-            | TokenDiscriminants::CaHardening | TokenDiscriminants::CaHurriedStart
-            | TokenDiscriminants::CaInhalation | TokenDiscriminants::CaLaughInWord
-            | TokenDiscriminants::CaPitchDown | TokenDiscriminants::CaPitchReset
-            | TokenDiscriminants::CaPitchUp | TokenDiscriminants::CaSuddenStop
-            | TokenDiscriminants::CaUnsure | TokenDiscriminants::CaPrecise
-            | TokenDiscriminants::CaCreaky | TokenDiscriminants::CaSofter
-            | TokenDiscriminants::CaSegmentRepetition | TokenDiscriminants::CaFaster
-            | TokenDiscriminants::CaSlower | TokenDiscriminants::CaWhisper
-            | TokenDiscriminants::CaSinging | TokenDiscriminants::CaLowPitch
-            | TokenDiscriminants::CaHighPitch | TokenDiscriminants::CaLouder
-            | TokenDiscriminants::CaSmileVoice | TokenDiscriminants::CaBreathyVoice
-            | TokenDiscriminants::CaYawn
-    )
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source_text::SourceText;
+    use talkbank_model::Span;
 
-pub fn is_word_token(d: TokenDiscriminants) -> bool {
-    matches!(
-        d,
-        TokenDiscriminants::WordSegment
-            | TokenDiscriminants::Zero
-            | TokenDiscriminants::PrefixFiller
-            | TokenDiscriminants::PrefixNonword
-            | TokenDiscriminants::PrefixFragment
-            | TokenDiscriminants::Shortening
-            | TokenDiscriminants::Lengthening
-            | TokenDiscriminants::StressPrimary | TokenDiscriminants::StressSecondary
-            | TokenDiscriminants::CompoundMarker
-            | TokenDiscriminants::OverlapTopBegin | TokenDiscriminants::OverlapTopEnd | TokenDiscriminants::OverlapBottomBegin | TokenDiscriminants::OverlapBottomEnd
-            | TokenDiscriminants::SyllablePause
-            | TokenDiscriminants::Tilde
-            // Note: UnderlineBegin/End are NOT word tokens; they're content-level markers
-            | TokenDiscriminants::CaBlockedSegments | TokenDiscriminants::CaConstriction
-            | TokenDiscriminants::CaHardening | TokenDiscriminants::CaHurriedStart
-            | TokenDiscriminants::CaInhalation | TokenDiscriminants::CaLaughInWord
-            | TokenDiscriminants::CaPitchDown | TokenDiscriminants::CaPitchReset
-            | TokenDiscriminants::CaPitchUp | TokenDiscriminants::CaSuddenStop
-            | TokenDiscriminants::CaUnsure | TokenDiscriminants::CaPrecise
-            | TokenDiscriminants::CaCreaky | TokenDiscriminants::CaSofter
-            | TokenDiscriminants::CaSegmentRepetition | TokenDiscriminants::CaFaster
-            | TokenDiscriminants::CaSlower | TokenDiscriminants::CaWhisper
-            | TokenDiscriminants::CaSinging | TokenDiscriminants::CaLowPitch
-            | TokenDiscriminants::CaHighPitch | TokenDiscriminants::CaLouder
-            | TokenDiscriminants::CaSmileVoice | TokenDiscriminants::CaBreathyVoice
-            | TokenDiscriminants::CaYawn
-            | TokenDiscriminants::FormMarker
-            | TokenDiscriminants::WordLangSuffix
-            | TokenDiscriminants::PosTag
-            | TokenDiscriminants::Ampersand
-    )
+    #[test]
+    fn scoped_admission_retains_coordinates_and_rejects_foreign_bytes() {
+        let input = String::from("prefix [!]");
+        let source = SourceText::new(&input);
+        let lexeme = &input[7..];
+        let parsed = token_to_parsed_annotation(Token::ScopedStressing(lexeme), source)
+            .expect("source-owned annotation");
+        let scoped = parsed.scoped().expect("scoped annotation");
+        assert_eq!(scoped.span(), Span::new(7, 10));
+        assert_eq!(scoped.lexeme(), "[!]");
+        assert_eq!(parsed.span_in(source), Some(scoped.span()));
+        assert_eq!(parsed.source_text(source), Some(lexeme));
+
+        let foreign = String::from(lexeme);
+        assert!(token_to_parsed_annotation(Token::ScopedStressing(&foreign), source).is_none());
+        assert_eq!(parsed.span_in(SourceText::new(&foreign)), None);
+        assert_eq!(parsed.source_text(SourceText::new(&foreign)), None);
+
+        let at_zero =
+            token_to_parsed_annotation(Token::ScopedStressing(&foreign), SourceText::new(&foreign))
+                .expect("independently admitted annotation");
+        assert_eq!(parsed, at_zero, "equality remains independent of location");
+        let encoded = serde_json::to_value(scoped).expect("annotation serialization");
+        assert_eq!(encoded["lexeme"], "[!]");
+        assert_eq!(encoded.as_object().expect("annotation object").len(), 2);
+        assert_eq!(
+            encoded["annotation"],
+            serde_json::to_value(talkbank_model::ContentAnnotation::Stressing).unwrap()
+        );
+    }
 }

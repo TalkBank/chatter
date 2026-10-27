@@ -79,6 +79,22 @@ pub(crate) struct WrappedFragment<'input> {
     input_start: usize,
 }
 
+/// Wrapper-owned bytes that cannot complete a CRLF across the input boundary.
+/// A caller's final CR already terminates its line; a leading synthetic LF
+/// would otherwise become part of that same token and extend source locations.
+struct SeparatedSuffix<'suffix>(&'suffix str);
+
+impl<'suffix> SeparatedSuffix<'suffix> {
+    fn after(input: &str, suffix: &'suffix str) -> Self {
+        let suffix = if input.ends_with('\r') {
+            suffix.strip_prefix('\n').unwrap_or(suffix)
+        } else {
+            suffix
+        };
+        Self(suffix)
+    }
+}
+
 /// A wrapper paired with the tree produced from its own assembled source.
 /// Only `WrappedFragment::parse` constructs this association.
 pub(crate) struct ParsedFragment<'source, 'input> {
@@ -131,6 +147,7 @@ impl<'input> WrappedFragment<'input> {
         suffix: &str,
     ) -> Result<Self, ParseErrors> {
         let text = input.input();
+        let SeparatedSuffix(suffix) = SeparatedSuffix::after(text, suffix);
         let capacity = prefixes
             .iter()
             .try_fold(text.len(), |size, prefix| size.checked_add(prefix.len()))
@@ -295,8 +312,10 @@ impl<'input> WrappedFragment<'input> {
 
     /// Move a synthetic value into the caller's document coordinates. The
     /// only exit from [`Synthetic`], together with the clamping variants below.
-    pub(crate) fn rebase<T: SpanShift>(&self, value: Synthetic<T>) -> T {
-        self.input.rebase_from(value.0, self.input_start)
+    pub(crate) fn rebase<T: SpanShift>(&self, value: Synthetic<T>) -> Result<T, ParseErrors> {
+        self.input
+            .rebase_from(value.0, self.input_start)
+            .map_err(|error| ParseErrors::from(vec![error.into_diagnostic()]))
     }
 
     /// A synthetic span clamped to the caller's input and moved into the
@@ -304,8 +323,7 @@ impl<'input> WrappedFragment<'input> {
     /// collapses the span to the input start and the move lands it at the
     /// origin, which is the admitted whole range of an empty input.
     fn document_span(&self, span: Span) -> Span {
-        self.input
-            .rebase_from(self.clamp_to_input(span), self.input_start)
+        self.input.project_span_from(span, self.input_start)
     }
 
     /// A wrapper-coordinate span clamped to the caller's input, still in
@@ -336,20 +354,55 @@ impl<'input> WrappedFragment<'input> {
     /// the wrapper added lies outside it), then the whole tier moves into the
     /// caller's coordinates; an unlocated tier stays unlocated. A known empty
     /// diagnostic is separately placed by `document_span`.
-    pub(crate) fn rebase_tier(&self, tier: Synthetic<DependentTier>) -> DependentTier {
-        self.rebase(tier.map(|tier| tier.map_location(|span| self.clamp_to_input(span))))
+    pub(crate) fn rebase_tier(
+        &self,
+        tier: Synthetic<DependentTier>,
+    ) -> Result<DependentTier, ParseErrors> {
+        self.rebase(self.project_tier(tier))
+    }
+
+    /// Exclude the wrapper's label/newline before selecting a tier payload.
+    pub(crate) fn project_tier(&self, tier: Synthetic<DependentTier>) -> Synthetic<DependentTier> {
+        tier.map(|tier| tier.map_location(|span| self.clamp_to_input(span)))
+    }
+
+    /// An utterance may inherit the wrapper's final newline in container
+    /// extents. Project those extents only; every payload span remains checked.
+    pub(crate) fn rebase_utterance(
+        &self,
+        utterance: Synthetic<talkbank_model::SingleUtterance>,
+    ) -> Result<talkbank_model::SingleUtterance, ParseErrors> {
+        self.rebase(utterance.map(|single| {
+            single.map_utterance(|mut utterance| {
+                utterance.main = self.project_main(utterance.main);
+                utterance.dependent_tiers = utterance
+                    .dependent_tiers
+                    .into_iter()
+                    .map(|mut entry| {
+                        entry.tier = entry.tier.map_location(|span| self.clamp_to_input(span));
+                        entry
+                    })
+                    .collect();
+                utterance
+            })
+        }))
+    }
+
+    fn project_main(&self, mut main: MainTier) -> MainTier {
+        main.location = main.location.map(|span| self.clamp_to_input(span));
+        main.content.location = main.content.location.map(|span| self.clamp_to_input(span));
+        main
     }
 
     /// Project a main tier parsed inside a wrapper: its own extent and its
     /// content's extent are clamped to the caller's input (the synthetic line
     /// terminator lies outside it), then the whole tier moves; unlocated
     /// stays unlocated.
-    pub(crate) fn rebase_main_tier(&self, main: Synthetic<MainTier>) -> MainTier {
-        self.rebase(main.map(|mut main| {
-            main.location = main.location.map(|span| self.clamp_to_input(span));
-            main.content.location = main.content.location.map(|span| self.clamp_to_input(span));
-            main
-        }))
+    pub(crate) fn rebase_main_tier(
+        &self,
+        main: Synthetic<MainTier>,
+    ) -> Result<MainTier, ParseErrors> {
+        self.rebase(main.map(|main| self.project_main(main)))
     }
 
     /// Translate parser diagnostics before display enhancement rewrites labels.
@@ -409,9 +462,16 @@ mod tests {
     #[test]
     fn wrapper_rebasing_preserves_known_zero_width_locations() {
         let fragment = wrapped(&["prefix"], "word", "suffix", 200);
-        assert_eq!(fragment.rebase(Synthetic(Span::at(6))), Span::at(200));
         assert_eq!(
-            fragment.rebase(Synthetic(talkbank_model::Location::Unlocated)),
+            fragment
+                .rebase(Synthetic(Span::at(6)))
+                .expect("contained point"),
+            Span::at(200)
+        );
+        assert_eq!(
+            fragment
+                .rebase(Synthetic(talkbank_model::Location::Unlocated))
+                .expect("unlocated value"),
             talkbank_model::Location::Unlocated
         );
         assert_eq!(fragment.document_span(Span::at(6)), Span::at(200));

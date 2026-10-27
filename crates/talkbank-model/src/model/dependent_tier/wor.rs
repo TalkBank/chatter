@@ -287,12 +287,16 @@ impl WorTier {
 
 impl crate::model::WriteChat for WorTier {
     /// Serializes `%wor` items, inline timing bullets, and an optional terminator.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "%wor:\t")?;
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        w.write_str("%wor:\t")?;
 
         // Language code
         if let Some(ref lc) = self.language_code {
-            write!(w, "[- {}] ", lc.as_str())?;
+            {
+                w.write_str("[- ")?;
+                crate::model::WriteChat::write_chat(&lc.as_str(), w)?;
+                w.write_str("] ")
+            }?;
         }
 
         // Items: words with optional timing bullets, and separators.

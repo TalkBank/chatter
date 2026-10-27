@@ -33,6 +33,8 @@ use talkbank_model::model::{ChatFile, Line, SpeakerCode, TierSeparator};
 use crate::PipelineError;
 use crate::pipeline::parse_and_validate;
 use crate::serialize::to_chat_string;
+use crate::speaker_token::SpeakerToken;
+pub use crate::speaker_token::SpeakerTokenError;
 
 /// A half-open media time span in milliseconds (`[start_ms, end_ms)`).
 ///
@@ -64,15 +66,7 @@ impl TimeSpanMs {
 
     /// Where the span starts, in media milliseconds.
     ///
-    /// # Why these exist
-    ///
-    /// The fields are private so that [`Self::new`] is the only route in and
-    /// an inverted span cannot be built. That is right, but it left the type
-    /// WRITE-ONLY through the public API: `DiarizationTurn::span` is a public
-    /// field of a type a caller could hold and not read, so a downstream
-    /// consumer of `parse_turns_json` had to re-declare the same concept to
-    /// get the numbers back out. Reading cannot invert anything, so the
-    /// invariant is untouched.
+    /// Read-only access preserves the ordering admitted by [`Self::new`].
     #[must_use]
     pub fn start_ms(&self) -> u64 {
         self.start_ms
@@ -126,12 +120,39 @@ impl NonEmptyTimeSpanMs {
 /// One timestamped diarization segment: an anonymous track code and the
 /// span it speaks. The track code is the diarizer's own label (e.g.
 /// `PAR0`, `PAR1`, `PAR2`); role assignment is a downstream concern.
+///
+/// Track admission cannot be bypassed by replacing the stored code:
+/// ```compile_fail
+/// use talkbank_model::SpeakerCode;
+/// use talkbank_transform::rediarize::{DiarizationTurn, TimeSpanMs};
+/// let mut turn = DiarizationTurn::new(SpeakerCode::new("CHI"), TimeSpanMs::new(0, 1).unwrap()).unwrap();
+/// turn.track = SpeakerCode::new("A:B");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DiarizationTurn {
-    /// The diarizer's anonymous track label for this segment.
-    pub track: SpeakerCode,
-    /// The media time span this track speaks.
-    pub span: TimeSpanMs,
+    track: SpeakerToken,
+    span: TimeSpanMs,
+}
+
+impl DiarizationTurn {
+    /// Admit a track to the output speaker-token grammar and model constraints.
+    /// The span has already passed its own constructor's admission.
+    pub fn new(track: SpeakerCode, span: TimeSpanMs) -> Result<Self, SpeakerTokenError> {
+        Ok(Self {
+            track: SpeakerToken::admit(track)?,
+            span,
+        })
+    }
+
+    /// The admitted diarizer track label.
+    pub fn track(&self) -> &SpeakerCode {
+        self.track.as_code()
+    }
+
+    /// The admitted half-open time interval.
+    pub fn span(&self) -> TimeSpanMs {
+        self.span
+    }
 }
 
 /// Diarization turns admitted to the time-ordered transform boundary.
@@ -181,6 +202,8 @@ pub enum FlagReason {
     /// The utterance carries no media time bullet, so it cannot be placed
     /// on the diarization timeline.
     NoBullet,
+    /// The utterance retains rejected media source, so ownership is unavailable.
+    UnparsedBullet,
     /// The utterance has a bullet but no diarization turn overlaps it.
     NoOverlappingTurn,
 }
@@ -189,6 +212,7 @@ impl std::fmt::Display for FlagReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NoBullet => write!(f, "no time bullet"),
+            Self::UnparsedBullet => write!(f, "unparsed time bullet"),
             Self::NoOverlappingTurn => write!(f, "no overlapping diarization turn"),
         }
     }
@@ -256,6 +280,14 @@ pub enum TurnsJsonError {
         /// The underlying span inversion.
         source: InvertedSpan,
     },
+    /// A diarizer label cannot be introduced as a valid CHAT speaker token.
+    #[error("track at index {index}: {source}")]
+    InvalidTrack {
+        /// Zero-based index in the turns array.
+        index: usize,
+        /// Token admission failure, including model diagnostics when available.
+        source: SpeakerTokenError,
+    },
 }
 
 /// Raw serde mirror of the turns JSON. Unknown fields are rejected:
@@ -288,10 +320,10 @@ pub fn parse_turns_json(text: &str) -> Result<TurnsFile, TurnsJsonError> {
     for (index, turn) in raw.turns.into_iter().enumerate() {
         let span = TimeSpanMs::new(turn.start_ms, turn.end_ms)
             .map_err(|source| TurnsJsonError::InvertedTurn { index, source })?;
-        turns.push(DiarizationTurn {
-            track: SpeakerCode::new(&turn.track),
-            span,
-        });
+        turns.push(
+            DiarizationTurn::new(SpeakerCode::new(&turn.track), span)
+                .map_err(|source| TurnsJsonError::InvalidTrack { index, source })?,
+        );
     }
     Ok(TurnsFile {
         source: raw.source.map(DiarizationSource),
@@ -391,7 +423,7 @@ pub fn rediarize_content(
 ) -> Result<(String, RediarizeOutcome), PipelineError> {
     let chat = parse_and_validate(content, options)?;
     let errors = talkbank_model::ErrorCollector::new();
-    let (rewritten, outcome) = rediarize(&chat, timeline, contested_at, &errors);
+    let (rewritten, outcome) = rediarize(&chat, timeline, contested_at, &errors)?;
     if errors.has_errors() {
         return Err(PipelineError::Validation(errors.into_vec()));
     }
@@ -408,6 +440,9 @@ pub fn rediarize_content(
 /// [`ContestedThreshold`].
 ///
 /// The input `chat` is not mutated; a new `ChatFile` is built.
+/// Absent, rejected or repeated participant declarations return an error before
+/// attribution or header reconciliation begins. Recognized unparsed IDs also
+/// reject because their speaker references cannot be reconciled.
 /// Reconciled headers pass through the canonical participant join before the
 /// model is returned. Join diagnostics are reported to `errors`; the mutable
 /// result is not a validity certificate. Callers must decide their error policy.
@@ -416,7 +451,18 @@ pub fn rediarize(
     timeline: &DiarizationTimeline,
     contested_at: Option<ContestedThreshold>,
     errors: &(impl talkbank_model::ErrorSink + ?Sized),
+) -> Result<(ChatFile, RediarizeOutcome), crate::SpeakerRewriteError> {
+    let input = crate::speaker_headers::SpeakerRewriteInput::admit(chat)?;
+    Ok(rediarize_admitted(input, timeline, contested_at, errors))
+}
+
+fn rediarize_admitted(
+    input: crate::speaker_headers::SpeakerRewriteInput<'_>,
+    timeline: &DiarizationTimeline,
+    contested_at: Option<ContestedThreshold>,
+    errors: &(impl talkbank_model::ErrorSink + ?Sized),
 ) -> (ChatFile, RediarizeOutcome) {
+    let chat = input.file();
     let mut outcome = RediarizeOutcome::default();
     let mut used_tracks: HashSet<SpeakerCode> = HashSet::new();
     let mut rewritten: Vec<Line> = Vec::with_capacity(chat.lines.as_slice().len());
@@ -428,7 +474,10 @@ pub fn rediarize(
                 let index = utterance_index;
                 utterance_index += 1;
                 let bullet = u.main.content.bullet.as_ref();
-                match bullet.and_then(|b| TrackOwnership::of(b, timeline)) {
+                match bullet
+                    .and_then(talkbank_model::BulletState::as_parsed)
+                    .and_then(|b| TrackOwnership::of(b, timeline))
+                {
                     Some(ownership) => {
                         let track = ownership.winner().clone();
                         if contested_at.is_some_and(|at| at.contests(ownership.runner_up_share())) {
@@ -449,10 +498,14 @@ pub fn rediarize(
                         }
                     }
                     None => {
-                        let reason = if bullet.is_none() {
-                            FlagReason::NoBullet
-                        } else {
-                            FlagReason::NoOverlappingTurn
+                        let reason = match bullet {
+                            None => FlagReason::NoBullet,
+                            Some(talkbank_model::BulletState::Unparsed { .. }) => {
+                                FlagReason::UnparsedBullet
+                            }
+                            Some(talkbank_model::BulletState::Parsed(_)) => {
+                                FlagReason::NoOverlappingTurn
+                            }
                         };
                         outcome.flagged.push(FlaggedUtterance {
                             utterance_index: index,
@@ -475,13 +528,9 @@ pub fn rediarize(
         // participants remain meaningful even though no speech uses them yet.
         None => rewritten,
     };
-    let participants =
-        talkbank_model::model::participant::join::build_participants_from_lines(&reconciled)
-            .report_into(errors);
-    (
-        ChatFile::with_participants(reconciled, participants),
-        outcome,
-    )
+    talkbank_model::model::participant::join::build_participants_from_lines(&reconciled)
+        .report_diagnostics(errors);
+    (ChatFile::new(reconciled), outcome)
 }
 
 /// How a bullet's overlapped time divides between diarization tracks.
@@ -614,9 +663,9 @@ impl TrackOwnership {
             let Some(span) = utt.intersection(&turn.span) else {
                 continue;
             };
-            match held.iter_mut().find(|hold| hold.track == turn.track) {
+            match held.iter_mut().find(|hold| &hold.track == turn.track()) {
                 Some(hold) => hold.include(span),
-                None => held.push(TrackHold::first(turn.track.clone(), span)),
+                None => held.push(TrackHold::first(turn.track().clone(), span)),
             }
         }
         if held.is_empty() {
@@ -827,8 +876,7 @@ fn reconcile_headers(lines: Vec<Line>, NonEmptyTracks(used_tracks): &NonEmptyTra
                         {
                             kept.push(ParticipantEntry {
                                 speaker_code: track.clone(),
-                                name: tpl.name.clone(),
-                                role: tpl.role.clone(),
+                                details: tpl.details.clone(),
                             });
                         }
                     }
@@ -928,11 +976,49 @@ mod tests {
 @End
 ";
 
-    fn turn(track: &str, start_ms: u64, end_ms: u64) -> DiarizationTurn {
-        DiarizationTurn {
-            track: SpeakerCode::new(track),
-            span: TimeSpanMs::new(start_ms, end_ms).expect("valid span"),
+    #[test]
+    fn track_constructor_and_json_share_token_admission() {
+        let span = TimeSpanMs::new(3, 9).expect("ordered interval");
+        for track in ["KID", "A_B", "A+B", "A-B", "A'B", "kid", "123", "ABC1234"] {
+            let turn =
+                DiarizationTurn::new(SpeakerCode::new(track), span).expect("spellable track");
+            assert_eq!(turn.track().as_str(), track);
+            assert_eq!(turn.span(), span);
+            let file = parse_turns_json(
+                &serde_json::json!({"turns":[{
+                    "track": track, "start_ms": 3, "end_ms": 9
+                }]})
+                .to_string(),
+            )
+            .expect("wire admission");
+            assert_eq!(file.timeline().turns()[0].track(), turn.track());
+            assert_eq!(file.timeline().turns()[0].span(), span);
         }
+        for track in ["", "A:B"] {
+            assert!(matches!(
+                DiarizationTurn::new(SpeakerCode::new(track), span),
+                Err(SpeakerTokenError::Unspellable)
+            ));
+        }
+        let Err(SpeakerTokenError::Invalid(errors)) =
+            DiarizationTurn::new(SpeakerCode::new("CHILDREN"), span)
+        else {
+            panic!("retain model length diagnostics");
+        };
+        assert!(!errors.is_empty());
+        assert!(
+            errors
+                .iter()
+                .all(|error| error.code == talkbank_model::ErrorCode::InvalidSpeaker)
+        );
+    }
+
+    fn turn(track: &str, start_ms: u64, end_ms: u64) -> DiarizationTurn {
+        DiarizationTurn::new(
+            SpeakerCode::new(track),
+            TimeSpanMs::new(start_ms, end_ms).expect("valid span"),
+        )
+        .expect("valid track")
     }
 
     #[test]
@@ -949,7 +1035,8 @@ mod tests {
         ];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
+        let (out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink)
+            .expect("admitted participant declaration");
         let text = crate::serialize::to_chat_string(&out);
 
         // The third utterance moved off PAR1 onto PAR2.
@@ -1002,7 +1089,8 @@ mod tests {
         ];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (out, _outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
+        let (out, _outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink)
+            .expect("admitted participant declaration");
         let text = crate::serialize::to_chat_string(&out);
         assert!(
             text.contains("*PAR2:\thi yourself ."),
@@ -1038,7 +1126,8 @@ mod tests {
             &timeline,
             Some(threshold),
             &talkbank_model::NullErrorSink,
-        );
+        )
+        .expect("admitted participant declaration");
 
         assert_eq!(outcome.contested.len(), 1, "one utterance is contested");
         let contested = &outcome.contested[0];
@@ -1070,7 +1159,8 @@ mod tests {
         ];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (_out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
+        let (_out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink)
+            .expect("admitted participant declaration");
         assert!(
             outcome.contested.is_empty(),
             "with no threshold supplied, nothing is reported as contested"
@@ -1101,12 +1191,11 @@ mod tests {
                 }
                 match intervals
                     .iter_mut()
-                    .find(|(track, _)| track == turn.track.as_str())
+                    .find(|(track, _)| track == turn.track().as_str())
                 {
                     Some((_, spans)) => spans.push((start_ms, end_ms)),
-                    None => {
-                        intervals.push((turn.track.as_str().to_string(), vec![(start_ms, end_ms)]))
-                    }
+                    None => intervals
+                        .push((turn.track().as_str().to_string(), vec![(start_ms, end_ms)])),
                 }
             }
             let mut shares: Vec<(String, u64)> = intervals
@@ -1186,7 +1275,8 @@ mod tests {
         let file = parse_turns_json(json)?;
 
         let (out, _outcome) =
-            rediarize(&chat, file.timeline(), None, &talkbank_model::NullErrorSink);
+            rediarize(&chat, file.timeline(), None, &talkbank_model::NullErrorSink)
+                .expect("admitted participant declaration");
         let text = crate::serialize::to_chat_string(&out);
         assert!(
             text.contains("*PAR2:\thi yourself ."),
@@ -1213,7 +1303,8 @@ mod tests {
         let turns = vec![turn("PAR0", 0, 1000)];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (_out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
+        let (_out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink)
+            .expect("admitted participant declaration");
         assert_eq!(
             outcome.flagged.len(),
             2,

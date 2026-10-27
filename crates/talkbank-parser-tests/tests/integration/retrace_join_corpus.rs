@@ -145,7 +145,12 @@ fn reference_successor_attributes_and_tiers_follow_split_retrace_policy() {
                 other_speaker = Some(utterance.main.speaker.clone());
             }
             if timing.len() < 2
-                && let Some(bullet) = &utterance.main.content.bullet
+                && let Some(bullet) = utterance
+                    .main
+                    .content
+                    .bullet
+                    .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed)
             {
                 timing.push(bullet.clone());
             }
@@ -236,7 +241,7 @@ fn reference_successor_attributes_and_tiers_follow_split_retrace_policy() {
             })
             .zip([previous, successor])
         {
-            utterance.main.content.bullet = bullet.cloned();
+            utterance.main.content.bullet = bullet.cloned().map(Into::into);
         }
         let stats = join_dangling_retraces(&mut candidate, RetraceJoinScope::RepetitionOnly);
         assert_eq!(stats.joined_utterances, 1);
@@ -254,6 +259,7 @@ fn reference_successor_attributes_and_tiers_follow_split_retrace_policy() {
                 .content
                 .bullet
                 .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
                 .map(|bullet| (bullet.timing.start_ms, bullet.timing.end_ms)),
             expected
         );
@@ -298,5 +304,43 @@ fn reference_successor_attributes_and_tiers_follow_split_retrace_policy() {
         assert!(
             join_dangling_retraces(&mut candidate, RetraceJoinScope::RepetitionOnly).is_empty()
         );
+    }
+}
+
+#[test]
+fn rejected_bullets_refuse_retrace_join_without_source_loss() {
+    let parser = TreeSitterParser::new().expect("grammar");
+    let split = include_str!("../error_corpus/validation_errors/E370_split_retrace_2.cha");
+    let original = strict_parse(parser.parse_chat_file(split)).expect("authored joinable retrace");
+    let rejected = include_str!("../error_corpus/validation_errors/E360_3.cha");
+    let errors = ErrorCollector::new();
+    let rejected = parser.parse_chat_file_streaming(rejected, &errors);
+    let bullet = rejected
+        .utterances()
+        .next()
+        .expect("rejected utterance")
+        .main
+        .content
+        .bullet
+        .clone()
+        .expect("occupied slot");
+    for position in [0, 1] {
+        let mut candidate = original.clone();
+        let target = candidate
+            .lines
+            .as_mut_slice()
+            .iter_mut()
+            .filter_map(|line| match line {
+                Line::Utterance(utterance) => Some(utterance),
+                Line::Header { .. } => None,
+            })
+            .nth(position)
+            .expect("join endpoint");
+        target.main.content.bullet = Some(bullet.clone());
+        let before = candidate.to_chat_string();
+        let stats =
+            join_dangling_retraces(&mut candidate, RetraceJoinScope::AllSameSpeakerSuccessor);
+        assert_eq!(stats.joined_utterances, 0);
+        assert_eq!(candidate.to_chat_string(), before);
     }
 }

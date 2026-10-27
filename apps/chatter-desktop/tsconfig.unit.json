@@ -27,6 +27,7 @@
     "src/hooks/validationState.ts",
     "src/components/FileTree.tsx",
     "src/components/ErrorPanel.tsx",
-    "tests/unit/renderedResults.test.ts"
+    "tests/unit/renderedResults.test.ts",
+    "tests/unit/preferences.test.ts"
   ]
 }

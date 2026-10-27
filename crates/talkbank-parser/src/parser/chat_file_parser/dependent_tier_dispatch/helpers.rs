@@ -8,7 +8,7 @@ use crate::generated_traversal::{
     AsRawNode, RangeAdmittedChildren, Ranged, ReadableSlot, SelectedNonMissingKindSlot,
     SourceBound, SourceSlice, TextWithBulletsNode,
 };
-use crate::model::NonEmptyString;
+use crate::model::RecoveryText;
 use crate::model::TextTier;
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::analyze_dependent_tier_error;
@@ -76,7 +76,7 @@ fn read_tier_body_text<'tree, 'source>(
         Ranged<'source>,
     >,
     errors: &impl ErrorSink,
-) -> ParseOutcome<NonEmptyString> {
+) -> ParseOutcome<RecoveryText> {
     match body {
         ReadableSlot::Present(text) => decode_body_text(tier, *text, errors),
         ReadableSlot::Error(node) => {
@@ -158,7 +158,7 @@ where
 pub(super) fn read_optional_tier_body_raw_text<'tree, 'source, C>(
     tier: &RangeAdmittedChildren<'tree, 'source, C>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<Option<NonEmptyString>>
+) -> ParseOutcome<Option<RecoveryText>>
 where
     C: OptionalTierBody<'tree, 'source>,
 {
@@ -173,8 +173,8 @@ fn decode_body_text<'tree, 'source>(
     tier: SourceSlice<'tree, 'source>,
     body: SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<NonEmptyString> {
-    match NonEmptyString::new(body.text()) {
+) -> ParseOutcome<RecoveryText> {
+    match RecoveryText::new(body.text()) {
         Ok(content) => ParseOutcome::parsed(content),
         Err(_) => {
             let tier_node = tier.raw_node();

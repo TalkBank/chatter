@@ -29,9 +29,7 @@ use crate::WriteChat;
 impl Utterance {
     /// Serialize to an owned CHAT string.
     pub fn to_chat(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_chat(w))
     }
 }
 
@@ -43,7 +41,7 @@ impl WriteChat for Utterance {
     ///
     /// **IMPORTANT**: The CHAT format does NOT mandate any particular tier ordering.
     /// We preserve input order to avoid introducing diffs during roundtrip.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         // Write any preceding headers (e.g., @Comment, @Bg, @Eg)
         for header in &self.preceding_headers {
             header.write_chat(w)?;

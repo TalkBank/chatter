@@ -1,4 +1,4 @@
-//! `chatter debug overlap-audit`, exploratory CA overlap audit.
+//! `chatter inspect overlaps`, exploratory CA overlap audit.
 
 use std::path::{Path, PathBuf};
 
@@ -17,8 +17,8 @@ use super::report::OpenReport;
 pub fn run_overlap_audit(
     paths: &[PathBuf],
     database_path: Option<&Path>,
-) -> Result<(), AuditError> {
-    let (files, parser) = super::transcripts_and_parser(paths);
+) -> crate::exit_codes::CommandResult {
+    let (files, parser) = super::transcripts_and_parser(paths)?;
     let mut report = database_path.map(OpenReport::create).transpose()?;
 
     let mut files_processed = 0;

@@ -66,7 +66,7 @@ fn assert_main_tier_preserved(name: &str, words: &str) -> Result<(), TestError> 
     fs::write(&path, chat_file(words))?;
 
     let output = crate::common::chatter_cmd()
-        .arg("normalize")
+        .arg("format")
         .arg(&path)
         .output()?;
     let written = String::from_utf8_lossy(&output.stdout);

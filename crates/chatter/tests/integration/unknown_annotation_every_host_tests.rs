@@ -75,7 +75,7 @@ fn validate_host(
 ) -> Result<std::process::Output, TestError> {
     let source = format!("{HEADER}*CHI:\t{body}\n@End\n");
     let path = write_fixture(harness.home_dir(), &format!("{name}.cha"), &source)?;
-    harness.run_validate(&path, &["--parser", backend, "--force"])
+    harness.run_validate(&path, &["--parser", backend, "--refresh-cache"])
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn a_replaced_words_unknown_annotation_is_reported_once() -> Result<(), TestErro
     let path = write_fixture(harness.home_dir(), "replaced.cha", &source)?;
 
     for backend in BACKENDS {
-        let output = harness.run_validate(&path, &["--parser", backend, "--force"])?;
+        let output = harness.run_validate(&path, &["--parser", backend, "--refresh-cache"])?;
         let rendered = combined_output(&output);
         // The primary grammar rejects the unknown marker structurally (E207
         // spec, replacement variant). re2c refuses its utterance at its own

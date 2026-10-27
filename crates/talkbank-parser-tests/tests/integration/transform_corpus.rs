@@ -18,6 +18,9 @@ mod speaker_identification_contracts;
 #[path = "speaker_replacement_corpus.rs"]
 mod speaker_replacement_contracts;
 
+#[path = "speaker_mapping_corpus.rs"]
+mod speaker_mapping_contracts;
+
 #[path = "alignment_diagnostic_corpus.rs"]
 mod alignment_diagnostic_contracts;
 #[path = "build_chat_corpus.rs"]
@@ -48,6 +51,8 @@ mod json_contracts;
 mod language_contracts;
 #[path = "legacy_validation_corpus.rs"]
 mod legacy_validation_contracts;
+#[path = "marker_chain_corpus.rs"]
+mod marker_chain_contracts;
 #[path = "merge_corpus.rs"]
 mod merge_contracts;
 #[path = "overlap_sibling_corpus.rs"]
@@ -74,6 +79,8 @@ mod source_admission_contracts;
 mod splice_contracts;
 #[path = "split_metadata_corpus.rs"]
 mod split_metadata_contracts;
+#[path = "text_tier_recovery_corpus.rs"]
+mod text_tier_recovery_contracts;
 #[path = "transform_tier_corpus.rs"]
 mod tier_contracts;
 #[path = "utterance_split_corpus.rs"]
@@ -217,18 +224,21 @@ fn participant_specs_preserve_names_and_retain_valid_siblings() {
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
     for (example, expected, rejection) in [
-        (2, vec![("CHI", Some("Ruth"), "Target_Child")], None),
+        (2, vec![("CHI", Some("Ruth"), Some("Target_Child"))], None),
         (
             3,
             vec![
-                ("CHI", Some("Ruth"), "Target_Child"),
-                ("MOT", Some("Éva Marie"), "Mother"),
+                ("CHI", Some("Ruth"), Some("Target_Child")),
+                ("MOT", Some("Éva Marie"), Some("Mother")),
             ],
             None,
         ),
         (
             4,
-            vec![("CHI", Some("Ruth"), "Target_Child")],
+            vec![
+                ("CHI", Some("Ruth"), Some("Target_Child")),
+                ("MOT", None, None),
+            ],
             Some(ErrorCode::EmptyParticipantRole),
         ),
     ] {
@@ -250,8 +260,8 @@ fn participant_specs_preserve_names_and_retain_valid_siblings() {
             .map(|entry| {
                 (
                     entry.speaker_code.as_str(),
-                    entry.name.as_ref().map(|name| name.as_str()),
-                    entry.role.as_str(),
+                    entry.name().map(|name| name.as_str()),
+                    entry.role().map(|role| role.as_str()),
                 )
             })
             .collect();
@@ -262,14 +272,14 @@ fn participant_specs_preserve_names_and_retain_valid_siblings() {
 
         match rejection {
             Some(code) => {
-                // The retained spec observation also reports the now-orphaned
-                // MOT @ID. It must not turn that ID into a declared entry.
+                // MOT remains declared; its matching ID cannot invent the
+                // missing role or become spuriously orphaned.
                 assert_eq!(
                     diagnostics
                         .iter()
                         .map(|error| error.code)
                         .collect::<Vec<_>>(),
-                    vec![code, ErrorCode::OrphanIDHeader]
+                    vec![code]
                 );
                 let span = diagnostics[0].location.span().expect("located diagnostic");
                 assert_eq!(&source[span.start()..span.end()], "MOT");
@@ -480,8 +490,7 @@ fn media_specs_reconcile_recorded_timing_without_inventing_it() {
             (ExpectedTiming::Linked, MediaTimingState::Timed(file)) => {
                 assert!(
                     file.as_chat_file()
-                        .media
-                        .as_ref()
+                        .media_header()
                         .expect("linked media")
                         .status
                         .is_none()
@@ -791,13 +800,12 @@ fn reference_language_retagging_is_reversible_or_refuses_atomically() {
             fixture.path().display()
         );
         assert!(original.semantic_eq(&probe));
-        for from in original.languages.iter() {
+        for from in original
+            .language_declaration()
+            .expect("admitted declaration")
+            .iter()
+        {
             let mut unchanged = original.clone();
-            assert!(
-                !unchanged.languages.retag(from, from),
-                "the language-list owner must preserve an identity declaration"
-            );
-            assert!(original.semantic_eq(&unchanged));
             let identity = retag_language(&mut unchanged, from, from)
                 .expect("identity retagging needs no unsupported-span rewrite");
             assert!(
@@ -826,6 +834,9 @@ fn reference_language_retagging_is_reversible_or_refuses_atomically() {
                         fixture.path().display()
                     );
                     accepted += 1;
+                }
+                Err(RetagRefusal::Declaration(reason)) => {
+                    panic!("valid reference declaration rejected: {reason}")
                 }
                 Err(RetagRefusal::NamesCodeInSpan) => {
                     assert!(

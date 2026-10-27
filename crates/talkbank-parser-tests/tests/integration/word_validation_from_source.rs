@@ -54,7 +54,6 @@ use talkbank_model::validation::{Validate, ValidationContext};
 use talkbank_model::{ChatParser, ErrorCollector, ParseError, ParseOutcome};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
-use talkbank_parser_tests::from_source::SingleSpeaker;
 use talkbank_parser_tests::test_error::TestError;
 
 /// What a row asserts about one code.
@@ -122,18 +121,9 @@ const fn in_language(
 const ROWS: &[Row] = &[
     // Compound boundaries: a `+` needs a segment on each side.
     //
-    // E232's own shape does not parse under the CANONICAL parser. Measured
-    // 2026-09-08 through both routes: `parse_word("+word")` reports E330, and
-    // `*CHI:` + tab + `+word .` in a whole file reports E316 and E342. The
-    // re2c backend DOES build the `Word` and reports E232 on the same file,
-    // which is what `UNDEMONSTRATED` in `error_code_demonstration.rs` records
-    // and why the code stays there rather than being called unreachable. The
-    // rule's MESSAGE is pinned in `compound_marker_messages_name_the_fault`
-    // below through that backend; until 2026-09-08 it was pinned only by an
-    // `insta` snapshot over a hand-built `Word`, which `cargo insta accept`
-    // would have absorbed a regression into silently. The predecessor here
-    // asserted E232 against a `Word` it built itself and so could not see any
-    // of this.
+    // Literal leading plus is rejected before word validation. E232's
+    // authored stress-only first part reaches the model rule through both
+    // backends; the message contract below uses that admitted shape.
     row("+word", "E232", Expect::DoesNotParse),
     row("word+", "E233", Expect::Violates),
     row("un++do", "E233", Expect::Violates),
@@ -379,47 +369,101 @@ fn every_clean_word_validates_clean() -> Result<(), TestError> {
     Ok(())
 }
 
-/// The compound-marker messages say which end of the word is missing.
-///
-/// SURVIVES a type change, and says which category: rendered diagnostic
-/// TEXT, which no type pins. E233 is reached through the canonical parser;
-/// E232 (`+word`) is built by no tree-sitter parse (see the E232 rows) and is
-/// pinned here through the independent backend, over a whole file, which is
-/// the one route from CHAT text to that message.
+/// Model diagnostic text and grammar rejection are distinct contracts.
+/// E232's authored stress-only part reaches validation; literal leading plus
+/// may instead be rejected before a word exists (spec/errors/E232.md).
 #[test]
 fn compound_marker_messages_name_the_fault() -> Result<(), TestError> {
-    let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
-    let word = parser.parse_word("word+").map_err(|errors| {
-        TestError::Failure(format!("\"word+\" does not parse as a word: {errors:?}"))
-    })?;
-    let trailing = diagnostics(&word, None)
-        .into_iter()
-        .find(|e| e.code.as_str() == "E233")
-        .ok_or_else(|| TestError::Failure("\"word+\" reported no E233".into()))?;
-    assert_eq!(
-        trailing.message,
-        "Compound marker '+' cannot have an empty trailing part"
-    );
+    enum Claim {
+        Rejected,
+        Clean,
+        Message {
+            code: &'static str,
+            text: &'static str,
+        },
+    }
 
-    let source = SingleSpeaker::english("*CHI:\t+word .").source();
-    let errors = ErrorCollector::new();
-    let ParseOutcome::Parsed(mut file) = Re2cParser::new().parse_chat_file(&source, 0, &errors)
-    else {
-        return Err(TestError::Failure(
-            "the independent backend rejected the whole file around \"+word\"".into(),
-        ));
-    };
-    file.validate_with_alignment(&errors, TranscriptName::Anonymous);
-    let leading = errors
-        .into_vec()
-        .into_iter()
-        .find(|e| e.code.as_str() == "E232")
-        .ok_or_else(|| {
-            TestError::Failure("the independent backend reported no E232 for \"+word\"".into())
-        })?;
-    assert_eq!(
-        leading.message,
-        "Compound marker '+' has no preceding spoken part"
-    );
+    fn check(parser: &impl ChatParser) {
+        let cases = [
+            (
+                include_str!("../error_corpus/validation_errors/E232_1.cha"),
+                Claim::Rejected,
+            ),
+            (
+                include_str!("../error_corpus/validation_errors/E232_2.cha"),
+                Claim::Clean,
+            ),
+            (
+                include_str!("../error_corpus/validation_errors/E232_3.cha"),
+                Claim::Message {
+                    code: "E232",
+                    text: "Compound marker '+' has no preceding spoken part",
+                },
+            ),
+            (
+                include_str!("../error_corpus/validation_errors/E233_8.cha"),
+                Claim::Message {
+                    code: "E233",
+                    text: "Compound marker '+' cannot have an empty trailing part",
+                },
+            ),
+            (
+                include_str!("../error_corpus/validation_errors/E233_4.cha"),
+                Claim::Clean,
+            ),
+            (
+                include_str!("../error_corpus/validation_errors/E233_2.cha"),
+                Claim::Rejected,
+            ),
+            (
+                include_str!("../error_corpus/validation_errors/E233_6.cha"),
+                Claim::Message {
+                    code: "E233",
+                    text: "Compound markers '+' enclose an empty spoken part",
+                },
+            ),
+            (
+                include_str!("../error_corpus/validation_errors/E233_7.cha"),
+                Claim::Clean,
+            ),
+        ];
+        for (source, claim) in cases {
+            let errors = ErrorCollector::new();
+            match parser.parse_chat_file(source, 0, &errors) {
+                ParseOutcome::Parsed(mut file) => {
+                    file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+                }
+                ParseOutcome::Rejected => assert!(
+                    matches!(claim, Claim::Rejected),
+                    "an admitted compound example must produce a model: {source}"
+                ),
+            }
+            let diagnostics = errors.into_vec();
+            match claim {
+                Claim::Rejected => assert!(
+                    diagnostics
+                        .iter()
+                        .any(|error| error.severity == talkbank_model::Severity::Error),
+                    "invalid compound must report an error: {diagnostics:?}"
+                ),
+                Claim::Clean => assert!(
+                    diagnostics.is_empty(),
+                    "legal compound must remain clean: {diagnostics:?}"
+                ),
+                Claim::Message { code, text } => {
+                    let matching: Vec<_> = diagnostics
+                        .iter()
+                        .filter(|error| error.code.as_str() == code)
+                        .collect();
+                    assert_eq!(matching.len(), 1, "{source}: {diagnostics:?}");
+                    assert_eq!(matching[0].message, text);
+                }
+            }
+        }
+    }
+
+    let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
+    check(&parser);
+    check(&Re2cParser::new());
     Ok(())
 }

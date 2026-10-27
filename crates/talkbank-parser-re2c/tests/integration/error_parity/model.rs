@@ -114,9 +114,7 @@ impl fmt::Display for BackendReport {
                 write!(
                     f,
                     "{} {:?} {:?}",
-                    finding.code,
-                    finding.severity,
-                    finding.location.span().expect("located diagnostic")
+                    finding.code, finding.severity, finding.location
                 )?;
             }
             f.write_str("] ")?;
@@ -296,6 +294,7 @@ mod tests {
             case(canonical_error(), failed()),
         ] {
             assert!(matches!(report.detection(), Detection::ToolFailure { .. }));
+            assert!(report.detail().contains("Unlocated"));
         }
     }
 }

@@ -21,9 +21,9 @@ fn language_specs_preserve_merge_admission_and_input_identity() {
     let multiple = load("E507_6.cha");
     let retained = single.unique_utterance_speakers();
     for (fixture, problem) in [
-        ("E504_2.cha", LanguageDeclarationProblem::Missing),
+        ("E504_2.cha", LanguageDeclarationProblem::Absent),
         ("E501_3.cha", LanguageDeclarationProblem::Repeated),
-        ("E507_2.cha", LanguageDeclarationProblem::Empty),
+        ("E507_2.cha", LanguageDeclarationProblem::Rejected),
     ] {
         let invalid = load(fixture);
         let original = invalid.to_chat_string();

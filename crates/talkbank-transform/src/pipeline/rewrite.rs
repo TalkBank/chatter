@@ -10,8 +10,8 @@
 //!
 //! # Which rewriters use THIS, and which use a different proof
 //!
-//! Only `normalize`. Its contract is "reshape, lose nothing", so "did a line
-//! vanish" is exactly its question.
+//! `normalize` and LSP whole-document formatting. Their contract is "reshape,
+//! lose nothing", so "did a line vanish" is exactly their question.
 //!
 //! The three EDITING rewriters (`chatter debug fix-s`, `retag-language` and
 //! `join-retrace`) need a different one, and trying to share this was a real
@@ -99,6 +99,32 @@ fn consume_witness<'a>(mut remaining: &'a str, needle: &str) -> Option<&'a str> 
     None
 }
 
+/// CHAT accepts LF, CRLF and CR. Consume CRLF as one line boundary so
+/// a refusal keeps the original physical line number, without copying source.
+fn source_lines(mut source: &str) -> impl Iterator<Item = &str> {
+    std::iter::from_fn(move || {
+        if source.is_empty() {
+            return None;
+        }
+        match source.find(['\r', '\n']) {
+            Some(end) => {
+                let line = &source[..end];
+                let ending = source.as_bytes()[end];
+                source = &source[end + 1..];
+                if ending == b'\r' && source.starts_with('\n') {
+                    source = &source[1..];
+                }
+                Some(line)
+            }
+            None => {
+                let line = source;
+                source = "";
+                Some(line)
+            }
+        }
+    })
+}
+
 impl Rewrite {
     /// Serialize `model`, requiring ordered, disjoint source-line witnesses.
     ///
@@ -132,7 +158,7 @@ impl Rewrite {
         // One scratch buffer, reused, so the needle costs no allocation after
         // the first line.
         let mut needle = String::new();
-        for (index, source_line) in source.lines().enumerate() {
+        for (index, source_line) in source_lines(source).enumerate() {
             needle.clear();
             strip_whitespace_into(source_line, &mut needle);
             // A blank or whitespace-only source line carries no content, so
@@ -170,6 +196,21 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::{consume_witness, strip_whitespace_into};
+
+    #[test]
+    fn source_line_numbers_follow_all_chat_line_endings() {
+        for ending in ["\n", "\r\n", "\r"] {
+            let source = ["@Begin", "", "*CHI:\thello .", "@End"].join(ending);
+            assert_eq!(
+                super::source_lines(&source).collect::<Vec<_>>(),
+                ["@Begin", "", "*CHI:\thello .", "@End"]
+            );
+        }
+        assert_eq!(
+            super::source_lines("a\r\nb\rc\n").collect::<Vec<_>>(),
+            ["a", "b", "c"]
+        );
+    }
 
     /// The one owner's rule, as a value, for readable assertions.
     fn without_whitespace(line: &str) -> String {

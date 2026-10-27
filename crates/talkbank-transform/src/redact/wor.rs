@@ -101,17 +101,18 @@ fn agreement(main: &MainTier, wor: &WorTier) -> WorAgreement {
 }
 
 /// Each `%wor` word becomes its paired main-tier word's display text, now
-/// that word's placeholders (`w1w1` for a sanitized compound): the form a
+/// that word's placeholders (`wordaworda` for a sanitized compound): the form a
 /// generated `%wor` carries and the form corroboration compares. Its
 /// bullet stays. An untranscribed marker written on `%wor` passes through
 /// as it does on the main tier, keeping the slot it holds in the pairing.
 fn take_main_placeholders(wor: &mut WorTier, main: &MainTier, state: &mut PlaceholderState) {
     // The binding borrows the tier, so the paired texts are taken before
     // the tier is rewritten; one small string per `%wor` word.
-    let paired: Vec<smol_str::SmolStr> = match main.wor_projection().bind_present_timing(wor) {
+    let paired: Vec<talkbank_model::WordText> = match main.wor_projection().bind_present_timing(wor)
+    {
         Ok(matched) => matched
-            .pairs()
-            .map(|(main_word, _wor_word)| smol_str::SmolStr::new(main_word.cleaned_text()))
+            .main_display_texts()
+            .map(|text| talkbank_model::WordText::from(text.into_owned()))
             .collect(),
         // Sanitizing changes no word count, so a tier decided Corroborated
         // binds count-matched again; count drift still takes the

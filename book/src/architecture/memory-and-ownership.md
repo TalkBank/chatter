@@ -53,7 +53,7 @@ workload and dependency versions before making such claims.
 
 ## Parser and model ownership
 
-The primary parser's `TreeSitterParser` stores a tree-sitter `Parser` in a
+The Tree-sitter backend's `TreeSitterParser` stores a tree-sitter `Parser` in a
 `RefCell`. Its methods can take a shared receiver while borrowing that parser
 mutably during an operation. A shared receiver is not permission to parse
 concurrently through the same instance. Reuse the established per-worker or

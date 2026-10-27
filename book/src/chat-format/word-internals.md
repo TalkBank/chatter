@@ -195,9 +195,9 @@ one-to-one node mapping.
 
 | Grammar node | `WordContent` variant | Rust type | Example |
 |---|---|---|---|
-| `word_segment` | `Text` | `WordText(NonEmptyString)` | `hello`, `want` |
-| folded body of a `@u` word | `Phonetic` | `WordPhonetic(NonEmptyString)` | `rɛmbə˞` in `rɛmbə˞@u` |
-| `shortening` | `Shortening` | `WordShortening(NonEmptyString)` | `(be)` in `(be)cause` |
+| `word_segment` | `Text` | `WordText(RecoveryText)` | `hello`, `want` |
+| folded body of a `@u` word | `Phonetic` | `WordPhonetic(RecoveryText)` | `rɛmbə˞` in `rɛmbə˞@u` |
+| `shortening` | `Shortening` | `WordShortening(RecoveryText)` | `(be)` in `(be)cause` |
 | `overlap_point` | `OverlapPoint` | `OverlapPoint` | `⌈`, `⌉2` |
 | `ca_element` | `CAElement` | `CAElement` | `↑`, `↓` |
 | `ca_delimiter` | `CADelimiter` | `CADelimiter` | `∆`, `°` |

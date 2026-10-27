@@ -11,6 +11,9 @@ use crate::extract;
 /// A proposed boundary that cannot preserve the producing CHAT structure.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SplitRefusal {
+    /// Rejected media source cannot be apportioned as numeric timing.
+    #[error("split source contains unparsed media timing")]
+    UnparsedTiming,
     /// The selected domain and assignment vector do not describe the same slots.
     #[error("split assignments have {actual} slots; this source has {expected}")]
     SlotCount {
@@ -170,6 +173,10 @@ impl<'source> UtteranceSplitPlan<'source> {
         assignments: &[usize],
         word_to_content: Vec<usize>,
     ) -> Result<Self, SplitRefusal> {
+        if source.main.content.has_unparsed_bullets() {
+            return Err(SplitRefusal::UnparsedTiming);
+        }
+
         let groups = ContentItemGroups::admit(source, &word_to_content, assignments)?;
         Ok(Self {
             content_groups: groups,
@@ -303,11 +310,16 @@ const XCOREF_LABEL: &str = "xcoref";
 
 fn policy_for_tier(tier: &DependentTier) -> TierSplitPolicy {
     match tier {
+        DependentTier::UnparsedText(_) => TierSplitPolicy::Drop,
+
         // Per-word timing: partitionable by word index.
         DependentTier::Wor(_) => TierSplitPolicy::Partition,
 
         // Context-dependent or reference-structured: drop, regenerate downstream.
-        DependentTier::Mor(_) | DependentTier::Gra(_) => TierSplitPolicy::Drop,
+        DependentTier::Mor(_)
+        | DependentTier::UnparsedMor(_)
+        | DependentTier::Gra(_)
+        | DependentTier::UnparsedGra(_) => TierSplitPolicy::Drop,
 
         // Word-positional but no partition implementation yet. Dropping is
         // honest: attaching to first child would claim phonological / sign
@@ -318,7 +330,12 @@ fn policy_for_tier(tier: &DependentTier) -> TierSplitPolicy {
         | DependentTier::Sin(_)
         | DependentTier::Modsyl(_)
         | DependentTier::Phosyl(_)
-        | DependentTier::Phoaln(_) => TierSplitPolicy::Drop,
+        | DependentTier::Phoaln(_)
+        | DependentTier::UnparsedPho(_)
+        | DependentTier::UnparsedMod(_)
+        | DependentTier::UnparsedSin(_)
+        | DependentTier::UnparsedWor(_)
+        | DependentTier::UnparsedPhoaln(_) => TierSplitPolicy::Drop,
 
         // `%xphoint` indexes INTO `%pho`: it is per-phone time intervals
         // segmenting each `%pho` word. `%pho` is dropped two arms above, so
@@ -326,7 +343,7 @@ fn policy_for_tier(tier: &DependentTier) -> TierSplitPolicy {
         // phones that are no longer in that utterance, and nothing on the
         // rest. It reached `AttachFirst` through the wildcard this match used
         // to end with, which is the failure the arm above is written to avoid.
-        DependentTier::Xphoint(_) => TierSplitPolicy::Drop,
+        DependentTier::Xphoint(_) | DependentTier::UnparsedXphoint(_) => TierSplitPolicy::Drop,
 
         // Free-form / loosely-structured utterance-level annotations:
         // preserve on first child rather than silently lose.
@@ -488,7 +505,7 @@ fn rebuild_split<'source, Affiliation>(
         // `split_main_timing_evidence`).
         SplitMainTimingEvidence::CompletePerChild(CompletePerChildMainTiming { bullets }) => {
             for (child, bullet) in result.as_mut_slice().iter_mut().zip(bullets) {
-                child.main.content.bullet = Some(bullet);
+                child.main.content.bullet = Some(bullet.into());
             }
         }
         SplitMainTimingEvidence::Unmeasured => {}

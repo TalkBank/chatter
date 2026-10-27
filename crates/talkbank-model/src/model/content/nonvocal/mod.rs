@@ -11,10 +11,9 @@
 
 mod begin;
 mod end;
-mod label;
 mod simple;
 
+pub use super::scoped_label::NonvocalLabel;
 pub use begin::NonvocalBegin;
 pub use end::NonvocalEnd;
-pub use label::NonvocalLabel;
 pub use simple::NonvocalSimple;

@@ -245,11 +245,12 @@ artifacts and run the relevant claim contracts in the same change.
 Deferred code status is not a count of missing validation rules. Run
 `cargo run --manifest-path spec/Cargo.toml --bin spec_status -- --deferred`
 to see each authored claim beside its observed codes. This view distinguishes
-verified legal/subsumption claims, contradicted claims and planned violation
-claims using the claim's shared evaluator. The separate deferred-spec regression
-test enforces legal/subsumption claims even when their code is not
-implemented. A verified alternate diagnostic does not reactivate that code;
-an observed emission of the deferred code instead requires status review.
+verified legal/subsumption claims and planned violation claims using the claim's
+shared evaluator. The command and deferred-spec regression test share one report
+admission: a contradicted claim or observed deferred code refuses the report,
+names the affected example and makes the command exit nonzero. A verified
+alternate diagnostic does not reactivate that code; an observed emission of
+the deferred code instead requires status review.
 
 ### `source` names the transcript
 

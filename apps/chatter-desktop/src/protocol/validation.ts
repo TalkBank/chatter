@@ -77,11 +77,16 @@ export interface ValidationStats {
   roundtripFailed: number;
 }
 
-/** A parse diagnostic paired with pre-rendered miette HTML from Rust */
+/** Rust-issued content identity; the frontend forwards it unchanged. */
+export interface SourceRevision {
+  readonly digest: readonly number[];
+}
+
 export type DiagnosticSourceContext =
-  | { kind: "available"; location: SourceContextLocation }
+  | { kind: "available"; location: SourceContextLocation; sourceRevision: SourceRevision }
   | { kind: "unavailable"; reason: string };
 
+/** A parse diagnostic paired with pre-rendered miette HTML from Rust */
 export interface RenderedDiagnostic {
   /** Untouched evidence; labels and location keep absolute file offsets. */
   error: ParseError;

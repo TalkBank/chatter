@@ -41,9 +41,11 @@ use talkbank_transform::splice::{
 };
 
 mod postcheck;
+use super::publication::SourceSnapshot;
+pub(super) use postcheck::PostCheckedFix;
+use postcheck::verify_fix_result;
 #[cfg(test)]
 use postcheck::{FixVerificationError, check_fix_result, code_counts};
-use postcheck::{PostCheckedFix, verify_fix_result};
 
 use super::debug::die;
 use crate::cli::FixMode;
@@ -77,14 +79,14 @@ pub fn run_fix(
     mode: FixMode,
     codes: &[ErrorCode],
     alignment: talkbank_model::validation::AlignmentValidation,
-) -> FixOutcome {
-    let files = super::inputs::readable_transcripts(paths)
-        .unwrap_or_else(|refusal| die(&refusal.to_string()));
+) -> crate::exit_codes::CommandResult<FixOutcome> {
+    let files =
+        super::inputs::readable_transcripts(paths).map_err(|refusal| die(&refusal.to_string()))?;
 
     let requested_codes = requested_codes(codes);
 
     let parser = TreeSitterParser::new()
-        .unwrap_or_else(|e| die(&format!("parser initialization failed: {e:?}")));
+        .map_err(|e| die(&format!("parser initialization failed: {e:?}")))?;
 
     let mut total_skipped = 0usize;
     let mut unreadable = 0usize;
@@ -92,7 +94,7 @@ pub fn run_fix(
 
     for stored in files {
         let path = stored.path();
-        let source = match std::fs::read_to_string(path) {
+        let source = match SourceSnapshot::read(path) {
             Ok(source) => source,
             Err(err) => {
                 eprintln!("ERROR: cannot read {}: {err}", path.display());
@@ -103,7 +105,7 @@ pub fn run_fix(
 
         let outcome = fix_one_file(
             &parser,
-            &source,
+            source.text(),
             &requested_codes,
             alignment,
             mode,
@@ -124,9 +126,10 @@ pub fn run_fix(
             continue;
         };
 
+        let selected_count = spliced.edit_count();
         let write_outcome = match mode {
-            FixMode::Apply => match std::fs::write(path, spliced.text()) {
-                Ok(()) => WriteOutcome::Written,
+            FixMode::Apply => match super::publication::publish_fix(&source, spliced) {
+                Ok(_) => WriteOutcome::Written,
                 Err(err) => {
                     eprintln!("ERROR: cannot write {}: {err}", path.display());
                     WriteOutcome::Failed
@@ -136,7 +139,7 @@ pub fn run_fix(
         };
 
         summaries.push(FileFixSummary {
-            selected_count: spliced.edit_count(),
+            selected_count,
             write_outcome,
         });
     }
@@ -180,7 +183,7 @@ pub fn run_fix(
             outcome.unreadable, outcome.unwritten
         );
     }
-    outcome
+    Ok(outcome)
 }
 
 /// How a `chatter fix` run ended: how many files it could not read, and how

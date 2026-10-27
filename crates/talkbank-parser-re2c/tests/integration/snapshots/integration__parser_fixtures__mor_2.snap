@@ -1,20 +1,19 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: tier
 ---
+tier_type: Mor
 items:
   - main:
       pos: det
       lemma: de
       features:
         - Def
-    post_clitics: []
   - main:
       pos: noun
       lemma: gieter
       features:
         - Acc
-    post_clitics: []
   - main:
       pos: verb
       lemma: houden
@@ -22,29 +21,22 @@ items:
         - Fin
         - Pres
         - S
-    post_clitics: []
   - main:
       pos: pron
       lemma: ze
       features:
         - Prs
         - S3
-    post_clitics: []
   - main:
       pos: adp
       lemma: onder
-      features: []
-    post_clitics: []
   - main:
       pos: det
       lemma: de
       features:
         - Def
-    post_clitics: []
   - main:
       pos: noun
       lemma: kraan
-      features: []
-    post_clitics: []
 terminator:
-  Period: "."
+  type: period

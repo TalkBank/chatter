@@ -57,10 +57,17 @@ pub(crate) fn parse_other_spoken_event<'tree>(
     let Some(text) = crate::parser::typed_cst::read_source_field(text, errors) else {
         return ParseOutcome::rejected();
     };
+    let Ok(lowered) = crate::parser::tree_parsing::main_tier::word::convert_word_node(text, errors)
+    else {
+        return ParseOutcome::rejected();
+    };
+    let ParseOutcome::Parsed(word) = lowered.into_word() else {
+        return ParseOutcome::rejected();
+    };
     let node = event.raw_node();
     ParseOutcome::parsed(UtteranceContent::OtherSpokenEvent(OtherSpokenEvent::new(
         span_of(node),
         speaker.text(),
-        text.text(),
+        word,
     )))
 }

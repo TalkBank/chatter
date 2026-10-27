@@ -34,11 +34,11 @@
 //! per-node parse spans flags those benign cases as failures. The exact code for
 //! a given CLAN-CHECK fixture is pinned separately by `chatter_matches_check` in
 //! the behavioral parity suite; this oracle's job is solely to make a silently
-//! swallowed recovery node loud. Validation fixtures whose rule is not yet
-//! implemented are a tracked backlog (skipped via the manifest status); the
-//! parse-error and CHECK-parity corpora are always-reject and always checked.
+//! swallowed recovery node loud. Diagnostic implementation status does not
+//! exempt a fixture: legal and subsumed examples also need recovery reporting.
+//! The manifest supplies each fixture's rule profile, never permission to skip it.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use talkbank_model::model::TranscriptName;
 
@@ -156,17 +156,9 @@ fn chatter_surfaces_diagnostic(
     }
 }
 
-/// What the validation manifest says about the fixtures this oracle walks.
-///
-/// Two facts, read in one pass, because they come from one file and asking for
-/// them separately means parsing it twice and letting the answers disagree.
+/// Rule profiles for every validation fixture, independent of diagnostic status.
 struct ManifestView {
-    /// Fixture filenames whose validation rule is NOT yet implemented (or is
-    /// deprecated). A tracked backlog: chatter is known not to catch them, so
-    /// the oracle skips them rather than flagging a known gap as a regression.
-    /// The same manifest status drives `validation_errors_detected`'s skips.
-    skip: HashSet<String>,
-    /// The rules each remaining fixture must be validated under.
+    /// The rules each fixture must be validated under.
     ///
     /// A fixture whose rule is opt-in reports NOTHING under the default rule
     /// set, which this oracle would read as a swallowed recovery node; and the
@@ -174,7 +166,7 @@ struct ManifestView {
     rules: BTreeMap<String, RuleProfile>,
 }
 
-/// Read the manifest once, for both questions.
+/// Read every fixture rule profile; code status cannot exempt parser recovery.
 fn manifest_view() -> Result<ManifestView, TestError> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/error_corpus/validation_errors/manifest.json");
@@ -185,16 +177,11 @@ fn manifest_view() -> Result<ManifestView, TestError> {
             .map_err(|err| TestError::Failure(format!("parse validation manifest: {err}")))?;
 
     let mut view = ManifestView {
-        skip: HashSet::new(),
         rules: BTreeMap::new(),
     };
     for entry in manifest.fixtures {
         let name = entry.fixture.as_str().to_owned();
-        if entry.status == talkbank_spec_vocabulary::Status::Implemented {
-            view.rules.insert(name, entry.rules);
-        } else {
-            view.skip.insert(name);
-        }
+        view.rules.insert(name, entry.rules);
     }
     Ok(view)
 }
@@ -214,14 +201,9 @@ fn no_recovery_node_in_accepted_file() -> Result<(), TestError> {
 
     let mut swallowed = Vec::new();
     let mut checked = 0usize;
-    let mut skipped_backlog = 0usize;
 
     for fixture in &fixtures {
         let name = fixture.file_name().and_then(|n| n.to_str()).unwrap_or("?");
-        if manifest.skip.contains(name) {
-            skipped_backlog += 1;
-            continue;
-        }
         let source = std::fs::read_to_string(fixture)
             .map_err(|err| TestError::Failure(format!("read {}: {err}", fixture.display())))?;
         let recovery_nodes = recovery_node_count(&tree_sitter_parse(&source)?);
@@ -265,7 +247,7 @@ fn no_recovery_node_in_accepted_file() -> Result<(), TestError> {
 
     println!(
         "✓ all {checked} recovery-bearing error-corpus fixture(s) surfaced a diagnostic \
-         ({skipped_backlog} not-yet-implemented validation fixture(s) skipped as tracked backlog)"
+         (no diagnostic-status exclusions)"
     );
     Ok(())
 }

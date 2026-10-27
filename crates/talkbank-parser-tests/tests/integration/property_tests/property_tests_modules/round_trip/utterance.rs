@@ -59,7 +59,7 @@ fn utterance_round_trip_with_dependent_tiers() {
     let utterance = Utterance::new(main)
         .with_gra(GraTier::new_gra(
             talkbank_model::Location::Unlocated,
-            vec![GrammaticalRelation::new(1, 0, "ROOT")],
+            vec![GrammaticalRelation::new(1, 0, "ROOT".try_into().unwrap())],
         ))
         .with_com(ComTier::new(
             talkbank_model::Location::Unlocated,

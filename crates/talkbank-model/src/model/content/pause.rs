@@ -16,7 +16,7 @@
 //! *CHI: I (2.0) forgot .              # 2-second pause
 //! ```
 
-use super::WriteChat;
+use super::{TimedPause, WriteChat};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -57,7 +57,7 @@ pub enum PauseDuration {
 
     /// Numeric pause value preserved as source text (for example `1.5`, `2.0`).
     #[serde(rename = "timed")]
-    Timed(PauseTimedDuration),
+    Timed(TimedPause),
 }
 
 /// Pause marker serialized as `(payload)`.
@@ -77,7 +77,7 @@ pub enum PauseDuration {
 ///
 /// ```
 /// use talkbank_model::Location;
-/// use talkbank_model::model::{Pause, PauseDuration, PauseTimedDuration};
+/// use talkbank_model::model::{Pause, PauseDuration, TimedPause};
 ///
 /// // Short pause
 /// let pause = Pause::new(Location::Unlocated, PauseDuration::Short);
@@ -92,7 +92,7 @@ pub enum PauseDuration {
 /// assert_eq!(pause.to_string(), "(...)");
 ///
 /// // Timed pause (2.5 seconds)
-/// let pause = Pause::new(Location::Unlocated, PauseDuration::Timed(PauseTimedDuration::new("2.5")));
+/// let pause = Pause::new(Location::Unlocated, PauseDuration::Timed(TimedPause::new("2.5").unwrap()));
 /// assert_eq!(pause.to_string(), "(2.5)");
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
@@ -121,7 +121,7 @@ impl Pause {
 
 impl WriteChat for Pause {
     /// Serializes canonical CHAT pause syntax (`(.)`, `(..)`, `(1.5)`, ...).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('(')?;
         match &self.duration {
             PauseDuration::Short => w.write_char('.')?,
@@ -362,7 +362,7 @@ mod tests {
     fn pause_numeric_roundtrip() {
         let pause = Pause::new(
             crate::Location::Unlocated,
-            PauseDuration::Timed(PauseTimedDuration::new("1.5")),
+            PauseDuration::Timed(TimedPause::new("1.5").unwrap()),
         );
         let output = pause.to_string();
         assert_eq!(output, "(1.5)", "Numeric pause roundtrip failed");
@@ -440,5 +440,15 @@ mod tests {
         assert!(!parsed.has_validation_issue());
         let unsupported = PauseTimedDuration::new("abc");
         assert!(unsupported.has_validation_issue());
+    }
+    #[test]
+    fn pause_model_wire_requires_chat_spelling_not_just_projection() {
+        for text in ["", "2", "+1.5", "1:2", "abc", "1.5) hello (2.0", "1.5\n"] {
+            let wire = serde_json::json!({ "duration": { "type": "timed", "seconds": text } });
+            assert!(
+                serde_json::from_value::<Pause>(wire).is_err(),
+                "admitted {text:?}"
+            );
+        }
     }
 }

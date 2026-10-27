@@ -19,8 +19,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 
-use std::fs;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::Path;
 use talkbank_model::errors::ErrorCollector;
 use talkbank_model::model::{TranscriptName, WriteChat};
@@ -58,31 +57,41 @@ pub fn create_new_file(
     role: &str,
     corpus: &str,
     utterance: Option<&str>,
-) {
+) -> crate::exit_codes::CommandResult {
     let content = match build_validated(speaker, language, role, corpus, utterance, output) {
         Ok(text) => text,
         Err(why) => {
             eprintln!("Error: {why}");
-            std::process::exit(1);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
     // Write to output
     match output {
         Some(path) => {
-            if let Err(e) = fs::write(path, &content) {
+            let write =
+                || -> Result<(), talkbank_transform::report_destination::ReportDestinationError> {
+                    let destination =
+                        talkbank_transform::report_destination::StagedReportDestination::admit(
+                            path,
+                            [],
+                        )?;
+                    let mut writer = destination.into_writer()?;
+                    writer.write_all(content.as_bytes())?;
+                    writer.finish()?.publish()?;
+                    Ok(())
+                };
+            if let Err(e) = write() {
                 eprintln!("Error writing file: {}", e);
-                std::process::exit(1);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
             eprintln!("✓ Created {}", path.display());
         }
         None => {
-            // Print to stdout
-            if let Err(e) = io::stdout().write_all(content.as_bytes()) {
-                crate::stdout::closed(e)
-            }
+            out!("{content}");
         }
     }
+    Ok(())
 }
 
 /// Describe the file this command writes, for the shared CHAT builder.
@@ -228,7 +237,7 @@ mod tests {
         let dir = tempdir().map_err(|source| TestError::TempDir { source })?;
         let path = dir.path().join("test.cha");
 
-        create_new_file(Some(&path), "CHI", "eng", "Target_Child", "corpus", None);
+        create_new_file(Some(&path), "CHI", "eng", "Target_Child", "corpus", None).unwrap();
 
         let chat_file = parse_file(&path)?;
         require_header(&chat_file, RequiredHeader::Utf8)?;
@@ -260,7 +269,8 @@ mod tests {
             "Mother",
             "mydata",
             Some("hola mundo ."),
-        );
+        )
+        .unwrap();
 
         let chat_file = parse_file(&path)?;
         require_language(
@@ -355,7 +365,7 @@ mod tests {
         let found = chat_file.lines.iter().any(|line| match line {
             Line::Header { header, .. } => match header.as_ref() {
                 Header::Participants { entries } => entries.iter().any(|entry| {
-                    entry.speaker_code == expected_speaker && entry.role == expected_role
+                    entry.speaker_code == expected_speaker && entry.role() == Some(&expected_role)
                 }),
                 _ => false,
             },

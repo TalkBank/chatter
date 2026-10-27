@@ -56,6 +56,39 @@ fn invalid_json_fails_schema() {
 }
 
 #[test]
+fn custom_tier_label_schema_matches_wire_admission() {
+    let schema =
+        serde_json::to_value(schemars::schema_for!(talkbank_model::DependentTier)).unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    for (label, admitted) in [
+        ("xtst", true),
+        ("xA1", true),
+        ("xmor", true),
+        ("mor", false),
+        ("", false),
+        ("x", false),
+        ("x1", false),
+        ("xphoint", false),
+        ("xname:other", false),
+        ("xname\n", false),
+        ("xname\r\n", false),
+        ("xé", false),
+        ("%xname", false),
+    ] {
+        let wire = serde_json::json!({
+            "type": "UserDefined",
+            "data": { "label": label, "content": "annotation" }
+        });
+        assert_eq!(validator.is_valid(&wire), admitted, "schema: {label:?}");
+        assert_eq!(
+            serde_json::from_value::<talkbank_model::DependentTier>(wire).is_ok(),
+            admitted,
+            "serde: {label:?}"
+        );
+    }
+}
+
+#[test]
 fn schema_load_error_is_none() {
     assert!(
         schema_load_error().is_none(),
@@ -246,24 +279,10 @@ fn media_filename_from_json_is_reported() {
     );
 }
 
-/// Overwrites the `@Media` filename everywhere a serialized `ChatFile` records
-/// it: the header line, and the extracted top-level `media` field.
-///
-/// Walks the JSON rather than string-replacing so the test cannot silently
-/// start editing some other field that happens to share the value. Only the
-/// header-line edit is load-bearing (validation reads the lines, never the
-/// extracted `media` field); the second is written so the document stays
-/// self-consistent, the way a real hand-edited or tool-generated one would be.
-/// Each site asserts where it is edited, so a failure names the site rather
-/// than a count that cannot distinguish them.
+/// Edit the authoritative `@Media` header in a serialized document.
+/// The model has no second extracted media field to synchronize.
 fn set_media_filename(doc: &mut serde_json::Value, filename: &str) {
     let new_name = || serde_json::Value::String(filename.to_string());
-
-    let extracted = doc
-        .get_mut("media")
-        .and_then(|m| m.get_mut("filename"))
-        .expect("a serialized ChatFile with @Media carries the extracted media field");
-    *extracted = new_name();
 
     let lines = doc
         .get_mut("lines")

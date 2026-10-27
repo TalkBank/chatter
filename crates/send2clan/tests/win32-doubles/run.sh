@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compile the real send2clan bridge against the Win32 doubles and run the
-# executable-path admission contract. Needs only a host C compiler; it never
+# executable/message-path admission contracts. Needs only a host C compiler; it never
 # touches a registry, launches CLAN or requires Windows.
 #
 # Usage: run.sh [--negative-control]

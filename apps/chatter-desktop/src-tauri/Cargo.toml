@@ -30,6 +30,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+blake3.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 # Auto-update: the updater plugin checks the GitHub Releases latest.json and

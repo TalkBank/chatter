@@ -16,6 +16,7 @@
 //! Each test exercises a real user-observable behavior via
 //! `assert_cmd` subprocess.
 
+use predicates::prelude::*;
 use std::fs;
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::tempdir;
@@ -53,6 +54,336 @@ kind = "speaker-id-low-confidence"
 choice = { kind = "accept-suggested" }
 "#;
 
+#[derive(Clone, Copy)]
+enum Alias {
+    SamePath,
+    DotPath,
+    HardLink,
+    #[cfg(unix)]
+    Symlink,
+}
+
+const ALIASES: &[Alias] = &[
+    Alias::SamePath,
+    Alias::DotPath,
+    Alias::HardLink,
+    #[cfg(unix)]
+    Alias::Symlink,
+];
+
+impl Alias {
+    fn create(self, source: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+        let alias = source.with_file_name("alias.toml");
+        match self {
+            Self::SamePath => Ok(source.to_path_buf()),
+            Self::DotPath => Ok(source
+                .parent()
+                .unwrap()
+                .join(".")
+                .join(source.file_name().unwrap())),
+            Self::HardLink => {
+                fs::hard_link(source, &alias)?;
+                Ok(alias)
+            }
+            #[cfg(unix)]
+            Self::Symlink => {
+                std::os::unix::fs::symlink(source, &alias)?;
+                Ok(alias)
+            }
+        }
+    }
+}
+
+/// A combined document is readable by both readers, but must not be rewritten
+/// as pending output while it also serves as the operator's decision script.
+#[test]
+fn adjudicate_refuses_pending_script_aliases() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    for alias in ALIASES {
+        let dir = tempdir()?;
+        let pending = dir.path().join("pending.toml");
+        let overrides = dir.path().join("overrides.toml");
+        let combined = format!(
+            "{}\n{}",
+            FIX_PENDING_ONE_SPEAKER_ID,
+            FIX_SCRIPTED_ACCEPT_SUGGESTED.split_once('\n').unwrap().1,
+        );
+        fs::write(&pending, &combined)?;
+        let script = alias.create(&pending)?;
+        let output = harness
+            .chatter_cmd()
+            .args(["experimental", "review", "scripted"])
+            .arg(&pending)
+            .arg("--override-file")
+            .arg(&overrides)
+            .arg("--script")
+            .arg(&script)
+            .arg("--operator")
+            .arg("operator")
+            .output()?;
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stderr).contains("alias"));
+        assert_eq!(fs::read_to_string(&pending)?, combined);
+        assert_eq!(fs::read_to_string(&script)?, combined);
+        assert!(
+            !overrides.exists(),
+            "refusal must not create an override file"
+        );
+    }
+    Ok(())
+}
+
+/// Neither output may alias another role, even when the contents would fail
+/// later schema admission. Interactive rejection must happen before prompting.
+#[test]
+fn adjudicate_refuses_override_aliases_before_reading_or_prompting() -> Result<(), TestError> {
+    enum ProtectedRole {
+        Pending,
+        Script,
+    }
+    let harness = CliHarness::new()?;
+    for role in [ProtectedRole::Pending, ProtectedRole::Script] {
+        for alias in ALIASES {
+            let dir = tempdir()?;
+            let pending = dir.path().join("pending.toml");
+            let script = dir.path().join("script.toml");
+            fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
+            fs::write(&script, FIX_SCRIPTED_ACCEPT_SUGGESTED)?;
+            let protected = match role {
+                ProtectedRole::Pending => &pending,
+                ProtectedRole::Script => &script,
+            };
+            let overrides = alias.create(protected)?;
+            let mut command = harness.chatter_cmd();
+            command
+                .args(["experimental", "review"])
+                .arg(match role {
+                    ProtectedRole::Pending => "interactive",
+                    ProtectedRole::Script => "scripted",
+                })
+                .arg(&pending)
+                .arg("--override-file")
+                .arg(&overrides)
+                .arg("--operator")
+                .arg("operator");
+            match role {
+                ProtectedRole::Pending => {}
+                ProtectedRole::Script => {
+                    command.arg("--script").arg(&script);
+                }
+            }
+            let output = command.output()?;
+            assert_eq!(output.status.code(), Some(1));
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains("alias"), "{stderr}");
+            assert!(output.stdout.is_empty(), "must refuse before prompting");
+            assert_eq!(fs::read_to_string(&pending)?, FIX_PENDING_ONE_SPEAKER_ID);
+            assert_eq!(fs::read_to_string(&script)?, FIX_SCRIPTED_ACCEPT_SUGGESTED);
+        }
+    }
+    Ok(())
+}
+
+/// Missing inputs and identity inspection failures cannot manufacture an
+/// admitted destination or create an override file.
+#[test]
+fn adjudicate_identity_failures_preserve_inputs() -> Result<(), TestError> {
+    enum Failure {
+        MissingPending,
+        MissingScript,
+        UninspectableOverrides,
+    }
+    let harness = CliHarness::new()?;
+    for failure in [
+        Failure::MissingPending,
+        Failure::MissingScript,
+        Failure::UninspectableOverrides,
+    ] {
+        let dir = tempdir()?;
+        let pending = dir.path().join("pending.toml");
+        let script = dir.path().join("script.toml");
+        let overrides = dir.path().join("overrides.toml");
+        fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
+        fs::write(&script, FIX_SCRIPTED_ACCEPT_SUGGESTED)?;
+        let (pending_arg, script_arg, override_arg) = match failure {
+            Failure::MissingPending => (
+                dir.path().join("missing.toml"),
+                script.clone(),
+                overrides.clone(),
+            ),
+            Failure::MissingScript => (
+                pending.clone(),
+                dir.path().join("missing.toml"),
+                overrides.clone(),
+            ),
+            Failure::UninspectableOverrides => (
+                pending.clone(),
+                script.clone(),
+                script.join("overrides.toml"),
+            ),
+        };
+        let output = harness
+            .chatter_cmd()
+            .args(["experimental", "review", "scripted"])
+            .arg(pending_arg)
+            .arg("--override-file")
+            .arg(override_arg)
+            .arg("--script")
+            .arg(script_arg)
+            .arg("--operator")
+            .arg("operator")
+            .output()?;
+        assert_eq!(output.status.code(), Some(1));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("identity"), "{stderr}");
+        assert_eq!(fs::read_to_string(&pending)?, FIX_PENDING_ONE_SPEAKER_ID);
+        assert_eq!(fs::read_to_string(&script)?, FIX_SCRIPTED_ACCEPT_SUGGESTED);
+        assert!(!overrides.exists());
+    }
+    Ok(())
+}
+
+/// Predictable staging names must not claim or follow existing sibling files.
+#[test]
+fn adjudicate_preserves_existing_temporary_siblings() -> Result<(), TestError> {
+    enum ExistingSibling {
+        File,
+        HardLink,
+        #[cfg(unix)]
+        Symlink,
+    }
+    let harness = CliHarness::new()?;
+    for kind in [
+        ExistingSibling::File,
+        ExistingSibling::HardLink,
+        #[cfg(unix)]
+        ExistingSibling::Symlink,
+    ] {
+        let dir = tempdir()?;
+        let pending = dir.path().join("pending.toml");
+        let overrides = dir.path().join("overrides.toml");
+        let scripted = dir.path().join("scripted.toml");
+        fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
+        fs::write(&scripted, FIX_SCRIPTED_ACCEPT_SUGGESTED)?;
+        let evidence = b"unrelated retained evidence";
+        let victim = dir.path().join("retained.txt");
+        fs::write(&victim, evidence)?;
+        let siblings = [
+            pending.with_extension("toml.tmp"),
+            overrides.with_extension("toml.tmp"),
+        ];
+        for sibling in &siblings {
+            match kind {
+                ExistingSibling::File => fs::write(sibling, evidence)?,
+                ExistingSibling::HardLink => fs::hard_link(&victim, sibling)?,
+                #[cfg(unix)]
+                ExistingSibling::Symlink => std::os::unix::fs::symlink(&victim, sibling)?,
+            }
+        }
+        harness
+            .chatter_cmd()
+            .args(["experimental", "review", "scripted"])
+            .arg(&pending)
+            .arg("--override-file")
+            .arg(&overrides)
+            .arg("--script")
+            .arg(&scripted)
+            .arg("--operator")
+            .arg("operator")
+            .assert()
+            .success();
+        assert_eq!(fs::read(&victim)?, evidence);
+        for sibling in &siblings {
+            assert_eq!(
+                fs::read(sibling)?,
+                evidence,
+                "existing sibling was changed or removed"
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(&scripted)?,
+            FIX_SCRIPTED_ACCEPT_SUGGESTED
+        );
+        assert!(
+            talkbank_transform::adjudication::PendingAdjudications::read(&pending)
+                .expect("published pending document")
+                .entries
+                .is_empty()
+        );
+        assert!(
+            talkbank_transform::speaker_id::OverrideFile::read_or_default(&overrides)
+                .expect("published overrides")
+                .get("session-102-t1")
+                .is_some()
+        );
+    }
+    Ok(())
+}
+
+/// A complete pending queue cannot silently discard extra scripted decisions.
+#[test]
+fn adjudicate_unused_script_decisions_preserve_files() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let pending = dir.path().join("pending.toml");
+    let scripted = dir.path().join("scripted.toml");
+    let overrides = dir.path().join("overrides.toml");
+    let existing = "# retain this evidence on refusal\nschema_version = 2\n";
+    let decision = FIX_SCRIPTED_ACCEPT_SUGGESTED
+        .split_once("[[decisions]]")
+        .expect("retained decision fixture")
+        .1;
+    let trailing = format!("{FIX_SCRIPTED_ACCEPT_SUGGESTED}\n[[decisions]]{decision}");
+    for (requests, script) in [
+        (FIX_PENDING_ONE_SPEAKER_ID, trailing.as_str()),
+        (
+            "schema_version = 2\nentries = []\n",
+            FIX_SCRIPTED_ACCEPT_SUGGESTED,
+        ),
+    ] {
+        fs::write(&pending, requests)?;
+        fs::write(&scripted, script)?;
+        fs::write(&overrides, existing)?;
+        harness
+            .chatter_cmd()
+            .args(["experimental", "review", "scripted"])
+            .arg(&pending)
+            .arg("--override-file")
+            .arg(&overrides)
+            .arg("--script")
+            .arg(&scripted)
+            .arg("--operator")
+            .arg("operator")
+            .assert()
+            .code(2)
+            .stderr(predicates::str::contains("unconsumed scripted decision"));
+        assert_eq!(fs::read_to_string(&pending)?, requests);
+        assert_eq!(fs::read_to_string(&overrides)?, existing);
+        assert_eq!(fs::read_to_string(&scripted)?, script);
+    }
+    // No pending requests and no scripted decisions is a completed empty run.
+    fs::write(&pending, "schema_version = 2\nentries = []\n")?;
+    fs::write(&scripted, "schema_version = 2\ndecisions = []\n")?;
+    harness
+        .chatter_cmd()
+        .args(["experimental", "review", "scripted"])
+        .arg(&pending)
+        .arg("--override-file")
+        .arg(&overrides)
+        .arg("--script")
+        .arg(&scripted)
+        .arg("--operator")
+        .arg("operator")
+        .assert()
+        .success();
+    Ok(())
+}
+
 /// Script versions are admitted before either persistent document can change.
 #[test]
 fn adjudicate_script_schema_admission_preserves_files() -> Result<(), TestError> {
@@ -76,11 +407,17 @@ fn adjudicate_script_schema_admission_preserves_files() -> Result<(), TestError>
         )?;
         harness
             .chatter_cmd()
-            .arg("adjudicate")
+            .args([
+                "experimental",
+                "review",
+                "scripted",
+                "--operator",
+                "fixture",
+            ])
             .arg(&pending)
             .arg("--override-file")
             .arg(&overrides)
-            .arg("--scripted")
+            .arg("--script")
             .arg(&scripted)
             .assert()
             .code(1)
@@ -102,11 +439,17 @@ fn adjudicate_script_schema_admission_preserves_files() -> Result<(), TestError>
         )?;
         harness
             .chatter_cmd()
-            .arg("adjudicate")
+            .args([
+                "experimental",
+                "review",
+                "scripted",
+                "--operator",
+                "fixture",
+            ])
             .arg(&pending)
             .arg("--override-file")
             .arg(&overrides)
-            .arg("--scripted")
+            .arg("--script")
             .arg(&scripted)
             .assert()
             .success();
@@ -136,11 +479,11 @@ fn adjudicate_missing_role_preserves_files() -> Result<(), TestError> {
     fs::write(&scripted, FIX_SCRIPTED_ACCEPT_SUGGESTED)?;
     harness
         .chatter_cmd()
-        .arg("adjudicate")
+        .args(["experimental", "review", "scripted"])
         .arg(&pending)
         .arg("--override-file")
         .arg(&overrides)
-        .arg("--scripted")
+        .arg("--script")
         .arg(&scripted)
         .arg("--operator")
         .arg("test-fixture")
@@ -172,11 +515,11 @@ fn adjudicate_scripted_accepts_suggested() -> Result<(), TestError> {
 
     harness
         .chatter_cmd()
-        .arg("adjudicate")
+        .args(["experimental", "review", "scripted"])
         .arg(&pending)
         .arg("--override-file")
         .arg(&overrides)
-        .arg("--scripted")
+        .arg("--script")
         .arg(&scripted)
         .arg("--operator")
         .arg("test-fixture")
@@ -226,6 +569,7 @@ fn adjudicate_scripted_accepts_suggested() -> Result<(), TestError> {
 /// adjudication core, override file write, and pending rewrite all
 /// behave exactly the same as the scripted-mode path (cycle 18),
 /// only the `Prompter` implementation differs.
+#[cfg(unix)]
 #[test]
 fn adjudicate_interactive_accepts_suggested() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
@@ -234,18 +578,18 @@ fn adjudicate_interactive_accepts_suggested() -> Result<(), TestError> {
     let overrides = dir.path().join("batch.overrides.toml");
     fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
 
-    harness
+    let status = harness
         .chatter_cmd()
-        .arg("adjudicate")
+        .args(["experimental", "review", "interactive"])
         .arg(&pending)
         .arg("--override-file")
         .arg(&overrides)
-        .arg("--interactive")
         .arg("--operator")
         .arg("interactive-fixture")
-        .write_stdin("accept\n")
-        .assert()
-        .success();
+        .at_terminal()
+        .answer_after(b"Decision [", b"accept\n")
+        .wait();
+    assert!(status.success(), "{status:?}");
 
     assert!(overrides.exists(), "override file should be written");
     let overrides_text = fs::read_to_string(&overrides)?;
@@ -323,11 +667,11 @@ fn adjudicate_scripted_accepts_suggested_multi_adult() -> Result<(), TestError> 
 
     harness
         .chatter_cmd()
-        .arg("adjudicate")
+        .args(["experimental", "review", "scripted"])
         .arg(&pending)
         .arg("--override-file")
         .arg(&overrides)
-        .arg("--scripted")
+        .arg("--script")
         .arg(&scripted)
         .arg("--operator")
         .arg("test-fixture-multi-adult")
@@ -385,6 +729,7 @@ fn adjudicate_scripted_accepts_suggested_multi_adult() -> Result<(), TestError> 
 /// Pre-existing pending-adjudications fixture with a parent-role-lookup
 /// entry. The pipeline identified a parent speaker but doesn't know
 /// whether to label them `MOT`, `FAT`, or another role.
+#[cfg(unix)]
 const FIX_PENDING_PARENT_ROLE: &str = r#"schema_version = 2
 
 [[entries]]
@@ -397,10 +742,11 @@ donor_speaker = "PAR"
 PAR = "rename"
 "#;
 
-/// `chatter adjudicate --interactive` parses `choose SPK:CODE:TAG
+/// `chatter experimental review interactive` parses `choose SPK:CODE:TAG
 /// [SPK:CODE:TAG ...] [optional note]` lines for parent-role-lookup
 /// pending entries. The operator types the role on stdin; the override
 /// file records the chosen role paired with the pre-set speaker mapping.
+#[cfg(unix)]
 #[test]
 fn adjudicate_interactive_chooses_role() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
@@ -409,18 +755,21 @@ fn adjudicate_interactive_chooses_role() -> Result<(), TestError> {
     let overrides = dir.path().join("batch.overrides.toml");
     fs::write(&pending, FIX_PENDING_PARENT_ROLE)?;
 
-    harness
+    let status = harness
         .chatter_cmd()
-        .arg("adjudicate")
+        .args(["experimental", "review", "interactive"])
         .arg(&pending)
         .arg("--override-file")
         .arg(&overrides)
-        .arg("--interactive")
         .arg("--operator")
         .arg("parent-role-fixture")
-        .write_stdin("choose PAR:MOT:Mother contributor data sheet\n")
-        .assert()
-        .success();
+        .at_terminal()
+        .answer_after(
+            b"Decision [",
+            b"choose PAR:MOT:Mother contributor data sheet\n",
+        )
+        .wait();
+    assert!(status.success(), "{status:?}");
 
     let overrides_text = fs::read_to_string(&overrides)?;
     assert!(
@@ -454,6 +803,7 @@ fn adjudicate_interactive_chooses_role() -> Result<(), TestError> {
 /// counterpart of cycle 20's `OverrideMapping` decision: the
 /// operator looked at the algorithm's suggestion, decided it was
 /// wrong, and supplies the mapping + per-speaker roles directly.
+#[cfg(unix)]
 #[test]
 fn adjudicate_interactive_override_mapping() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
@@ -466,18 +816,21 @@ fn adjudicate_interactive_override_mapping() -> Result<(), TestError> {
     // with PAR1's role INV:Investigator. The operator overrides:
     // PAR0=rename, PAR1=drop, and assigns PAR0 the role MOT:Mother
     // (SPK:CODE:TAG syntax), with a multi-word note.
-    harness
+    let status = harness
         .chatter_cmd()
-        .arg("adjudicate")
+        .args(["experimental", "review", "interactive"])
         .arg(&pending)
         .arg("--override-file")
         .arg(&overrides)
-        .arg("--interactive")
         .arg("--operator")
         .arg("override-fixture")
-        .write_stdin("override PAR0:MOT:Mother PAR0=rename PAR1=drop audio review confirms swap\n")
-        .assert()
-        .success();
+        .at_terminal()
+        .answer_after(
+            b"Decision [",
+            b"override PAR0:MOT:Mother PAR0=rename PAR1=drop audio review confirms swap\n",
+        )
+        .wait();
+    assert!(status.success(), "{status:?}");
 
     let overrides_text = fs::read_to_string(&overrides)?;
     assert!(
@@ -515,5 +868,56 @@ fn adjudicate_interactive_override_mapping() -> Result<(), TestError> {
         !pending_text.contains("session-102-t1"),
         "pending file should no longer carry the resolved session:\n{pending_text}"
     );
+    Ok(())
+}
+
+// A retained PTY prevents EOF from racing the operator response.
+#[cfg(unix)]
+trait TerminalReview {
+    fn at_terminal(&self) -> crate::common::terminal::RunningTerminal;
+}
+#[cfg(unix)]
+impl TerminalReview for assert_cmd::Command {
+    fn at_terminal(&self) -> crate::common::terminal::RunningTerminal {
+        let mut command = std::process::Command::new(self.get_program());
+        command.args(self.get_args());
+        for (name, value) in self.get_envs() {
+            match value {
+                Some(value) => {
+                    command.env(name, value);
+                }
+                None => {
+                    command.env_remove(name);
+                }
+            }
+        }
+        if let Some(directory) = self.get_current_dir() {
+            command.current_dir(directory);
+        }
+        crate::common::terminal::Pty::open()
+            .launch(command, crate::common::terminal::TerminalOutput::Terminal)
+    }
+}
+
+#[test]
+fn interactive_review_refuses_a_pipe_without_touching_inputs() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let directory = tempdir()?;
+    let pending = directory.path().join("pending.toml");
+    let overrides = directory.path().join("overrides.toml");
+    fs::write(&pending, FIX_PENDING_ONE_SPEAKER_ID)?;
+    harness
+        .chatter_cmd()
+        .args(["experimental", "review", "interactive"])
+        .arg(&pending)
+        .arg("--override-file")
+        .arg(&overrides)
+        .args(["--operator", "fixture"])
+        .write_stdin("accept\n")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("requires a terminal"));
+    assert_eq!(fs::read_to_string(&pending)?, FIX_PENDING_ONE_SPEAKER_ID);
+    assert!(!overrides.exists());
     Ok(())
 }

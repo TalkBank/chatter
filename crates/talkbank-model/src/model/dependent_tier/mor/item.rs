@@ -106,7 +106,7 @@ impl Mor {
     ///
     /// The method writes directly into the provided formatter so callers can
     /// stream large tiers without per-item allocations.
-    pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         self.main.write_chat(w)?;
 
         for clitic in &self.post_clitics {
@@ -120,7 +120,7 @@ impl Mor {
 
 impl WriteChat for Mor {
     /// Serializes the item as `main[~post_clitic]*`.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         Mor::write_chat(self, w)
     }
 }

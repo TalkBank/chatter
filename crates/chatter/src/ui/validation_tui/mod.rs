@@ -75,17 +75,18 @@ pub fn run_validation_tui_streaming(
     theme: Theme,
     notes: &[String],
 ) -> Result<TuiAction> {
-    // Setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
+    let screen = ValidationScreen::enter()?;
+    let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
 
     // The file list populates as files with diagnostics or failures arrive.
     let mut state = TuiState::new(theme);
     let mut phase = RunPhase::Running;
-    let mut ctrl_c_count = 0usize;
+    enum InterruptStage {
+        Running,
+        Cancelling,
+    }
+    let mut interruption = InterruptStage::Running;
 
     // Main event loop with non-blocking polls
     let result = loop {
@@ -105,10 +106,10 @@ pub fn run_validation_tui_streaming(
                         canceller.cancel();
                     }
                     (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                        ctrl_c_count += 1;
                         canceller.cancel();
-                        if ctrl_c_count >= 2 {
-                            break Ok(TuiAction::ForceQuit);
+                        match interruption {
+                            InterruptStage::Running => interruption = InterruptStage::Cancelling,
+                            InterruptStage::Cancelling => break Ok(TuiAction::ForceQuit),
                         }
                     }
                     (KeyCode::Char('q'), KeyModifiers::NONE) | (KeyCode::Esc, _) => {
@@ -130,16 +131,67 @@ pub fn run_validation_tui_streaming(
         phase = drain_validation_events(&events_rx, &mut state, phase);
     };
 
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
+    // Explicit restoration reports errors on normal completion. The owning
+    // guard also restores on every earlier error from setup, drawing or input.
+    screen.finish()?;
     result
+}
+
+/// Possession means raw mode was enabled and must be restored.
+struct RawTerminal;
+
+impl RawTerminal {
+    fn enter() -> io::Result<Self> {
+        enable_raw_mode()?;
+        Ok(Self)
+    }
+}
+
+impl Drop for RawTerminal {
+    fn drop(&mut self) {
+        // Best-effort fallback when another terminal operation already failed.
+        let _ = disable_raw_mode();
+    }
+}
+
+/// A restoration obligation is consumed either explicitly or by Drop. The
+/// option holds an owned resource, never a flag permitting further UI work.
+struct ValidationScreen(Option<RawTerminal>);
+
+impl ValidationScreen {
+    fn enter() -> io::Result<Self> {
+        let screen = Self(Some(RawTerminal::enter()?));
+        // Install the owner before either command: partial setup also restores.
+        execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+        Ok(screen)
+    }
+
+    fn restore(raw: RawTerminal) -> io::Result<()> {
+        // Attempt every restoration even when an earlier operation fails.
+        let leave = execute!(io::stdout(), LeaveAlternateScreen);
+        let mouse = execute!(io::stdout(), DisableMouseCapture);
+        let cursor = execute!(io::stdout(), crossterm::cursor::Show);
+        let cooked = disable_raw_mode();
+        drop(raw);
+        leave.and(mouse).and(cursor).and(cooked)
+    }
+
+    fn finish(mut self) -> io::Result<()> {
+        match self.0.take() {
+            Some(raw) => Self::restore(raw),
+            None => Err(io::Error::other(
+                "terminal restoration was already consumed",
+            )),
+        }
+    }
+}
+
+impl Drop for ValidationScreen {
+    fn drop(&mut self) {
+        if let Some(raw) = self.0.take() {
+            let _ = Self::restore(raw);
+        }
+    }
 }
 
 /// Absorb every event currently queued from the runner into `state`, returning

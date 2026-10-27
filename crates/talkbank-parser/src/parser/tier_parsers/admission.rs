@@ -12,8 +12,8 @@
 //! - [`TierRecovery`]: the tier carries a recovery node somewhere. The
 //!   dispatcher reports every ERROR and MISSING node in it with the
 //!   whole-tier recovery walk and substitutes the tier's recovery
-//!   disposition (an empty placeholder for `%mor`, a dropped tier for
-//!   `%pho`, ...). No typed tier parser runs on it.
+//!   disposition (explicit unparsed source for MOR/GRA/PHO/MOD/SIN/WOR).
+//!   No typed tier parser runs on it.
 //! - [`HealthyTier`]: no descendant is ERROR or MISSING. This is the only
 //!   value a typed tier parser accepts, so inside such a parser a slot in
 //!   the `Missing` or `Error` state contradicts the admission and is a

@@ -11,9 +11,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use std::fs;
 use std::path::PathBuf;
 use tracing::{Level, debug, info, span, warn};
+
+use super::publication;
 
 /// Normalize a CHAT file to the canonical format defined by the CHAT File Format and Header sections.
 ///
@@ -25,22 +26,22 @@ pub fn normalize_chat(
     input: &PathBuf,
     output: Option<&PathBuf>,
     level: talkbank_model::CheckLevel,
-) {
+) -> crate::exit_codes::CommandResult {
     let _span = span!(Level::INFO, "normalize_chat", input = %input.display()).entered();
     info!("Normalizing CHAT file to canonical format");
 
     // Read CHAT file
     let content = {
         let _span = span!(Level::DEBUG, "read_file").entered();
-        match fs::read_to_string(input) {
+        match publication::SourceSnapshot::read(input) {
             Ok(c) => {
-                debug!("Read {} bytes from file", c.len());
+                debug!("Read {} bytes from file", c.text().len());
                 c
             }
             Err(e) => {
                 warn!("Failed to read file: {}", e);
                 eprintln!("Error reading file {:?}: {}", input, e);
-                std::process::exit(1);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         }
     };
@@ -51,7 +52,7 @@ pub fn normalize_chat(
     // Use pipeline function to parse, validate, and normalize
     let canonical_chat = {
         let _span = span!(Level::DEBUG, "pipeline").entered();
-        match talkbank_transform::normalize_chat(&content, options) {
+        match talkbank_transform::normalize_chat(content.text(), options) {
             Ok(chat_str) => {
                 debug!("Pipeline successful, {} bytes", chat_str.text().len());
                 match level {
@@ -64,8 +65,8 @@ pub fn normalize_chat(
                 chat_str
             }
             Err(e) => {
-                crate::output::report_pipeline_failure(input, &content, &e);
-                std::process::exit(1);
+                crate::output::report_pipeline_failure(input, content.text(), &e);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         }
     };
@@ -77,22 +78,26 @@ pub fn normalize_chat(
     // a transcript at exit 0.
     if let Some(output_path) = output {
         let _span = span!(Level::DEBUG, "write_output").entered();
-        if let Err(e) = fs::write(output_path, canonical_chat.text()) {
-            warn!("Failed to write output: {}", e);
-            eprintln!("Error writing CHAT to {:?}: {}", output_path, e);
-            std::process::exit(1);
-        }
+        let published = match publication::publish(&content, output_path, canonical_chat) {
+            Ok(published) => published,
+            Err(e) => {
+                warn!("Failed to publish output: {}", e);
+                eprintln!("Error writing CHAT to {:?}: {}", output_path, e);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
+            }
+        };
         info!(
             "Normalized {} to {}",
             input.display(),
-            output_path.display()
+            published.path().display()
         );
         eprintln!(
             "✓ Normalized {} to {}",
             input.display(),
-            output_path.display()
+            published.path().display()
         );
     } else {
         out!("{}", canonical_chat.text());
     }
+    Ok(())
 }

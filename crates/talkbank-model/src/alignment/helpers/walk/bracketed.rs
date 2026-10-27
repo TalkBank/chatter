@@ -65,6 +65,7 @@ pub(super) fn walk_bracketed_content<'a>(
             BracketedItem::Freecode(fc) => {
                 f(ContentItem::Freecode(fc));
             }
+            BracketedItem::OrphanAnnotation(raw) => f(ContentItem::OrphanAnnotation(raw)),
             BracketedItem::LongFeatureBegin(lfb) => {
                 f(ContentItem::LongFeatureBegin(lfb));
             }
@@ -151,6 +152,7 @@ pub(super) fn walk_bracketed_content_mut<'a>(
             BracketedItem::Freecode(fc) => {
                 f(ContentItemMut::Freecode(fc));
             }
+            BracketedItem::OrphanAnnotation(raw) => f(ContentItemMut::OrphanAnnotation(raw)),
             BracketedItem::LongFeatureBegin(lfb) => {
                 f(ContentItemMut::LongFeatureBegin(lfb));
             }
@@ -257,6 +259,7 @@ pub(super) fn walk_bracketed_words<'a>(
             | BracketedItem::AnnotatedAction(_)
             | BracketedItem::OverlapPoint(_)
             | BracketedItem::InternalBullet(_)
+            | BracketedItem::OrphanAnnotation(_)
             | BracketedItem::Freecode(_)
             | BracketedItem::LongFeatureBegin(_)
             | BracketedItem::LongFeatureEnd(_)
@@ -313,6 +316,7 @@ pub(super) fn walk_bracketed_words_mut<'a>(
             | BracketedItem::AnnotatedAction(_)
             | BracketedItem::OverlapPoint(_)
             | BracketedItem::InternalBullet(_)
+            | BracketedItem::OrphanAnnotation(_)
             | BracketedItem::Freecode(_)
             | BracketedItem::LongFeatureBegin(_)
             | BracketedItem::LongFeatureEnd(_)

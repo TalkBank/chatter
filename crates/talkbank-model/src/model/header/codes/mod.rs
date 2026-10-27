@@ -16,18 +16,22 @@ mod date;
 mod header_strings;
 pub(crate) mod iso639;
 mod language;
+mod multiple_languages;
+mod page_number;
 mod participant;
 mod ses;
 mod speaker;
 pub(crate) mod time_values;
 
 // Re-export all public types
-pub use age::AgeValue;
+pub use age::{AgeComponents, AgeValue};
 pub use date::{ChatDate, CheckedChatDate, Month};
 pub(crate) use date::{DateDigitError, DateDigits};
 pub use header_strings::*;
-pub use language::{LanguageCode, LanguageCodeError};
-pub use participant::{ParticipantEntry, ParticipantName, ParticipantRole};
+pub use language::{LanguageCode, LanguageCodeError, RegisteredLanguageCode};
+pub use multiple_languages::{MultipleLanguageCodes, TooFewLanguageCodes};
+pub use page_number::{InvalidPageNumber, PageNumber};
+pub use participant::{ParticipantDetails, ParticipantEntry, ParticipantName, ParticipantRole};
 pub use ses::{Ethnicity, SesCode, SesValue};
 pub use speaker::SpeakerCode;
 pub(crate) use time_values::{InvalidTimeDuration, InvalidTimeStart};

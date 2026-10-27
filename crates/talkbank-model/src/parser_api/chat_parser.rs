@@ -99,6 +99,7 @@ pub trait ChatParser {
     }
 
     /// Parse a single utterance (main tier + dependent tiers) with streaming diagnostics.
+    /// Inputs containing multiple utterances are rejected rather than truncated.
     fn parse_utterance(
         &self,
         input: &str,
@@ -107,6 +108,10 @@ pub trait ChatParser {
     ) -> ParseOutcome<Utterance>;
 
     /// Parse a single utterance with explicit semantic context.
+    ///
+    /// A complete single-utterance document retains its own `@Options`.
+    /// Supplied context supplements those options; bare fragments rely on the
+    /// caller for semantics requiring file-level context.
     fn parse_utterance_with_context(
         &self,
         input: &str,
@@ -118,6 +123,9 @@ pub trait ChatParser {
     }
 
     /// Parse a main tier line (`*CHI: ...`) with streaming diagnostics.
+    ///
+    /// The complete input must be one main tier. Attached dependent tiers are
+    /// refused rather than discarded; use `parse_utterance` to retain them.
     fn parse_main_tier(
         &self,
         input: &str,

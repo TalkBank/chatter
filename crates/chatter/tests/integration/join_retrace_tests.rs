@@ -54,7 +54,13 @@ fn joins_obvious_dangling_retrace_no_dependent_tiers() -> Result<(), TestError> 
     let fixture = write_fixture(harness.home_dir(), "obvious.cha", &input)?;
 
     // Run the repair in place.
-    let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+    let join = harness.run_output(&[
+        "experimental",
+        "transform",
+        "join-retrace",
+        "--apply",
+        fixture.to_str().unwrap(),
+    ])?;
     assert!(
         join.status.success(),
         "join-retrace should succeed; output: {}",
@@ -76,7 +82,7 @@ fn joins_obvious_dangling_retrace_no_dependent_tiers() -> Result<(), TestError> 
     );
 
     // The joined file must be valid CHAT.
-    let validate = harness.run_validate(&fixture, &["--force"])?;
+    let validate = harness.run_validate(&fixture, &["--refresh-cache"])?;
     assert!(
         validate.status.success(),
         "joined file must validate; output: {}",
@@ -99,7 +105,13 @@ fn joins_obvious_case_dropping_dependent_tiers() -> Result<(), TestError> {
     );
     let fixture = write_fixture(harness.home_dir(), "deptier.cha", &input)?;
 
-    let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+    let join = harness.run_output(&[
+        "experimental",
+        "transform",
+        "join-retrace",
+        "--apply",
+        fixture.to_str().unwrap(),
+    ])?;
     assert!(
         join.status.success(),
         "join-retrace should succeed; output: {}",
@@ -124,7 +136,7 @@ fn joins_obvious_case_dropping_dependent_tiers() -> Result<(), TestError> {
         "report must flag needs-re-morphotag, got:\n{report}"
     );
 
-    let validate = harness.run_validate(&fixture, &["--force"])?;
+    let validate = harness.run_validate(&fixture, &["--refresh-cache"])?;
     assert!(
         validate.status.success(),
         "joined file must validate; output: {}",
@@ -143,7 +155,13 @@ fn does_not_join_correction_retrace() -> Result<(), TestError> {
     let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
     let fixture = write_fixture(harness.home_dir(), "correction.cha", &input)?;
 
-    let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+    let join = harness.run_output(&[
+        "experimental",
+        "transform",
+        "join-retrace",
+        "--apply",
+        fixture.to_str().unwrap(),
+    ])?;
     assert!(
         join.status.success(),
         "join-retrace should run; output: {}",
@@ -168,7 +186,13 @@ fn does_not_join_non_repeating_successor() -> Result<(), TestError> {
     let input = doc("*CHI:\tthe dog [/] .\n*CHI:\twhat happened next .\n");
     let fixture = write_fixture(harness.home_dir(), "nonrepeat.cha", &input)?;
 
-    let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+    let join = harness.run_output(&[
+        "experimental",
+        "transform",
+        "join-retrace",
+        "--apply",
+        fixture.to_str().unwrap(),
+    ])?;
     assert!(
         join.status.success(),
         "join-retrace should run; output: {}",
@@ -196,8 +220,10 @@ fn scope_corrections_joins_full_correction_retrace() -> Result<(), TestError> {
     let fixture = write_fixture(harness.home_dir(), "correction_join.cha", &input)?;
 
     let join = harness.run_output(&[
-        "debug",
+        "experimental",
+        "transform",
         "join-retrace",
+        "--apply",
         "--scope",
         "corrections",
         fixture.to_str().unwrap(),
@@ -220,7 +246,7 @@ fn scope_corrections_joins_full_correction_retrace() -> Result<(), TestError> {
     );
 
     // The joined file must be valid CHAT.
-    let validate = harness.run_validate(&fixture, &["--force"])?;
+    let validate = harness.run_validate(&fixture, &["--refresh-cache"])?;
     assert!(
         validate.status.success(),
         "joined correction file must validate; output: {}",
@@ -240,7 +266,13 @@ fn default_scope_does_not_join_full_correction() -> Result<(), TestError> {
     let input = doc("*CHI:\tthe cat [//] .\n*CHI:\tthe dog runs .\n");
     let fixture = write_fixture(harness.home_dir(), "correction_nojoin.cha", &input)?;
 
-    let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+    let join = harness.run_output(&[
+        "experimental",
+        "transform",
+        "join-retrace",
+        "--apply",
+        fixture.to_str().unwrap(),
+    ])?;
     assert!(
         join.status.success(),
         "join-retrace should run; output: {}",
@@ -266,11 +298,11 @@ fn scope_corrections_dry_run_reports_without_modifying() -> Result<(), TestError
     let fixture = write_fixture(harness.home_dir(), "correction_dryrun.cha", &input)?;
 
     let join = harness.run_output(&[
-        "debug",
+        "experimental",
+        "transform",
         "join-retrace",
         "--scope",
         "corrections",
-        "--dry-run",
         fixture.to_str().unwrap(),
     ])?;
     assert!(
@@ -316,7 +348,13 @@ fn scope_all_joins_nonrepeat_partial_retrace() -> Result<(), TestError> {
     // Default scope: must NOT join.
     {
         let fixture = write_fixture(harness.home_dir(), "nonrepeat_default.cha", &input)?;
-        let join = harness.run_output(&["debug", "join-retrace", fixture.to_str().unwrap()])?;
+        let join = harness.run_output(&[
+            "experimental",
+            "transform",
+            "join-retrace",
+            "--apply",
+            fixture.to_str().unwrap(),
+        ])?;
         assert!(join.status.success(), "{}", combined_output(&join));
         let after = std::fs::read_to_string(&fixture)?;
         assert_eq!(
@@ -329,8 +367,10 @@ fn scope_all_joins_nonrepeat_partial_retrace() -> Result<(), TestError> {
     {
         let fixture = write_fixture(harness.home_dir(), "nonrepeat_corrections.cha", &input)?;
         let join = harness.run_output(&[
-            "debug",
+            "experimental",
+            "transform",
             "join-retrace",
+            "--apply",
             "--scope",
             "corrections",
             fixture.to_str().unwrap(),
@@ -347,8 +387,10 @@ fn scope_all_joins_nonrepeat_partial_retrace() -> Result<(), TestError> {
     {
         let fixture = write_fixture(harness.home_dir(), "nonrepeat_all.cha", &input)?;
         let join = harness.run_output(&[
-            "debug",
+            "experimental",
+            "transform",
             "join-retrace",
+            "--apply",
             "--scope",
             "all",
             fixture.to_str().unwrap(),
@@ -371,7 +413,7 @@ fn scope_all_joins_nonrepeat_partial_retrace() -> Result<(), TestError> {
         );
 
         // The joined file must be valid CHAT.
-        let validate = harness.run_validate(&fixture, &["--force"])?;
+        let validate = harness.run_validate(&fixture, &["--refresh-cache"])?;
         assert!(
             validate.status.success(),
             "joined non-repeat [/] file must validate; output: {}",
@@ -391,8 +433,10 @@ fn scope_all_does_not_join_different_speaker() -> Result<(), TestError> {
     let fixture = write_fixture(harness.home_dir(), "diffspk_all.cha", &input)?;
 
     let join = harness.run_output(&[
-        "debug",
+        "experimental",
+        "transform",
         "join-retrace",
+        "--apply",
         "--scope",
         "all",
         fixture.to_str().unwrap(),
@@ -421,8 +465,10 @@ fn chain_of_dangling_retraces_collapses_and_validates() -> Result<(), TestError>
     let fixture = write_fixture(harness.home_dir(), "chain.cha", &input)?;
 
     let join = harness.run_output(&[
-        "debug",
+        "experimental",
+        "transform",
         "join-retrace",
+        "--apply",
         "--scope",
         "all",
         fixture.to_str().unwrap(),
@@ -437,7 +483,7 @@ fn chain_of_dangling_retraces_collapses_and_validates() -> Result<(), TestError>
     );
 
     // The joined file must be valid CHAT (no residual E370).
-    let validate = harness.run_validate(&fixture, &["--force"])?;
+    let validate = harness.run_validate(&fixture, &["--refresh-cache"])?;
     assert!(
         validate.status.success(),
         "collapsed chain must validate; output: {}",
@@ -458,8 +504,10 @@ fn does_not_join_across_intervening_header() -> Result<(), TestError> {
     let fixture = write_fixture(harness.home_dir(), "header_between.cha", &input)?;
 
     let join = harness.run_output(&[
-        "debug",
+        "experimental",
+        "transform",
         "join-retrace",
+        "--apply",
         "--scope",
         "all",
         fixture.to_str().unwrap(),

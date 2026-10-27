@@ -35,6 +35,7 @@ pub(super) fn as_retrace(item: &UtteranceContent) -> Option<&Retrace> {
         | UtteranceContent::SinGroup(_)
         | UtteranceContent::Action(_)
         | UtteranceContent::AnnotatedAction(_)
+        | UtteranceContent::OrphanAnnotation(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::Separator(_)
         | UtteranceContent::OverlapPoint(_)

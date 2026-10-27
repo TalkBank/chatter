@@ -87,7 +87,7 @@ fn new_file_default_scaffold() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     harness
         .chatter_cmd()
-        .arg("new-file")
+        .arg("new")
         .assert()
         .success()
         .stdout(predicate::str::contains("@UTF8"))
@@ -105,7 +105,7 @@ fn new_file_custom_speaker_language_utterance() -> Result<(), TestError> {
     harness
         .chatter_cmd()
         .args([
-            "new-file",
+            "new",
             "--speaker",
             "MOT",
             "--language",
@@ -131,7 +131,7 @@ fn new_file_output_is_valid_chat() -> Result<(), TestError> {
 
     harness
         .chatter_cmd()
-        .arg("new-file")
+        .arg("new")
         .arg("--output")
         .arg(&path)
         .args(["--utterance", "hello world ."])
@@ -167,7 +167,7 @@ fn clean_reports_cleaned_words() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     harness
         .chatter_cmd()
-        .arg("clean")
+        .args(["inspect", "words"])
         .arg(reference_fixture(CONVERSATION_FIXTURE))
         .assert()
         .success()
@@ -185,7 +185,7 @@ fn clean_json_is_valid_json_array() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let output = harness
         .chatter_cmd()
-        .arg("clean")
+        .args(["inspect", "words"])
         .arg(reference_fixture(CONVERSATION_FIXTURE))
         .args(["--format", "json"])
         .output()?;
@@ -296,7 +296,7 @@ fn jobs_zero_is_a_usage_error() -> Result<(), TestError> {
         .assert();
     let to_json = harness
         .chatter_cmd()
-        .arg("to-json")
+        .args(["convert", "to-json"])
         .arg(dir.path())
         .arg("--output-dir")
         .arg(&out_dir)
@@ -398,7 +398,7 @@ fn conflicting_output_flags_are_usage_errors() -> Result<(), TestError> {
         vec!["--format", "json", "--quiet"],
         vec!["--format", "json", "--tui-mode", "force"],
         // An audit never writes the cache; --force would clear rows.
-        vec!["--audit", audit.to_str().expect("utf-8"), "--force"],
+        vec!["--audit", audit.to_str().expect("utf-8"), "--refresh-cache"],
     ] {
         let output = crate::common::chatter_cmd()
             .arg("validate")
@@ -424,8 +424,13 @@ fn flags_a_command_would_ignore_are_usage_errors() -> Result<(), TestError> {
         "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n",
     )?;
     for args in [
-        vec!["normalize", "--skip-alignment"],
-        vec!["to-json", "--skip-validation", "--skip-alignment"],
+        vec!["format", "--skip-alignment"],
+        vec![
+            "convert",
+            "to-json",
+            "--skip-validation",
+            "--skip-alignment",
+        ],
     ] {
         let output = crate::common::chatter_cmd()
             .args(&args[..1])

@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "zho"
-  ],
   "lines": [
     {
       "header": {
@@ -32,8 +29,11 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Participant",
+            "details": {
+              "name": null,
+              "role": "Participant",
+              "state": "complete"
+            },
             "speaker_code": "PAR0"
           }
         ],
@@ -1448,26 +1448,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "media": {
-    "filename": "chinese-adult-conversation",
-    "media_type": "audio"
-  },
-  "options": [],
-  "participants": {
-    "PAR0": {
-      "birth_date": null,
-      "code": "PAR0",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "zho"
-        ],
-        "role": "Participant",
-        "speaker": "PAR0"
-      },
-      "name": null,
-      "role": "Participant"
-    }
-  }
+  ]
 }

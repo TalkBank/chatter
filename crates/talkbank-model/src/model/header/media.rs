@@ -126,16 +126,19 @@ pub enum DeclaredRecording {
 
 impl WriteChat for MediaHeader {
     /// Serializes canonical `@Media` text, including optional status.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(
-            w,
-            "@Media:\t{}, {}",
-            self.filename,
-            self.media_type.as_str()
-        )?;
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        {
+            w.write_str("@Media:\t")?;
+            crate::model::WriteChat::write_chat(&self.filename, w)?;
+            w.write_str(", ")?;
+            crate::model::WriteChat::write_chat(&self.media_type.as_str(), w)
+        }?;
 
         if let Some(ref status) = self.status {
-            write!(w, ", {}", status.as_str())?;
+            {
+                w.write_str(", ")?;
+                crate::model::WriteChat::write_chat(&status.as_str(), w)
+            }?;
         }
 
         Ok(())

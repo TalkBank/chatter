@@ -3,7 +3,7 @@
 **Status:** Reference
 **Last updated:** {{git-dates:page}}
 
-This document describes the structure of JSON produced by `chatter to-json`.
+This document describes the structure of JSON produced by `chatter convert to-json`.
 For the formal JSON Schema, see [JSON Schema](json-schema.md).
 Examples below are selected fields, not complete transcript fixtures. Ellipses
 are schematic placeholders, not JSON syntax; omitted fields and source spans
@@ -13,16 +13,16 @@ must not be inferred from these illustrations.
 
 ```bash
 # Default: parse + validate + align, pretty-printed, schema-checked
-chatter to-json file.cha
+chatter convert to-json file.cha
 
 # Write to file
-chatter to-json file.cha -o file.json
+chatter convert to-json file.cha -o file.json
 
 # Skip validation (parse only, faster)
-chatter to-json file.cha --skip-validation
+chatter convert to-json file.cha --skip-validation
 
 # Skip alignment only
-chatter to-json file.cha --skip-alignment
+chatter convert to-json file.cha --skip-alignment
 ```
 
 Validation and alignment are **on by default**. Use `--skip-validation`
@@ -84,7 +84,7 @@ a partial typed word while separately reporting rejected source material.
 Source-coordinate consumers must retain the original source and use its spans;
 they must not index derived spelling with offsets into that source.
 
-Rust callers use `Word::new(WordText)` for a nonempty plain-text model, then
+Rust callers use `Word::new(location, WordText)` for a nonempty plain-text model, then
 explicit typed builders for markers. Nonempty construction alone is not full
 CHAT admission. For external CHAT/ASR tokens, use `ChatParser::parse_word`
 and handle rejection explicitly instead of falling back to unchecked construction.
@@ -95,7 +95,9 @@ streams that display projection directly. The cleaned-text cache is
 invalidated by content mutation; no raw-text cache can become stale after
 public marker mutation.
 
-- **`cleaned_text`**: Concatenates `Text` and `Shortening` elements from `content`.
+- **`cleaned_text`**: Concatenates spoken `Text`, `Shortening`, and `Phonetic`
+  elements from `content`. Text inside CA segment-repetition delimiters
+  (`↫ ... ↫`) is retained in the model but excluded from this projection.
   Excludes lengthening markers (`:`), stress markers, CA elements, overlap points,
   compound markers, and underline markers. Example: `sit(ting)` → `"sitting"`.
 
@@ -277,20 +279,36 @@ Key structural points:
 
 ### `language_metadata`
 
-One entry per WORD of the main tier, in in-order traversal order, under
-`language_metadata.word_languages`:
+The `language_metadata` field is omitted when language analysis has not run,
+as in a parse-only export. If present, inspect `language_metadata.status`.
+An explicit `"uncomputed"` value likewise means the analysis has not run;
+it is not an empty result and must not be
+replaced with a guessed language. A `"computed"` value contains `metadata`,
+with one entry per word in main-tier traversal order under
+`language_metadata.metadata.word_languages`:
 
 ```json
 "language_metadata": {
-  "tier_language": "zho",
-  "word_languages": [
-    { "languages": { "single": "zho" }, "source": "default" },
-    { "languages": { "single": "eng" }, "source": "word_shortcut" }
-  ]
+  "status": "computed",
+  "metadata": {
+    "tier_language": "zho",
+    "word_languages": [
+      { "languages": { "Single": "zho" }, "source": "default" },
+      { "languages": { "Single": "eng" }, "source": "word_shortcut" }
+    ]
+  }
 }
 ```
 
-Three properties worth knowing before consuming it:
+The explicit uncomputed form is `{"status": "uncomputed"}`, with no `metadata`
+field; normal transcript serialization omits that state instead.
+Computation also does not guarantee that a language could be resolved: consume
+each entry's language state rather than substituting the tier language.
+The `languages` wire forms are case-sensitive: `{"Single": "eng"}`,
+`{"Multiple": ["eng", "zho"]}`, `{"Ambiguous": ["eng", "zho"]}`, or the
+string `"Unresolved"`. These differ from the lowercase word-suffix `lang` tags.
+
+Properties of computed metadata:
 
 - **Every word at any depth**, including words inside quotations,
   phonological groups, sign groups and retraces. A retraced word was spoken
@@ -437,7 +455,7 @@ Headers use the `header` object with a `type` discriminator:
 | `"begin"` | `@Begin` | none |
 | `"end"` | `@End` | none |
 | `"languages"` | `@Languages` | `codes` |
-| `"participants"` | `@Participants` | `entries` (speaker_code, name, role) |
+| `"participants"` | `@Participants` | `entries` (`speaker_code`, `details`) |
 | `"id"` | `@ID` | `language`, `corpus`, `speaker`, `role`, `age`, `sex`, ... |
 | `"media"` | `@Media` | `filename`, `media_type`, `status` |
 | `"comment"` | `@Comment` | `content` (`BulletContent`) |
@@ -445,6 +463,22 @@ Headers use the `header` object with a `type` discriminator:
 | `"options"` | `@Options` | `options` (array of strings) |
 
 See the [JSON Schema](json-schema.md) for the complete list of header types and fields.
+
+Participant declarations keep the observed name and role inside `details`:
+
+```json
+{
+  "speaker_code": "CHI",
+  "details": { "state": "complete", "role": "Child" }
+}
+```
+
+The `"complete"` state may also include a `name`. A declaration containing only
+a speaker code has `"details": {"state": "missing_role"}`; it does not acquire
+a role from an `@ID` header or a default value. This is a recovery state, not a
+valid declaration. The top-level `participants` metadata projection uses
+`code` instead of `speaker_code` and also carries `details` alongside `id`.
+Deserialization and schema shape checks do not replace transcript validation.
 
 ## Timing
 

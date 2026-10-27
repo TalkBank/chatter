@@ -138,9 +138,12 @@ pub enum BracketedItem {
     Separator(Separator),
     /// Internal bullet/timestamp within group
     #[serde(rename = "internal_bullet")]
-    InternalBullet(super::Bullet),
+    InternalBullet(super::BulletState),
     /// Freecode - free-form inline annotation (e.g., `[^ comment]`)
     Freecode(super::Freecode),
+    /// Annotation source with no preceding host inside this group.
+    #[serde(rename = "orphan_annotation")]
+    OrphanAnnotation(super::OrphanAnnotation),
     /// Long feature begin marker (&{l=LABEL)
     #[serde(rename = "long_feature_begin")]
     LongFeatureBegin(LongFeatureBegin),
@@ -169,7 +172,7 @@ pub enum BracketedItem {
 
 impl WriteChat for BracketedItem {
     /// Serializes one bracket-internal item in its canonical CHAT surface form.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             BracketedItem::Word(word) => word.write_chat(w),
             BracketedItem::AnnotatedWord(ann) => ann.write_chat(w),
@@ -189,6 +192,7 @@ impl WriteChat for BracketedItem {
             BracketedItem::Separator(sep) => sep.write_chat(w),
             BracketedItem::InternalBullet(bullet) => bullet.write_chat(w),
             BracketedItem::Freecode(freecode) => freecode.write_chat(w),
+            BracketedItem::OrphanAnnotation(raw) => raw.write_chat(w),
             BracketedItem::LongFeatureBegin(marker) => marker.write_chat(w),
             BracketedItem::LongFeatureEnd(marker) => marker.write_chat(w),
             BracketedItem::UnderlineBegin(_) => {
@@ -277,7 +281,7 @@ impl BracketedContent {
 
 impl WriteChat for BracketedContent {
     /// Serializes bracket-internal content only (without surrounding bracket chars).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         let Some((first, remaining)) = self.content.split_first() else {
             return Ok(());
         };

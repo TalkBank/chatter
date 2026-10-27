@@ -3,10 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng",
-    "ara"
-  ],
   "lines": [
     {
       "header": {
@@ -34,18 +30,27 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Child",
+            "details": {
+              "name": null,
+              "role": "Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           },
           {
-            "name": null,
-            "role": "Father",
+            "details": {
+              "name": null,
+              "role": "Father",
+              "state": "complete"
+            },
             "speaker_code": "F_A_T"
           }
         ],
@@ -296,57 +301,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": "28-JUN-2001",
-      "code": "CHI",
-      "id": {
-        "age": "1;08.02",
-        "corpus": "corpus",
-        "group": "normal",
-        "language": [
-          "eng",
-          "ara"
-        ],
-        "role": "Child",
-        "sex": "female",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Child"
-    },
-    "F_A_T": {
-      "birth_date": null,
-      "code": "F_A_T",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng",
-          "ara"
-        ],
-        "role": "Father",
-        "speaker": "F_A_T"
-      },
-      "name": null,
-      "role": "Father"
-    },
-    "MOT": {
-      "birth_date": "15-MAR-1975",
-      "code": "MOT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng",
-          "ara"
-        ],
-        "role": "Mother",
-        "sex": "female",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    }
-  }
+  ]
 }

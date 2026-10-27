@@ -91,6 +91,11 @@ impl DocumentAnalysis {
         (self.revision.source() == source).then_some(self)
     }
 
+    /// The source owned by this analysis, inseparable from its parsed model.
+    pub(crate) fn source(&self) -> &str {
+        self.revision.source()
+    }
+
     pub(crate) fn tree(&self) -> Option<Tree> {
         self.revision.tree()
     }

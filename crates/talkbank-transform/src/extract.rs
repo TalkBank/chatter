@@ -67,9 +67,23 @@ impl ExtractedWord {
     pub fn resolve_language(
         &self,
         tier_language: Option<&LanguageCode>,
-        declared_languages: &[LanguageCode],
+        declared_languages: talkbank_model::DeclaredLanguagesRef<'_>,
     ) -> LanguageResolutionOutcome {
-        self.language.resolve(tier_language, declared_languages)
+        self.language
+            .resolve_with_declaration(tier_language, Ok(declared_languages))
+    }
+
+    /// Resolve while retaining the declaration's explicit admission failure.
+    pub fn resolve_language_with_declaration(
+        &self,
+        tier_language: Option<&LanguageCode>,
+        declaration: Result<
+            talkbank_model::DeclaredLanguagesRef<'_>,
+            talkbank_model::model::LanguageDeclarationError,
+        >,
+    ) -> LanguageResolutionOutcome {
+        self.language
+            .resolve_with_declaration(tier_language, declaration)
     }
 }
 
@@ -293,6 +307,7 @@ mod tests {
     use talkbank_model::alignment::helpers::PositionalDomain;
     use talkbank_model::validation::GoverningMarkKind;
     use talkbank_parser::TreeSitterParser;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
 
     /// Parse a CHAT string into a ChatFile, panicking on errors (test-only).
     fn parse_chat(text: &str) -> ChatFile {
@@ -592,7 +607,11 @@ mod tests {
             assert_eq!(word.text.as_str(), *text, "word order");
             assert_eq!(word.language_kind(), *kind, "which mark governs `{text}`");
             assert_eq!(
-                word.resolve_language(Some(&eng), &declared).resolution,
+                word.resolve_language(
+                    Some(&eng),
+                    talkbank_model::DeclaredLanguagesRef::new(&declared).unwrap()
+                )
+                .resolution,
                 *language,
                 "resolved language of `{text}`"
             );

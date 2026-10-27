@@ -2,7 +2,7 @@
 //! Source-owned edits distinguish item/chunk/relation spaces without fabricated ASTs.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use talkbank_model::model::{DependentTier, DependentTierEntry, GraCompleteness, ParseHealthTier};
+use talkbank_model::model::{DependentTier, DependentTierEntry, ParseHealthTier};
 use talkbank_model::{
     ChatFile, ChatParser, ErrorCode, ErrorCollector, FragmentSemanticContext, ParseOutcome,
     SemanticEq, Span, TranscriptName, Utterance,
@@ -142,14 +142,6 @@ fn wire_contract(file: &ChatFile, failures: &mut Vec<String>) -> ChatFile {
             .utterances()
             .all(|turn| turn.parse_health().is_unknown()),
         "wire fabricated parse health",
-        failures,
-    );
-    require(
-        decoded
-            .utterances()
-            .filter_map(|turn| turn.gra_tier())
-            .all(|gra| gra.completeness() == GraCompleteness::Unknown),
-        "wire fabricated GRA completeness",
         failures,
     );
     require(
@@ -514,8 +506,8 @@ fn mor_gra_combinations_recovery_retains_independent_turns_and_refuses_fragments
                 &mut failures,
             );
             require(
-                middle.gra_tier().expect("intact GRA").completeness() == GraCompleteness::Whole,
-                "MOR fault withdrew GRA own completeness",
+                middle.gra_tier().is_some(),
+                "MOR fault removed intact GRA",
                 &mut failures,
             );
             for offset in [0, candidate.span().start(), candidate.span().start() + 25] {

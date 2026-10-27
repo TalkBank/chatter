@@ -43,11 +43,11 @@
 //!     LanguageCode,
 //! };
 //!
-//! let entry = ParticipantEntry {
-//!     speaker_code: SpeakerCode::new("CHI"),
-//!     name: Some(ParticipantName::new("Ruth")),
-//!     role: ParticipantRole::new("Target_Child"),
-//! };
+//! let entry = ParticipantEntry::new(
+//!     SpeakerCode::new("CHI"),
+//!     Some(ParticipantName::new("Ruth")),
+//!     ParticipantRole::new("Target_Child"),
+//! );
 //!
 //! let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child")
 //!     .with_age("10;03.")
@@ -58,7 +58,7 @@
 //!
 //! assert_eq!(participant.code.as_str(), "CHI");
 //! assert_eq!(
-//!     participant.name.as_ref().map(|n| n.as_str()),
+//!     participant.name().map(|n| n.as_str()),
 //!     Some("Ruth")
 //! );
 //! assert_eq!(
@@ -72,8 +72,13 @@ mod accessors;
 mod core;
 mod declared;
 pub mod join;
+mod roster;
 #[cfg(test)]
 mod tests;
 
 pub use core::Participant;
 pub use declared::DeclaredSpeaker;
+pub use join::ParticipantView;
+
+pub(crate) use roster::participant_declaration;
+pub use roster::{ParticipantDeclarationError, ParticipantRoster, SpeakerMembership};

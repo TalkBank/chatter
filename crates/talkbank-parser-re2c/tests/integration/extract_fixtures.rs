@@ -23,9 +23,9 @@
 //! Each fixture file contains one logical CHAT line per entry, separated by
 //! a blank line. Lines include continuations (tab-indented follow-on lines).
 
+use crate::chat_lines::ChatLines;
 use std::collections::BTreeMap;
 use std::io::Write;
-use talkbank_parser_re2c::chat_lines::ChatLines;
 
 /// Set `TALKBANK_DATA` to the path containing `*-data` corpus
 /// directories before running this binary. The fallback path is
@@ -124,10 +124,11 @@ fn extract_all_fixtures() {
                 for chat_line in ChatLines::new(&content) {
                     for (name, prefix) in &prefixes {
                         let samples = by_prefix.get_mut(*name).unwrap();
-                        if samples.len() < SAMPLES_PER_TYPE && chat_line.text.starts_with(prefix) {
+                        if samples.len() < SAMPLES_PER_TYPE && chat_line.text().starts_with(prefix)
+                        {
                             // Deduplicate
-                            if !samples.contains(&chat_line.text.to_string()) {
-                                samples.push(chat_line.text.to_string());
+                            if !samples.contains(&chat_line.text().to_string()) {
+                                samples.push(chat_line.text().to_string());
                             }
                         }
                     }

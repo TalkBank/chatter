@@ -7,12 +7,12 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{AsRawNode, LongFeatureNode};
-use crate::model::{LongFeatureBegin, LongFeatureEnd, LongFeatureLabel, UtteranceContent};
+use crate::model::UtteranceContent;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 
-use super::{delimiter, marker_label, span_of};
+use super::labeled_marker::MarkerSource;
 
 /// Parse one `long_feature` node: a begin marker (`&{l=label`) or an end
 /// marker (`&}l=label`), over the generated traversal.
@@ -58,91 +58,13 @@ pub(crate) fn parse_long_feature<'tree>(
         }
         crate::generated_traversal::SourceSlotView::Absent(_) => return ParseOutcome::rejected(),
     };
-    let built = match choice.view() {
+    let marker = match choice.view() {
         crate::generated_traversal::LongFeatureChoiceBoundView::LongFeatureBegin(node) => {
-            let Ok(associated) = crate::parser::typed_cst::report_admission(
-                crate::parser::typed_cst::extract_inner(node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let inner = associated.children();
-            surface_displaced(&inner.unexpected, "long_feature_begin", source, errors);
-            // Every delimiter is checked (and reported) before the verdict;
-            // a marker whose shape is not intact is not built.
-            let intact = inner.unexpected.is_empty()
-                & delimiter(
-                    inner.child_0.slot(),
-                    "'&'",
-                    "long_feature_begin",
-                    source,
-                    errors,
-                )
-                & delimiter(
-                    inner.child_1.slot(),
-                    "'{l='",
-                    "long_feature_begin",
-                    source,
-                    errors,
-                );
-            let span = span_of(node.raw_node());
-            marker_label(
-                associated.field_child_2().slot(),
-                "long_feature_begin",
-                errors,
-            )
-            .filter(|_| intact)
-            .map(|label| {
-                UtteranceContent::LongFeatureBegin(LongFeatureBegin::new(
-                    span,
-                    LongFeatureLabel::new(label),
-                ))
-            })
+            MarkerSource::LongFeatureBegin(node)
         }
         crate::generated_traversal::LongFeatureChoiceBoundView::LongFeatureEnd(node) => {
-            let Ok(associated) = crate::parser::typed_cst::report_admission(
-                crate::parser::typed_cst::extract_inner(node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let inner = associated.children();
-            surface_displaced(&inner.unexpected, "long_feature_end", source, errors);
-            // Every delimiter is checked (and reported) before the verdict;
-            // a marker whose shape is not intact is not built.
-            let intact = inner.unexpected.is_empty()
-                & delimiter(
-                    inner.child_0.slot(),
-                    "'&'",
-                    "long_feature_end",
-                    source,
-                    errors,
-                )
-                & delimiter(
-                    inner.child_1.slot(),
-                    "'}l='",
-                    "long_feature_end",
-                    source,
-                    errors,
-                );
-            let span = span_of(node.raw_node());
-            marker_label(
-                associated.field_child_2().slot(),
-                "long_feature_end",
-                errors,
-            )
-            .filter(|_| intact)
-            .map(|label| {
-                UtteranceContent::LongFeatureEnd(LongFeatureEnd::new(
-                    span,
-                    LongFeatureLabel::new(label),
-                ))
-            })
+            MarkerSource::LongFeatureEnd(node)
         }
     };
-    ParseOutcome::from(built)
+    marker.parse(errors)
 }

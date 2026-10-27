@@ -116,9 +116,9 @@ fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError
     }
 
     // Check @Languages present
-    if file.languages.is_empty() {
+    if let Err(reason) = file.language_declaration() {
         errors.push(ValidationError {
-            message: "@Languages header missing".to_string(),
+            message: reason.to_string(),
             level: ValidityLevel::StructurallyComplete,
         });
     }
@@ -127,8 +127,7 @@ fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError
     // has incomplete turns, backchannels and trailing-off speech. It says
     // nothing about which notation the file uses.
     let terminators_waived = file
-        .options
-        .iter()
+        .option_flags()
         .any(|f| f.has_effect(CaOptionEffect::TerminatorRequirementWaived));
 
     // Check every utterance has a terminator (non-CA) and a declared speaker
@@ -144,7 +143,7 @@ fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError
 
             // Check speaker is declared in participants.
             //
-            // The ROSTER is the `@Participants` header, not `file.participants`,
+            // The ROSTER is the `@Participants` header, not the metadata join,
             // which is the `@Participants`-to-`@ID` join and therefore drops a
             // speaker whose `@ID` is missing. Asking the map returned the
             // opposite of the truth for such a speaker: "not declared in
@@ -196,8 +195,7 @@ pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<Validat
     // Check every utterance still has a terminator, unless `@Options: CA` has
     // waived the requirement (see `CaOptionEffect`).
     let terminators_waived = file
-        .options
-        .iter()
+        .option_flags()
         .any(|f| f.has_effect(CaOptionEffect::TerminatorRequirementWaived));
 
     if !terminators_waived {
@@ -277,6 +275,13 @@ fn validate_align_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
         if let Line::Utterance(utt) = line
             && let Some(ref bullet) = utt.main.content.bullet
         {
+            let Some(bullet) = bullet.as_parsed() else {
+                errors.push(ValidationError {
+                    message: "After align: unparsed terminal timing".to_owned(),
+                    level: ValidityLevel::MainTierValid,
+                });
+                continue;
+            };
             let start = bullet.timing.start_ms;
             let end = bullet.timing.end_ms;
 
@@ -298,6 +303,7 @@ fn validate_align_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
 mod tests {
     use super::*;
     use talkbank_parser::TreeSitterParser;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
 
     const MOR_GRA_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
 @ID:\teng|test|CHI|3;|male|||Target_Child|||\n*CHI:\thello world .\n\
@@ -369,7 +375,17 @@ mod tests {
         let mut chat = parse_chat_file(MOR_GRA_CHAT);
 
         // Add @Options: CA and remove terminators
-        chat.options.push(talkbank_model::model::ChatOptionFlag::Ca);
+        chat.lines.insert(
+            2,
+            Line::header(
+                talkbank_model::Location::Unlocated,
+                talkbank_model::Header::Options {
+                    options: talkbank_model::model::ChatOptionFlags::new(vec![
+                        talkbank_model::model::ChatOptionFlag::Ca,
+                    ]),
+                },
+            ),
+        );
         for line in &mut chat.lines {
             if let Line::Utterance(utt) = line {
                 utt.main.content.terminator = None;
@@ -542,7 +558,7 @@ mod tests {
         );
 
         assert!(
-            !chat.participants.contains_key("MOT"),
+            chat.get_participant("MOT").is_none(),
             "precondition: the @ID join drops MOT, which is why the old check was wrong"
         );
 

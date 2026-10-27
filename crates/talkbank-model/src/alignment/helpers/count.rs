@@ -282,8 +282,8 @@ pub fn count_tier_positions(content: &[UtteranceContent], domain: PositionalDoma
 /// use talkbank_model::model::{UtteranceContent, Word};
 ///
 /// let content = vec![
-///     UtteranceContent::Word(Box::new(Word::simple(Location::Unlocated, "hello"))),
-///     UtteranceContent::Word(Box::new(Word::simple(Location::Unlocated, "world"))),
+///     UtteranceContent::Word(Box::new(Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("hello"))))),
+///     UtteranceContent::Word(Box::new(Word::new(Location::Unlocated, talkbank_model::WordText::from(talkbank_model::non_empty_literal!("world"))))),
 /// ];
 ///
 /// // Count items before index 1 (only first word)
@@ -381,6 +381,7 @@ fn walk_alignable_item<'a, D: PositionDomain>(
         // events, markers, formatting, freecodes, overlap points, internal bullets.
         UtteranceContent::Event(_)
         | UtteranceContent::AnnotatedEvent(_)
+        | UtteranceContent::OrphanAnnotation(_)
         | UtteranceContent::Freecode(_)
         | UtteranceContent::OverlapPoint(_)
         | UtteranceContent::InternalBullet(_)
@@ -473,6 +474,7 @@ fn walk_alignable_bracketed_item<'a, D: PositionDomain>(
         | BracketedItem::AnnotatedAction(_)
         | BracketedItem::Event(_)
         | BracketedItem::AnnotatedEvent(_)
+        | BracketedItem::OrphanAnnotation(_)
         | BracketedItem::Freecode(_)
         | BracketedItem::OverlapPoint(_)
         | BracketedItem::InternalBullet(_)

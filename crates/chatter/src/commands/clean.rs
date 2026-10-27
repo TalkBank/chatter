@@ -45,7 +45,11 @@ struct UtteranceEntry {
 /// in the CHAT manual’s Main Tier and Dependent Tier sections define which tokens are considered words and how they
 /// should be iterated, so we reuse the validated `ChatFile` and line map to keep the output aligned with that
 /// structure when emitting JSON or text diffs.
-pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
+pub fn clean_file(
+    input: &PathBuf,
+    diff_only: bool,
+    format: OutputFormat,
+) -> crate::exit_codes::CommandResult {
     let _span = span!(Level::INFO, "clean_file", input = %input.display()).entered();
     info!("Showing cleaned text for utterance words");
 
@@ -57,7 +61,7 @@ pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
         Err(e) => {
             warn!("Failed to read file: {}", e);
             eprintln!("Error reading file {:?}: {}", input, e);
-            std::process::exit(1);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -66,7 +70,7 @@ pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("Error parsing {:?}: {}", input, e);
-            std::process::exit(1);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
@@ -102,12 +106,12 @@ pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
 
     match format {
         OutputFormat::Json => {
-            // serde_json::to_string_pretty is infallible for types
-            // that derive `Serialize` cleanly (no custom serializers
-            // can fail). `entries` is `Vec<CleanEntry>` with derived
-            // Serialize.
-            #[allow(clippy::expect_used)]
-            let json = serde_json::to_string_pretty(&entries).expect("JSON serialization failed");
+            let json = serde_json::to_string_pretty(&entries).map_err(|error| {
+                eprintln!("Error encoding word inspection: {error}");
+                crate::exit_codes::CommandStop::Reported(
+                    crate::exit_codes::ReportedFailure::Internal,
+                )
+            })?;
             outln!("{json}");
         }
         OutputFormat::Text => {
@@ -122,6 +126,7 @@ pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
             }
         }
     }
+    Ok(())
 }
 
 /// Collect word entries from a main tier's content.

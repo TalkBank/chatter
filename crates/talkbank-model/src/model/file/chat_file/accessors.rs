@@ -2,14 +2,14 @@
 //!
 //! These helpers give downstream readers deterministic iteration order without
 //! exposing the internal `Line` enum. `get_participant` and `all_participants`
-//! reuse the canonical participant map to avoid re-parsing `@Participants`.
+//! borrow the current model headers through the canonical participant join.
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Participants_Header>
 
 use crate::model::header::IDHeader;
-use crate::model::{DeclaredSpeaker, Participant, Utterance};
+use crate::model::{DeclaredSpeaker, ParticipantView, Utterance};
 use crate::{Header, WriteChat};
 use tracing::{debug, info};
 
@@ -22,6 +22,35 @@ impl ChatFile {
     /// utterances (for example `@Comment` lines mid-file).
     pub fn headers(&self) -> impl Iterator<Item = &Header> {
         self.lines.iter().filter_map(|line| line.as_header())
+    }
+
+    /// Borrow flags from the last `@Options` header in the current lines.
+    ///
+    /// No header means no flags. Duplicate-header validation is independent;
+    /// this preserves the existing last-header selection for recovery models.
+    /// Editing lines immediately changes the result; no second mutable copy
+    /// or deserialized metadata field can override it.
+    pub fn option_flags(&self) -> impl Iterator<Item = &crate::model::ChatOptionFlag> {
+        self.lines
+            .iter()
+            .rev()
+            .find_map(|line| match line.as_header() {
+                Some(Header::Options { options }) => Some(options),
+                _ => None,
+            })
+            .into_iter()
+            .flat_map(|options| options.iter())
+    }
+
+    /// Borrow the first `@Media` header in the current lines, if present.
+    ///
+    /// This is source structure, not proof of valid linkage or unique media.
+    /// Timing admission and duplicate-header validation remain separate.
+    pub fn media_header(&self) -> Option<&crate::model::MediaHeader> {
+        self.headers().find_map(|header| match header {
+            Header::Media(media) => Some(media),
+            _ => None,
+        })
     }
 
     /// Iterates the file's `@ID` headers in original file order.
@@ -132,13 +161,16 @@ impl ChatFile {
     ///     println!("CHI's age: {:?}", chi.age());
     /// }
     /// ```
-    pub fn get_participant(&self, code: &str) -> Option<&Participant> {
-        self.participants.get(code)
+    pub fn get_participant(&self, code: &str) -> Option<ParticipantView<'_>> {
+        self.all_participants()
+            .into_iter()
+            .find(|participant| participant.code().as_str() == code)
     }
 
-    /// Returns all participants from the internal participant map.
+    /// Returns matching declaration/ID pairs borrowed from current headers.
     ///
-    /// Order follows map iteration and should not be assumed stable for UI ordering.
+    /// Order follows the declaration. These are observations, not validation certificates.
+    /// Parse and validation boundaries report join diagnostics independently.
     ///
     /// **This is the `@ID` join, not the roster.** A speaker declared in
     /// `@Participants` with no `@ID` header is absent here. For "who is in
@@ -151,11 +183,12 @@ impl ChatFile {
     /// # use talkbank_model::model::ChatFile;
     /// # let chat_file = ChatFile::new(vec![]);
     /// for participant in chat_file.all_participants() {
-    ///     println!("{}: {}", participant.code, participant.role);
+    ///     println!("{}: {:?}", participant.code(), participant.role());
     /// }
     /// ```
-    pub fn all_participants(&self) -> Vec<&Participant> {
-        self.participants.values().collect()
+    pub fn all_participants(&self) -> Vec<ParticipantView<'_>> {
+        crate::model::participant::join::build_participants_from_lines(&self.lines)
+            .report_borrowed_into(&crate::NullErrorSink)
     }
 
     /// Iterates every speaker DECLARED in `@Participants`, in declaration
@@ -164,7 +197,7 @@ impl ChatFile {
     /// **Prefer this to [`all_participants`](Self::all_participants) for any
     /// question about who is in the transcript.** The two differ exactly when
     /// the file is invalid, and this one is the roster.
-    /// [`participants`](Self::participants) is keyed and populated from the
+    /// [`all_participants`](Self::all_participants) is populated from the
     /// `@ID` join, so a speaker declared without an `@ID` raises E522 and is
     /// then simply absent from the map: a consumer iterating the map sees
     /// fewer speakers than the file declares, with nothing to say so. Here
@@ -181,35 +214,50 @@ impl ChatFile {
     /// # let chat_file = ChatFile::new(vec![]);
     /// for speaker in chat_file.declared_speakers() {
     ///     match speaker.id_metadata() {
-    ///         Some(meta) => println!("{} ({}) age {:?}", speaker.code(), speaker.role(), meta.age()),
-    ///         None => println!("{} ({}) has no @ID header", speaker.code(), speaker.role()),
+    ///         Some(meta) => println!("{} ({:?}) age {:?}", speaker.code(), speaker.role(), meta.age()),
+    ///         None => println!("{} ({:?}) has no @ID header", speaker.code(), speaker.role()),
     ///     }
     /// }
     /// ```
     pub fn declared_speakers(&self) -> impl Iterator<Item = DeclaredSpeaker<'_>> {
+        let metadata = self.all_participants();
         self.participant_entries()
             .into_iter()
             .flatten()
-            .map(|entry| DeclaredSpeaker::new(entry, self.participants.get(&entry.speaker_code)))
+            .map(move |entry| {
+                DeclaredSpeaker::new(
+                    entry,
+                    metadata
+                        .iter()
+                        .copied()
+                        .find(|view| view.code() == &entry.speaker_code),
+                )
+            })
     }
 
-    /// The `@Participants` payload, in declared order, if the file has one.
+    /// The sole parsed `@Participants` payload, in declared order.
+    /// Rejected or repeated declarations return `None`; use
+    /// [`participant_declaration`](Self::participant_declaration) for the reason.
     ///
     /// Sibling of [`id_headers`](Self::id_headers), and there for the same
     /// stated reason: a reader that wants the declaration list should not
     /// hand-roll the `Header::Participants` match.
     pub fn participant_entries(&self) -> Option<&crate::model::ParticipantEntries> {
-        self.headers().find_map(|header| match header {
-            Header::Participants { entries } => Some(entries),
-            _ => None,
-        })
+        self.participant_declaration().ok()
     }
 
-    /// Returns number of participant entries currently materialized.
+    /// Admit exactly one parsed participant declaration, with no first-wins fallback.
+    pub fn participant_declaration(
+        &self,
+    ) -> Result<&crate::model::ParticipantEntries, crate::model::ParticipantDeclarationError> {
+        crate::model::participant::participant_declaration(self.headers())
+    }
+
+    /// Returns the number of current declaration/ID pairs.
     ///
-    /// This reflects parsed/validated participant state, not a separate header reparse.
+    /// This observes model headers; it does not certify their validity.
     pub fn participant_count(&self) -> usize {
-        self.participants.len()
+        self.all_participants().len()
     }
 
     /// Serializes the full file to an owned CHAT string.
@@ -229,8 +277,7 @@ impl ChatFile {
             header_count,
             utterance_count
         );
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
+        let s = crate::model::ChatString::render(|w| self.write_chat(w));
         info!("Serialized to {} bytes", s.len());
         s
     }

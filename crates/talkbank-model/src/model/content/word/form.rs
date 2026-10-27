@@ -127,7 +127,7 @@ impl UndeclaredFormMarker {
 
 impl WriteChat for FormType {
     /// Serializes marker payload without leading `@`.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.to_chat_marker().as_ref())
     }
 }

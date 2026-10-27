@@ -60,6 +60,32 @@ ignore = []
 multiple-versions = "allow"
 wildcards = "allow"
 
+# Runtime boundaries: book/src/architecture/overview.md.
+[[bans.deny]]
+name = "talkbank-llm"
+wrappers = ["talkbank-chatter"]
+reason = "Only the CLI opts into the model-assisted HTTP adapter."
+
+[[bans.deny]]
+name = "talkbank-parser-re2c"
+wrappers = ["talkbank-transform", "talkbank-parser-tests"]
+reason = "Transform composes parser backends; parser-tests has a dev-only parity exception."
+
+[[bans.deny]]
+name = "talkbank-cache"
+wrappers = ["talkbank-transform", "talkbank-parser-tests", "talkbank-cache"]
+reason = "Transform owns the runtime cache; test support and parser-tests are dev-only exceptions."
+
+[[bans.deny]]
+name = "talkbank-parser"
+wrappers = ["talkbank-transform", "talkbank-lsp", "talkbank-chatter", "talkbank-parser-tests", "talkbank-parser-re2c"]
+reason = "Applications may parse directly; the peer backend uses only dev parity helpers."
+
+[[bans.deny]]
+name = "ureq"
+wrappers = ["talkbank-llm"]
+reason = "Model-assisted HTTP requests belong to the adapter."
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"

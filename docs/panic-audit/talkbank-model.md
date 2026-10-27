@@ -13,6 +13,12 @@ orphan loops. The admitted index is available directly, without a later unwrap.
 This local control-flow invariant does not prove that every model, validation
 or alignment operation cannot panic.
 
+`ParseProduct` no longer exposes a panicking fixture extractor. Its former
+`expect_built` method lives in the explicit `ParseProductTestExt` extension in
+the parser-test support crate; runtime model consumers handle both product
+variants. This removes that inherent panic route without certifying every
+other operation as panic-free.
+
 The build script has separate allowances. Build-time generation, test-only
 attributes, runtime operations and dependencies need distinct review. Do not
 infer runtime panic freedom from a search limited to explicit allowances.

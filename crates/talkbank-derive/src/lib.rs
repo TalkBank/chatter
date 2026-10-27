@@ -215,6 +215,11 @@ pub fn derive_semantic_eq(input: TokenStream) -> TokenStream {
 /// in the LSP: when the user types into a CHAT file, all spans after the edit
 /// point must be adjusted.
 ///
+/// Also generates consuming `try_map_spans`, which recursively applies a
+/// fallible span translation and returns no partial model on failure. It moves
+/// skipped fields unchanged and does not require `Clone`. Fragment rebasing
+/// uses this operation so out-of-source spans cannot be clamped into success.
+///
 /// Use `#[span_shift(skip)]` to exclude fields that should not be shifted
 /// (e.g., cached hashes, indices into external data).
 /// The field-only control accepts exactly one `skip` identifier; malformed,

@@ -195,11 +195,15 @@ impl SourceAdmission {
         utterance: Box<Utterance>,
         origin: MergeOrigin,
     ) -> Result<(), MergeError> {
+        if utterance.main.content.has_unparsed_bullets() {
+            return Err(MergeError::UnparsedTiming { origin });
+        }
         let timing = utterance
             .main
             .content
             .bullet
             .as_ref()
+            .and_then(talkbank_model::BulletState::as_parsed)
             .map(|bullet| &bullet.timing);
         if self.placement == Placement::Timed && timing.is_none() {
             return Err(MergeError::UnpositionedUtterance { origin });
@@ -330,12 +334,16 @@ impl AdmittedMerge {
                             Some(SourceEvent::Section(header)),
                             Some(SourceEvent::Utterance(utterance)),
                         ) => {
-                            let exterior =
-                                self.timed_gem.as_ref().and_then(|gem| {
-                                    utterance.utterance.main.content.bullet.as_ref().and_then(
-                                        |bullet| gem.precedes(&header.header.header, bullet),
-                                    )
-                                });
+                            let exterior = self.timed_gem.as_ref().and_then(|gem| {
+                                utterance
+                                    .utterance
+                                    .main
+                                    .content
+                                    .bullet
+                                    .as_ref()
+                                    .and_then(talkbank_model::BulletState::as_parsed)
+                                    .and_then(|bullet| gem.precedes(&header.header.header, bullet))
+                            });
                             if let Some(precedes) = exterior {
                                 precedes
                             } else {
@@ -430,6 +438,7 @@ impl AdmittedMerge {
                     .content
                     .bullet
                     .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed)
                     .is_some_and(|bullet| gem.precedes(&header.header.header, bullet).is_some());
                 if answered && !gem_decided.contains(&utterance.origin) {
                     gem_decided.push(utterance.origin);
@@ -459,7 +468,13 @@ impl AdmittedMerge {
                         if let (Some(gem), MergeOrigin::Inserted(donor), Some(bullet)) = (
                             &self.timed_gem,
                             positioned.origin,
-                            positioned.utterance.main.content.bullet.as_ref(),
+                            positioned
+                                .utterance
+                                .main
+                                .content
+                                .bullet
+                                .as_ref()
+                                .and_then(talkbank_model::BulletState::as_parsed),
                         ) && gem_decided.contains(&positioned.origin)
                             && let Some(evidence) = gem.evidence(donor, bullet)
                         {
@@ -475,9 +490,8 @@ impl AdmittedMerge {
             order.verify(&origins)?;
         }
         let errors = talkbank_model::ErrorCollector::new();
-        let participants =
-            talkbank_model::model::participant::join::build_participants_from_lines(&lines)
-                .report_into(&errors);
+        talkbank_model::model::participant::join::build_participants_from_lines(&lines)
+            .report_diagnostics(&errors);
         let diagnostics = errors.into_vec();
         if !diagnostics.is_empty() {
             return Err(MergeError::InvalidParticipantJoin { diagnostics });
@@ -485,7 +499,7 @@ impl AdmittedMerge {
         // Validation is the draft's own transition (`MergeDraft::validate`), so a
         // caller may repair timing between assembly and validation.
         Ok(MergeDraft {
-            file: ChatFile::with_participants(lines, participants),
+            file: ChatFile::new(lines),
             origins,
             reference_fates: self.reference_fates,
             donor_fates: self.donor_fates,

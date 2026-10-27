@@ -1,4 +1,4 @@
-# Speaker-ID (`chatter speaker-id`)
+# Speaker identity (`chatter experimental speakers`)
 
 **Status:** Current
 **Last modified:** {{git-dates:page}}
@@ -13,6 +13,13 @@ can call an external LLM and writes review-gated pending suggestions rather than
 relabeled CHAT; see the [CLI reference](cli-reference.md). Do not treat local
 deterministic checks as provider qualification.
 
+Speaker assignments also apply to `@Birth of`, `@Birthplace of`, and `@L1 of`:
+renaming changes the speaker reference while preserving the date, place, or
+language; dropping a speaker removes those headers. Unmapped speakers and their
+headers remain unchanged. Free-text comments are not searched for speaker codes.
+Recognized unparsed ID headers refuse rewriting because their identity fields
+are unavailable.
+
 ## Identification modes
 
 For deterministic judgment, choose exactly one mapping source.
@@ -25,7 +32,7 @@ the single supplied `CODE:ROLE`. Dropping is intended for later assembly with
 the retained reference, not for producing a complete standalone transcript.
 
 ```bash
-chatter speaker-id donor.cha \
+chatter experimental speakers match donor.cha \
   --reference reference.cha --anchor CHI --inserted-role INV:Investigator \
   --write-match-report match-report.json \
   --write-override overrides.toml --write-pending pending.toml \
@@ -45,16 +52,23 @@ to obtain output.
 ### 2. Explicit-mapping mode
 
 ```bash
-chatter speaker-id donor.cha \
+chatter experimental speakers map donor.cha \
   --mapping "PAR0=INV:Investigator,PAR1=drop" -o relabeled.cha
 ```
 
 Assignments are comma-separated `OLD=CODE:ROLE` or `OLD=drop`.
 Malformed/duplicate source assignments refuse.
+Before rendering, every rename must have a valid speaker token and a canonical
+participant role. A supplied participant name must be nonblank and contain no
+comma or line break. These checks also apply to saved overrides and library
+mappings; invalid replacements refuse with exit two before CHAT output.
 Speakers absent from the map currently pass through unchanged; unused mapping
 keys do not prove that those speakers existed in the input. Review the whole
-mapping yourself. Target uniqueness and complete source coverage are not
-validated here.
+mapping yourself. Retained participants must have distinct final codes: a rename
+onto an unchanged participant or two renames onto the same target refuse before
+CHAT output. Swapping two codes or reusing a dropped participant's code is legal.
+This is a relabeling operation, not a participant merge. Complete source coverage
+and general input validity remain separate requirements.
 
 `--write-override` is rejected in explicit mode. Use
 [adjudication](merge-workflow.md) to persist operator decisions; an explicit
@@ -63,11 +77,11 @@ mapping invocation does not automatically preserve scores from an earlier run.
 ### 3. Override-file mode
 
 ```bash
-chatter speaker-id donor.cha --override-file overrides.toml \
+chatter experimental speakers replay donor.cha --override-file overrides.toml \
   --session-id session-demo -o relabeled.cha
 ```
 
-The session ID defaults to the input basename stem. The requested entry must
+The session ID is required explicitly. The requested entry must
 exist and its renames must have role records. Replay applies the saved mapping
 without rerunning lexical identification or updating the original record's
 mode, operator or timestamp. A session key is not proof of recording identity.
@@ -77,6 +91,14 @@ mode, operator or timestamp. A session key is not proof of recording identity.
 Without `-o`, relabeled CHAT goes to stdout. An output path is written with
 replacement semantics, not exclusive creation: choose a new destination and
 keep source files intact.
+
+Before writing CHAT, the command refuses an output that aliases the donor,
+reference or replay file, or an existing configured match-report, override or
+pending file. Identity checks include hard links and symlinks; writing consumes
+the same opened destination handle that passed admission. An unrelated existing
+output still gets replaced. This is not atomic publication or protection against
+concurrent replacement of source paths; a later I/O failure can leave partial
+CHAT output.
 
 Input parse/validation and I/O failures exit one; mapping/precondition refusals
 exit two; low reference confidence exits four. Unsupported override versions
@@ -92,6 +114,8 @@ Do not generalize fixture byte-stability checks to all source formatting.
 Reference `--write-override` keys entries by input basename, with operator
 from `USER` or `unknown`. It writes the decision before writing CHAT output,
 so a later output failure can leave the override changed.
+The match report can likewise exist before final CHAT destination admission.
+An alias refusal preserves that evidence; it does not roll back earlier writes.
 `--session-id` selects replay entries; it does not rename reference-mode
 output records. Pending writes append requests and do not deduplicate repeated
 runs. See [Override File Format](../integrating/merge-overrides.md).

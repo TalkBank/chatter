@@ -77,7 +77,7 @@ fn adjudicate_speaker_id_accepts_suggested() {
     let mut overrides = OverrideFile::default();
 
     // ScriptedPrompter answers AcceptSuggested for this session.
-    let mut prompter = ScriptedPrompter::from_decisions(vec![(
+    let prompter = ScriptedPrompter::from_decisions(vec![(
         "session-102-t1".to_string(),
         OperatorDecision::AcceptSuggested { note: None },
     )]);
@@ -85,7 +85,7 @@ fn adjudicate_speaker_id_accepts_suggested() {
     let outcome = run_adjudication(
         &mut pending,
         &mut overrides,
-        &mut prompter,
+        prompter,
         "test-operator".to_string(),
     )
     .expect("run_adjudication should succeed on a single AcceptSuggested decision");
@@ -188,7 +188,7 @@ fn adjudicate_speaker_id_override_mapping() {
     };
     let mut overrides = OverrideFile::default();
 
-    let mut prompter = ScriptedPrompter::from_decisions(vec![(
+    let prompter = ScriptedPrompter::from_decisions(vec![(
         "session-204-t1".to_string(),
         OperatorDecision::OverrideMapping {
             mapping: operator_mapping.clone(),
@@ -207,7 +207,7 @@ fn adjudicate_speaker_id_override_mapping() {
     let outcome = run_adjudication(
         &mut pending,
         &mut overrides,
-        &mut prompter,
+        prompter,
         "test-operator".to_string(),
     )
     .expect("run_adjudication should succeed on a single OverrideMapping decision");
@@ -294,7 +294,7 @@ fn adjudicate_parent_role_lookup_chooses_role() {
     let mut overrides = OverrideFile::default();
 
     // Operator picks MOT (mother).
-    let mut prompter = ScriptedPrompter::from_decisions(vec![(
+    let prompter = ScriptedPrompter::from_decisions(vec![(
         "session-307-parent".to_string(),
         OperatorDecision::ChooseRole {
             adult_roles: BTreeMap::from([(
@@ -312,7 +312,7 @@ fn adjudicate_parent_role_lookup_chooses_role() {
     let outcome = run_adjudication(
         &mut pending,
         &mut overrides,
-        &mut prompter,
+        prompter,
         "test-operator".to_string(),
     )
     .expect("run_adjudication should succeed on a single ChooseRole decision");
@@ -403,7 +403,7 @@ fn adjudicate_sanity_scan_accept_suggested() {
     };
     let mut overrides = OverrideFile::default();
 
-    let mut prompter = ScriptedPrompter::from_decisions(vec![(
+    let prompter = ScriptedPrompter::from_decisions(vec![(
         "session-455-t2".to_string(),
         OperatorDecision::AcceptSuggested {
             note: Some("audio review confirms scan's swap".to_string()),
@@ -413,7 +413,7 @@ fn adjudicate_sanity_scan_accept_suggested() {
     let outcome = run_adjudication(
         &mut pending,
         &mut overrides,
-        &mut prompter,
+        prompter,
         "test-operator".to_string(),
     )
     .expect("run_adjudication should succeed on AcceptSuggested for sanity-scan");

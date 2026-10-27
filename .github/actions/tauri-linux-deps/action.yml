@@ -1,7 +1,8 @@
 name: Install Tauri Linux system dependencies
 description: >-
   Install the system libraries the chatter-desktop Tauri crate links against on
-  Linux. THE one owner of this list.
+  Linux, offline from an exact-match apt cache when one exists. The package
+  list lives in packages.txt, its one owner.
 
 # Why this is an action and not a `run:` step copied into each workflow.
 #
@@ -21,6 +22,38 @@ description: >-
 # workspace build, which ci.yml's own comment has proposed since before this
 # happened.
 
+# CACHED, because every Linux job in five workflows used to download the same
+# packages (181 of them, 64 MB, on 2026-10-22) from the runner's Ubuntu mirror,
+# so any mirror stall could fail any of those workflows, a release included. On
+# 2026-10-22 the scheduled Cross-platform run failed that way: packages arrived
+# at 15 to 30 s each, and the install hit its bound twice.
+#
+# The cache holds apt's package lists and downloaded packages together, keyed
+# on the runner OS, architecture and image (ImageOS, ImageVersion), the UTC
+# date, and the package list and install.sh. The key has no partial-match
+# fallback: a restored entry was produced on the same image, so its lists agree
+# with the packages the image already has installed, and `apt-get install
+# --no-download` installs from it without contacting the mirror at all. A new
+# runner image or an edited package list is a new key, so a stale entry is
+# never restored.
+#
+# Entries are write-once: a key that exists cannot be refreshed. The date is in
+# the key so that no install is more than a day behind the mirror, which
+# matters because the Linux desktop release bundles these libraries into its
+# AppImage. The first default-branch run of a day, usually the daily scheduled
+# Cross-platform run, pays one mirror install; later runs that day install
+# offline. Only the default branch saves (scheduled runs always run there);
+# tags and pull requests read its entries.
+#
+# Trust: apt accepts restored lists without re-verifying their signatures, so
+# whoever can write a default-branch cache entry decides what this action
+# installs as root. Only push, schedule and dispatch runs on the default branch
+# can write that scope, which is the same trust the Rust build caches already
+# rely on.
+#
+# On a miss, or if the offline install fails, the bounded mirror install below
+# runs as before.
+
 # BOUNDED, because a mirror can stall without failing. On the v0.29.0 release
 # tag `apt-get update` stopped after an index fetch, printed nothing more, and
 # held the Linux desktop job for over two hours until it was cancelled. The
@@ -34,37 +67,63 @@ description: >-
 #   3. One retry of the whole sequence after `dpkg --configure -a`, which
 #      repairs a package configuration interrupted by the bound.
 #
-# A composite action's steps cannot carry `timeout-minutes`; each calling step
-# sets one as the outer backstop.
+# A composite action's steps cannot carry `timeout-minutes`. The release
+# callers (release-lint.yml, release-desktop.yml) set one on the calling step;
+# the others are bounded by their job's `timeout-minutes`, the outer backstop.
 runs:
   using: composite
   steps:
-    - name: apt-get install
+    - name: Key the apt cache on the runner image and the package list
+      id: key
       shell: bash
       run: |
         set -euo pipefail
-        packages=(
-          libwebkit2gtk-4.1-dev
-          libgtk-3-dev
-          libayatana-appindicator3-dev
-          librsvg2-dev
-          libsoup-3.0-dev
-          libjavascriptcoregtk-4.1-dev
-          pkg-config
-        )
-        apt_options=(
-          -o Acquire::Retries=3
-          -o Acquire::http::Timeout=60
-          -o Acquire::https::Timeout=60
-          -o DPkg::Lock::Timeout=120
-        )
-        install_packages() {
-          sudo timeout --kill-after=30 300 apt-get "${apt_options[@]}" update &&
-            sudo timeout --kill-after=30 900 apt-get "${apt_options[@]}" install -y "${packages[@]}"
-        }
-        if install_packages; then
+        # ImageOS and ImageVersion are set on GitHub-hosted runners. Without
+        # them two different images could share a key, so the cache is off.
+        if [[ -z "${ImageOS:-}" || -z "${ImageVersion:-}" ]]; then
+          echo "::warning::the runner image is unidentified (ImageOS or ImageVersion unset); installing without the apt cache"
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        echo "::warning::apt-get failed or exceeded its time bound; retrying once"
-        sudo dpkg --configure -a
-        install_packages
+        inputs="$(cat "$GITHUB_ACTION_PATH/packages.txt" "$GITHUB_ACTION_PATH/install.sh" | sha256sum | cut -c1-16)"
+        day="$(date -u +%Y-%m-%d)"
+        echo "enabled=true" >> "$GITHUB_OUTPUT"
+        echo "key=tauri-linux-apt-v1-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS}-${ImageVersion}-${day}-${inputs}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the apt cache
+      id: restore
+      if: steps.key.outputs.enabled == 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/tauri-linux-apt
+        key: ${{ steps.key.outputs.key }}
+
+    - name: apt-get install
+      id: install
+      shell: bash
+      env:
+        CACHE_DIR: ${{ runner.temp }}/tauri-linux-apt
+        CACHE_ENABLED: ${{ steps.key.outputs.enabled }}
+        CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        if [[ "$CACHE_ENABLED" != true ]]; then
+          state=disabled
+        elif [[ "$CACHE_HIT" == true ]]; then
+          state=hit
+        else
+          state=miss
+        fi
+        bash "$GITHUB_ACTION_PATH/install.sh" "$CACHE_DIR" "$state"
+
+    - name: Save the apt cache
+      # A schedule event's payload carries no repository, so its default
+      # branch cannot be read there; scheduled runs only run on it anyway.
+      if: >-
+        steps.install.outputs.save == 'true' &&
+        (github.event_name == 'schedule' ||
+         github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/tauri-linux-apt
+        key: ${{ steps.key.outputs.key }}

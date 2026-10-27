@@ -101,7 +101,7 @@ fn each_tier_kind_reaches_its_own_variant() -> Result<(), TestError> {
 ///
 /// It first claimed `%bogus:\tcontent` would be refused, and that was MY belief
 /// about CHAT rather than chatter's rule. Measured, it lowers to
-/// `Unsupported(UserDefinedDependentTier { label: "bogus" })`, which is the
+/// `Unsupported(UnsupportedDependentTier { label: "bogus" })`, which is the
 /// maximal-preservation policy working: a tier whose label chatter does not
 /// know is KEPT, with its label and content, rather than discarded. Discarding
 /// it would lose transcript content to a vocabulary gap, and a roundtrip could

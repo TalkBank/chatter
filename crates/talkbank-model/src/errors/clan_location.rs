@@ -104,8 +104,11 @@ fn is_hidden_header(line: &str) -> bool {
 /// arithmetic also preserves cached coordinates larger than isize::MAX.
 fn visible_line(source: &str, source_line: usize) -> Option<NonZeroUsize> {
     let mut hidden = 0;
-    for (index, line) in source.lines().take(source_line).enumerate() {
-        if is_hidden_header(line) {
+    for (index, line) in super::physical_lines::PhysicalLines::new(source)
+        .take(source_line)
+        .enumerate()
+    {
+        if is_hidden_header(line.text()) {
             if index + 1 == source_line {
                 return None;
             }
@@ -135,6 +138,39 @@ mod tests {
                 DiagnosticLocation::known_at(span, LineColumn { line, column })
             }
             _ => DiagnosticLocation::new(span),
+        }
+    }
+
+    #[test]
+    fn physical_terminators_preserve_hidden_and_visible_coordinates() {
+        for ending in ["\n", "\r\n", "\r"] {
+            let source = [
+                "@UTF8",
+                "@Begin",
+                "@Window:\t100,0",
+                "*CHI:\thello .",
+                "@End",
+                "",
+            ]
+            .join(ending);
+            let start = source.find("*CHI:").expect("main tier");
+            for location in [
+                DiagnosticLocation::new(Span::new(start, start)),
+                DiagnosticLocation::known_at(
+                    Span::new(start, start),
+                    LineColumn::from_zero_based(3, 0),
+                ),
+            ] {
+                assert_eq!(
+                    resolve_clan_location(&location, &source).unwrap(),
+                    ClanLocation { line: 2, column: 1 }
+                );
+            }
+            let hidden = source.find("@Window").expect("hidden header");
+            assert_eq!(
+                resolve_clan_location(&DiagnosticLocation::new(Span::new(hidden, hidden)), &source),
+                Err(ClanLocationError::HiddenLine { source_line: 3 })
+            );
         }
     }
 

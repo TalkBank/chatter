@@ -71,6 +71,7 @@ pub(crate) mod word;
 // Re-export public API
 pub use config::RuleSelection;
 pub use context::{SharedValidationData, ValidationContext, language_allows_numbers};
+pub use header::participant::is_allowed_participant_role;
 pub use lexical::report_control_characters;
 pub use state::{AlignmentValidation, ValidChatFile, ValidationFailure, ValidationPolicy};
 pub use state::{MediaTimingObligation, PendingTimingChatFile, TimingRegenerationAdmission};
@@ -115,7 +116,10 @@ mod tests {
 
         let word = Annotated::with_one(
             crate::Location::Unlocated,
-            Word::new_unchecked(crate::Location::Unlocated, "hello"),
+            Word::new(
+                crate::Location::Unlocated,
+                crate::WordText::from(crate::non_empty_literal!("hello")),
+            ),
             ContentAnnotation::Unknown(crate::model::ScopedUnknown {
                 marker: ":::".into(),
                 text: "stuff".into(),
@@ -159,7 +163,10 @@ mod tests {
     fn test_word_validation_no_errors() {
         // Build valid word programmatically
         // Note: Don't wrap in Annotated unless there are actual annotations,
-        let word = Word::simple(crate::Location::Unlocated, "hello");
+        let word = Word::new(
+            crate::Location::Unlocated,
+            crate::WordText::from(crate::non_empty_literal!("hello")),
+        );
 
         let errors = ErrorCollector::new();
         let context = ValidationContext::new();

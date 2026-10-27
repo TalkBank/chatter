@@ -123,7 +123,8 @@ fn reference_nonword_display_preserves_chat_and_every_writer_refusal() {
                     }
                     // Word/replacement display has separate canonical owners;
                     // underline markers have no standalone Display adapter.
-                    ContentItem::Word(_)
+                    ContentItem::OrphanAnnotation(_)
+                    | ContentItem::Word(_)
                     | ContentItem::ReplacedWord(_)
                     | ContentItem::UnderlineBegin(_)
                     | ContentItem::UnderlineEnd(_) => return,
@@ -136,4 +137,68 @@ fn reference_nonword_display_preserves_chat_and_every_writer_refusal() {
         witnessed.iter().all(|count| *count > 0),
         "every adapter needs a reference witness: {witnessed:?}"
     );
+}
+
+#[test]
+fn event_descriptions_preserve_source_and_admission_through_both_parsers() {
+    use talkbank_model::{ChatParser, ErrorCollector, Event, EventType};
+    let schema = serde_json::to_value(schemars::schema_for!(EventType)).unwrap();
+    let schema = jsonschema::validator_for(&schema).unwrap();
+    for text in ["", "two words", "laughs.", "cough°", "laughs\n", "laughs\0"] {
+        let wire = serde_json::json!(text);
+        assert!(!schema.is_valid(&wire), "schema admitted {text:?}");
+        assert!(serde_json::from_value::<EventType>(wire).is_err());
+    }
+    for text in [
+        "ˈcough",
+        "ˌcough",
+        "„cough",
+        "‡cough",
+        "ca=fé",
+        "clears:throat",
+    ] {
+        assert!(
+            schema.is_valid(&serde_json::json!(text)),
+            "schema refused {text:?}"
+        );
+    }
+    fn check(parser: &impl ChatParser) {
+        let corpus = ChatCorpus::reference().unwrap();
+        let mut witnessed = 0;
+        for fixture in corpus.fixtures() {
+            let errors = ErrorCollector::new();
+            let parsed = parser
+                .parse_chat_file(fixture.source(), 71, &errors)
+                .into_option()
+                .unwrap();
+            assert!(
+                errors.is_empty(),
+                "{}: {:?}",
+                fixture.path().display(),
+                errors.to_vec()
+            );
+            for utterance in parsed.utterances() {
+                walk_content(&utterance.main.content.content, None, &mut |item| {
+                    if let ContentItem::Event(event) = item {
+                        witnessed += 1;
+                        let span = event.location.span().unwrap();
+                        assert_eq!(
+                            &fixture.source()[span.start() - 71..span.end() - 71],
+                            event.to_chat_string()
+                        );
+                        let wire = serde_json::to_value(event).unwrap();
+                        let restored: Event = serde_json::from_value(wire.clone()).unwrap();
+                        assert!(restored.location.span().is_none());
+                        assert_eq!(restored.to_chat_string(), event.to_chat_string());
+                        let mut invalid = wire;
+                        invalid["event_type"] = serde_json::json!("laughs\n*CHI:\tsecret");
+                        assert!(serde_json::from_value::<Event>(invalid).is_err());
+                    }
+                });
+            }
+        }
+        assert!(witnessed > 0, "reference event witnesses");
+    }
+    check(&TreeSitterParser::new().unwrap());
+    check(&talkbank_parser_re2c::Re2cParser::new());
 }

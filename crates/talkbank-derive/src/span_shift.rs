@@ -5,7 +5,7 @@ use quote::quote;
 use std::collections::HashSet;
 use syn::visit::Visit;
 
-use crate::field_plan::{BodyPlan, FieldsPlan, InputPlan, Shift};
+use crate::field_plan::{BodyPlan, FieldsPlan, InputPlan, Shape, Shift};
 
 /// Only participating fields contribute inferred type-parameter bounds.
 /// Opaque type macros retain the conservative bounds: their expansion can
@@ -60,6 +60,42 @@ fn shift_generics(input: &InputPlan<Shift>) -> syn::Generics {
     generics
 }
 
+/// Reconstruct all fields, retaining opaque fields without cloning them.
+fn mapped_fields(fields: &FieldsPlan, constructor: TokenStream) -> TokenStream {
+    let bindings = fields
+        .fields
+        .iter()
+        .map(|field| {
+            let member = &field.member;
+            let binding = &field.left;
+            match fields.shape {
+                Shape::Named => quote! { #member: #binding },
+                Shape::Tuple | Shape::Unit => quote! { #binding },
+            }
+        })
+        .collect::<Vec<_>>();
+    let values = fields.fields.iter().map(|field| {
+        let member = &field.member;
+        let binding = &field.left;
+        let value = if field.included() {
+            quote! { talkbank_model::SpanShift::try_map_spans(#binding, __tb_map)? }
+        } else {
+            quote! { #binding }
+        };
+        match fields.shape {
+            Shape::Named => quote! { #member: #value },
+            Shape::Tuple | Shape::Unit => value,
+        }
+    });
+    match fields.shape {
+        Shape::Named => {
+            quote! { #constructor { #(#bindings,)* } => Ok(#constructor { #(#values,)* }) }
+        }
+        Shape::Tuple => quote! { #constructor(#(#bindings,)*) => Ok(#constructor(#(#values,)*)) },
+        Shape::Unit => quote! { #constructor => Ok(#constructor) },
+    }
+}
+
 /// Emit span movement without binding user names as locals.
 pub(crate) fn impl_span_shift(input: &InputPlan<Shift>) -> TokenStream {
     let name = &input.name;
@@ -88,9 +124,34 @@ pub(crate) fn impl_span_shift(input: &InputPlan<Shift>) -> TokenStream {
             quote! { match self { #(#arms,)* } }
         }
     };
+    let map_arms = match &input.body {
+        BodyPlan::Struct(fields) => mapped_fields(fields, quote! { Self }),
+        BodyPlan::Enum(variants) => {
+            let arms = variants.iter().map(|variant| {
+                let variant_name = &variant.name;
+                mapped_fields(&variant.fields, quote! { Self::#variant_name })
+            });
+            quote! { #(#arms,)* }
+        }
+    };
+    let mut error_name = String::from("__TalkbankSpanMapError");
+    while input.generics.params.iter().any(|param| match param {
+        syn::GenericParam::Type(param) => param.ident == error_name,
+        syn::GenericParam::Const(param) => param.ident == error_name,
+        syn::GenericParam::Lifetime(param) => param.lifetime.ident == error_name,
+    }) {
+        error_name.push('_');
+    }
+    let error = syn::Ident::new(&error_name, proc_macro2::Span::mixed_site());
     quote! {
         impl #impl_generics talkbank_model::SpanShift for #name #ty_generics #where_clause {
             fn shift_spans_after(&mut self, offset: usize, delta: isize) { #body }
+            fn try_map_spans<#error>(
+                self,
+                __tb_map: &mut impl FnMut(talkbank_model::Span) -> Result<talkbank_model::Span, #error>,
+            ) -> Result<Self, #error> {
+                match self { #map_arms }
+            }
         }
     }
 }

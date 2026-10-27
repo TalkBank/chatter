@@ -150,9 +150,9 @@ impl From<DependentTier> for DependentTierEntry {
 }
 
 impl WriteChat for DependentTierEntry {
-    /// Serializes this entry's tier line (`%label:\tcontent`), canonicalizing
-    /// the separator to a single tab regardless of source trailing spaces.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    /// Serializes this entry's tier line. Parsed tiers canonicalize separators;
+    /// unparsed recovery retains the observed source instead of rewriting it.
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         self.tier.write_chat(w)
     }
 }
@@ -174,9 +174,9 @@ mod tests {
     /// equal tiers at different separators compare semantically equal.
     #[test]
     fn separator_is_not_semantic() {
-        use crate::model::NonEmptyString;
+        use crate::model::RecoveryText;
 
-        let content = NonEmptyString::new("hello").expect("literal is non-empty");
+        let content = RecoveryText::new("hello").expect("literal is non-empty");
         let a = DependentTierEntry::with_separator(
             DependentTier::Eng(TextTier::new(crate::Location::Unlocated, content.clone())),
             TierSeparator::CLEAN,

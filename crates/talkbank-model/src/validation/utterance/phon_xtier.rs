@@ -58,7 +58,7 @@ const MEDIA_BOUNDS_TOLERANCE_MS: u64 = 1;
 /// is stripped from the source word only, so a pair side that carries one
 /// (`p‿f↔p‿f`, which is not a bare segment) still mismatches rather than
 /// being read as `pf`. Nothing typed proves a pair side is a bare segment
-/// (`AlignmentPair` holds `NonEmptyString`s); that proof, and the code it
+/// (`AlignmentPair` holds `RecoveryText`s); that proof, and the code it
 /// would report under, is recorded work, not this change.
 const SEGMENT_COMPARISON_IGNORED: [char; 4] = ['\u{02C8}', '\u{02CC}', '\u{005E}', '\u{002E}'];
 

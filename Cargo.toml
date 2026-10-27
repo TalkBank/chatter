@@ -22,7 +22,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.31.0"
+version = "0.32.0"
 edition = "2024"
 authors = ["Franklin Chen <franklinchen@franklinchen.com>"]
 license = "MIT OR Apache-2.0"
@@ -95,7 +95,7 @@ crossbeam-channel = "0.5"
 dashmap = "6.2"
 dirs = "7.0"
 indexmap = { version = "2.14", features = ["serde"] }
-parking_lot = "0.12"
+parking_lot = "0.13"
 sha2 = "0.11"
 # Canonical-equivalence comparison for `@Media` filenames: NFC vs. NFD
 # spellings of the same accented name (composed "ü" vs. "u" + combining
@@ -105,7 +105,7 @@ unicode-segmentation = "1.13.3"
 
 # Serialization, schema, error reporting
 csv = "1"
-jsonschema = { version = "0.58", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.60", default-features = false, features = ["resolve-file"] }
 miette = { version = "7.6.0", features = ["derive"] }
 schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
@@ -122,7 +122,7 @@ syn = { version = "3.0", features = ["full", "parsing", "extra-traits"] }
 
 # Async runtime + SQLite cache
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate"] }
-tokio = { version = "1.53", features = ["full"] }
+tokio = { version = "1.54", features = ["full"] }
 
 # Tree-sitter parsing
 tree-sitter = "0.27.1"
@@ -149,7 +149,7 @@ unicode-width = "0.2"
 notify = "8.2"
 
 # Doc / formatting helpers
-comrak = "0.56.0"
+comrak = "0.57.0"
 
 # String matching / NLP utilities
 ferrous-opencc = "0.4.0"
@@ -167,25 +167,25 @@ tower-service = "0.3"
 tree-sitter-highlight = "0.27.1"
 
 # C compiler driver for send2clan
-cc = "1.8"
+cc = "1.10"
 
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # TalkBank crates, path for local dev, version for crates.io publishing
-send2clan = { path = "crates/send2clan", version = "0.31.0" }
-talkbank-cache = { path = "crates/talkbank-cache", version = "0.31.0" }
-chatter = { path = "crates/chatter", version = "0.31.0" }
-talkbank-build = { path = "crates/talkbank-build", version = "0.31.0" }
-talkbank-derive = { path = "crates/talkbank-derive", version = "0.31.0" }
-talkbank-llm = { path = "crates/talkbank-llm", version = "0.31.0" }
-talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.31.0" }
-talkbank-model = { path = "crates/talkbank-model", version = "0.31.0" }
-talkbank-parser = { path = "crates/talkbank-parser", version = "0.31.0" }
-talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.31.0" }
-talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.31.0" }
-talkbank-transform = { path = "crates/talkbank-transform", version = "0.31.0" }
+send2clan = { path = "crates/send2clan", version = "0.32.0" }
+talkbank-cache = { path = "crates/talkbank-cache", version = "0.32.0" }
+chatter = { path = "crates/chatter", version = "0.32.0" }
+talkbank-build = { path = "crates/talkbank-build", version = "0.32.0" }
+talkbank-derive = { path = "crates/talkbank-derive", version = "0.32.0" }
+talkbank-llm = { path = "crates/talkbank-llm", version = "0.32.0" }
+talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.32.0" }
+talkbank-model = { path = "crates/talkbank-model", version = "0.32.0" }
+talkbank-parser = { path = "crates/talkbank-parser", version = "0.32.0" }
+talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.32.0" }
+talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.32.0" }
+talkbank-transform = { path = "crates/talkbank-transform", version = "0.32.0" }
 
 # Testing
 assert_cmd = "2.2"
@@ -193,7 +193,7 @@ divan = "0.1"
 insta = { version = "1.49", features = ["json", "yaml"] }
 predicates = "3.1"
 proptest = "1.12.0"
-rstest = { version = "0.27.0", default-features = false }
+rstest = { version = "0.28.0", default-features = false }
 tempfile = "3.27"
 trybuild = "1.0"
 

@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Authored nested controls combining word-level emphasis and [e]
+	exclusion with explicit code-switch scopes. Inner word scope overrides the
+	group only for that word; the following word resumes the enclosing scope.
+*CHI:	<hello [!] there [e]> [!] after .
+*CHI:	<hello [@s:eng] hola> [@s:spa] after .
+@End

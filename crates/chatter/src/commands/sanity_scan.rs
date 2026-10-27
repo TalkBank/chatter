@@ -8,18 +8,66 @@
 //! tooling can short-circuit.
 
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use tracing::{Level, info, span, warn};
 
-use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_LOW_CONFIDENCE, EXIT_SUCCESS};
 use talkbank_model::{ParseValidateOptions, SpeakerCode};
 use talkbank_transform::adjudication::{
     PendingAdjudications, PendingEntry, PendingKindData, SuggestedSpeakerIdMapping,
 };
 use talkbank_transform::parse_and_validate;
 use talkbank_transform::recorded_time::RecordedTime;
+use talkbank_transform::report_destination::{ReportInputs, StagedReportDestination};
 use talkbank_transform::sanity_scan::{SanityScanThreshold, scan_session};
 use talkbank_transform::speaker_id::OverrideFile;
+
+/// A complete source population and a pending destination distinct from it.
+/// Missing decision sources or selected transcripts cannot become empty scans.
+struct ScanInputs {
+    overrides: OverrideFile,
+    pending: PendingAdjudications,
+    destination: StagedReportDestination,
+}
+
+fn report_input_error(error: impl std::fmt::Display) -> crate::exit_codes::CommandStop {
+    eprintln!("Error preparing scan: {error}");
+    crate::exit_codes::ReportedFailure::Input.into()
+}
+
+impl ScanInputs {
+    fn admit(
+        directory: &Path,
+        overrides: &Path,
+        pending: &Path,
+    ) -> crate::exit_codes::CommandResult<Self> {
+        let metadata = fs::metadata(directory).map_err(report_input_error)?;
+        if !metadata.is_dir() {
+            return Err(report_input_error(format!(
+                "{} is not a CHAT directory",
+                directory.display()
+            )));
+        }
+        let decisions = OverrideFile::read(overrides).map_err(report_input_error)?;
+        let transcripts: Vec<_> = decisions
+            .auto_entries()
+            .map(|(session, _)| directory.join(format!("{session}.cha")))
+            .collect();
+        let sources = ReportInputs::discover(
+            std::iter::once(overrides).chain(transcripts.iter().map(|path| path.as_path())),
+        )
+        .map_err(report_input_error)?;
+        let destination = sources
+            .staged_destination(pending)
+            .map_err(report_input_error)?;
+        let pending = PendingAdjudications::read_or_default(pending).map_err(report_input_error)?;
+        Ok(Self {
+            overrides: decisions,
+            pending,
+            destination,
+        })
+    }
+}
 
 /// Top-level entry for `chatter sanity-scan`.
 ///
@@ -36,7 +84,7 @@ pub fn run_sanity_scan(
     anchor: &str,
     threshold: SanityScanThreshold,
     write_pending_path: &Path,
-) {
+) -> crate::exit_codes::CommandResult {
     let _span = span!(
         Level::INFO,
         "chatter_sanity_scan",
@@ -45,55 +93,20 @@ pub fn run_sanity_scan(
     )
     .entered();
 
-    let override_file = match OverrideFile::read_or_default(override_path) {
-        Ok(f) => f,
-        Err(e) => {
-            warn!(
-                "failed to read override file {}: {}",
-                override_path.display(),
-                e
-            );
-            eprintln!(
-                "Error reading override file {}: {}",
-                override_path.display(),
-                e
-            );
-            std::process::exit(EXIT_INPUT_ERROR);
-        }
-    };
+    let ScanInputs {
+        overrides: override_file,
+        mut pending,
+        destination,
+    } = ScanInputs::admit(merged_dir, override_path, write_pending_path)?;
 
     let anchor_code = SpeakerCode::new(anchor);
     let options = ParseValidateOptions::default();
 
     let mut flagged: u32 = 0;
     let mut scanned: u32 = 0;
-    let mut pending = match PendingAdjudications::read_or_default(write_pending_path) {
-        Ok(f) => f,
-        Err(e) => {
-            warn!(
-                "failed to read pending file {}: {}",
-                write_pending_path.display(),
-                e
-            );
-            eprintln!(
-                "Error reading pending file {}: {}",
-                write_pending_path.display(),
-                e
-            );
-            std::process::exit(EXIT_INPUT_ERROR);
-        }
-    };
 
     for (session_id, entry) in override_file.auto_entries() {
         let merged_path = merged_dir.join(format!("{session_id}.cha"));
-        if !merged_path.exists() {
-            warn!(
-                "no merged file for session {:?}; expected {}",
-                session_id,
-                merged_path.display()
-            );
-            continue;
-        }
         scanned += 1;
         let merged_content = match fs::read_to_string(&merged_path) {
             Ok(s) => s,
@@ -104,7 +117,7 @@ pub fn run_sanity_scan(
                     e
                 );
                 eprintln!("Error reading {}: {}", merged_path.display(), e);
-                std::process::exit(EXIT_INPUT_ERROR);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         };
         let merged_chat = match parse_and_validate(&merged_content, options.clone()) {
@@ -115,7 +128,7 @@ pub fn run_sanity_scan(
                     session_id, e
                 );
                 eprintln!("Error parsing {}: {}", merged_path.display(), e);
-                std::process::exit(EXIT_INPUT_ERROR);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         };
         if let Some(flag) = scan_session(&merged_chat, entry, &anchor_code, threshold) {
@@ -145,19 +158,15 @@ pub fn run_sanity_scan(
     }
 
     if flagged > 0 {
-        if let Err(e) = pending.write(write_pending_path) {
-            warn!(
-                "failed to write pending file {}: {}",
-                write_pending_path.display(),
-                e
-            );
-            eprintln!(
-                "Error writing pending file {}: {}",
-                write_pending_path.display(),
-                e
-            );
-            std::process::exit(EXIT_INPUT_ERROR);
-        }
+        let text = toml::to_string_pretty(&pending).map_err(report_input_error)?;
+        let mut writer = destination.into_writer().map_err(report_input_error)?;
+        writer
+            .write_all(text.as_bytes())
+            .map_err(report_input_error)?;
+        writer
+            .finish()
+            .and_then(|publication| publication.publish())
+            .map_err(report_input_error)?;
         info!(
             "appended {} pending entries to: {}",
             flagged,
@@ -165,12 +174,12 @@ pub fn run_sanity_scan(
         );
     }
 
-    eprintln!(
+    outln!(
         "sanity-scan summary: {scanned} auto-decided session(s) scanned; \
          {flagged} flagged for adjudication"
     );
     if flagged > 0 {
-        std::process::exit(EXIT_LOW_CONFIDENCE);
+        return Err(crate::exit_codes::ReportedFailure::NeedsReview.into());
     }
-    std::process::exit(EXIT_SUCCESS);
+    Ok(())
 }

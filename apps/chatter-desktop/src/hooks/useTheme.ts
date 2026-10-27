@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type ThemePreference = "system" | "light" | "dark";
+import { usePreference } from "./usePreference";
+import { themePreference, type ThemePreference } from "../runtime/capabilities/preferences";
+export type { ThemePreference } from "../runtime/capabilities/preferences";
 export type ResolvedTheme = "light" | "dark";
-
-const STORAGE_KEY = "chatter-theme";
 
 function getSystemTheme(): ResolvedTheme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -24,26 +24,18 @@ function applyTheme(preference: ThemePreference): void {
   }
 }
 
-function loadPreference(): ThemePreference {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark" || stored === "system") {
-    return stored;
-  }
-  return "system";
-}
-
 export function useTheme() {
-  const [theme, setThemeState] = useState<ThemePreference>(loadPreference);
+  const [preference, setPreference] = usePreference(themePreference);
+  const theme = preference.value;
   const [resolved, setResolved] = useState<ResolvedTheme>(() =>
-    resolveTheme(loadPreference()),
+    resolveTheme(theme),
   );
 
   const setTheme = useCallback((preference: ThemePreference) => {
-    localStorage.setItem(STORAGE_KEY, preference);
-    setThemeState(preference);
+    setPreference(preference);
     applyTheme(preference);
     setResolved(resolveTheme(preference));
-  }, []);
+  }, [setPreference]);
 
   // Apply on mount
   useEffect(() => {
@@ -63,7 +55,7 @@ export function useTheme() {
   }, [theme]);
 
   return useMemo(
-    () => ({ theme, setTheme, resolved }),
-    [theme, setTheme, resolved],
+    () => ({ theme, setTheme, resolved, preference }),
+    [theme, setTheme, resolved, preference],
   );
 }

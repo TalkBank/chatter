@@ -3525,7 +3525,7 @@
     },
     "long_feature_label": {
       "type": "PATTERN",
-      "value": "[A-Za-z0-9@%_-]+"
+      "value": "[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@%_\\-]+"
     },
     "event_segment": {
       "type": "TOKEN",

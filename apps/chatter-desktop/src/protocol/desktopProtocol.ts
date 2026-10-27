@@ -1,4 +1,4 @@
-import type { ValidationEvent } from "./validation";
+import type { SourceRevision, ValidationEvent } from "./validation";
 
 export const DESKTOP_COMMANDS = {
   validate: "validate",
@@ -66,7 +66,19 @@ export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
 
 /** Mirrors Rust `ValidateRequest`: one value, the command's only argument. */
 export interface ValidateRequest extends ValidationSettings {
+  runId: ValidationRunId;
   path: string;
+}
+
+/** Opaque identity that remains distinct across webview reloads. */
+export type ValidationRunId = string & { readonly __brand: "ValidationRunId" };
+
+export function createValidationRunId(): ValidationRunId {
+  return crypto.randomUUID() as ValidationRunId;
+}
+
+export interface CancelValidationCommandArgs {
+  request: { runId: ValidationRunId };
 }
 
 export interface ValidateCommandArgs {
@@ -79,6 +91,7 @@ export interface OpenInClanRequestArgs {
   line: number;
   col: number;
   byteOffset: number;
+  sourceRevision: SourceRevision;
   msg: string;
 }
 
@@ -103,7 +116,7 @@ export interface RevealInFileManagerCommandArgs {
 
 export type DesktopCommandPayloadMap = {
   [DESKTOP_COMMANDS.validate]: ValidateCommandArgs;
-  [DESKTOP_COMMANDS.cancelValidation]: undefined;
+  [DESKTOP_COMMANDS.cancelValidation]: CancelValidationCommandArgs;
   [DESKTOP_COMMANDS.checkClanAvailable]: undefined;
   [DESKTOP_COMMANDS.openInClan]: OpenInClanCommandArgs;
   [DESKTOP_COMMANDS.exportResults]: ExportResultsCommandArgs;
@@ -124,4 +137,7 @@ export type DesktopCommandArgs<C extends DesktopCommandName> =
     ? []
     : [payload: DesktopCommandPayloadMap[C]];
 
-export type ValidationEventPayload = ValidationEvent;
+export interface ValidationEventPayload {
+  runId: ValidationRunId;
+  event: ValidationEvent;
+}

@@ -28,6 +28,7 @@
 use talkbank_model::model::TranscriptName;
 use talkbank_model::{ErrorCode, ErrorCollector};
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 use talkbank_parser_tests::test_error::TestError;
 
 /// `@Media` with a space before the comma: invalid, and E767 names it.

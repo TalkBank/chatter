@@ -20,11 +20,8 @@ impl Utterance {
     /// Report the `%gra` structural rules for every `%gra` tier of THIS
     /// utterance.
     ///
-    /// The pairing lives here because this is the only value that owns both
-    /// halves. `WholeGra::of` takes a tier and a diagnostic slice, and a tier
-    /// from one utterance beside another utterance's diagnostics type-checks
-    /// and answers confidently about neither; nothing but the utterance can
-    /// pair them correctly, so nothing but the utterance is allowed to.
+    /// The utterance owns the tier and its alignment evidence. Analyze the
+    /// unchanged tier once, then consume those facts into whole-tier admission.
     fn validate_gra_structure(&self, errors: &impl ErrorSink) {
         for entry in &self.dependent_tiers {
             let DependentTier::Gra(tier) = &entry.tier else {
@@ -33,12 +30,11 @@ impl Utterance {
             // Always: dropping a relation cannot create a second root or close
             // a cycle, so a violation among the survivors is one the author
             // wrote.
-            tier.validate_monotone_structure(errors);
+            let structure = crate::model::dependent_tier::GraStructure::analyze(tier);
+            structure.report_monotone(errors);
             // Only on a tier established whole and undisputed: dropping breaks
             // sequentiality by itself, and can remove the only root.
-            if let Some(whole) =
-                crate::model::dependent_tier::WholeGra::of(tier, &self.alignment_diagnostics)
-            {
+            if let Some(whole) = structure.into_whole(&self.alignment_diagnostics) {
                 whole.validate_whole_tier(errors);
             }
         }
@@ -53,24 +49,13 @@ impl Validate for Utterance {
     /// Rule ordering is deliberate: foundational parse/speaker issues are
     /// reported first so later tier-level diagnostics have clearer context.
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
-        // E522: speaker code used on `*SPEAKER:` must appear in @Participants.
-        //
-        // This used to be guarded by `!participant_ids.is_empty() &&`, with no
-        // stated reason, and that guard meant an EMPTY participant set switched
-        // the check off entirely. A file where no speaker has a usable `@ID` is
-        // exactly the file whose speaker diagnostics matter, and it was the one
-        // getting none: "we have no information" was being read as "there is
-        // nothing to check".
-        //
-        // Found on 2026-08-15 when re2c stopped inventing a participant keyed
-        // on an empty speaker code. Its map became legitimately empty on one
-        // spec fixture, and two correct diagnostics vanished with it.
-        //
-        // Inert on real data, measured rather than assumed: removing it changed
-        // nothing across a 2,158-file stratified corpus sample, because every
-        // kept file carries `@ID` lines. It only ever suppressed diagnostics on
-        // malformed input.
-        if !context.shared.participant_ids.contains(&self.main.speaker) {
+        // Membership is declaration evidence, independent of ID enrichment.
+        if context
+            .shared
+            .participant_roster
+            .membership(&self.main.speaker)
+            == crate::model::SpeakerMembership::Undeclared
+        {
             let speaker_str = self.main.speaker.as_str();
             errors.report(
                 crate::ParseError::at_location(
@@ -108,10 +93,6 @@ impl Validate for Utterance {
         // ↫...↫-wrapped, no stem) is invalid; see the module docs.
         crate::validation::utterance::check_repetition_segment_has_stem(self, errors);
 
-        // E373: Validate overlap index values
-        // E348: Validate overlap marker pairing
-        crate::validation::utterance::check_overlap_markers(self, context, errors);
-
         // E258: Validate no consecutive commas in document order
         crate::validation::utterance::check_consecutive_commas(self, errors);
         crate::validation::utterance::check_semicolon_separators(self, errors);
@@ -137,18 +118,20 @@ impl Validate for Utterance {
         crate::validation::utterance::check_gra_relation_vocabulary(self, errors);
 
         // E604: `%gra` requires `%mor`.
-        // Skip when `%mor` is parse-tainted: parser recovery may have dropped `%mor`
-        // from the AST while still reporting the root parse issue elsewhere.
+        // Unparsed MOR is present but cannot participate in alignment. Do not
+        // cascade a missing-tier diagnosis from its malformed content.
         let has_gra = self.dependent_tiers.iter().any(|entry| {
             matches!(
                 &entry.tier,
                 crate::model::dependent_tier::DependentTier::Gra(_)
+                    | crate::model::dependent_tier::DependentTier::UnparsedGra(_)
             )
         });
         let has_mor = self.dependent_tiers.iter().any(|entry| {
             matches!(
                 &entry.tier,
                 crate::model::dependent_tier::DependentTier::Mor(_)
+                    | crate::model::dependent_tier::DependentTier::UnparsedMor(_)
             )
         });
         let mor_tainted = self
@@ -198,6 +181,23 @@ impl Validate for Utterance {
         // a new tier variant stops compiling there rather than silently
         // escaping this rule. This loop only asks.
         for entry in &self.dependent_tiers {
+            if let Some(recovery) = entry.tier.unparsed_recovery() {
+                errors.report(crate::ParseError::at_location(
+                    crate::ErrorCode::UnparsableContent,
+                    crate::Severity::Error,
+                    recovery.raw().location(),
+                    format!(
+                        "%{} source is unparsed; repair or regenerate this tier before validation",
+                        entry.kind()
+                    ),
+                ));
+            }
+            if let Some((content, location)) = entry.tier.bullet_content() {
+                let context = context
+                    .clone()
+                    .with_field_location(location.or(context.field_location));
+                content.segments.validate(&context, errors);
+            }
             if let DependentTier::Sin(tier) = &entry.tier {
                 tier.validate(context, errors);
             }

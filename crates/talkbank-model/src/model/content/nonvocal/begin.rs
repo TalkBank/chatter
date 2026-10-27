@@ -62,13 +62,15 @@ impl PartialEq for NonvocalBegin {
 impl Eq for NonvocalBegin {}
 
 impl NonvocalBegin {
-    /// Build a begin marker with dummy span metadata.
+    /// Construct this marker with an admitted label and explicit source location.
     ///
-    /// Parser code should attach concrete spans via [`Self::with_span`] so
-    /// scope-mismatch diagnostics can point to exact source locations.
-    pub fn new(location: impl Into<crate::Location>, label: impl Into<NonvocalLabel>) -> Self {
+    /// ```compile_fail
+    /// use talkbank_model::{NonvocalBegin, Location};
+    /// let marker = NonvocalBegin::new(Location::Unlocated, "label");
+    /// ```
+    pub fn new(location: impl Into<crate::Location>, label: NonvocalLabel) -> Self {
         Self {
-            label: label.into(),
+            label,
             location: location.into(),
         }
     }
@@ -76,8 +78,12 @@ impl NonvocalBegin {
 
 impl WriteChat for NonvocalBegin {
     /// Writes this nonvocal begin marker in CHAT format.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "&{{n={}", self.label)
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        {
+            w.write_str("&{")?;
+            w.write_str("n=")?;
+            crate::model::WriteChat::write_chat(&self.label, w)
+        }
     }
 }
 

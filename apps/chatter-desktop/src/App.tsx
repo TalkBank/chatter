@@ -6,6 +6,8 @@ import FileTree from "./components/FileTree";
 import OnboardingOverlay from "./components/OnboardingOverlay";
 import ProgressBar from "./components/ProgressBar";
 import ValidationSettingsPanel from "./components/ValidationSettingsPanel";
+import { usePreference } from "./hooks/usePreference";
+import { onboardingPreference, targetPreference, preferenceWarning } from "./runtime/capabilities/preferences";
 import { useTheme } from "./hooks/useTheme";
 import { useValidation } from "./hooks/useValidation";
 import { fileStatusLabel, finishedRunSummary, isRunPending, isRunRecoverable } from "./hooks/validationState";
@@ -20,7 +22,7 @@ import {
 } from "./runtime/DesktopRuntimeContext";
 
 export default function App() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, preference: themeState } = useTheme();
   const clan = useClanCapability();
   const exportCapability = useExportCapability();
   const updates = useUpdatesCapability();
@@ -30,9 +32,14 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [clanAvailable, setClanAvailable] = useState(false);
-  const [lastTarget, setLastTarget] = useState<string | null>(
-    () => localStorage.getItem("chatter-last-target"),
-  );
+  const [targetState, setLastTarget] = usePreference(targetPreference);
+  const lastTarget = targetState.value;
+  const [onboardingState, setOnboarding] = usePreference(onboardingPreference);
+  const preferenceWarnings = [
+    preferenceWarning("Theme", themeState),
+    preferenceWarning("Recent target", targetState),
+    preferenceWarning("Welcome screen", onboardingState),
+  ].filter((warning) => warning !== null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [validationSettings, setValidationSettings] = useState<ValidationSettings>(
     DEFAULT_VALIDATION_SETTINGS,
@@ -172,12 +179,11 @@ export default function App() {
   const handlePath = useCallback(
     (path: string) => {
       setLastTarget(path);
-      localStorage.setItem("chatter-last-target", path);
       setSelectedFile(null);
       setStartTime(null);
       startValidation(path, validationSettings);
     },
-    [startValidation, validationSettings],
+    [startValidation, validationSettings, setLastTarget],
   );
 
   const handleRevalidate = useCallback(() => {
@@ -207,6 +213,7 @@ export default function App() {
       await validationTarget.revealFile(path);
     } catch (err) {
       console.error("reveal_in_file_manager failed:", err);
+      alert(`Reveal in file manager failed: ${err}`);
     }
   }, [validationTarget]);
 
@@ -221,10 +228,9 @@ export default function App() {
     }
 
     try {
-      const path = await exportCapability.chooseExportPath();
-      if (!path) return;
+      const destination = await exportCapability.chooseExportDestination();
+      if (destination === null) return;
 
-      const format = path.endsWith(".json") ? "json" : "text";
       const results = [...state.files.values()].map((file) => ({
         path: file.path,
         errors: file.diagnostics.map((diagnostic) => ({
@@ -236,7 +242,7 @@ export default function App() {
         statusLabel: fileStatusLabel(file),
       }));
 
-      await exportCapability.exportResults(results, format, path);
+      await exportCapability.exportResults(results, destination);
     } catch (err) {
       console.error("export failed:", err);
       alert(`Export failed: ${err}`);
@@ -277,7 +283,9 @@ export default function App() {
 
   return (
     <div className="app">
-      <OnboardingOverlay />
+      {onboardingState.value === "show" && (
+        <OnboardingOverlay onDismiss={() => setOnboarding("dismissed")} />
+      )}
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <div className="drop-zone-area">
         <span className="app-wordmark">
@@ -299,6 +307,11 @@ export default function App() {
           disabled={isRunning}
         />
       </div>
+      {preferenceWarnings.length > 0 && (
+        <div role="status" aria-live="polite">
+          {preferenceWarnings.map((warning) => <p key={warning}>{warning}</p>)}
+        </div>
+      )}
       <div className="main-panels">
         <FileTree
           files={state.files}

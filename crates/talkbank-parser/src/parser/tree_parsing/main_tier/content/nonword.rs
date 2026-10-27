@@ -10,21 +10,21 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, EventNode, NonwordChoiceBoundView, NonwordNode, NonwordWithOptionalAnnotationsNode,
-    SourceBound, SourceSlotView,
+    AsRawNode, EventNode, NonwordChoiceBoundView, NonwordMissingSourceView, NonwordNode,
+    NonwordWithOptionalAnnotationsNode, SlotView, SourceBound, SourceSlotView,
 };
-use crate::model::{Action, Event, UtteranceContent};
+use crate::model::{Action, Event, EventType, UtteranceContent};
 use talkbank_model::ParseOutcome;
 
 use super::super::annotations::parse_scoped_annotations;
-use super::marker_chain::fold_marker_chain;
+use super::marker_chain::{MarkerSeed, fold_marker_chain};
 use super::report_tree_shape;
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{
     check_not_missing, expect_delimiter, surface_displaced,
 };
-use crate::parser::typed_cst::read_source_field;
+use crate::parser::typed_cst::{ExtractCanonical, read_source_field};
 
 /// Fold the ordered annotations onto the nonword. Compiled kind admission
 /// excludes a Missing composite slot; Error/absence and lexical recovery
@@ -38,35 +38,31 @@ pub(crate) fn parse_nonword_content<'tree>(
     let node = typed.raw_node();
     let full_span = span_of(node);
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_inner(typed),
+        crate::parser::typed_cst::extract_inner(typed)
+            .and_then(|children| children.admit_ranges().map_err(Into::into)),
         node,
         source,
         errors,
     ) else {
         return ParseOutcome::Rejected;
     };
-    let core = match associated.field_nonword().slot().view() {
-        SourceSlotView::Present(nonword) => {
-            read_source_field(nonword, errors).and_then(|nonword| nonword_core(nonword, errors))
-        }
+    let core = match associated.children().nonword.slot.view() {
+        SlotView::Present(nonword) => nonword_core(*nonword, errors),
     };
-    let markers = match associated.field_annotations().slot().optional() {
+    let markers = match associated.children().annotations.slot.as_ref() {
         Some(slot) => match slot.view() {
-            SourceSlotView::Present(annotations) => match read_source_field(annotations, errors) {
-                Some(annotations) => parse_scoped_annotations(annotations, errors),
-                None => Vec::new(),
-            },
-            SourceSlotView::Error(bad) => {
+            SlotView::Present(annotations) => parse_scoped_annotations(*annotations, errors),
+            SlotView::Error(bad) => {
                 errors.report(unexpected_node_error(
                     bad.raw_node(),
                     bad.source(),
                     "nonword_with_optional_annotations",
                 ));
-                Vec::new()
+                Ok(Vec::new())
             }
-            SourceSlotView::Absent(never) => match never {},
+            SlotView::Absent(never) => match never {},
         },
-        None => Vec::new(),
+        None => Ok(Vec::new()),
     };
     surface_displaced(
         &associated.children().unexpected,
@@ -74,6 +70,9 @@ pub(crate) fn parse_nonword_content<'tree>(
         source,
         errors,
     );
+    let Ok(markers) = markers else {
+        return ParseOutcome::Rejected;
+    };
     ParseOutcome::from(core.map(|core| fold_marker_chain(core, markers, full_span)))
 }
 
@@ -81,8 +80,14 @@ pub(crate) fn parse_nonword_content<'tree>(
 fn nonword_core<'tree>(
     nonword: SourceBound<'tree, '_, NonwordNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Option<UtteranceContent> {
-    let associated = nonword.extract();
+) -> Option<MarkerSeed> {
+    let associated = crate::parser::typed_cst::report_admission(
+        nonword.extract_canonical(),
+        nonword.raw_node(),
+        nonword.source(),
+        errors,
+    )
+    .ok()?;
     surface_displaced(
         &associated.children().unexpected,
         "nonword",
@@ -94,10 +99,11 @@ fn nonword_core<'tree>(
             NonwordChoiceBoundView::Event(event) => event_of(event, errors),
             NonwordChoiceBoundView::Zero(zero) => {
                 let raw = zero.raw_node();
-                Some(UtteranceContent::Action(Action::new(span_of(raw))))
+                Some(MarkerSeed::Action(Action::new(span_of(raw))))
             }
         },
-        SourceSlotView::Missing(placeholder) => {
+        SourceSlotView::Missing(NonwordMissingSourceView::Event(never)) => match never.0 {},
+        SourceSlotView::Missing(NonwordMissingSourceView::Zero(placeholder)) => {
             check_not_missing(
                 placeholder.raw_node(),
                 associated.source(),
@@ -123,7 +129,7 @@ fn nonword_core<'tree>(
 fn event_of<'tree>(
     event: SourceBound<'tree, '_, EventNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Option<UtteranceContent> {
+) -> Option<MarkerSeed> {
     let associated = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::extract_inner(event),
         event.raw_node(),
@@ -149,8 +155,12 @@ fn event_of<'tree>(
         }
     };
     let raw = event.raw_node();
-    Some(UtteranceContent::Event(Event::new(
-        span_of(raw),
-        description.text(),
-    )))
+    let event_type = match EventType::new(description.text()) {
+        Ok(event_type) => event_type,
+        Err(error) => {
+            report_tree_shape(raw, error.to_string(), event.source(), errors);
+            return None;
+        }
+    };
+    Some(MarkerSeed::Event(Event::new(span_of(raw), event_type)))
 }

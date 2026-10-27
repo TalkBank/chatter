@@ -6,10 +6,8 @@
 
 use clap::Parser;
 
-use super::cli_types::{LogFormat, TuiMode};
+use super::cli_types::LogFormat;
 use super::core::Commands;
-
-pub use crate::ui::ThemePreset;
 
 /// TalkBank utilities for CHAT format validation and transformation
 #[derive(Parser)]
@@ -30,7 +28,7 @@ pub use crate::ui::ThemePreset;
 Getting started:
   chatter validate myfile.cha          Validate a CHAT file
   chatter validate corpus/             Validate an entire corpus
-  chatter to-json myfile.cha           Convert to JSON
+  chatter convert to-json myfile.cha           Convert to JSON
 
 Exit codes:
   0    All files valid / command succeeded
@@ -47,14 +45,6 @@ pub struct Cli {
     /// Logging output format
     #[arg(long, value_enum, default_value = "text", global = true)]
     pub log_format: LogFormat,
-
-    /// TUI mode: auto (detect terminal), force (always), disable (never)
-    #[arg(long, value_enum, default_value_t, global = true)]
-    pub tui_mode: TuiMode,
-
-    /// Color theme for TUI mode
-    #[arg(long, value_enum, global = true)]
-    pub theme: Option<ThemePreset>,
 
     #[command(subcommand)]
     pub command: Commands,

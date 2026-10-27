@@ -49,6 +49,20 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 unicode-width = { workspace = true }
 
+[build-dependencies]
+talkbank-build = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+xattr = "1.6"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+# Native terminal restoration is a subprocess boundary, exercised through a PTY.
+libc = "0.2"
+
 [dev-dependencies]
 # TEST-ONLY. It was a regular dependency until 2026-08-19, because `new-file`
 # used a template that lived here, so this test-support crate compiled into the
@@ -60,7 +74,7 @@ talkbank-parser-tests = { path = "../talkbank-parser-tests" }
 # hold them equal, and this is the one crate that does.
 talkbank-spec-vocabulary = { path = "../../spec/vocabulary" }
 assert_cmd = { workspace = true }
-httpmock = "0.8.3"
+httpmock = "0.9.0"
 predicates = { workspace = true }
 serde_json = { workspace = true }
 

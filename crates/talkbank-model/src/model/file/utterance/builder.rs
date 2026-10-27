@@ -38,9 +38,16 @@ impl Utterance {
         }
     }
 
-    /// Read the recorded provenance without permitting external replacement.
+    /// Read producer provenance, conservatively incorporating retained recovery.
+    /// Unknown provenance stays unknown; unparsed tiers never license alignment.
     pub fn parse_health(&self) -> ParseHealthState {
-        self.parse_health
+        let mut health = self.parse_health;
+        for entry in &self.dependent_tiers {
+            if let Some(recovery) = entry.tier.unparsed_recovery() {
+                recovery.taint(&mut health);
+            }
+        }
+        health
     }
 
     /// Enable checks on an owned construction candidate. Only the model's

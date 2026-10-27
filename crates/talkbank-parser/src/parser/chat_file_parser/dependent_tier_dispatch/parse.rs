@@ -85,58 +85,85 @@ pub(crate) fn parse_and_attach_dependent_tier<'tree>(
             }
             // Bullet/text tiers: parse directly, no `has_error` gate (unchanged).
             C::ComDependentTier(n) => {
-                let tier = parse_com_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Com));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_com_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Com));
+                }
             }
             C::ExpDependentTier(n) => {
-                let tier = parse_exp_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Exp));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_exp_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Exp));
+                }
             }
             C::AddDependentTier(n) => {
-                let tier = parse_add_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Add));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_add_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Add));
+                }
             }
             C::SpaDependentTier(n) => {
-                let tier = parse_spa_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Spa));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_spa_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Spa));
+                }
             }
             C::SitDependentTier(n) => {
-                let tier = parse_sit_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Sit));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_sit_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Sit));
+                }
             }
             C::IntDependentTier(n) => {
-                let tier = parse_int_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Int));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_int_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Int));
+                }
             }
             C::GpxDependentTier(n) => {
-                let tier = parse_gpx_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Gpx));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_gpx_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Gpx));
+                }
             }
             C::CodDependentTier(n) => {
-                let tier = parse_cod_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Cod));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_cod_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Cod));
+                }
             }
             C::ActDependentTier(n) => {
-                let tier = parse_act_tier_with_separator(n, errors)?;
-                utterance
-                    .dependent_tiers
-                    .push(tier.into_entry(DependentTier::Act));
+                if let talkbank_model::ParseOutcome::Parsed(tier) =
+                    parse_act_tier_with_separator(n, errors)?
+                {
+                    utterance
+                        .dependent_tiers
+                        .push(tier.into_entry(DependentTier::Act));
+                }
             }
             // Raw text tiers: the `raw` applier keyed on the concrete kind CONST
             // taken from the typed variant (not `node.kind()`).

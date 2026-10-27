@@ -38,11 +38,10 @@
 use indexmap::IndexMap;
 
 use crate::errors::source_location::ErrorVec;
-use crate::model::{ChatDate, Header, IDHeader, Line, Participant, SpeakerCode};
+use crate::model::{ChatDate, Header, IDHeader, Line, Participant, ParticipantEntry, SpeakerCode};
 use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 
-/// The join's result: the participant map, and what was wrong with the
-/// declarations that produced it.
+/// A borrowed join plan and its declaration/metadata diagnostics.
 ///
 /// # Why this is a type rather than a `(map, errors)` pair
 ///
@@ -52,25 +51,132 @@ use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, 
 /// backend parsed, while the tree-sitter backend reported them: a validity
 /// divergence with nothing in the types to notice it.
 ///
-/// [`report_into`](Self::report_into) is the ONLY way to reach the map, and it
-/// takes the sink. Possession of the map is therefore proof that the
+/// The reporting transitions are the only way to reach joined metadata; each
+/// takes a sink. Possession of joined metadata is therefore proof that the
 /// diagnostics were reported. Dropping them is still possible, but only by
 /// naming [`NullErrorSink`](crate::errors::NullErrorSink), which says so.
-#[must_use = "the participant map is only reachable through `report_into`, which is also what reports the diagnostics"]
-pub struct ParticipantJoin {
-    participants: IndexMap<SpeakerCode, Participant>,
+#[must_use = "consume the join through a reporting transition"]
+pub struct ParticipantJoin<'a> {
+    participants: IndexMap<SpeakerCode, ParticipantView<'a>>,
     diagnostics: ErrorVec,
 }
 
-impl ParticipantJoin {
+/// A declaration and its observed matching metadata; construction happens once
+/// at the join boundary. Validation can consume diagnostics without cloning ASTs.
+/// A view cannot survive an edit to the headers it describes:
+///
+/// ```compile_fail,E0502
+/// # use talkbank_model::model::ChatFile;
+/// # let mut file = ChatFile::new(vec![]);
+/// let participant = file.get_participant("CHI");
+/// file.lines.remove(0);
+/// println!("{:?}", participant);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ParticipantView<'a> {
+    entry: &'a ParticipantEntry,
+    id: &'a IDHeader,
+    birth: Option<&'a ChatDate>,
+}
+
+impl<'a> ParticipantView<'a> {
+    /// Canonical speaker code text.
+    pub fn speaker_code(&self) -> &'a str {
+        self.code().as_str()
+    }
+
+    /// Whether a birth header was observed.
+    pub fn has_birth_date(&self) -> bool {
+        self.birth.is_some()
+    }
+
+    /// Speaker identity from the current declaration.
+    pub fn code(&self) -> &'a SpeakerCode {
+        &self.entry.speaker_code
+    }
+
+    /// Matching observed ID header; this is not a validity certificate.
+    pub fn id(&self) -> &'a IDHeader {
+        self.id
+    }
+
+    /// Observed birth date, if present.
+    pub fn birth_date(&self) -> Option<&'a ChatDate> {
+        self.birth
+    }
+
+    /// Name from the declaration.
+    pub fn name(&self) -> Option<&'a crate::model::ParticipantName> {
+        self.entry.name()
+    }
+
+    /// Role from the declaration.
+    pub fn role(&self) -> Option<&'a crate::model::ParticipantRole> {
+        self.entry.role()
+    }
+
+    /// Observed age text.
+    pub fn age(&self) -> Option<&'a str> {
+        self.id.age.as_ref().map(|age| age.as_str())
+    }
+
+    /// Observed sex metadata.
+    pub fn sex(&self) -> Option<&'a crate::model::Sex> {
+        self.id.sex.as_ref()
+    }
+
+    /// Languages from the ID header.
+    pub fn languages(&self) -> &'a crate::model::LanguageCodes {
+        &self.id.language
+    }
+
+    /// Nonempty corpus name from the ID header.
+    pub fn corpus(&self) -> Option<&'a str> {
+        let corpus = self.id.corpus.as_str();
+        (!corpus.is_empty()).then_some(corpus)
+    }
+
+    /// Explicit detached snapshot, no longer tied to subsequent header edits.
+    pub fn to_owned_participant(self) -> Participant {
+        let mut participant = Participant::new(self.entry.clone(), self.id.clone());
+        if let Some(date) = self.birth {
+            participant = participant.with_birth_date(date.clone());
+        }
+        participant
+    }
+}
+
+impl<'a> ParticipantJoin<'a> {
+    /// Report diagnostics before exposing views borrowed from the source lines.
+    pub fn report_borrowed_into(
+        self,
+        errors: &(impl ErrorSink + ?Sized),
+    ) -> Vec<ParticipantView<'a>> {
+        errors.report_vec(self.diagnostics);
+        self.participants.into_values().collect()
+    }
+
     /// Report the join's diagnostics into `errors` and yield the participant map.
     pub fn report_into(
         self,
         errors: &(impl ErrorSink + ?Sized),
     ) -> IndexMap<SpeakerCode, Participant> {
-        errors.report_vec(self.diagnostics);
-        self.participants
+        self.report_borrowed_into(errors)
+            .into_iter()
+            .map(|joined| (joined.code().clone(), joined.to_owned_participant()))
+            .collect()
     }
+
+    /// Validate the join without constructing or replacing a metadata cache.
+    pub fn report_diagnostics(self, errors: &(impl ErrorSink + ?Sized)) {
+        errors.report_vec(self.diagnostics);
+    }
+}
+
+/// Whether all observed ID headers were readable for absence claims.
+enum IDCoverage {
+    Complete,
+    Rejected,
 }
 
 /// Build the participant map from parsed lines, preserving source spans in
@@ -89,14 +195,28 @@ impl ParticipantJoin {
 /// - **E522** (`SpeakerNotDefined`): a speaker in `@Participants` has no `@ID`.
 /// - **E523** (`OrphanIDHeader`): an `@ID` header has no `@Participants` entry.
 /// - **E524** (`BirthUnknownParticipant`): an `@Birth of` header names a
-///   speaker that is not in the map.
-pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
+///   speaker that is not declared, independently of ID metadata availability.
+pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin<'_> {
     let mut diagnostics = ErrorVec::new();
     let mut participants = IndexMap::new();
 
-    // One pass over every line, which is the only unavoidable O(n) walk here:
-    // nothing marks where the headers end. Everything after this touches only
-    // the three header kinds the join is about, never the utterances again.
+    let Ok(declaration) =
+        super::roster::admit_participant_declaration(lines.iter().filter_map(|line| match line {
+            Line::Header {
+                header, location, ..
+            } => Some((header.as_ref(), *location)),
+            _ => None,
+        }))
+    else {
+        return ParticipantJoin {
+            participants,
+            diagnostics,
+        };
+    };
+    let (entries, participants_location) = declaration.into_parts();
+
+    // Scan metadata after declaration admission. Subsequent work touches only
+    // these header kinds; the admitted entries and location need no rediscovery.
     //
     // The `@ID` and `@Birth` lists stay in source order and keep every
     // occurrence, because the orphan checks below report one diagnostic per
@@ -104,8 +224,8 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
     // sized (tens of entries at most, against 2 to 6 participants), so the
     // lookups below scan them rather than building maps: two hash maps would
     // be more allocation than the scans they replace at these sizes.
-    let mut declaration: Option<(&crate::model::ParticipantEntries, crate::Location)> = None;
     let mut id_headers: Vec<(&IDHeader, crate::Location)> = Vec::new();
+    let mut id_coverage = IDCoverage::Complete;
     let mut births: Vec<(&SpeakerCode, &ChatDate, crate::Location)> = Vec::new();
 
     for line in lines {
@@ -116,23 +236,12 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
             continue;
         };
         match header.as_ref() {
-            // First declaration wins, matching the single `@Participants`
-            // header the format allows.
-            Header::Participants { entries } if declaration.is_none() => {
-                declaration = Some((entries, *location));
-            }
             Header::ID(id) => id_headers.push((id, *location)),
+            Header::UnparsedID(_) => id_coverage = IDCoverage::Rejected,
             Header::Birth { participant, date } => births.push((participant, date, *location)),
             _ => {}
         }
     }
-
-    let Some((entries, participants_location)) = declaration else {
-        return ParticipantJoin {
-            participants,
-            diagnostics,
-        };
-    };
 
     for entry in entries {
         let speaker_code = entry.speaker_code.clone();
@@ -144,16 +253,17 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
 
         match matching_id {
             Some((id, _)) => {
-                let mut participant = Participant::new(entry.clone(), (*id).clone());
-
-                if let Some((_, date, _)) = births
+                let birth = births
                     .iter()
                     .find(|(speaker, _, _)| speaker.as_str() == speaker_str)
-                {
-                    participant = participant.with_birth_date((*date).clone());
-                }
-
-                participants.insert(speaker_code, participant);
+                    .map(|(_, date, _)| *date);
+                participants.insert(
+                    entry.speaker_code.clone(),
+                    ParticipantView { entry, id, birth },
+                );
+            }
+            None if matches!(id_coverage, IDCoverage::Rejected) => {
+                // An unreadable ID may belong to this speaker. Absence is unproven.
             }
             None => {
                 diagnostics.push(
@@ -161,15 +271,19 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
                         ErrorCode::SpeakerNotDefined,
                         Severity::Error,
                         DiagnosticLocation::from(participants_location),
-                        ErrorContext::new(speaker_str, crate::Span::new(0, speaker_str.len()), speaker_str),
+                        ErrorContext::new(
+                            speaker_str,
+                            crate::Span::new(0, speaker_str.len()),
+                            speaker_str,
+                        ),
                         format!(
                             "Speaker '{}' declared in @Participants but has no matching @ID header",
                             speaker_str
                         ),
                     )
                     .with_suggestion(format!(
-                        "Add @ID header: @ID:\t<lang>|<corpus>|{}|<age>|<sex>|<group>|<ses>|{}|<edu>|<custom>|",
-                        speaker_str, entry.role
+                        "Add an @ID header for declared speaker '{}' with its observed metadata",
+                        speaker_str
                     )),
                 );
             }
@@ -177,7 +291,7 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
     }
 
     for (id, id_location) in &id_headers {
-        if !participants.contains_key(&id.speaker) {
+        if !entries.iter().any(|entry| entry.speaker_code == id.speaker) {
             let speaker_str = id.speaker.to_string();
             diagnostics.push(
                 ParseError::new(
@@ -203,7 +317,7 @@ pub fn build_participants_from_lines(lines: &[Line]) -> ParticipantJoin {
     }
 
     for (speaker, _, birth_location) in &births {
-        if !participants.contains_key(*speaker) {
+        if !entries.iter().any(|entry| &entry.speaker_code == *speaker) {
             diagnostics.push(
                 ParseError::new(
                     ErrorCode::BirthUnknownParticipant,

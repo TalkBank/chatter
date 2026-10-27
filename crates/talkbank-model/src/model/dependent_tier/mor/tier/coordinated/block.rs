@@ -132,37 +132,24 @@ pub enum SplicedBlockError {
     },
 }
 
-/// The items a coordinated splice puts in place of a range, with one `%gra`
-/// relation per chunk in block-relative form: a tree with exactly one root.
-///
-/// Built only by [`SplicedBlock::new`], which parses the raw relations once:
-/// head `0` becomes the span root, every other head a [`BlockChunk`].
-#[derive(Debug, Clone, PartialEq)]
-pub struct SplicedBlock {
-    /// The replacement items, in order.
-    mors: Vec<Mor>,
-    /// Chunks of the items, summed: at least the span root's.
+/// Dense chunk order and all head bounds have been checked. No root or
+/// reachability claim is available until this owner is consumed.
+struct BoundedBlockGraph {
     chunk_count: NonZeroUsize,
-    /// The unique root, admitted together with the immutable relations.
-    root: BlockChunk,
-    /// One relation per chunk, in chunk order; exactly one is the span root
-    /// and every chain of heads reaches it.
     relations: Vec<BlockRelation>,
 }
 
-impl SplicedBlock {
-    /// Validate `mors` and `relations` as one block.
-    ///
-    /// `relations` holds one relation per chunk of `mors`, in chunk order,
-    /// each with `index` its 1-based chunk within the block and `head` either
-    /// `0` (the span root, exactly one) or a chunk of the block; every chain
-    /// of heads reaches the span root. The span root's own label is not
-    /// kept: the splice's `SpanRoot` supplies the relation it takes.
-    pub fn new(
-        mors: Vec<Mor>,
-        relations: Vec<GrammaticalRelation>,
-    ) -> Result<Self, SplicedBlockError> {
-        let chunks: usize = mors.iter().map(Mor::count_chunks).sum();
+/// Every admitted chain reaches this unique root. Only graph admission can
+/// construct the immutable facts retained by a replacement block.
+#[derive(Debug, Clone, PartialEq)]
+struct RootedBlockGraph {
+    chunk_count: NonZeroUsize,
+    root: BlockChunk,
+    relations: Vec<BlockRelation>,
+}
+
+impl BoundedBlockGraph {
+    fn new(relations: Vec<GrammaticalRelation>, chunks: usize) -> Result<Self, SplicedBlockError> {
         if relations.len() != chunks {
             return Err(SplicedBlockError::CountMismatch {
                 chunks,
@@ -201,6 +188,17 @@ impl SplicedBlock {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            chunk_count,
+            relations,
+        })
+    }
+
+    fn into_rooted(self) -> Result<RootedBlockGraph, SplicedBlockError> {
+        let Self {
+            chunk_count,
+            relations,
+        } = self;
         let mut roots = relations
             .iter()
             .enumerate()
@@ -215,32 +213,80 @@ impl SplicedBlock {
                 roots: additional_roots + 1,
             });
         }
-        // With one root and `chunks` relations, a chain that has not reached
-        // the root after `chunks` steps is on a cycle.
-        for position in 0..chunks {
-            let mut head = relations[position].head;
-            let mut steps = 0;
-            while let BlockHead::Chunk(next) = head {
-                steps += 1;
-                if steps > chunks {
-                    return Err(SplicedBlockError::Cycle {
-                        chunk: BlockChunk::at_position(position),
-                    });
+        #[derive(Clone, Copy)]
+        enum Reachability {
+            Unseen,
+            Visiting,
+            Rooted,
+        }
+        let mut states = vec![Reachability::Unseen; chunk_count.get()];
+        let mut path = Vec::new();
+        for position in 0..chunk_count.get() {
+            let start = BlockChunk::at_position(position);
+            let mut current = start;
+            loop {
+                match states[current.get() - 1] {
+                    Reachability::Rooted => break,
+                    Reachability::Visiting => {
+                        return Err(SplicedBlockError::Cycle { chunk: start });
+                    }
+                    Reachability::Unseen => {
+                        states[current.get() - 1] = Reachability::Visiting;
+                        path.push(current);
+                        match relations[current.get() - 1].head {
+                            BlockHead::SpanRoot => break,
+                            BlockHead::Chunk(next) => current = next,
+                        }
+                    }
                 }
-                head = relations[next.get() - 1].head;
+            }
+            // Every node on this path reaches either the root or an already
+            // rooted path. Each head is traversed once across all starts.
+            for chunk in path.drain(..) {
+                states[chunk.get() - 1] = Reachability::Rooted;
             }
         }
-        Ok(Self {
-            mors,
+        Ok(RootedBlockGraph {
             chunk_count,
             root,
             relations,
         })
     }
+}
+
+/// The items a coordinated splice puts in place of a range, with one `%gra`
+/// relation per chunk in block-relative form: a tree with exactly one root.
+///
+/// Built only by [`SplicedBlock::new`], which parses the raw relations once:
+/// head `0` becomes the span root, every other head a [`BlockChunk`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct SplicedBlock {
+    /// The replacement items, in order.
+    mors: Vec<Mor>,
+    /// Immutable, rooted relations admitted together with the chunk count.
+    graph: RootedBlockGraph,
+}
+
+impl SplicedBlock {
+    /// Validate `mors` and `relations` as one block.
+    ///
+    /// `relations` holds one relation per chunk of `mors`, in chunk order,
+    /// each with `index` its 1-based chunk within the block and `head` either
+    /// `0` (the span root, exactly one) or a chunk of the block; every chain
+    /// of heads reaches the span root. The span root's own label is not
+    /// kept: the splice's `SpanRoot` supplies the relation it takes.
+    pub fn new(
+        mors: Vec<Mor>,
+        relations: Vec<GrammaticalRelation>,
+    ) -> Result<Self, SplicedBlockError> {
+        let chunks: usize = mors.iter().map(Mor::count_chunks).sum();
+        let graph = BoundedBlockGraph::new(relations, chunks)?.into_rooted()?;
+        Ok(Self { mors, graph })
+    }
 
     /// Chunks in the block (its items' chunks, summed).
     pub fn chunk_count(&self) -> usize {
-        self.chunk_count.get()
+        self.graph.chunk_count.get()
     }
 
     /// The block's unique root, in block-relative numbering.
@@ -249,12 +295,12 @@ impl SplicedBlock {
     /// or admitting the relations a second time. The root and the relations
     /// are constructed together and cannot be mutated independently.
     pub fn root_chunk(&self) -> BlockChunk {
-        self.root
+        self.graph.root
     }
 
     /// Chunks in the block, which has at least one, for a renumbering.
     pub(super) fn chunks(&self) -> NonZeroUsize {
-        self.chunk_count
+        self.graph.chunk_count
     }
 
     /// The replacement items.
@@ -264,12 +310,12 @@ impl SplicedBlock {
 
     /// The relation of `chunk`, which the caller has taken from this block.
     pub(super) fn relation(&self, chunk: BlockChunk) -> &BlockRelation {
-        &self.relations[chunk.get() - 1]
+        &self.graph.relations[chunk.get() - 1]
     }
 
     /// The items and relations, for the splice to put in place.
     pub(super) fn into_parts(self) -> (Vec<Mor>, Vec<BlockRelation>) {
-        (self.mors, self.relations)
+        (self.mors, self.graph.relations)
     }
 }
 
@@ -290,7 +336,9 @@ mod tests {
         heads
             .iter()
             .enumerate()
-            .map(|(position, head)| GrammaticalRelation::new(position + 1, *head, "DEP"))
+            .map(|(position, head)| {
+                GrammaticalRelation::new(position + 1, *head, "DEP".try_into().unwrap())
+            })
             .collect()
     }
 
@@ -362,6 +410,70 @@ mod tests {
             SplicedBlockError::IndexOutOfOrder {
                 chunk: BlockChunk::at_position(1),
                 index: 5,
+            }
+        );
+    }
+
+    /// Independent bounded walks check all small raw graphs, including paths
+    /// that converge, cycles with incoming tails and every root position.
+    #[test]
+    fn graph_admission_agrees_with_bounded_reachability() {
+        for count in 1_usize..=5 {
+            for encoding in 0..(count + 1).pow(count as u32) {
+                let mut remaining = encoding;
+                let heads = (0..count)
+                    .map(|_| {
+                        let head = remaining % (count + 1);
+                        remaining /= count + 1;
+                        head
+                    })
+                    .collect::<Vec<_>>();
+                let roots = heads.iter().filter(|&&head| head == 0).count();
+                let expected = if roots != 1 {
+                    Err(SplicedBlockError::RootCount { roots })
+                } else {
+                    (1..=count)
+                        .find(|&start| {
+                            let mut head = start;
+                            for _ in 0..count {
+                                if head == 0 {
+                                    break;
+                                }
+                                head = heads[head - 1];
+                            }
+                            head != 0
+                        })
+                        .map_or(Ok(()), |start| {
+                            Err(SplicedBlockError::Cycle {
+                                chunk: BlockChunk::at_position(start - 1),
+                            })
+                        })
+                };
+                assert_eq!(
+                    SplicedBlock::new(items(count), relations(&heads)).map(|_| ()),
+                    expected,
+                    "{heads:?}"
+                );
+            }
+        }
+    }
+
+    /// Long chains in either orientation avoid recursion; a separate root
+    /// cannot conceal a disconnected cycle.
+    #[test]
+    fn long_chains_are_rooted_and_disconnected_cycles_are_refused() {
+        let count = 25_000;
+        let mut forward = (2..=count).chain([0]).collect::<Vec<_>>();
+        let block = SplicedBlock::new(items(count), relations(&forward)).unwrap();
+        assert_eq!(block.root_chunk().get(), count);
+        let backward = (0..count).collect::<Vec<_>>();
+        let block = SplicedBlock::new(items(count), relations(&backward)).unwrap();
+        assert_eq!(block.root_chunk(), BlockChunk::FIRST);
+        forward[count - 2] = 1;
+        assert_eq!(
+            SplicedBlock::new(items(count), relations(&forward)).unwrap_err(),
+            SplicedBlockError::Cycle {
+                chunk: BlockChunk::FIRST
             }
         );
     }

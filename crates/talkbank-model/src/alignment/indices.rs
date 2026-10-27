@@ -110,7 +110,10 @@ macro_rules! zero_indexed_newtype {
         // `SpanShift` recurse into their fields.
         impl SpanShift for $name {
             fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {}
-        }
+            fn try_map_spans<E>(self, _map: &mut impl FnMut(crate::Span) -> Result<crate::Span, E>) -> Result<Self, E> {
+        Ok(self)
+    }
+}
     };
 }
 
@@ -243,10 +246,22 @@ impl std::fmt::Display for SemanticWordIndex1 {
 
 impl SpanShift for SemanticWordIndex1 {
     fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {}
+    fn try_map_spans<E>(
+        self,
+        _map: &mut impl FnMut(crate::Span) -> Result<crate::Span, E>,
+    ) -> Result<Self, E> {
+        Ok(self)
+    }
 }
 
 impl SpanShift for GraHeadRef {
     fn shift_spans_after(&mut self, _offset: usize, _delta: isize) {}
+    fn try_map_spans<E>(
+        self,
+        _map: &mut impl FnMut(crate::Span) -> Result<crate::Span, E>,
+    ) -> Result<Self, E> {
+        Ok(self)
+    }
 }
 
 /// The head of a `%gra` relation: either ROOT (authored as `0`) or a

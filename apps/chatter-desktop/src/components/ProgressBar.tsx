@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RunPhase } from "../hooks/useValidation";
-import { finishedRunSummary, isRunRecoverable, totalFilesOf } from "../hooks/validationState";
+import { finishedRunSummary, isRunPending, isRunRecoverable, totalFilesOf, type RunPhase } from "../hooks/validationState";
 
 interface Props {
   run: RunPhase;
@@ -63,9 +62,9 @@ export default function ProgressBar({
           {backendSilent && (
             <span className="warning-text">
               {" "}
-              The validator has not responded yet. If this persists, please
-              report it: nothing has begun scanning, so the fault is at startup
-              rather than in your files.
+              No validation progress has been reported yet. You can request
+              cancellation. If this persists, report the target and how long
+              you waited.
             </span>
           )}
         </span>
@@ -122,7 +121,7 @@ export default function ProgressBar({
       )}
 
       <div className="actions">
-        {run.kind === "running" && (
+        {isRunPending(run) && (
           <button onClick={onCancel}>Cancel</button>
         )}
         {isRunRecoverable(run) && (
@@ -130,8 +129,8 @@ export default function ProgressBar({
             Re-validate
           </button>
         )}
-        {/* Export stays finished-only: an aborted run produced no results to
-            export, so isRunRecoverable is deliberately not used here. */}
+        {/* Export requires a complete result set. An aborted run can retain
+            partial results, so isRunRecoverable is not sufficient here. */}
         {run.kind === "finished" && <button onClick={onExport}>Export</button>}
       </div>
     </div>

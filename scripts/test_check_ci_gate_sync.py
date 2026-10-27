@@ -34,5 +34,17 @@ class GateRecipesTests(unittest.TestCase):
             self.recipes("suite:\n    cargo test\n")
 
 
+
+class ListedPackagesTests(unittest.TestCase):
+    def test_reads_package_lines_and_skips_comments_and_blanks(self):
+        listed = check_ci_gate_sync.listed_packages(
+            "# owner of the list\nlibwebkit2gtk-4.1-dev\n\npkg-config\n"
+        )
+        self.assertEqual(listed, ["libwebkit2gtk-4.1-dev", "pkg-config"])
+
+    def test_a_commented_out_package_is_not_listed(self):
+        listed = check_ci_gate_sync.listed_packages("# libwebkit2gtk-4.1-dev\npkg-config\n")
+        self.assertEqual(listed, ["pkg-config"])
+
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,6 @@
 use super::{PhoItem, PhoTierType, PhoWord, WriteChat};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as FmtWrite;
 use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
@@ -152,7 +151,7 @@ impl PhoTier {
     ///
     /// This is used for roundtrip testing against golden data that contains
     /// content-only, and for the TreeSitterParser API which expects content-only input.
-    pub fn write_content<W: FmtWrite>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_content<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         for (i, item) in self.items.iter().enumerate() {
             if i > 0 {
                 w.write_char(' ')?;
@@ -165,22 +164,18 @@ impl PhoTier {
     /// Allocating helper that writes the full tier line into a `String`.
     pub fn to_chat(&self) -> String {
         use super::WriteChat;
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_chat(w))
     }
 
     /// Allocating helper that writes content-only payload into a `String`.
     pub fn to_content(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_content(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_content(w))
     }
 }
 
 impl WriteChat for PhoTier {
     /// Serializes one full `%pho`, `%mod`, or `%upho` tier line.
-    fn write_chat<W: FmtWrite>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         // Write tier type prefix using PhoTierType's WriteChat impl
         self.tier_type.write_chat(w)?;
         w.write_str(":\t")?;

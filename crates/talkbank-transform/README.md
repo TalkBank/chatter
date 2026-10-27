@@ -33,7 +33,7 @@ Key capabilities:
 
 ## Usage
 
-Start with the [library recipes](../../book/src/chatter/integrating/library-usage.md)
+Start with the [library recipes](https://github.com/TalkBank/chatter/blob/main/book/src/chatter/integrating/library-usage.md)
 for dependency setup, parsing, validation, traversal and serialization. Their
 examples are included from compiled test source rather than copied into this
 README. Keep the model, parser and transform dependencies at one coherent
@@ -45,7 +45,7 @@ the transcript name are not silently omitted. Parsing failures, internal faults,
 model validation failures and incomplete provenance remain distinct outcomes.
 Do not discard diagnostics or convert all failures into a successful model.
 
-The [transform pipeline guide](../../book/src/architecture/transform-pipeline.md)
+The [transform pipeline guide](https://github.com/TalkBank/chatter/blob/main/book/src/architecture/transform-pipeline.md)
 describes mutable models, retained admission, rewrite limits and runner/cache
 ownership. Use fresh output destinations when learning conversion; a returned
 model, JSON string or rewrite does not by itself authorize replacing the input.

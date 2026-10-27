@@ -1,5 +1,5 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: result.unwrap()
 ---
 speaker:
@@ -27,6 +27,6 @@ tier_body:
         annotations: []
         raw_text: crack
   terminator:
-    TrailingOff: +...
+    type: trailingoff
   postcodes: []
   media_bullet: ~

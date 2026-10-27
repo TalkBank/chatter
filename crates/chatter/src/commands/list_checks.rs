@@ -30,7 +30,7 @@ pub fn all_error_codes() -> Vec<ErrorCode> {
 /// Output format is stable-ish but intended for human consumption. It is
 /// deliberately NOT machine-parseable JSON, downstream tooling should read
 /// the spec files directly instead.
-pub fn print_check_list() {
+pub fn print_check_list() -> crate::exit_codes::CommandResult {
     // No sort: the macro rejects a descending declaration, so `all()` is in
     // code order by construction. This used to be `sort_by_key(|c| c.as_str())`
     // under a doc comment claiming declaration order, which was a hand-written
@@ -77,6 +77,15 @@ pub fn print_check_list() {
          {planned_count} Planned)",
         codes.len()
     );
+    Ok(())
+}
+
+/// Explain the generated diagnostic identity and its authoritative documentation.
+pub fn explain_check(code: ErrorCode) -> crate::exit_codes::CommandResult {
+    outln!("{}: {:?}", code.as_str(), code);
+    outln!("Status: {:?}", code.check_status());
+    outln!("Documentation: {}", code.documentation_url());
+    Ok(())
 }
 
 #[cfg(test)]

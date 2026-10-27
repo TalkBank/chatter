@@ -48,7 +48,7 @@ fn cache_dir_env_override_is_honored() -> Result<(), TestError> {
         .env("TALKBANK_CHAT_CACHE_DIR", cache_root.path())
         .arg("validate")
         .arg(fixture_path())
-        .arg("--force")
+        .arg("--refresh-cache")
         .assert()
         .success();
 

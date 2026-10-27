@@ -76,8 +76,37 @@ pub enum TimeSegment {
 /// comma-separated combinations, and ranges with `;` separator.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Time_Duration_Header>
+/// Constructors own agreement between text and time components.
+///
+/// ```compile_fail
+/// use talkbank_model::model::TimeDurationValue;
+/// let value = TimeDurationValue::Parsed {
+///     segments: Vec::new(), raw: "25:00:00".into(),
+/// };
+/// assert!(value.has_out_of_range_component());
+/// ```
+#[derive(Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
+pub struct TimeDurationValue {
+    state: TimeDurationState,
+}
+
+impl std::fmt::Debug for TimeDurationValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.state, f)
+    }
+}
+
+impl crate::model::ValidationTagged for TimeDurationValue {
+    fn validation_tag(&self) -> crate::model::ValidationTag {
+        crate::model::ValidationTagged::validation_tag(&self.state)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift, ValidationTagged)]
-pub enum TimeDurationValue {
+enum TimeDurationState {
+    /// An absent optional value is not a parsed clock reading.
+    #[validation_tag(clean)]
+    Empty,
     /// Successfully parsed time duration with structured segments.
     Parsed {
         /// Structured time segments extracted from the text.
@@ -108,12 +137,10 @@ impl TimeDurationValue {
     /// Preserve the existing optional-empty policy before issuing a refusal.
     pub(crate) fn invalidity(&self) -> Option<InvalidTimeDuration<'_>> {
         let text = self.as_str();
-        if text.is_empty() {
-            return None;
-        }
-        let invalid = match self {
-            Self::Unsupported(_) => true,
-            Self::Parsed { .. } => {
+        let invalid = match &self.state {
+            TimeDurationState::Empty => false,
+            TimeDurationState::Unsupported(_) => true,
+            TimeDurationState::Parsed { .. } => {
                 self.violates_depfile_pattern() || self.has_out_of_range_component()
             }
         };
@@ -122,37 +149,36 @@ impl TimeDurationValue {
 
     /// Parse a CHAT time duration string.
     ///
-    /// Returns `Parsed` for well-formed durations, `Unsupported` otherwise.
+    /// Empty text stays absent; nonempty text is parsed or retained as unsupported.
     pub fn from_text(value: &str) -> Self {
-        if value.is_empty() {
-            return Self::Parsed {
-                segments: Vec::new(),
-                raw: SmolStr::from(value),
-            };
-        }
-
-        match parse_duration_segments(value) {
-            Some(segments) => Self::Parsed {
-                segments,
-                raw: SmolStr::from(value),
-            },
-            None => Self::Unsupported(value.to_string()),
-        }
+        let state = if value.is_empty() {
+            TimeDurationState::Empty
+        } else {
+            match parse_duration_segments(value) {
+                Some(segments) => TimeDurationState::Parsed {
+                    segments,
+                    raw: SmolStr::from(value),
+                },
+                None => TimeDurationState::Unsupported(value.to_owned()),
+            }
+        };
+        Self { state }
     }
 
     /// Returns the time duration as a string.
     pub fn as_str(&self) -> &str {
-        match self {
-            Self::Parsed { raw, .. } => raw.as_str(),
-            Self::Unsupported(s) => s.as_str(),
+        match &self.state {
+            TimeDurationState::Parsed { raw, .. } => raw.as_str(),
+            TimeDurationState::Unsupported(s) => s.as_str(),
+            TimeDurationState::Empty => "",
         }
     }
 
-    /// Returns the structured segments (empty for `Unsupported`).
+    /// Returns the structured segments (empty for absent or unsupported text).
     pub fn segments(&self) -> &[TimeSegment] {
-        match self {
-            Self::Parsed { segments, .. } => segments,
-            Self::Unsupported(_) => &[],
+        match &self.state {
+            TimeDurationState::Parsed { segments, .. } => segments,
+            TimeDurationState::Unsupported(_) | TimeDurationState::Empty => &[],
         }
     }
 
@@ -199,7 +225,7 @@ impl TimeDurationValue {
     /// real corpora use both `1:30` and `01:30`; depfile.cut's slots
     /// admit any digit count.
     pub fn violates_depfile_pattern(&self) -> bool {
-        let Self::Parsed { raw, .. } = self else {
+        let TimeDurationState::Parsed { raw, .. } = &self.state else {
             return false;
         };
         !matches_duration_depfile(raw.as_str())
@@ -352,7 +378,7 @@ impl std::fmt::Display for TimeDurationValue {
 }
 
 impl crate::model::WriteChat for TimeDurationValue {
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.as_str())
     }
 }
@@ -401,8 +427,38 @@ impl From<&str> for TimeDurationValue {
 /// Formats: `MM:SS`, `HH:MM:SS`, or either with `.mmm` milliseconds.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Time_Start_Header>
+/// Constructors own agreement between text and time components.
+///
+/// ```compile_fail
+/// use talkbank_model::model::TimeStartValue;
+/// let value = TimeStartValue::Parsed {
+///     hours: 0, minutes: 0, seconds: 0, millis: None,
+///     raw: "25:00:00".into(),
+/// };
+/// assert_eq!(value, TimeStartValue::from_text(value.as_str()));
+/// ```
+#[derive(Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
+pub struct TimeStartValue {
+    state: TimeStartState,
+}
+
+impl std::fmt::Debug for TimeStartValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.state, f)
+    }
+}
+
+impl crate::model::ValidationTagged for TimeStartValue {
+    fn validation_tag(&self) -> crate::model::ValidationTag {
+        crate::model::ValidationTagged::validation_tag(&self.state)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift, ValidationTagged)]
-pub enum TimeStartValue {
+enum TimeStartState {
+    /// An absent optional value is not a parsed clock reading.
+    #[validation_tag(clean)]
+    Empty,
     /// Successfully parsed time start.
     Parsed {
         /// Hours component.
@@ -443,12 +499,10 @@ impl TimeStartValue {
     /// Empty optional values retain their existing omission policy.
     pub(crate) fn invalidity(&self) -> Option<InvalidTimeStart<'_>> {
         let text = self.as_str();
-        if text.is_empty() {
-            return None;
-        }
-        let invalid = match self {
-            Self::Unsupported(_) => true,
-            Self::Parsed {
+        let invalid = match &self.state {
+            TimeStartState::Empty => false,
+            TimeStartState::Unsupported(_) => true,
+            TimeStartState::Parsed {
                 hours,
                 minutes,
                 seconds,
@@ -469,20 +523,12 @@ impl TimeStartValue {
 
     /// Parse a CHAT time start string (`MM:SS`, `HH:MM:SS`, or either with `.mmm`).
     ///
-    /// Returns `Parsed` for well-formed times, `Unsupported` otherwise.
+    /// Empty text stays absent; nonempty text is parsed or retained as unsupported.
     pub fn from_text(value: &str) -> Self {
-        if value.is_empty() {
-            return Self::Parsed {
-                hours: 0,
-                minutes: 0,
-                seconds: 0,
-                millis: None,
-                raw: SmolStr::from(value),
-            };
-        }
-
-        if let Some(tv) = parse_time_value(value) {
-            Self::Parsed {
+        let state = if value.is_empty() {
+            TimeStartState::Empty
+        } else if let Some(tv) = parse_time_value(value) {
+            TimeStartState::Parsed {
                 hours: tv.hours,
                 minutes: tv.minutes,
                 seconds: tv.seconds,
@@ -490,15 +536,37 @@ impl TimeStartValue {
                 raw: SmolStr::from(value),
             }
         } else {
-            Self::Unsupported(value.to_string())
+            TimeStartState::Unsupported(value.to_owned())
+        };
+        Self { state }
+    }
+
+    /// Parsed components, absent for empty or unsupported text.
+    /// The returned copy cannot change the source value's classification.
+    pub fn time(&self) -> Option<TimeValue> {
+        match &self.state {
+            TimeStartState::Parsed {
+                hours,
+                minutes,
+                seconds,
+                millis,
+                ..
+            } => Some(TimeValue {
+                hours: *hours,
+                minutes: *minutes,
+                seconds: *seconds,
+                millis: *millis,
+            }),
+            TimeStartState::Empty | TimeStartState::Unsupported(_) => None,
         }
     }
 
     /// Returns the time start as a string.
     pub fn as_str(&self) -> &str {
-        match self {
-            Self::Parsed { raw, .. } => raw.as_str(),
-            Self::Unsupported(s) => s.as_str(),
+        match &self.state {
+            TimeStartState::Parsed { raw, .. } => raw.as_str(),
+            TimeStartState::Unsupported(s) => s.as_str(),
+            TimeStartState::Empty => "",
         }
     }
 
@@ -525,7 +593,7 @@ impl TimeStartValue {
     /// `has_validation_issue()`, so this method returns `false` for
     /// it to avoid double-reporting.
     pub fn violates_depfile_pattern(&self) -> bool {
-        let Self::Parsed { raw, .. } = self else {
+        let TimeStartState::Parsed { raw, .. } = &self.state else {
             return false;
         };
         let raw = raw.as_str();
@@ -551,7 +619,7 @@ impl std::fmt::Display for TimeStartValue {
 }
 
 impl crate::model::WriteChat for TimeStartValue {
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.as_str())
     }
 }
@@ -596,155 +664,4 @@ impl From<&str> for TimeStartValue {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn clock_range_accepts_valid_and_rejects_out_of_range() {
-        let out_of_range = |s: &str| TimeDurationValue::from_text(s).has_out_of_range_component();
-        // Valid clock values (CLAN accepts these).
-        assert!(!out_of_range("23:59:59"));
-        assert!(!out_of_range("12:30:45"));
-        assert!(!out_of_range("00:00:00"));
-        assert!(!out_of_range("00:00-23:59")); // HH:MM-HH:MM range, both endpoints valid
-        // Out-of-range components (CLAN error 35), grounded empirically.
-        assert!(out_of_range("99:99:99"));
-        assert!(out_of_range("25:00:00")); // hours > 23
-        assert!(out_of_range("12:60:00")); // minutes > 59
-        assert!(out_of_range("12:00:60")); // seconds > 59
-        assert!(out_of_range("00:00:00-25:00:00")); // a range endpoint out of range
-    }
-
-    #[test]
-    fn time_value_parse_hms() {
-        let tv = parse_time_value("01:23:45").unwrap();
-        assert_eq!(
-            (tv.hours, tv.minutes, tv.seconds, tv.millis),
-            (1, 23, 45, None)
-        );
-    }
-
-    #[test]
-    fn time_value_parse_ms() {
-        let tv = parse_time_value("23:45").unwrap();
-        assert_eq!(
-            (tv.hours, tv.minutes, tv.seconds, tv.millis),
-            (0, 23, 45, None)
-        );
-    }
-
-    #[test]
-    fn time_value_parse_bare_seconds() {
-        let tv = parse_time_value("45").unwrap();
-        assert_eq!(
-            (tv.hours, tv.minutes, tv.seconds, tv.millis),
-            (0, 0, 45, None)
-        );
-    }
-
-    #[test]
-    fn time_value_parse_bare_seconds_with_millis() {
-        let tv = parse_time_value("45.678").unwrap();
-        assert_eq!(
-            (tv.hours, tv.minutes, tv.seconds, tv.millis),
-            (0, 0, 45, Some(678))
-        );
-    }
-
-    #[test]
-    fn time_value_parse_with_millis() {
-        let tv = parse_time_value("01:23:45.678").unwrap();
-        assert_eq!(
-            (tv.hours, tv.minutes, tv.seconds, tv.millis),
-            (1, 23, 45, Some(678))
-        );
-    }
-
-    #[test]
-    fn duration_single() {
-        let d = TimeDurationValue::from_text("01:23:45");
-        assert!(matches!(d, TimeDurationValue::Parsed { .. }));
-        assert_eq!(d.segments().len(), 1);
-        assert!(matches!(d.segments()[0], TimeSegment::Single(_)));
-    }
-
-    #[test]
-    fn duration_range_hyphen() {
-        let d = TimeDurationValue::from_text("00:00:00-01:30:00");
-        assert_eq!(d.segments().len(), 1);
-        assert!(matches!(d.segments()[0], TimeSegment::Range { .. }));
-    }
-
-    #[test]
-    fn duration_range_semicolon() {
-        let d = TimeDurationValue::from_text("00:00:00;01:30:00");
-        assert_eq!(d.segments().len(), 1);
-        assert!(matches!(d.segments()[0], TimeSegment::Range { .. }));
-    }
-
-    #[test]
-    fn duration_comma_separated() {
-        let d = TimeDurationValue::from_text("01:00:00, 02:00:00-03:00:00");
-        assert_eq!(d.segments().len(), 2);
-        assert!(matches!(d.segments()[0], TimeSegment::Single(_)));
-        assert!(matches!(d.segments()[1], TimeSegment::Range { .. }));
-    }
-
-    #[test]
-    fn duration_unsupported() {
-        let d = TimeDurationValue::from_text("foobar");
-        assert!(matches!(d, TimeDurationValue::Unsupported(_)));
-        assert_eq!(d.segments().len(), 0);
-    }
-
-    #[test]
-    fn duration_roundtrip() {
-        for input in &["01:23:45", "00:00:00-01:30:00", "01:00:00, 02:00:00"] {
-            let d = TimeDurationValue::from_text(input);
-            assert_eq!(d.as_str(), *input);
-        }
-    }
-
-    #[test]
-    fn start_hms() {
-        let s = TimeStartValue::from_text("01:23:45");
-        assert!(matches!(
-            s,
-            TimeStartValue::Parsed {
-                hours: 1,
-                minutes: 23,
-                seconds: 45,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn start_ms() {
-        let s = TimeStartValue::from_text("23:45");
-        assert!(matches!(
-            s,
-            TimeStartValue::Parsed {
-                hours: 0,
-                minutes: 23,
-                seconds: 45,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn start_with_millis() {
-        let s = TimeStartValue::from_text("01:23:45.678");
-        assert!(matches!(
-            s,
-            TimeStartValue::Parsed {
-                hours: 1,
-                minutes: 23,
-                seconds: 45,
-                millis: Some(678),
-                ..
-            }
-        ));
-    }
-}
+mod tests;

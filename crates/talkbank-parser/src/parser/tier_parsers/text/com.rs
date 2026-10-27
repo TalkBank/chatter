@@ -27,16 +27,19 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 pub fn parse_com_tier<'tree>(
     typed: SourceBound<'tree, '_, ComDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<ComTier, crate::CstFailure> {
+) -> Result<talkbank_model::ParseOutcome<ComTier>, crate::CstFailure> {
     parse_com_tier_with_separator(typed, errors)
-        .map(crate::parser::tier_parsers::ParsedDependentTier::into_tier)
+        .map(|outcome| outcome.map(crate::parser::tier_parsers::ParsedDependentTier::into_tier))
 }
 
 /// Retain the tier and its separator from one selected extraction.
 pub(crate) fn parse_com_tier_with_separator<'tree>(
     typed: SourceBound<'tree, '_, ComDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<crate::parser::tier_parsers::ParsedDependentTier<ComTier>, crate::CstFailure> {
+) -> Result<
+    talkbank_model::ParseOutcome<crate::parser::tier_parsers::ParsedDependentTier<ComTier>>,
+    crate::CstFailure,
+> {
     let node = typed.raw_node();
     let span = span_of(node);
     let children = crate::parser::typed_cst::extract_envelope(typed)?;
@@ -50,8 +53,10 @@ pub(crate) fn parse_com_tier_with_separator<'tree>(
     );
     let children = children.admit_ranges()?;
     let content = parse_optional_text_tier_content(&children, errors)?;
-    Ok(crate::parser::tier_parsers::ParsedDependentTier::new(
-        ComTier::new(span, content),
-        separator,
-    ))
+    Ok(content.map(|content| {
+        crate::parser::tier_parsers::ParsedDependentTier::new(
+            ComTier::new(span, content),
+            separator,
+        )
+    }))
 }

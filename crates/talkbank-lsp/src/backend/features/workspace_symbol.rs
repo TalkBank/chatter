@@ -1,133 +1,127 @@
-//! Workspace symbol provider for CHAT files.
-//!
-//! Searches across all open CHAT documents for headers (`@`-lines) and
-//! speaker utterances (`*SPEAKER:`) matching the query string.
+//! Workspace navigation over source-bound parsed headers and utterances.
 
+use talkbank_model::Line;
 use tower_lsp::lsp_types::*;
 
-/// Search a single document for symbols matching the query.
-pub fn workspace_symbols_for_document(uri: &Url, doc: &str, query: &str) -> Vec<SymbolInformation> {
+use crate::backend::diagnostics::DocumentAnalysis;
+use crate::backend::utils::{LineIndex, protocol_lines};
+
+/// Present only model-owned symbols, using their own source for editor ranges.
+/// A recovered analysis can still expose the healthy structures it retained.
+pub(crate) fn workspace_symbols_for_document(
+    uri: &Url,
+    analysis: &DocumentAnalysis,
+    query: &str,
+) -> Vec<SymbolInformation> {
     let query_lower = query.to_lowercase();
-    let mut symbols = Vec::new();
-
-    for (line_idx, line) in doc.lines().enumerate() {
-        let name = if line.starts_with('@') {
-            // Header line: use the header name as the symbol.
-            line.split('\t').next().unwrap_or(line).to_string()
-        } else if line.starts_with('*') {
-            // Main tier: use speaker code.
-            line.split('\t').next().unwrap_or(line).to_string()
-        } else {
-            continue;
-        };
-
-        if !query.is_empty() && !name.to_lowercase().contains(&query_lower) {
-            continue;
-        }
-
-        let kind = if line.starts_with('@') {
-            SymbolKind::PROPERTY
-        } else {
-            SymbolKind::FUNCTION
-        };
-
-        #[allow(deprecated)]
-        symbols.push(SymbolInformation {
-            name,
-            kind,
-            tags: None,
-            deprecated: None,
-            location: Location {
-                uri: uri.clone(),
-                range: Range {
-                    start: Position {
-                        line: line_idx as u32,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: line_idx as u32,
-                        character: crate::backend::utils::offset_to_position(line, line.len())
-                            .character,
-                    },
+    let document = analysis.source();
+    let index = LineIndex::new(document);
+    let file = analysis.file();
+    file.lines
+        .iter()
+        .filter_map(|entry| {
+            let span = entry.location().span()?;
+            let source = document.get(span.start()..span.end())?;
+            let first_line = protocol_lines(source).next()?.text();
+            let (name, kind) = match entry {
+                Line::Header { .. } => {
+                    // This is a display label for an already-parsed header, not
+                    // an independent classifier for arbitrary @-prefixed text.
+                    let label = first_line
+                        .split_once('\t')
+                        .map_or(first_line, |(label, _)| label);
+                    (label.to_owned(), SymbolKind::PROPERTY)
+                }
+                Line::Utterance(utterance) => (
+                    format!("*{}:", utterance.main.speaker),
+                    SymbolKind::FUNCTION,
+                ),
+            };
+            if !name.to_lowercase().contains(&query_lower) {
+                return None;
+            }
+            #[allow(deprecated)]
+            Some(SymbolInformation {
+                name,
+                kind,
+                tags: None,
+                deprecated: None,
+                location: Location {
+                    uri: uri.clone(),
+                    range: Range::new(
+                        index.offset_to_position(span.start()),
+                        index.offset_to_position(span.start() + first_line.len()),
+                    ),
                 },
-            },
-            container_name: None,
-        });
-    }
-
-    symbols
+                container_name: None,
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use talkbank_parser::TreeSitterParser;
 
-    #[test]
-    fn test_workspace_symbols_finds_headers_and_speakers() {
-        let uri = Url::parse("file:///test.cha").unwrap();
-        let doc = "@UTF8\n@Begin\n@Participants:\tCHI Child\n*CHI:\thello .\n*MOT:\thi .\n@End\n";
+    const SOURCE: &str =
+        include_str!("../../../../../corpus/reference/core/basic-conversation.cha");
 
-        let all = workspace_symbols_for_document(&uri, doc, "");
-        assert_eq!(all.len(), 6); // 4 headers + 2 speakers
-
-        let chi_only = workspace_symbols_for_document(&uri, doc, "CHI");
-        assert_eq!(chi_only.len(), 1); // *CHI: line only (header name is @Participants:, not CHI)
+    fn symbols(source: &str, query: &str) -> Vec<SymbolInformation> {
+        let uri = Url::parse("file:///reference.cha").unwrap();
+        let parser = TreeSitterParser::new().unwrap();
+        let analysis = DocumentAnalysis::parse(&parser, &uri, Arc::from(source), None);
+        workspace_symbols_for_document(&uri, &analysis, query)
     }
 
     #[test]
-    fn workspace_symbols_query_is_case_insensitive() {
-        let uri = Url::parse("file:///test.cha").unwrap();
-        let doc = "@UTF8\n@Begin\n@Participants:\tCHI Child\n*CHI:\thello .\n@End\n";
-
-        let upper = workspace_symbols_for_document(&uri, doc, "CHI");
-        let lower = workspace_symbols_for_document(&uri, doc, "chi");
-        assert_eq!(upper.len(), lower.len(), "Query should be case-insensitive");
-    }
-
-    #[test]
-    fn workspace_symbols_assigns_correct_kinds() {
-        let uri = Url::parse("file:///test.cha").unwrap();
-        let doc = "@UTF8\n@Begin\n@Participants:\tCHI Child\n*CHI:\thello .\n@End\n";
-
-        let all = workspace_symbols_for_document(&uri, doc, "");
-        for sym in &all {
-            if sym.name.starts_with('@') {
-                assert_eq!(
-                    sym.kind,
-                    SymbolKind::PROPERTY,
-                    "Headers should be PROPERTY kind, got {:?} for {}",
-                    sym.kind,
-                    sym.name
-                );
-            } else if sym.name.starts_with('*') {
-                assert_eq!(
-                    sym.kind,
-                    SymbolKind::FUNCTION,
-                    "Speaker lines should be FUNCTION kind, got {:?} for {}",
-                    sym.kind,
-                    sym.name
-                );
-            }
+    fn protocol_line_endings_keep_workspace_symbol_ranges() {
+        let expected = symbols(SOURCE, "");
+        assert!(!expected.is_empty());
+        for ending in ["\r\n", "\r"] {
+            assert_eq!(symbols(&SOURCE.replace('\n', ending), ""), expected);
         }
     }
 
     #[test]
+    fn test_workspace_symbols_finds_headers_and_speakers() {
+        let all = symbols(SOURCE, "");
+        assert_eq!(all.len(), 13); // Nine headers and four utterances.
+        let chi_only = symbols(SOURCE, "CHI");
+        assert_eq!(chi_only.len(), 2); // Header payloads are not symbol names.
+        assert!(chi_only.iter().all(|symbol| symbol.name == "*CHI:"));
+    }
+
+    #[test]
+    fn workspace_symbols_query_is_case_insensitive() {
+        assert_eq!(symbols(SOURCE, "CHI"), symbols(SOURCE, "chi"));
+    }
+
+    #[test]
+    fn workspace_symbols_assigns_correct_kinds() {
+        let headers = symbols(SOURCE, "@");
+        assert_eq!(headers.len(), 9);
+        assert!(
+            headers
+                .iter()
+                .all(|symbol| symbol.kind == SymbolKind::PROPERTY)
+        );
+        let speakers = symbols(SOURCE, "*");
+        assert_eq!(speakers.len(), 4);
+        assert!(
+            speakers
+                .iter()
+                .all(|symbol| symbol.kind == SymbolKind::FUNCTION)
+        );
+    }
+
+    #[test]
     fn workspace_symbols_line_positions_are_correct() {
-        let uri = Url::parse("file:///test.cha").unwrap();
-        let doc = "@UTF8\n@Begin\n*CHI:\thello .\n@End\n";
-
-        let all = workspace_symbols_for_document(&uri, doc, "");
-        // @UTF8 is on line 0, @Begin on line 1, *CHI: on line 2, @End on line 3.
-        let utf8 = all.iter().find(|s| s.name == "@UTF8").unwrap();
-        assert_eq!(utf8.location.range.start.line, 0);
-
-        let begin = all.iter().find(|s| s.name == "@Begin").unwrap();
-        assert_eq!(begin.location.range.start.line, 1);
-
-        let chi = all.iter().find(|s| s.name == "*CHI:").unwrap();
-        assert_eq!(chi.location.range.start.line, 2);
-
-        let end = all.iter().find(|s| s.name == "@End").unwrap();
-        assert_eq!(end.location.range.start.line, 3);
+        let all = symbols(SOURCE, "");
+        for (name, line) in [("@UTF8", 0), ("@Begin", 1), ("*CHI:", 8), ("@End", 12)] {
+            let symbol = all.iter().find(|symbol| symbol.name == name).unwrap();
+            assert_eq!(symbol.location.range.start, Position::new(line, 0));
+        }
     }
 }

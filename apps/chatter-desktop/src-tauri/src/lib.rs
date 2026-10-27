@@ -16,7 +16,9 @@ pub mod commands;
 pub mod errors;
 pub mod events;
 pub mod protocol;
+pub mod source_revision;
 pub mod validation;
+mod validation_session;
 
 use commands::ValidationState;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -142,7 +144,6 @@ pub fn run() {
             commands::open_in_clan,
             commands::export_results,
             commands::reveal_in_file_manager,
-            commands::install_cli,
             commands::open_external,
         ])
         .run(tauri::generate_context!())

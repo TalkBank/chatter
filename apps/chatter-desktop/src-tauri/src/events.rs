@@ -28,8 +28,14 @@ pub struct FrontendDiagnostic {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum FrontendSourceContext {
-    Available { location: FrontendSourceLocation },
-    Unavailable { reason: String },
+    #[serde(rename_all = "camelCase")]
+    Available {
+        location: FrontendSourceLocation,
+        source_revision: crate::source_revision::SourceRevision,
+    },
+    Unavailable {
+        reason: String,
+    },
 }
 
 /// Wire coordinates exist only after checked presentation admission.
@@ -205,6 +211,7 @@ fn frontend_errors(
     shown: talkbank_transform::validation_runner::ShownDiagnostics<'_>,
 ) -> FrontendEvent {
     let source = shown.source.to_owned();
+    let source_revision = crate::source_revision::SourceRevision::from_source(&source);
     let diagnostics = render_diagnostics(shown.errors, &file, &source, RenderMode::Ansi)
         .into_iter()
         .map(|d| {
@@ -220,6 +227,7 @@ fn frontend_errors(
                 source_context: match d.error.presentation() {
                     Ok(presentation) => FrontendSourceContext::Available {
                         location: presentation.into(),
+                        source_revision,
                     },
                     Err(reason) => FrontendSourceContext::Unavailable {
                         reason: reason.to_string(),

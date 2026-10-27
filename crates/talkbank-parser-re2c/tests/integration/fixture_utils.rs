@@ -113,26 +113,112 @@ pub fn meta_repo_root() -> &'static Path {
     })
 }
 
-/// The entries of one checked-in fixture.
-///
-/// ONE owner, in the library, where the strictness lives: see
-/// [`talkbank_parser_re2c::tests_support::load_fixture`]. This was a second
-/// copy of the same twenty lines, and the copies had drifted in exactly the
-/// way two copies do: this one printed "Skipping fixture" before returning an
-/// empty Vec and the other returned it silently, so the same defect reported
-/// itself differently depending on which test hit it. Neither failed.
-pub fn load_fixture(name: &str) -> Vec<String> {
-    talkbank_parser_re2c::tests_support::load_fixture(name)
+/// A checked-in fixture with at least one entry. Only the loader constructs it;
+/// callers cannot turn missing or empty input into a successful zero-iteration test.
+pub struct FixtureEntries {
+    first: String,
+    rest: Vec<String>,
+}
+
+type FixtureIter<'a> = std::iter::Chain<std::iter::Once<&'a String>, std::slice::Iter<'a, String>>;
+
+#[derive(Debug, thiserror::Error)]
+enum FixtureLoadError {
+    #[error("could not read fixture {path}: {source}", path = path.display())]
+    Read {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("fixture {path} contains no entries", path = .0.display())]
+    Empty(PathBuf),
+}
+
+impl FixtureEntries {
+    fn read(path: &Path) -> Result<Self, FixtureLoadError> {
+        let content = std::fs::read_to_string(path).map_err(|source| FixtureLoadError::Read {
+            path: path.to_owned(),
+            source,
+        })?;
+        let mut entries = Vec::new();
+        let mut current = String::new();
+        for line in content.lines() {
+            if line.starts_with('#') {
+                continue;
+            }
+            if line.is_empty() {
+                if !current.is_empty() {
+                    entries.push(std::mem::take(&mut current));
+                }
+            } else {
+                if !current.is_empty() {
+                    current.push('\n');
+                }
+                current.push_str(line);
+            }
+        }
+        if !current.is_empty() {
+            entries.push(current);
+        }
+        let mut entries = entries.into_iter();
+        let first = entries
+            .next()
+            .ok_or_else(|| FixtureLoadError::Empty(path.to_owned()))?;
+        Ok(Self {
+            first,
+            rest: entries.collect(),
+        })
+    }
+
+    pub fn entry_count(&self) -> usize {
+        1 + self.rest.len()
+    }
+
+    pub fn iter(&self) -> FixtureIter<'_> {
+        std::iter::once(&self.first).chain(self.rest.iter())
+    }
+}
+
+impl<'a> IntoIterator for &'a FixtureEntries {
+    type Item = &'a String;
+    type IntoIter = FixtureIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// Load one checked-in fixture or fail the requesting test.
+/// This belongs to the integration target, never the production library API.
+pub fn load_fixture(name: &str) -> FixtureEntries {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(format!("{name}.txt"));
+    FixtureEntries::read(&path).unwrap_or_else(|error| panic!("{error}"))
+}
+
+#[test]
+fn empty_fixture_files_refuse_admission() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    for name in ["header_recording_quality", "tier_flo", "tier_xcod"] {
+        let path = root.join(format!("{name}.txt"));
+        assert!(
+            matches!(FixtureEntries::read(&path), Err(FixtureLoadError::Empty(ref rejected)) if rejected == &path)
+        );
+    }
+}
+
+#[test]
+fn missing_fixture_retains_its_io_failure() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/__absent_fixture__.txt");
+    assert!(
+        matches!(FixtureEntries::read(&path), Err(FixtureLoadError::Read { path: rejected, source }) if rejected == path && source.kind() == std::io::ErrorKind::NotFound)
+    );
 }
 
 /// Load fixtures and verify all lex cleanly (zero error tokens).
 /// Returns the entries for further testing.
-pub fn load_and_verify_lex(name: &str) -> Vec<String> {
+pub fn load_and_verify_lex(name: &str) -> FixtureEntries {
     let entries = load_fixture(name);
-    if entries.is_empty() {
-        eprintln!("  {name}: no fixtures (skipped)");
-        return entries;
-    }
     let mut errors = 0;
     for entry in &entries {
         let input = if entry.ends_with('\n') {
@@ -146,7 +232,7 @@ pub fn load_and_verify_lex(name: &str) -> Vec<String> {
             if errors <= 3 {
                 let snippet = entry.chars().take(60).collect::<String>();
                 eprintln!("  LEX ERROR in {name}: {}", snippet.escape_debug());
-                eprint!("{}", result.error_report(&input));
+                eprint!("{}", result.error_report());
             }
         }
     }
@@ -154,8 +240,8 @@ pub fn load_and_verify_lex(name: &str) -> Vec<String> {
         errors,
         0,
         "{name}: {errors}/{} entries had lex errors",
-        entries.len()
+        entries.entry_count()
     );
-    eprintln!("  {name}: {} entries, all lex clean", entries.len());
+    eprintln!("  {name}: {} entries, all lex clean", entries.entry_count());
     entries
 }

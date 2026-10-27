@@ -14,7 +14,6 @@
 mod ca_delimiter;
 mod comma;
 pub(crate) mod gra_relation_vocabulary;
-mod overlap;
 mod phon_xtier;
 mod repetition_segment;
 mod separator;
@@ -35,7 +34,6 @@ pub(crate) use comma::{
     check_comma_after_non_spoken, check_comma_glued_to_next, check_consecutive_commas,
 };
 pub(crate) use gra_relation_vocabulary::check_gra_relation_vocabulary;
-pub(crate) use overlap::check_overlap_markers;
 pub(crate) use phon_xtier::check_phon_xtiers;
 pub(crate) use repetition_segment::check_repetition_segment_has_stem;
 pub(crate) use separator::check_semicolon_separators;

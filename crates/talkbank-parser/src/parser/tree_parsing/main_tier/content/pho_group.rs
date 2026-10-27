@@ -6,14 +6,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::{AsRawNode, MainPhoGroupNode, SourceBound};
+use crate::generated_traversal::{AsRawNode, MainPhoGroupNode, SlotView, SourceBound};
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
 
 use super::group::{contents_of, parse_group_contents};
 use super::recovery::surface_main_tier_sink;
-use super::report_tree_shape;
-use crate::parser::tree_parsing::parser_helpers::expect_delimiter;
 
 /// Parse a `main_pho_group` node into `UtteranceContent::PhoGroup`.
 ///
@@ -27,7 +25,8 @@ pub(crate) fn parse_pho_group_content<'tree>(
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_inner(typed),
+        crate::parser::typed_cst::extract_inner(typed)
+            .and_then(|children| children.admit_ranges().map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -36,39 +35,22 @@ pub(crate) fn parse_pho_group_content<'tree>(
     };
     let children = associated.children();
 
-    expect_delimiter(children.child_0.slot(), |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected '\u{2039}' at position 0 of main_pho_group, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    });
-    let group_items = match contents_of(associated.field_child_1().slot(), errors) {
+    let SlotView::Present(contents) = children.child_1.slot.view();
+    let group_items = match contents_of(*contents, errors) {
         Some(contents) => parse_group_contents(&contents, errors),
-        None => Vec::new(),
+        None => ParseOutcome::Rejected,
     };
-    expect_delimiter(children.child_2.slot(), |bad| {
-        report_tree_shape(
-            bad,
-            format!(
-                "Expected '\u{203a}' at position 2 of main_pho_group, found '{}'",
-                bad.kind()
-            ),
-            source,
-            errors,
-        );
-    });
     surface_main_tier_sink(children, source, errors);
 
+    let ParseOutcome::Parsed(group_items) = group_items else {
+        return ParseOutcome::Rejected;
+    };
     if group_items.is_empty() {
         return ParseOutcome::rejected();
     }
     let bracketed = crate::model::BracketedContent::new(group_items);
     ParseOutcome::parsed(UtteranceContent::PhoGroup(crate::model::PhoGroup::new(
+        crate::parser::node_span::span_of(typed.raw_node()),
         bracketed,
     )))
 }

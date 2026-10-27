@@ -14,7 +14,7 @@ pub(crate) fn parse_internal_bullet<'tree>(
     let node = typed.raw_node();
     let source = typed.source();
     let bullet = match parse_bullet_node(typed, errors) {
-        Ok(bullet) => bullet,
+        Ok(bullet) => bullet.into(),
         // "could not extract timestamps" said nothing a reader could act on,
         // and its context carried an empty string where the bullet text
         // belongs. The rejection knows which of the four routes it took.
@@ -22,7 +22,17 @@ pub(crate) fn parse_internal_bullet<'tree>(
             crate::parser::tree_parsing::media_bullet::report_bullet_rejection(
                 node, source, &why, errors,
             );
-            return ParseOutcome::rejected();
+            if matches!(
+                why,
+                crate::parser::tree_parsing::media_bullet::BulletRejection::Producer(_)
+            ) {
+                return ParseOutcome::rejected();
+            }
+            talkbank_model::UnparsedBullet::new(
+                crate::parser::node_span::span_of(node),
+                typed.text(),
+            )
+            .into()
         }
     };
 

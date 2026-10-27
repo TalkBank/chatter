@@ -258,7 +258,7 @@ fn force_clears_rows_whatever_spelling_the_argument_used() -> Result<(), TestErr
         let output = harness
             .chatter_cmd()
             .current_dir(dir.path())
-            .args(["validate", spelling, "--format", "json", "--force"])
+            .args(["validate", spelling, "--format", "json", "--refresh-cache"])
             .output()?;
         assert!(output.status.success(), "{}", combined_output(&output));
         let cleared: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
@@ -296,7 +296,7 @@ fn test_force_flag_clears_cache() -> Result<(), TestError> {
     }
 
     // Now validate with --force - should clear and re-validate
-    let output2 = run_validate(&harness, &file_path, &["--force"])?;
+    let output2 = run_validate(&harness, &file_path, &["--refresh-cache"])?;
 
     if !output2.status.success() {
         eprintln!("stdout: {}", String::from_utf8_lossy(&output2.stdout));
@@ -349,7 +349,7 @@ fn test_force_flag_clears_cache_for_every_input_path() -> Result<(), TestError> 
     }
 
     // Force-refresh both. Both cached entries must be cleared.
-    let output2 = harness.run_output(&["validate", "--force", &a, &b])?;
+    let output2 = harness.run_output(&["validate", "--refresh-cache", &a, &b])?;
     if !output2.status.success() {
         return Err(TestError::Failure(
             "forced validation should succeed".to_string(),
@@ -706,7 +706,7 @@ fn a_dry_run_reports_the_migration_a_clear_performs() -> Result<(), TestError> {
         database.display()
     );
 
-    let dry_run = harness.run_output(&["cache", "clear", "--all", "--dry-run"])?;
+    let dry_run = harness.run_output(&["cache", "clear", "--all"])?;
     assert_success(&dry_run, "cache clear --dry-run over an older schema");
     let said = combined_output(&dry_run);
     if !said.contains(&format!("Would {migration}")) || !said.contains("(dry-run;") {
@@ -723,7 +723,7 @@ fn a_dry_run_reports_the_migration_a_clear_performs() -> Result<(), TestError> {
         )));
     }
 
-    let clear = harness.run_output(&["cache", "clear", "--all"])?;
+    let clear = harness.run_output(&["cache", "clear", "--all", "--apply"])?;
     assert_success(&clear, "cache clear over an older schema");
     let said = combined_output(&clear);
     if !said.contains(&format!(
@@ -770,7 +770,6 @@ fn test_cache_clear_dry_run() -> Result<(), TestError> {
         dir.path()
             .to_str()
             .ok_or_else(|| TestError::Failure("Invalid directory path".to_string()))?,
-        "--dry-run",
     ])?;
 
     if !clear.status.success() {
@@ -813,6 +812,7 @@ fn test_cache_clear_prefix() -> Result<(), TestError> {
     let clear = harness.run_output(&[
         "cache",
         "clear",
+        "--apply",
         "--prefix",
         dir.path()
             .to_str()
@@ -840,7 +840,7 @@ fn test_cache_clear_all() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
 
     // Run cache clear --all
-    let clear = harness.run_output(&["cache", "clear", "--all"])?;
+    let clear = harness.run_output(&["cache", "clear", "--all", "--apply"])?;
 
     if !clear.status.success() {
         return Err(TestError::Failure(
@@ -943,7 +943,7 @@ fn cache_clear_dry_run_creates_no_database() -> Result<(), TestError> {
     let cache_dir = tempdir()?;
     let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
         .env("TALKBANK_CHAT_CACHE_DIR", cache_dir.path())
-        .args(["cache", "clear", "--all", "--dry-run"])
+        .args(["cache", "clear", "--all"])
         .output()?;
     assert_success(&output, "cache clear --all --dry-run");
     let stdout = String::from_utf8_lossy(&output.stdout);

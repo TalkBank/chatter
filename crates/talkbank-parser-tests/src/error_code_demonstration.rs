@@ -60,15 +60,15 @@ const SNAPSHOT: &str = "spec/observations/example-diagnostics.json";
 /// from a whole file (`E324.md`, example 3).
 // September 28 correction: this is an explicit residual inventory of diagnostic
 // identities NOT demonstrated by the canonical whole-file snapshot, not a list
-// of missing CHAT validity rules. The E202/E207/E231/E301/E404/E505/E509/E601/
+// of missing CHAT validity rules. The E202/E207/E231/E301/E404/E505/E509/
 // E602/E759/E760 specs retain independently checked rejection/subsumption claims.
 // Model, fragment and experimental-backend producers may still use these codes;
 // do not distort the primary parser to recreate their historical specificity.
 // E302's former EOF witness now reports E376/E342 without a fragment reparse.
 // E208 is retired and therefore leaves this implemented-code inventory.
 const UNDEMONSTRATED: &[&str] = &[
-    "E202", "E207", "E231", "E301", "E302", "E309", "E319", "E321", "E404", "E505", "E509", "E601",
-    "E602", "E759", "E760",
+    "E202", "E207", "E231", "E301", "E302", "E309", "E319", "E321", "E404", "E505", "E509", "E602",
+    "E759", "E760",
 ];
 
 /// Codes the registry calls `not_implemented` whose variant production code

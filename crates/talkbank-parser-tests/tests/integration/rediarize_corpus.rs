@@ -31,7 +31,13 @@ fn reference_timing_wire_refuses_inversion_before_timeline_admission() {
     let chat = strict_parse(parser.parse_chat_file(&text)).expect("reference syntax");
     let bullet = chat
         .utterances()
-        .find_map(|u| u.main.content.bullet.as_ref())
+        .find_map(|u| {
+            u.main
+                .content
+                .bullet
+                .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
+        })
         .expect("reference timing witness");
     let start = bullet.timing.start_ms;
     let end = bullet.timing.end_ms;
@@ -47,7 +53,7 @@ fn reference_timing_wire_refuses_inversion_before_timeline_admission() {
         "absent producer label stays unknown"
     );
     assert_eq!(admitted.timeline().turns().len(), 1);
-    let span = admitted.timeline().turns()[0].span;
+    let span = admitted.timeline().turns()[0].span();
     assert_eq!(span.overlap_ms(&span), end - start);
     let touching = TimeSpanMs::new(end, end).expect("empty boundary interval");
     assert_eq!(
@@ -85,13 +91,18 @@ fn birth_header_spec_survives_reattribution_as_reported_error_not_silent_loss() 
     let text = std::fs::read_to_string(root.join("E524_3.cha")).expect("timed birth control");
     let source = strict_parse(parser.parse_chat_file(&text)).expect("legal control parses");
     let utterance = source.utterances().next().expect("timed control utterance");
-    let bullet = utterance.main.content.bullet.as_ref().expect("spec timing");
+    let bullet = utterance
+        .main
+        .content
+        .bullet
+        .as_ref()
+        .and_then(talkbank_model::BulletState::as_parsed)
+        .expect("spec timing");
     let span =
         TimeSpanMs::new(bullet.timing.start_ms, bullet.timing.end_ms).expect("spec interval");
-    let original = DiarizationTimeline::new(vec![DiarizationTurn {
-        track: utterance.main.speaker.clone(),
-        span,
-    }]);
+    let original = DiarizationTimeline::new(vec![
+        DiarizationTurn::new(utterance.main.speaker.clone(), span).expect("source speaker token"),
+    ]);
     let (unchanged, outcome) = rediarize_content(
         &text,
         &original,
@@ -103,12 +114,12 @@ fn birth_header_spec_survives_reattribution_as_reported_error_not_silent_loss() 
     let parsed = strict_parse(parser.parse_chat_file(&unchanged)).expect("identity output parses");
     assert!(source.semantic_eq(&parsed));
 
-    let renamed = DiarizationTimeline::new(vec![DiarizationTurn {
-        track: SpeakerCode::new("TRACK"),
-        span,
-    }]);
+    let renamed = DiarizationTimeline::new(vec![
+        DiarizationTurn::new(SpeakerCode::new("TRACK"), span).expect("control track"),
+    ]);
     let errors = talkbank_model::ErrorCollector::new();
-    let (output, outcome) = rediarize(&source, &renamed, None, &errors);
+    let (output, outcome) =
+        rediarize(&source, &renamed, None, &errors).expect("admitted participant declaration");
     assert_eq!(outcome.reassigned, 1);
     let diagnostics = errors.into_vec();
     assert_eq!(diagnostics.len(), 1);
@@ -171,37 +182,40 @@ fn reference_contested_ownership_unions_duplicates_and_preserves_cross_track_tim
         let source =
             strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
         let mut turns = Vec::new();
-        for bullet in source
-            .utterances()
-            .filter_map(|u| u.main.content.bullet.as_ref())
-        {
+        for bullet in source.utterances().filter_map(|u| {
+            u.main
+                .content
+                .bullet
+                .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
+        }) {
             let span = TimeSpanMs::new(bullet.timing.start_ms, bullet.timing.end_ms)
                 .expect("reference interval");
             // Same-track duplication is redundant evidence, not extra held
             // time. Both distinct tracks retain the original full interval.
             for track in [&rival, &winner, &winner] {
-                turns.push(DiarizationTurn {
-                    track: track.clone(),
-                    span,
-                });
+                turns.push(DiarizationTurn::new(track.clone(), span).expect("control track"));
             }
         }
         let reversed = DiarizationTimeline::new(turns.iter().rev().cloned().collect());
         let timeline = DiarizationTimeline::new(turns);
         let errors = talkbank_model::ErrorCollector::new();
-        let (unreported, plain) = rediarize(&source, &timeline, None, &errors);
+        let (unreported, plain) =
+            rediarize(&source, &timeline, None, &errors).expect("admitted participant declaration");
         let (reported, outcome) = rediarize(
             &source,
             &reversed,
             Some(ContestedThreshold::new(0.5).expect("half share")),
             &errors,
-        );
+        )
+        .expect("admitted participant declaration");
         let (above, excluded) = rediarize(
             &source,
             &timeline,
             Some(ContestedThreshold::new(0.75).expect("above half")),
             &errors,
-        );
+        )
+        .expect("admitted participant declaration");
         assert!(
             !errors.has_errors(),
             "reference headers reconcile: {} {:?}",
@@ -231,6 +245,7 @@ fn reference_contested_ownership_unions_duplicates_and_preserves_cross_track_tim
                     .content
                     .bullet
                     .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed)
                     .filter(|b| b.timing.start_ms < b.timing.end_ms)
                     .map(|b| (index, b.timing.end_ms - b.timing.start_ms))
             })
@@ -322,7 +337,7 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
         };
         // The fresh anonymous label is external diarization input, not a claim
         // about anyone's real identity or a synthesized CHAT document.
-        let fresh = SpeakerCode::new("NEWTRACK");
+        let fresh = SpeakerCode::new("NEWTRK");
         assert!(!source.unique_utterance_speakers().contains(&fresh));
         for case in [
             TimelineCase::Absent,
@@ -334,11 +349,19 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
                 TimelineCase::OneTrack(track) => source
                     .utterances()
                     .filter_map(|u| {
-                        u.main.content.bullet.as_ref().map(|b| DiarizationTurn {
-                            track: track.clone(),
-                            span: TimeSpanMs::new(b.timing.start_ms, b.timing.end_ms)
-                                .expect("reference bullet is not inverted"),
-                        })
+                        u.main
+                            .content
+                            .bullet
+                            .as_ref()
+                            .and_then(talkbank_model::BulletState::as_parsed)
+                            .map(|b| {
+                                DiarizationTurn::new(
+                                    track.clone(),
+                                    TimeSpanMs::new(b.timing.start_ms, b.timing.end_ms)
+                                        .expect("reference bullet is not inverted"),
+                                )
+                                .expect("control track")
+                            })
                     })
                     .collect(),
             };
@@ -351,9 +374,9 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
                 .rev()
                 .map(|turn| {
                     serde_json::json!({
-                        "track": turn.track.as_str(),
-                        "start_ms": turn.span.start_ms(),
-                        "end_ms": turn.span.end_ms(),
+                        "track": turn.track().as_str(),
+                        "start_ms": turn.span().start_ms(),
+                        "end_ms": turn.span().end_ms(),
                     })
                 })
                 .collect();
@@ -370,17 +393,18 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
             let expected: Vec<_> = timeline
                 .turns()
                 .iter()
-                .map(|turn| (&turn.track, turn.span))
+                .map(|turn| (turn.track(), turn.span()))
                 .collect();
             let actual: Vec<_> = imported
                 .timeline()
                 .turns()
                 .iter()
-                .map(|turn| (&turn.track, turn.span))
+                .map(|turn| (turn.track(), turn.span()))
                 .collect();
             assert_eq!(actual, expected, "wire admission restores time ordering");
             let errors = talkbank_model::ErrorCollector::new();
-            let (output, outcome) = rediarize(&source, imported.timeline(), None, &errors);
+            let (output, outcome) = rediarize(&source, imported.timeline(), None, &errors)
+                .expect("admitted participant declaration");
             assert!(
                 !errors.has_errors(),
                 "reference header reconciliation: {} {:?}",
@@ -393,7 +417,15 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
             for (index, (before, after)) in source.utterances().zip(output.utterances()).enumerate()
             {
                 let mut expected = before.clone();
-                match (&case, before.main.content.bullet.as_ref()) {
+                match (
+                    &case,
+                    before
+                        .main
+                        .content
+                        .bullet
+                        .as_ref()
+                        .and_then(talkbank_model::BulletState::as_parsed),
+                ) {
                     (TimelineCase::OneTrack(track), Some(b))
                         if b.timing.start_ms < b.timing.end_ms =>
                     {
@@ -429,6 +461,7 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
                     (index, &speaker, reason)
                 );
                 match reason {
+                    FlagReason::UnparsedBullet => panic!("valid reference has no rejected timing"),
                     FlagReason::NoBullet => {
                         assert_eq!(actual.reason.to_string(), "no time bullet");
                         no_bullet += 1;

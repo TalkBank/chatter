@@ -9,11 +9,21 @@ validation and serialization. For compiled examples, use
 use [Versioning](../chatter/integrating/versioning.md). A current implementation
 description is not a promise that every pre-1.0 API is stable.
 
+Both parsers follow the shared model's
+[no-defaults/no-sentinels principle](chat-model/chat-model.md#no-silent-defaults-or-sentinels).
+A recovered value must represent observed data and its explicit recovery state.
+Parser failure must not become empty successful content or an invented required
+field; those substitutions cause diagnostic cascades and silent corruption.
+
 ## Parser entry points
 
-`TreeSitterParser` is the primary parser handle. Reuse an instance when
-processing multiple inputs. The native `talkbank-parser-re2c` backend is a
-separate implementation; shared model types do not establish identical recovery,
+`TreeSitterParser` and `Re2cParser` are peer implementations of the shared
+`ChatParser` contract. Tree-sitter was prototyped first and is the current CLI
+default; it does not own the shared model. Either backend can motivate model
+changes, including explicit malformed or recovery states. See
+[shared model ownership](parser-backends.md#equal-backends-one-shared-model).
+Reuse a Tree-sitter handle when processing multiple inputs. Shared model types
+do not establish identical recovery,
 diagnostics or complete behavioral equivalence. See
 [parser backends](parser-backends.md) for supported comparisons and fragment
 context.
@@ -30,7 +40,7 @@ The inherent `TreeSitterParser::parse_chat_file` method and the streaming
 There is no `Success / Partial / Failed` status field in `ParseOutcome`.
 A built model can still carry error diagnostics. Conversely, a rejected outcome
 does not authorize discarding diagnostics already emitted to the sink.
-For example, the trait word method is `parse_word`; the primary parser's
+For example, the trait word method is `parse_word`; the Tree-sitter parser's
 inherent helper is `parse_word_fragment`. Do not mix their signatures.
 
 ## Recovery is not admission
@@ -56,6 +66,25 @@ already satisfies it. Inspect actual retained model and serialized output in
 regressions; an emitted error code alone cannot detect fabricated values.
 Source diagnostics must describe the original input, not invented replacements.
 
+Bullet-text lowering likewise distinguishes a rejected body from an absent
+optional dependent-tier body. A `MISSING` continuation is reported and rejects
+its body; only a written continuation becomes a model segment. Low-level
+bullet-text and dependent-tier adapters carry `ParseOutcome` inside their
+producer-failure `Result`, so callers cannot construct a tier from a rejection.
+
+Timing-tier text and its derived segments likewise have a single admission
+owner. `TimTier::from_text` classifies source or JSON text as parsed, unsupported
+or empty, and readers cannot mutate that classification or its segments.
+Unsupported text remains available for E603; empty declarations remain for
+E756. JSON preserves the original string and re-enters the same constructor.
+
+Time headers use the same ownership boundary: `TimeDurationValue` and
+`TimeStartValue` classify their text once, with read-only segments or a copied
+`TimeValue`. Callers cannot pair out-of-range source text with valid numeric
+components to bypass clock assessment. Empty optional headers have an explicit
+absent state, so an empty start has no clock reading rather than midnight.
+Their JSON remains a string and re-enters the text constructor.
+
 ## Source identity and coordinates
 
 Keep the original UTF-8 source with the diagnostics that refer to it. Do not
@@ -72,6 +101,21 @@ constructor that combines arbitrary text with an unrelated model proof.
 `into_valid_file` relinquishes the source-byte binding. A transform that removes
 and regenerates tiers uses its separate replacement admission, not unchanged
 source preservation. See the [library guide](../chatter/integrating/library-usage.md).
+
+Fragment source admission checks input length and document extent. Model
+rebasing is a separate consuming admission: `FragmentSource::rebase` and
+`rebase_from` return `Result<T, FragmentRebaseError>` and reject every located
+span outside the admitted input. This check also runs when the document origin
+is zero. `SpanShift::try_map_spans` reconstructs a complete result or returns a
+failure; it never lends a partly translated model to the caller. Skipped fields
+and independently owned diagnostic snippets retain their own coordinates.
+
+Tree-sitter wrappers may explicitly project their own container extents and
+diagnostic ranges onto the caller input before translation. Payload spans are
+checked, not blanket-clipped. The separate in-place `shift_spans_after` operation
+retains its text-edit deletion policy and is not used for fragment translation.
+When a diagnostic cannot be translated, the sink reports an internal failure with the
+original message and snippet and no fabricated document location or labels.
 
 For fragments, respect the API's source origin and contextual policy. A
 document-relative offset is not an index into a fragment string. Legacy

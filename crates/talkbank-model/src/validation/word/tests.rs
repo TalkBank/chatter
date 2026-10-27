@@ -33,7 +33,7 @@
 //!
 //! # What is left, and why it belongs here
 //!
-//! Two rules guard `Word` values that no parser can build, so no parse-backed
+//! These rules guard `Word` values that no parser can build, so no parse-backed
 //! test can reach them and there is nothing to migrate:
 //!
 //! - E243: word TEXT carrying a space, tab, newline or bullet byte. Whitespace
@@ -42,6 +42,8 @@
 //! - E251/E253: a `Word` with an EMPTY content list. A parse always produces
 //!   content; the reachable route is `serde`, which is how the E251 test builds
 //!   its fixture.
+//! - E212: a mixed/ambiguous language marker with fewer than two codes, retained
+//!   through lenient JSON import. Resolution must refuse that malformed list.
 //!
 //! These stay hand-built ON PURPOSE, and that is the difference between the
 //! fabrication that left and the fabrication that remains: the state under test
@@ -62,6 +64,51 @@ use crate::non_empty_literal;
 use crate::validation::{Validate, ValidationContext};
 use crate::{ErrorCollector, ParseError};
 use serde_json;
+
+/// A parsed mixed/ambiguous marker always has at least two components. JSON
+/// can preserve a malformed list, which must not become a resolved language set.
+#[test]
+fn imported_short_language_lists_are_not_resolved_or_validated_as_success() {
+    for kind in ["multiple", "ambiguous"] {
+        for codes in [
+            serde_json::json!([]),
+            serde_json::json!(["eng"]),
+            serde_json::json!(["qzz"]),
+        ] {
+            let has_invalid_code = codes == serde_json::json!(["qzz"]);
+            let wire = serde_json::json!({"type": kind, "code": codes});
+            let marker: crate::WordLanguageMarker =
+                serde_json::from_value(wire.clone()).expect("recovery marker import");
+            let mut word = Word::new(
+                crate::Location::Unlocated,
+                WordText::from(non_empty_literal!("word")),
+            );
+            word.lang = Some(marker);
+            let errors = run_word_validation(&word, None, &[], false);
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.code == crate::ErrorCode::InvalidWordFormat),
+                "malformed imported marker must report E212: {wire}, {errors:?}"
+            );
+            let outcome = crate::validation::GoverningMark::of(&word, None).resolve(None, &[]);
+            assert_eq!(
+                errors
+                    .iter()
+                    .any(|error| error.code == crate::ErrorCode::InvalidLanguageCode),
+                has_invalid_code
+            );
+            assert_eq!(
+                outcome.resolution,
+                crate::validation::LanguageResolution::Unresolved
+            );
+            assert_eq!(
+                serde_json::to_value(word.lang.as_ref().expect("retained marker")).expect("wire"),
+                wire
+            );
+        }
+    }
+}
 
 /// Validates one word under a caller-controlled language/CA context.
 ///
@@ -89,7 +136,10 @@ fn run_word_validation(
 #[test]
 fn test_e243_word_with_trailing_space() {
     // This catches the %wor tier bug where words include trailing spaces
-    let word = Word::simple(crate::Location::Unlocated, "hello ");
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("hello ")),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -104,7 +154,10 @@ fn test_e243_word_with_trailing_space() {
 /// Leading spaces should consistently emit `E243` rather than silently passing.
 #[test]
 fn test_e243_word_with_leading_space() {
-    let word = Word::simple(crate::Location::Unlocated, " hello");
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!(" hello")),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -122,7 +175,10 @@ fn test_e243_word_with_leading_space() {
 fn test_e243_word_with_bullet_marker() {
     // Bullet marker U+0015 (byte 0x15) should never be in word text
     let word_with_bullet = "hello\x15".to_string();
-    let word = Word::new_unchecked(crate::Location::Unlocated, &word_with_bullet);
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::new(&word_with_bullet).expect("nonempty validation input"),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -139,7 +195,10 @@ fn test_e243_word_with_bullet_marker() {
 /// Tabs are treated as formatting contamination and should emit `E243`.
 #[test]
 fn test_e243_word_with_tab() {
-    let word = Word::simple(crate::Location::Unlocated, "hello\tworld");
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("hello\tworld")),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -154,7 +213,10 @@ fn test_e243_word_with_tab() {
 /// Newlines must not survive tokenization and therefore trigger `E243`.
 #[test]
 fn test_e243_word_with_newline() {
-    let word = Word::simple(crate::Location::Unlocated, "hello\nworld");
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("hello\nworld")),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -169,7 +231,10 @@ fn test_e243_word_with_newline() {
 /// A plain token should pass with no `E243`.
 #[test]
 fn test_e243_clean_word_no_error() {
-    let word = Word::simple(crate::Location::Unlocated, "hello");
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("hello")),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -186,7 +251,10 @@ fn test_e243_clean_word_no_error() {
 fn test_e243_word_with_space_and_bullet() {
     // This is the exact pattern from %wor tier bug: "word \x15"
     let word_with_space_and_bullet = "hello \x15".to_string();
-    let word = Word::new_unchecked(crate::Location::Unlocated, &word_with_space_and_bullet);
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::new(&word_with_space_and_bullet).expect("nonempty validation input"),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     // Should get at least one E243 error (maybe two - one for space, one for bullet)
@@ -211,8 +279,11 @@ fn test_e243_word_with_space_and_bullet() {
 /// semantic element.
 #[test]
 fn test_e253_empty_word_content_list() {
-    let word =
-        Word::simple(crate::Location::Unlocated, "test").with_content(WordContents::default());
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("test")),
+    )
+    .with_content(WordContents::default());
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -227,7 +298,10 @@ fn test_e253_empty_word_content_list() {
 /// A normal `Word` should preserve at least one element in `content`.
 #[test]
 fn test_e253_non_empty_word_content_list() {
-    let word = Word::simple(crate::Location::Unlocated, "test");
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("test")),
+    );
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -266,10 +340,13 @@ fn test_e251_deserialized_word_content() -> Result<(), serde_json::Error> {
 #[test]
 fn test_e251_valid_non_empty_text() {
     // Word with non-empty Text content
-    let word =
-        Word::simple(crate::Location::Unlocated, "test").with_content(vec![WordContent::Text(
-            WordText::from(non_empty_literal!("test")),
-        )]);
+    let word = Word::new(
+        crate::Location::Unlocated,
+        crate::WordText::from(crate::non_empty_literal!("test")),
+    )
+    .with_content(vec![WordContent::Text(WordText::from(non_empty_literal!(
+        "test"
+    )))]);
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(

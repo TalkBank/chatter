@@ -34,8 +34,8 @@ pub struct Backend {
     /// LSP client for sending notifications
     pub client: Client,
 
-    /// Cache of document contents (URI -> text)
-    pub(crate) documents: Arc<DashMap<Url, Arc<super::documents::OpenDocument>>>,
+    /// Open sessions, with source available only while synchronized.
+    pub(crate) documents: Arc<DashMap<Url, super::documents::DocumentSession>>,
 
     /// Thread-local parser and semantic-token services.
     pub(crate) language_services: LanguageServices,
@@ -87,6 +87,9 @@ impl Backend {
     /// Feature reads independently require an exact source match.
     pub fn parse_state(&self, uri: &Url) -> ParseState {
         let Some(source) = self.documents.get(uri) else {
+            return ParseState::Absent;
+        };
+        let Some(source) = source.current() else {
             return ParseState::Absent;
         };
         let Some(analysis) = self.analyses.get(uri) else {

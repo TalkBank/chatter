@@ -93,7 +93,7 @@ impl LanguageCodes {
 
 impl crate::model::WriteChat for LanguageCodes {
     /// Writes comma-separated language codes: `eng, spa`.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         for (i, code) in self.0.iter().enumerate() {
             if i > 0 {
                 w.write_str(", ")?;
@@ -418,6 +418,17 @@ pub enum Header {
         /// Ordered language codes (first is primary)
         codes: LanguageCodes,
     },
+
+    /// Rejected @Languages source; never an admitted language declaration.
+    UnparsedLanguages(super::super::UnparsedLanguageHeader),
+
+    /// Rejected participant-header source; establishes no speaker identities.
+    UnparsedParticipants(super::super::UnparsedParticipantHeader),
+
+    /// Recognized ID header whose fields could not be admitted.
+    /// Raw source remains invalid through serialization; no identity is inferred.
+    #[serde(rename = "unparsed_id")]
+    UnparsedID(super::super::UnparsedIDHeader),
 
     /// @Participants:\tSPK Name Role, SPK2 Name2 Role2, ...
     Participants {

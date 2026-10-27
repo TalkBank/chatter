@@ -213,3 +213,203 @@ fn every_surface_group_declares_coverage_and_rationale() {
         );
     }
 }
+
+/// An independent public-surface oracle catches missing leaves and mismatched
+/// semantics while argument details are derived exclusively from clap.
+#[test]
+fn machine_discovery_covers_executable_leaves_and_their_help() {
+    let harness = CliHarness::new().expect("isolated harness");
+    let output = harness
+        .run_output(&["commands", "list", "--format", "json"])
+        .expect("discovery");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let catalog: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("one complete JSON document");
+    assert_eq!(catalog["schema"], "chatter.commands.v1");
+    let entries = catalog["commands"].as_array().expect("command array");
+    let expected: BTreeSet<&str> = [
+        "validate",
+        "fix",
+        "format",
+        "new",
+        "watch",
+        "schema",
+        "cache stats",
+        "cache clear",
+        "convert to-json",
+        "convert from-json",
+        "inspect alignment",
+        "inspect words",
+        "inspect overlaps",
+        "inspect linkers",
+        "checks list",
+        "checks explain",
+        "commands list",
+        "commands show",
+        "experimental update",
+        "experimental speakers map",
+        "experimental speakers match",
+        "experimental speakers replay",
+        "experimental speakers suggest",
+        "experimental speakers rediarize",
+        "experimental speakers scan",
+        "experimental review scripted",
+        "experimental review interactive",
+        "experimental transform language-runs",
+        "experimental transform retag-language",
+        "experimental transform join-retrace",
+        "experimental transform redact",
+    ]
+    .into_iter()
+    .collect();
+    let actual: BTreeSet<String> = entries
+        .iter()
+        .map(|entry| {
+            entry["path"]
+                .as_array()
+                .expect("path")
+                .iter()
+                .map(|word| word.as_str().expect("path word"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect();
+    assert_eq!(actual, expected.into_iter().map(str::to_owned).collect());
+    assert_eq!(actual.len(), entries.len(), "no duplicate paths");
+    for entry in entries {
+        let path: Vec<&str> = entry["path"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        if path.starts_with(&["experimental", "review"]) {
+            assert_eq!(entry["semantics"]["stdout"], "no_result");
+        }
+        let mut command = harness.chatter_cmd();
+        let output = command
+            .args(&path)
+            .arg("--help")
+            .output()
+            .expect("leaf help");
+        assert!(output.status.success(), "{path:?}");
+        assert_eq!(
+            entry["semantics"]["maturity"],
+            if path[0] == "experimental" {
+                "experimental"
+            } else {
+                "general"
+            }
+        );
+        assert!(
+            !entry["arguments"].as_array().unwrap().is_empty(),
+            "help is always an argument"
+        );
+        for argument in entry["arguments"].as_array().unwrap() {
+            if let Some(long) = argument["long"].as_str() {
+                assert!(
+                    String::from_utf8_lossy(&output.stdout).contains(&format!("--{long}")),
+                    "{path:?}: {long}"
+                );
+            }
+        }
+    }
+    let validate = entries
+        .iter()
+        .find(|entry| entry["path"] == serde_json::json!(["validate"]))
+        .unwrap();
+    assert_eq!(validate["semantics"]["effects"], "validation_cache");
+    let clear = entries
+        .iter()
+        .find(|entry| entry["path"] == serde_json::json!(["cache", "clear"]))
+        .unwrap();
+    assert_eq!(clear["semantics"]["effects"], "preview_or_apply");
+}
+
+#[test]
+fn namespaces_are_successful_help_and_invalid_modes_are_usage_errors() {
+    let harness = CliHarness::new().expect("isolated harness");
+    for path in [
+        vec![],
+        vec!["convert"],
+        vec!["inspect"],
+        vec!["checks"],
+        vec!["cache"],
+        vec!["commands"],
+        vec!["experimental"],
+        vec!["experimental", "speakers"],
+        vec!["experimental", "review"],
+        vec!["experimental", "transform"],
+    ] {
+        let output = harness.run_output(&path).expect("namespace help");
+        assert!(
+            output.status.success(),
+            "{path:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("Usage:"));
+    }
+    for args in [
+        vec!["validate"],
+        vec!["validate", "--list-checks"],
+        vec!["schema", "--tui-mode", "disable"],
+        vec![
+            "experimental",
+            "speakers",
+            "map",
+            "missing.cha",
+            "--mapping",
+            "PAR=CHI:Target_Child",
+            "--reference",
+            "missing.cha",
+        ],
+        vec![
+            "experimental",
+            "speakers",
+            "replay",
+            "missing.cha",
+            "--override-file",
+            "missing.toml",
+        ],
+        vec![
+            "experimental",
+            "review",
+            "scripted",
+            "missing.toml",
+            "--override-file",
+            "out.toml",
+            "--operator",
+            "fixture",
+        ],
+    ] {
+        let output = harness.run_output(&args).expect("usage refusal");
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+    }
+    for old in [
+        "normalize",
+        "to-json",
+        "from-json",
+        "show-alignment",
+        "clean",
+        "new-file",
+        "debug",
+        "speaker-id",
+        "rediarize",
+        "adjudicate",
+        "sanity-scan",
+        "update",
+    ] {
+        let output = harness
+            .run_output(&[old, "--help"])
+            .expect("removed spelling");
+        assert_eq!(output.status.code(), Some(2), "{old}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("Migration: Use chatter"),
+            "{old}"
+        );
+    }
+}

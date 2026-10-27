@@ -41,7 +41,8 @@ const ROWS: &[(&str, &[&str])] = &[
     // The same inside a `%x` tier.
     ("%xfoo:\t\u{15}with %gra: text", &["E316", "E330"]),
     // Junk after a well-formed relation is E316 at the junk, not E710.
-    ("%gra:\t1|0|ROOT %gra: x", &["E316", "E604"]),
+    // Parse rejection and retained raw-model invalidity each report E316.
+    ("%gra:\t1|0|ROOT %gra: x", &["E316", "E316", "E604"]),
     // E258 governs main-tier separator structure, not opaque dependent text.
     ("%eng:\t\u{15}one,,two", &["E316", "E330"]),
     // The substring `%mor:` inside an `%eng` body, beside a token that would

@@ -24,10 +24,17 @@
 //! examples. Each test is a library recipe, not an application entrypoint.
 
 // ANCHOR: book_imports
+use talkbank_model::model::TranscriptName;
+use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
+use talkbank_model::{ChatParser, ErrorCollector, RuleSelection};
 use talkbank_model::{DependentTier, ErrorSink, ParseError, ParseValidateOptions, WriteChat};
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_re2c::Re2cParser;
 use talkbank_transform::json::to_json_pretty_validated;
-use talkbank_transform::{PipelineError, parse_and_validate, parse_and_validate_with_parser};
+use talkbank_transform::{
+    PipelineError, ValidatedParseError, parse_and_validate, parse_and_validate_with_parser,
+    parse_source_with_parser, parse_validated_with_parser,
+};
 // ANCHOR_END: book_imports
 
 // ANCHOR: book_samples
@@ -73,14 +80,16 @@ fn book_parsing_and_validating_simplest() -> Result<(), PipelineError> {
 // ANCHOR: book_reuse_parser
 #[test]
 fn book_parsing_and_validating_with_parser() -> Result<(), Box<dyn std::error::Error>> {
-    let parser = TreeSitterParser::new()?;
-    let options = ParseValidateOptions::default().with_validation();
-    let chat_files: Vec<&str> = vec![SAMPLE_MINIMAL, SAMPLE_WITH_MOR];
-
-    for source in &chat_files {
-        let chat_file = parse_and_validate_with_parser(&parser, source, options.clone())?;
-        let _ = chat_file;
+    fn batch(parser: &impl ChatParser) -> Result<(), PipelineError> {
+        let options = ParseValidateOptions::default().with_validation();
+        for source in [SAMPLE_MINIMAL, SAMPLE_WITH_MOR] {
+            let chat_file = parse_and_validate_with_parser(parser, source, options.clone())?;
+            assert!(chat_file.utterances().next().is_some());
+        }
+        Ok(())
     }
+    batch(&TreeSitterParser::new()?)?;
+    batch(&Re2cParser::new())?;
     Ok(())
 }
 // ANCHOR_END: book_reuse_parser
@@ -95,9 +104,9 @@ fn book_working_with_the_model() -> Result<(), PipelineError> {
         ParseValidateOptions::default().with_validation(),
     )?;
 
-    let _participants = &chat_file.participants;
+    let _participants = chat_file.all_participants();
     assert!(
-        !chat_file.participants.is_empty(),
+        !chat_file.all_participants().is_empty(),
         "sample should yield at least one participant"
     );
 
@@ -173,3 +182,63 @@ fn book_custom_error_handling() {
     let _: &dyn ErrorSink = &MyErrorHandler;
 }
 // ANCHOR_END: book_sink
+
+/// Both backends produce the same retained admission capability.
+// ANCHOR: book_peer_admission
+#[test]
+fn book_checked_admission_with_either_backend() -> Result<(), Box<dyn std::error::Error>> {
+    fn check(parser: &impl ChatParser) -> Result<(), ValidatedParseError> {
+        let errors = ErrorCollector::new();
+        let admitted = parse_validated_with_parser(
+            parser,
+            SAMPLE_MINIMAL,
+            ValidationPolicy::new(
+                RuleSelection::new(),
+                AlignmentValidation::IncludeTierAlignment,
+            ),
+            TranscriptName::Anonymous,
+            &errors,
+        )?;
+        assert_eq!(admitted.document().utterances().count(), 1);
+        // Keep this capability while validity is required. Editing requires
+        // consuming it with into_unchecked() and validating again.
+        for diagnostic in errors.into_vec() {
+            eprintln!("{:?}", diagnostic);
+        }
+        Ok(())
+    }
+    check(&TreeSitterParser::new()?)?;
+    check(&Re2cParser::new())?;
+    Ok(())
+}
+// ANCHOR_END: book_peer_admission
+
+/// Source admission preserves bytes; malformed source stays explicit refusal.
+// ANCHOR: book_source_admission
+#[test]
+fn book_source_admission_and_refusal() -> Result<(), Box<dyn std::error::Error>> {
+    fn check(parser: &impl ChatParser) -> Result<(), ValidatedParseError> {
+        let diagnostics = ErrorCollector::new();
+        let admitted = parse_source_with_parser(parser, SAMPLE_MINIMAL)
+            .admit(TranscriptName::Anonymous, &diagnostics)?;
+        assert_eq!(admitted.source(), SAMPLE_MINIMAL);
+
+        let malformed = SAMPLE_MINIMAL.replace("*CHI:", "CHI:");
+        let rejected_diagnostics = ErrorCollector::new();
+        let outcome = parse_source_with_parser(parser, &malformed)
+            .admit(TranscriptName::Anonymous, &rejected_diagnostics);
+        match outcome {
+            Err(ValidatedParseError::Parse(product)) => {
+                assert!(product.has_error_diagnostics());
+                assert_eq!(product.diagnostics(), rejected_diagnostics.into_vec());
+            }
+            Err(other) => return Err(other),
+            Ok(_) => panic!("malformed source must not gain admission"),
+        }
+        Ok(())
+    }
+    check(&TreeSitterParser::new()?)?;
+    check(&Re2cParser::new())?;
+    Ok(())
+}
+// ANCHOR_END: book_source_admission

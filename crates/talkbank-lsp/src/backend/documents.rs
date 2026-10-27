@@ -6,6 +6,11 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tower_lsp::lsp_types::*;
 
+mod revision;
+pub(crate) use revision::{
+    CurrentDocumentRevision, DocumentRevision, RevisionResponse, content_modified,
+};
+
 const DEBOUNCE_MS: u64 = 250;
 
 /// One editor revision. Arc identity also distinguishes close/reopen cycles.
@@ -14,11 +19,72 @@ pub(crate) struct OpenDocument {
     pub(crate) version: i32,
 }
 
+/// A lost synchronization state carries no source that features could consume.
+pub(crate) enum DocumentSession {
+    Synchronized(Arc<OpenDocument>),
+    AwaitingReplacement { version: i32 },
+}
+
+impl DocumentSession {
+    pub(crate) fn current(&self) -> Option<&Arc<OpenDocument>> {
+        match self {
+            Self::Synchronized(document) => Some(document),
+            Self::AwaitingReplacement { .. } => None,
+        }
+    }
+
+    fn version(&self) -> i32 {
+        match self {
+            Self::Synchronized(document) => document.version,
+            Self::AwaitingReplacement { version } => *version,
+        }
+    }
+
+    /// Every ranged edit requires a source from a synchronized revision or an
+    /// earlier full replacement in this batch. No partial batch is published.
+    fn revised(
+        &self,
+        version: i32,
+        changes: Vec<TextDocumentContentChangeEvent>,
+    ) -> Result<OpenDocument, DocumentChangeError> {
+        let mut source = self.current().map(|document| document.source.to_string());
+        for change in changes {
+            if let Some(range) = change.range {
+                if range.start > range.end {
+                    return Err(DocumentChangeError::ReversedRange);
+                }
+                let source = source
+                    .as_mut()
+                    .ok_or(DocumentChangeError::ReplacementRequired)?;
+                let start = super::utils::position_to_offset(source, range.start);
+                let end = super::utils::position_to_offset(source, range.end);
+                source.replace_range(start..end, &change.text);
+            } else {
+                source = Some(change.text);
+            }
+        }
+        Ok(OpenDocument {
+            source: source
+                .ok_or(DocumentChangeError::ReplacementRequired)?
+                .into(),
+            version,
+        })
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum DocumentChangeError {
+    #[error("document edit range is reversed")]
+    ReversedRange,
+    #[error("a full document replacement is required")]
+    ReplacementRequired,
+}
+
 pub(super) fn get_document_text(backend: &Backend, uri: &Url) -> Option<String> {
     backend
         .documents
         .get(uri)
-        .map(|entry| entry.source.to_string())
+        .and_then(|entry| entry.current().map(|document| document.source.to_string()))
 }
 
 pub(super) async fn handle_did_open(backend: &Backend, params: DidOpenTextDocumentParams) {
@@ -28,39 +94,49 @@ pub(super) async fn handle_did_open(backend: &Backend, params: DidOpenTextDocume
         version: params.text_document.version,
     });
     backend.pending_validations.remove(&uri);
-    backend.documents.insert(uri.clone(), Arc::clone(&document));
+    backend.documents.insert(
+        uri.clone(),
+        DocumentSession::Synchronized(Arc::clone(&document)),
+    );
     diagnostics::validate_and_publish(backend, uri, document).await;
 }
 
 pub(super) async fn handle_did_change(backend: &Backend, params: DidChangeTextDocumentParams) {
     let uri = params.text_document.uri;
-    let document = {
+    let version = params.text_document.version;
+    let outcome = {
         let Some(mut current) = backend.documents.get_mut(&uri) else {
             return;
         };
-        if params.text_document.version <= current.version {
+        if version <= current.version() {
             return;
         }
-        let mut source = current.source.to_string();
-        for change in params.content_changes {
-            if let Some(range) = change.range {
-                let start = super::utils::position_to_offset(&source, range.start);
-                let end = super::utils::position_to_offset(&source, range.end);
-                if start > end {
-                    tracing::warn!(%uri, "ignoring reversed document edit range");
-                    return;
-                }
-                source.replace_range(start..end, &change.text);
-            } else {
-                source = change.text;
+        match current.revised(version, params.content_changes) {
+            Ok(document) => {
+                let document = Arc::new(document);
+                *current = DocumentSession::Synchronized(Arc::clone(&document));
+                Ok(document)
+            }
+            Err(error) => {
+                *current = DocumentSession::AwaitingReplacement { version };
+                backend.pending_validations.remove(&uri);
+                backend.analyses.remove(&uri);
+                Err(error)
             }
         }
-        let document = Arc::new(OpenDocument {
-            source: source.into(),
-            version: params.text_document.version,
-        });
-        *current = Arc::clone(&document);
-        document
+    };
+    let document = match outcome {
+        Ok(document) => document,
+        Err(error) => {
+            backend
+                .client
+                .publish_diagnostics(uri.clone(), vec![], Some(version))
+                .await;
+            backend.client.log_message(MessageType::WARNING, format!(
+                "Document synchronization lost for {uri}: {error}. Send full text or reopen the document."
+            )).await;
+            return;
+        }
     };
     let validation_id = backend.validation_counter.fetch_add(1, Ordering::SeqCst);
     backend
@@ -84,7 +160,7 @@ pub(super) async fn handle_did_save(backend: &Backend, params: DidSaveTextDocume
     let document = backend
         .documents
         .get(&uri)
-        .map(|entry| Arc::clone(entry.value()));
+        .and_then(|entry| entry.current().cloned());
     if let Some(document) = document {
         // An identical-source analysis is reused by the publisher. An older
         // revision's cache can never suppress validation of the saved source.

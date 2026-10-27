@@ -170,6 +170,7 @@ fn check_candidate(
                     .content
                     .bullet
                     .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed)
                     .expect("unchanged timing control");
                 assert_eq!(
                     bullet.raw_node().byte_range(),
@@ -180,6 +181,7 @@ fn check_candidate(
                         .content
                         .bullet
                         .as_ref()
+                        .and_then(talkbank_model::BulletState::as_parsed)
                         .is_some_and(|value| expected.semantic_eq(value)),
                     "{stem}_{index}: healthy grammar-owned terminal timing lost"
                 );
@@ -216,7 +218,10 @@ fn check_candidate(
                         .content
                         .postcodes
                         .semantic_eq(&actual.content.postcodes)
-                    && actual.content.bullet.is_none()
+                    && matches!(
+                        actual.content.bullet,
+                        Some(talkbank_model::BulletState::Unparsed { .. })
+                    )
             }) {
                 failures.push(format!(
                     "{stem}_{index}: bullet refusal invented timing or lost codes"
@@ -255,8 +260,11 @@ fn check_candidate(
                 }
                 if let ParseOutcome::Parsed(main) = outcome {
                     assert!(
-                        main.content.bullet.is_none(),
-                        "decoder refusal invents no timing"
+                        matches!(
+                            main.content.bullet,
+                            Some(talkbank_model::BulletState::Unparsed { .. })
+                        ),
+                        "decoder refusal retains source without numeric timing"
                     );
                 }
             }

@@ -205,9 +205,11 @@ extern "C" {
  *
  * **Windows:**
  * - Creates message file in user's home directory
- * - Uses synchronous SendMessageA with WM_APP to CLAN's main window
+ * - Uses SendMessageTimeoutA with WM_APP to CLAN's main window
  * - Uses ShellExecute to start CLAN if needed
- * - Launch and window lookup wait separately; SendMessageA is not timeout-bounded
+ * - Launch waits separately; lookup and notification share a post-publication budget
+ * - Notification is attempted once; failure does not establish whether CLAN acted
+ * - The API ignores its timeout for a target on the calling thread's queue
  *
  * @section usage_example Basic Usage Example
  *
@@ -250,6 +252,10 @@ extern "C" {
  *
  * No latency bound is established. The combined formatted message can be
  * truncated by the fixed C buffer. Retrying may repeat partial external effects.
+ * Oversized Windows message-file destinations are refused before file opening,
+ * possibly after a launch attempt.
+ * Windows notification requires successful message-file write and close.
+ * Write/close failure returns SEND2CLAN_ERR_SEND_FAILED and may leave partial bytes.
  *
  * @section memory_management Memory Management
  *
@@ -258,7 +264,9 @@ extern "C" {
  * - **String ownership**: All string parameters are read-only; caller retains ownership
  *
  * @param timeOut Seconds for selected platform waits, not the entire operation.
- *                Nonpositive values select platform-specific defaults.
+ *                Nonpositive values select platform-specific defaults (Windows: 30 seconds
+ *                after publication). Windows positive values above 4,294,967
+ *                seconds are refused before publication, possibly after launch.
  *
  * @param filePath Full path to the .cha file to open in CLAN. Must be:
  *                 - Non-NULL and non-empty

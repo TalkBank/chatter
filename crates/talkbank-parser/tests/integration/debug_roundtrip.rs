@@ -51,15 +51,13 @@ fn test_pho_groupings_roundtrip() {
                     }
 
                     // Serialize
-                    let mut output = String::new();
-                    let _ = utt.main.write_chat(&mut output);
+                    let output = utt.main.to_chat_string();
                     println!("\n=== Serialized ===\n{}", output);
                 }
             }
 
             // Full roundtrip
-            let mut full_output = String::new();
-            let _ = file.write_chat(&mut full_output);
+            let full_output = file.to_chat_string();
 
             let input_normalized = input.replace("\r\n", "\n").replace("\r", "\n");
             let output_normalized = full_output.replace("\r\n", "\n").replace("\r", "\n");

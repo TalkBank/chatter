@@ -79,7 +79,7 @@ Then run `chatter --version` and `chatter --help`, followed by the
 [practice tutorial](../chatter/user-guide/quick-start.md). Full reference: [CLI
 installation](../chatter/user-guide/installation.md) and [CLI
 Reference](../chatter/user-guide/cli-reference.md). Official installer-based
-installations can use `chatter update`; source and package-manager installations
+installations can use `chatter experimental update`; source and package-manager installations
 must use their original installation method.
 
 ## `talkbank-lsp` language server (editor integration)

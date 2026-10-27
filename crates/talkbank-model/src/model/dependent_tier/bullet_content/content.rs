@@ -153,6 +153,7 @@ impl BulletContent {
             BulletContentSegment::Text(text) => text.text.trim().is_empty(),
             // A bullet, a picture and a continuation marker are each a payload.
             BulletContentSegment::Bullet(_)
+            | BulletContentSegment::UnparsedBullet(_)
             | BulletContentSegment::Picture(_)
             | BulletContentSegment::Continuation => false,
         })
@@ -233,12 +234,22 @@ impl IntoIterator for BulletContentSegments {
 }
 
 impl crate::validation::Validate for BulletContentSegments {
-    /// Segment-level checks run in tier-specific validators with field context.
+    /// Recovery stays invalid even when deserialization removes source locations.
     fn validate(
         &self,
-        _context: &crate::validation::ValidationContext,
-        _errors: &impl crate::ErrorSink,
+        context: &crate::validation::ValidationContext,
+        errors: &impl crate::ErrorSink,
     ) {
+        for segment in self {
+            if let BulletContentSegment::UnparsedBullet(raw) = segment {
+                errors.report(crate::ParseError::at_location(
+                    crate::ErrorCode::InvalidMediaBullet,
+                    crate::Severity::Error,
+                    raw.location().or(context.field_location),
+                    "Unparsed media bullet cannot be used as timing",
+                ));
+            }
+        }
     }
 }
 

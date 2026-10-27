@@ -5,6 +5,29 @@
 
 use thiserror::Error;
 
+/// Explicit fixture-only extraction; not part of the production parse API.
+/// A built model may still carry diagnostics and be invalid CHAT.
+pub trait ParseProductTestExt {
+    /// Take a fixture's built model, discarding its parse diagnostics.
+    ///
+    /// # Panics
+    /// Panics with retained diagnostics when the fixture built no model.
+    fn expect_built(self) -> talkbank_model::ChatFile;
+}
+
+impl ParseProductTestExt for talkbank_model::ParseProduct {
+    #[allow(clippy::panic)] // Explicit fixture assertion in the test-support crate.
+    #[track_caller]
+    fn expect_built(self) -> talkbank_model::ChatFile {
+        match self {
+            Self::Built { file, .. } => file,
+            Self::Unbuildable { diagnostics } => {
+                panic!("ParseProduct::expect_built called on Unbuildable: {diagnostics:?}")
+            }
+        }
+    }
+}
+
 /// Shared failure modes for parser-test binaries and integration suites.
 #[derive(Debug, Error)]
 pub enum TestError {
@@ -48,7 +71,7 @@ impl From<talkbank_parser::ParserInitError> for TestError {
 /// Spec-generated construct/error tests (see `spec/tools/src/output/rust_test.rs`)
 /// and hand-written parser-suite tests that assert a fixture parses
 /// completely cleanly use this, rather than
-/// [`talkbank_parser::ParseProduct::expect_built`] alone, which only
+/// [`ParseProductTestExt::expect_built`] alone, which only
 /// answers "was a model built," not "was it built without error
 /// diagnostics." Kept in this test-support crate (never in
 /// `talkbank-parser` itself): a convenience that silently discards a

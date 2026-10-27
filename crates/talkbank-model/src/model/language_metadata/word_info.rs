@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SpanShift, ValidationTagged};
 
-use super::super::LanguageCode;
+use super::super::{LanguageCode, MultipleLanguageCodes};
 use super::LanguageSource;
 
 /// The languages applicable to a word, preserving code-mixing and ambiguity information.
@@ -33,9 +33,9 @@ pub enum WordLanguages {
     /// Single definitive language
     Single(LanguageCode),
     /// Multiple languages mixed together (code-mixing)
-    Multiple(Vec<LanguageCode>),
+    Multiple(MultipleLanguageCodes),
     /// Ambiguous between languages
-    Ambiguous(Vec<LanguageCode>),
+    Ambiguous(MultipleLanguageCodes),
     /// No language could be resolved for this word
     #[validation_tag(error)]
     Unresolved,
@@ -49,7 +49,7 @@ impl WordLanguages {
     pub fn languages(&self) -> Vec<&LanguageCode> {
         match self {
             Self::Single(code) => vec![code],
-            Self::Multiple(codes) | Self::Ambiguous(codes) => codes.iter().collect(),
+            Self::Multiple(codes) | Self::Ambiguous(codes) => codes.as_slice().iter().collect(),
             Self::Unresolved => Vec::new(),
         }
     }

@@ -44,10 +44,13 @@ fn word_turns(
             .slots()
             .iter()
             .enumerate()
-            .map(|(slot, word)| DiarizationTurn {
-                track: talkbank_model::SpeakerCode::new(track(slot)),
-                span: TimeSpanMs::new(word.timing().start().get(), word.timing().end().get())
-                    .expect("admitted positive word interval"),
+            .map(|(slot, word)| {
+                DiarizationTurn::new(
+                    talkbank_model::SpeakerCode::new(track(slot)),
+                    TimeSpanMs::new(word.timing().start().get(), word.timing().end().get())
+                        .expect("admitted positive word interval"),
+                )
+                .expect("control track")
             })
             .collect(),
     )
@@ -278,6 +281,7 @@ fn timing_partition_retains_leading_interior_and_trailing_sidecar_separators() {
                     .content
                     .bullet
                     .as_ref()
+                    .and_then(talkbank_model::BulletState::as_parsed)
                     .expect("child timing comes from the attached sidecar");
                 assert_eq!(bullet.timing.start_ms, hull.start().get());
                 assert_eq!(bullet.timing.end_ms, hull.end().get());

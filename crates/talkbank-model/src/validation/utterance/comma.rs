@@ -39,6 +39,7 @@ fn is_comma_licensing(item: &ContentItem<'_>) -> bool {
         // Events, separators, actions, markers, etc. do not license commas.
         ContentItem::Event(_)
         | ContentItem::Action(_)
+        | ContentItem::OrphanAnnotation(_)
         | ContentItem::Freecode(_)
         | ContentItem::Separator(_)
         | ContentItem::OverlapPoint(_)

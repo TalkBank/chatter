@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
-assertion_line: 12
 expression: result
 ---
 Ok(
@@ -28,8 +27,10 @@ Ok(
                 ),
                 Text(
                     WordText(
-                        NonEmptyString(
-                            "hello",
+                        NonEmpty(
+                            NonEmptyString(
+                                "hello",
+                            ),
                         ),
                     ),
                 ),

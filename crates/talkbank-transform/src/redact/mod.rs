@@ -1,12 +1,18 @@
 //! Structural CHAT-file sanitizer.
 //!
 //! Replaces supported lexical fields in a parsed `ChatFile` while
-//! preserving timing, structure, speaker codes, and CHAT validity. The
+//! preserving supported timing, structure and speaker-code values. It does
+//! not validate the input or certify output validity. The
 //! output is intended for engineering use (debugging, validator
 //! reproduction, structural analysis) where the original transcript is
 //! protected by contributor consent. This is not a complete de-identification
 //! guarantee: unsupported fields and preserved metadata require privacy review
 //! before any disclosure.
+//!
+//! When starting from source text, use [`crate::parse_source_with_parser`] and
+//! [`crate::ParsedSourceChat::sanitize`]. That consumes the source-bound parse and
+//! checks the unedited serialization for source loss before redaction. The
+//! model-only [`sanitize`] function cannot establish source preservation.
 //!
 //! # Quick Start
 //!
@@ -24,7 +30,7 @@
 //! See the chatter book chapter `user-guide/sanitize.md` for the full leak-surface inventory. The
 //! short version:
 //!
-//! - **Preserved byte-exact**: timing bullets, `%wor` per-word bullets,
+//! - **Preserved model values** (not original formatting): timing bullets, `%wor` per-word bullets,
 //!   speaker codes, `@Languages`, `@Birth`, `@Date`, `@Media`, `@PID`,
 //!   `@L1Of`, structural markers (`+`, `~`, CA elements, `@n`, POS tags).
 //! - **Replaced**: every `WordContent::Text`, `Shortening` text, `%wor`
@@ -35,9 +41,13 @@
 //!   `@Participants` names, `@ID` `custom_field`/`education`, free-text
 //!   annotations.
 //!
+//! Unattached annotations, rejected participant headers, MOR and GRA return [`RedactError`] rather
+//! than guessing lexical fields. Rejected WOR, text and phonological/sign tiers
+//! are dropped. Unknown headers remain raw and require manual privacy review.
+//!
 //! # Determinism + Idempotence
 //!
-//! Placeholders come from one monotonic counter advanced in document
+//! Placeholders come from one alphabetic sequence advanced in document
 //! order (`placeholder.rs`), so sanitizing the same input always produces
 //! byte-identical output, and re-sanitizing a sanitized file reproduces
 //! it.
@@ -59,6 +69,6 @@ mod word;
 pub(crate) const REDACTED_TEXT: &str = "[redacted]";
 
 pub use document::{SanitizedDocument, sanitize};
-pub use error::RedactError;
+pub use error::{RedactError, SourceSanitizationError};
 pub use placeholder::{PlaceholderIndex, PlaceholderToken};
 pub use policy::SanitizationPolicy;

@@ -5,28 +5,7 @@ use super::Token;
 impl<'a> Token<'a> {
     /// Check if this is an error token.
     pub fn is_err(&self) -> bool {
-        matches!(
-            self,
-            Token::ErrorUnrecognized(_)
-                | Token::ErrorLine(_)
-                | Token::ErrorHeaderAfterName(_)
-                | Token::ErrorSpeaker(_)
-                | Token::ErrorTierAfterLabel(_)
-                | Token::ErrorTierSep(_)
-                | Token::ErrorUnclosedParen(_)
-                | Token::ErrorInMainContent(_)
-                | Token::ErrorInMorContent(_)
-                | Token::ErrorInGraContent(_)
-                | Token::ErrorInPhoContent(_)
-                | Token::ErrorInSinContent(_)
-                | Token::ErrorInTierContent(_)
-                | Token::ErrorInHeaderContent(_)
-                | Token::ErrorInIdContent(_)
-                | Token::ErrorInTypesContent(_)
-                | Token::ErrorInLanguagesContent(_)
-                | Token::ErrorInParticipantsContent(_)
-                | Token::ErrorInMediaContent(_)
-        )
+        self.error_context().is_some()
     }
 
     /// Human-readable context description for error tokens.
@@ -66,7 +45,7 @@ impl<'a> Token<'a> {
     /// The token's content: the whole lexeme for a plain token, the payload
     /// (not the lexeme) for an `Extracted` one, the whole suffix for a word's
     /// `@s` suffix, the delimited raw text for a
-    /// media bullet, the SPEAKER for an other-spoken event, and the leading
+    /// media bullet, the SPEAKER for an interposed-speaker prefix, and the leading
     /// field for the rich header and `%mor`/`%gra` tokens. Placement never
     /// goes through this; it reads the lexeme the token carries.
     pub fn text(&self) -> &'a str {
@@ -143,11 +122,7 @@ impl<'a> Token<'a> {
             | Token::CodeSwitchShortcut(s)
             | Token::CaContinuationMarker(s)
             | Token::ReplacementBegin(s)
-            | Token::WordSegment(s)
-            | Token::Shortening(s)
             | Token::Lengthening(s)
-            | Token::StressPrimary(s)
-            | Token::StressSecondary(s)
             | Token::OverlapTopBegin(s)
             | Token::OverlapTopEnd(s)
             | Token::OverlapBottomBegin(s)
@@ -240,10 +215,10 @@ impl<'a> Token<'a> {
             | Token::ErrorInMediaContent(s) => s,
             Token::Word { raw_text, .. } => raw_text,
             Token::WordLangSuffix(suffix) => suffix.lexeme(),
-            Token::OtherSpokenEvent { speaker, .. } => speaker,
+            Token::OtherSpokenPrefix(prefix) => prefix.text(),
             Token::MediaBullet { bullet } => bullet.text(),
-            Token::HeaderPrefix(s)
-            | Token::HeaderSep(s)
+            Token::HeaderPrefix(s) => s.text(),
+            Token::HeaderSep(s)
             | Token::HeaderBirthOf(s)
             | Token::HeaderBirthplaceOf(s)
             | Token::HeaderL1Of(s)
@@ -257,22 +232,48 @@ impl<'a> Token<'a> {
     }
 }
 
-/// Result of lexing a line: tokens + any errors found.
+/// Source-bound result of lexing a line, with read-only tokens and error reports.
+///
+/// Reports cannot take a different source:
+/// ```compile_fail
+/// let result = talkbank_parser_re2c::lex("");
+/// result.error_report("unrelated");
+/// ```
+/// Token ranges cannot be replaced after lexing:
+/// ```compile_fail
+/// let mut result = talkbank_parser_re2c::lex("");
+/// result.tokens()[0].1 = 0..1;
+/// ```
 #[derive(Debug)]
 pub struct LexResult<'a> {
-    pub tokens: Vec<(Token<'a>, std::ops::Range<usize>)>,
+    source: &'a str,
+    tokens: Vec<(Token<'a>, std::ops::Range<usize>)>,
 }
 
 impl<'a> LexResult<'a> {
+    /// Produce tokens and their source together at the lexer boundary.
+    pub(crate) fn lex(source: &'a str, condition: crate::lexer::StartCondition) -> Self {
+        Self {
+            source,
+            tokens: crate::lexer::Lexer::new(source, condition).collect(),
+        }
+    }
+
+    /// Borrow tokens and their byte ranges in the original source.
+    pub fn tokens(&self) -> &[(Token<'a>, std::ops::Range<usize>)] {
+        &self.tokens
+    }
+
     /// Returns all error tokens with their positions and context.
     pub fn errors(&self) -> Vec<LexError<'a>> {
         self.tokens
             .iter()
-            .filter(|(t, _)| t.is_err())
-            .map(|(t, span)| LexError {
-                token: t.clone(),
-                span: span.clone(),
-                context: t.error_context().unwrap_or("unknown error"),
+            .filter_map(|(token, span)| {
+                Some(LexError {
+                    context: token.error_context()?,
+                    token: token.clone(),
+                    span: span.clone(),
+                })
             })
             .collect()
     }
@@ -283,14 +284,14 @@ impl<'a> LexResult<'a> {
     }
 
     /// Human-readable error report.
-    pub fn error_report(&self, source: &str) -> String {
+    pub fn error_report(&self) -> String {
         let errors = self.errors();
         if errors.is_empty() {
             return String::new();
         }
         let mut report = String::new();
         for e in &errors {
-            let snippet = &source[e.span.clone()];
+            let snippet = &self.source[e.span.clone()];
             let escaped = snippet.escape_debug().to_string();
             report.push_str(&format!(
                 "  [{}-{}] {}: {:?} (text: \"{}\")\n",
@@ -301,10 +302,64 @@ impl<'a> LexResult<'a> {
     }
 }
 
-/// A single lexer error with context.
+/// An error token, source span and context admitted together by [`LexResult`].
+///
+/// Consumers cannot replace the admitted token with a successful token:
+/// ```compile_fail
+/// use talkbank_parser_re2c::{lex, token::Token};
+/// let mut error = lex("oops\n").errors().remove(0);
+/// error.token = Token::Zero("0");
+/// ```
 #[derive(Debug, Clone)]
 pub struct LexError<'a> {
-    pub token: Token<'a>,
-    pub span: std::ops::Range<usize>,
-    pub context: &'static str,
+    token: Token<'a>,
+    span: std::ops::Range<usize>,
+    context: &'static str,
+}
+
+impl<'a> LexError<'a> {
+    /// The error token emitted by the lexer.
+    pub fn token(&self) -> &Token<'a> {
+        &self.token
+    }
+
+    /// Byte range in the lexed source.
+    pub fn span(&self) -> std::ops::Range<usize> {
+        self.span.clone()
+    }
+
+    /// Context admitted by the token's error classification.
+    pub fn context(&self) -> &'static str {
+        self.context
+    }
+}
+
+#[cfg(test)]
+mod source_binding_tests {
+    #[test]
+    fn report_uses_original_unicode_source() {
+        let source = "😀oops\n";
+        let result = crate::lex(source);
+        assert!(!result.is_clean());
+        let report = result.error_report();
+        assert!(report.contains("[0-8]"), "{report}");
+        assert!(report.contains("😀oops"), "{report}");
+        assert!(report.contains("invalid line"), "{report}");
+        assert_eq!(result.tokens()[0].1, 0..8);
+        let errors = result.errors();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].span(), 0..8);
+        assert_eq!(errors[0].context(), "invalid line (expected @, *, or %)");
+        assert!(matches!(
+            errors[0].token(),
+            super::Token::ErrorLine("😀oops")
+        ));
+    }
+
+    #[test]
+    fn empty_source_has_no_error_report() {
+        let result = crate::lex("");
+        assert!(result.is_clean());
+        assert!(result.error_report().is_empty());
+    }
 }

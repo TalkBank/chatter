@@ -16,7 +16,7 @@ use crate::model::{
     ChatDate, Header, IDHeader, LanguageCode, Line, Participant, ParticipantEntry, ParticipantName,
     ParticipantRole, SpeakerCode,
 };
-use crate::{ErrorCollector, ParseError};
+use crate::{ErrorCode, ErrorCollector, ParseError};
 
 /// Run the join over fixture headers, returning the map and the diagnostics it
 /// reported.
@@ -45,11 +45,11 @@ fn id(speaker: &str, role: &str) -> IDHeader {
 /// A single-speaker `@Participants` declaration.
 fn declares(speaker: &str, name: &str, role: &str) -> Header {
     Header::Participants {
-        entries: vec![ParticipantEntry {
-            speaker_code: SpeakerCode::new(speaker),
-            name: Some(ParticipantName::new(name)),
-            role: ParticipantRole::new(role),
-        }]
+        entries: vec![ParticipantEntry::new(
+            SpeakerCode::new(speaker),
+            Some(ParticipantName::new(name)),
+            ParticipantRole::new(role),
+        )]
         .into(),
     }
 }
@@ -69,8 +69,8 @@ fn test_build_participants_basic() -> Result<(), String> {
         .get("CHI")
         .ok_or_else(|| "CHI participant should exist".to_string())?;
     assert_eq!(chi.code.as_str(), "CHI");
-    assert_eq!(chi.name.as_ref().map(|n| n.as_str()), Some("Ruth"));
-    assert_eq!(chi.role.as_str(), "Target_Child");
+    assert_eq!(chi.name().map(|n| n.as_str()), Some("Ruth"));
+    assert_eq!(chi.role().map(|role| role.as_str()), Some("Target_Child"));
     Ok(())
 }
 
@@ -146,6 +146,21 @@ fn test_e524_orphan_birth() {
     assert!(errors[0].message.contains("not a declared participant"));
 }
 
+/// Metadata absence does not erase declaration evidence for a birth header.
+#[test]
+fn birth_for_declared_speaker_without_id_is_not_orphaned() {
+    let (participants, errors) = join(vec![
+        declares("CHI", "Ruth", "Target_Child"),
+        Header::Birth {
+            participant: SpeakerCode::new("CHI"),
+            date: ChatDate::new("01-JAN-2000"),
+        },
+    ]);
+    assert!(participants.is_empty(), "metadata is genuinely missing");
+    assert_eq!(errors.len(), 1, "only missing ID, no unknown birth speaker");
+    assert_eq!(errors[0].code, crate::ErrorCode::SpeakerNotDefined);
+}
+
 /// Several speakers keep declaration order, and each takes only its own
 /// `@ID` and `@Birth`.
 #[test]
@@ -153,16 +168,16 @@ fn test_multiple_participants() -> Result<(), String> {
     let headers = vec![
         Header::Participants {
             entries: vec![
-                ParticipantEntry {
-                    speaker_code: SpeakerCode::new("CHI"),
-                    name: Some(ParticipantName::new("Ruth")),
-                    role: ParticipantRole::new("Target_Child"),
-                },
-                ParticipantEntry {
-                    speaker_code: SpeakerCode::new("INV"),
-                    name: Some(ParticipantName::new("Chiat")),
-                    role: ParticipantRole::new("Investigator"),
-                },
+                ParticipantEntry::new(
+                    SpeakerCode::new("CHI"),
+                    Some(ParticipantName::new("Ruth")),
+                    ParticipantRole::new("Target_Child"),
+                ),
+                ParticipantEntry::new(
+                    SpeakerCode::new("INV"),
+                    Some(ParticipantName::new("Chiat")),
+                    ParticipantRole::new("Investigator"),
+                ),
             ]
             .into(),
         },
@@ -194,4 +209,35 @@ fn test_multiple_participants() -> Result<(), String> {
     assert_eq!(inv.code.as_str(), "INV");
     assert_eq!(inv.birth_date, None);
     Ok(())
+}
+
+/// A rejected ID cannot establish absence, even after the wire loses locations.
+#[test]
+fn rejected_id_preserves_uncertainty_without_inventing_metadata() {
+    let rejected = Header::UnparsedID(crate::model::UnparsedIDHeader::new(
+        crate::Location::Unlocated,
+        "@ID:\teng,,ara|corpus|CHI|||||Target_Child|||",
+    ));
+    for header in [
+        rejected.clone(),
+        serde_json::from_value(serde_json::to_value(rejected).unwrap()).unwrap(),
+    ] {
+        let (participants, errors) = join(vec![
+            declares("CHI", "Ruth", "Target_Child"),
+            header,
+            Header::ID(id("INV", "Investigator")),
+        ]);
+        assert!(participants.is_empty());
+        assert!(
+            errors
+                .iter()
+                .all(|error| error.code != ErrorCode::SpeakerNotDefined)
+        );
+        // Readable orphan metadata still proves its own inconsistency.
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.code == ErrorCode::OrphanIDHeader)
+        );
+    }
 }

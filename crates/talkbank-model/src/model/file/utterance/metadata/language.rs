@@ -38,6 +38,21 @@ impl Utterance {
         default_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
     ) {
+        self.compute_language_metadata_with_declaration(
+            default_language,
+            crate::model::DeclaredLanguagesRef::new(declared_languages),
+        );
+    }
+
+    /// Resolve metadata without converting a rejected declaration to an empty list.
+    pub fn compute_language_metadata_with_declaration(
+        &mut self,
+        default_language: Option<&LanguageCode>,
+        declared_languages: Result<
+            crate::model::DeclaredLanguagesRef<'_>,
+            crate::model::LanguageDeclarationError,
+        >,
+    ) {
         // Determine utterance baseline language state.
         self.utterance_language = if let Some(code) = self.main.content.language_code.as_ref() {
             UtteranceLanguage::ResolvedTierScoped {
@@ -77,7 +92,8 @@ impl Utterance {
                     WordItem::Separator(_) => return,
                 };
                 let governor = GoverningMarker::of(word, scope.span());
-                let outcome = governor.resolve(word, tier_language, declared_languages);
+                let outcome =
+                    governor.resolve_with_declaration(word, tier_language, declared_languages);
                 let source = governor.source(&outcome.resolution, &self.utterance_language);
                 metadata.add_word(
                     resolution_to_metadata_languages(&outcome.resolution),

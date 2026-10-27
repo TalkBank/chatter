@@ -32,7 +32,7 @@ fn parse_chat_file_or_err(input: &str) -> Result<crate::model::ChatFile, String>
     }
 }
 
-/// `@Languages: cat, spa` produces `ChatFile.languages = [cat, spa]`
+/// `@Languages: cat, spa` produces `an admitted [cat, spa] declaration`
 /// in declaration order.
 #[test]
 fn cat_spa_header_parses_to_two_declared_languages() -> Result<(), String> {
@@ -46,8 +46,8 @@ fn cat_spa_header_parses_to_two_declared_languages() -> Result<(), String> {
     let chat_file = parse_chat_file_or_err(input)?;
 
     let langs: Vec<&str> = chat_file
-        .languages
-        .as_slice()
+        .language_declaration()
+        .expect("admitted declaration")
         .iter()
         .map(|c| c.as_str())
         .collect();
@@ -346,4 +346,72 @@ fn test_validation_error_has_proper_span() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[test]
+fn file_level_tier_recovery_survives_both_lowering_phases() {
+    use super::tier_plan::{PlanEntry, RetainAll};
+    use crate::model::{DependentTier, WriteChat};
+    let source = include_str!(
+        "../../../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E601_1.cha"
+    );
+    let parser = TreeSitterParser::new().unwrap();
+    for prefix in ["%mor:", "%gra:"] {
+        for body in ["|||", "|||\n\t|||"] {
+            let source = source.replace("%mor:\t|||", &format!("{prefix}\t{body}"));
+            for plan in [
+                PlanEntry::Decided(RetainAll),
+                PlanEntry::AfterHeaders(Box::new(|_| RetainAll)),
+            ] {
+                let errors = ErrorCollector::new();
+                let (file, producer) =
+                    parser.parse_chat_file_bound_with_removal(&source, None, &errors, plan);
+                assert!(producer.is_some());
+                assert!(errors.has_errors());
+                let utterance = file
+                    .utterances()
+                    .next()
+                    .unwrap_or_else(|| panic!("source={source:?}, errors={:?}", errors.into_vec()));
+                assert!(matches!(
+                    utterance.dependent_tiers[0].tier,
+                    DependentTier::UnparsedMor(_) | DependentTier::UnparsedGra(_)
+                ));
+                assert!(
+                    file.to_chat_string()
+                        .contains(&format!("{prefix}\t{body}\n"))
+                );
+                assert!(!utterance.parse_health().can_align_main_to_mor());
+            }
+        }
+    }
+}
+
+#[test]
+fn file_level_mor_recovery_does_not_attach_across_a_header_or_without_an_utterance() {
+    use super::tier_plan::{PlanEntry, RetainAll};
+    use crate::model::DependentTier;
+    let source = include_str!(
+        "../../../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E601_1.cha"
+    );
+    let parser = TreeSitterParser::new().unwrap();
+    for input in [
+        source.replace("%mor:", "@Comment:\tintervening\n%mor:"),
+        source.replace("*CHI:\thello .\n", ""),
+        source.replace("%mor:\t|||", "%mor:\t|||\n%mor:\t|||"),
+    ] {
+        for plan in [
+            PlanEntry::Decided(RetainAll),
+            PlanEntry::AfterHeaders(Box::new(|_| RetainAll)),
+        ] {
+            let errors = ErrorCollector::new();
+            let (file, _) = parser.parse_chat_file_bound_with_removal(&input, None, &errors, plan);
+            assert!(errors.has_errors());
+            assert!(file.utterances().all(|utterance| {
+                utterance
+                    .dependent_tiers
+                    .iter()
+                    .all(|entry| !matches!(entry.tier, DependentTier::UnparsedMor(_)))
+            }));
+        }
+    }
 }

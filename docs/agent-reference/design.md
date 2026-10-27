@@ -12,9 +12,12 @@ repository paths are relative to the repository root unless stated otherwise.
 
 ### Architecture-native recovery and diagnostics
 
-Error recovery and reporting must be idiomatic to the tree-sitter and typed-AST
-architecture. Derive findings from CST kinds, source-bound recovery evidence
-and context supplied by the owning traversal. Do not reconstruct a parallel
+Error recovery and reporting must be idiomatic to each parser's architecture.
+Tree-sitter uses generated typed CST traversal; re2c uses its lexer, token
+admission and parser-owned recovery. Both are peers and may evolve the shared
+model, including explicit malformed states. Derive findings from source-bound
+syntax and recovery evidence and context supplied by the owning parser.
+Do not reconstruct a parallel
 parser from raw line prefixes or token heuristics merely to reproduce another
 validator's diagnostics. Lexical checks and inspection of genuinely unparsed
 input need an explicit boundary justification and must retain their source
@@ -115,7 +118,7 @@ Introducing a type does not by itself justify deleting its boundary tests.
    (`walk_words`), never flat-index adjacency.
 5. Parse, don't validate: strict plus catch-all grammar pattern for closed
    header-value sets (`grammar/AGENTS.md`).
-6. **The production parser is driven by the generated typed CST traversal
+6. **The Tree-sitter parser is driven by the generated typed CST traversal
    (`generated_traversal`, `NodeSlot`); hand-walking `node.kind()` and
    classifying ERROR-node text are banned.** The whole-tree recovery backstop
    is retained alongside per-position handling; both are load-bearing.
@@ -124,8 +127,9 @@ Introducing a type does not by itself justify deleting its boundary tests.
    invalid; never drop a recovery node; never fabricate model values during
    recovery. **Two facts, never one:** `ParseHealth` taint answers "is
    CROSS-TIER alignment involving this domain trustworthy" and is also set for
-   faults in OTHER tiers; whether a tier lost content of its own is the tier's
-   business (`GraCompleteness`). Reading the first as the second withheld four
+   faults in OTHER tiers; a tier's own failed lowering is explicit rejection
+   or an unparsed variant. No partial GraTier is constructed. Reading the
+   alignment taint as tier-local rejection withheld four
    `%gra` rules from a tier that parsed perfectly, and reading it as "these
    labels are not the author's" withheld E761 from relations that are.
 8. Fix root causes, never symptoms. "Pragmatic" is banned as a justification

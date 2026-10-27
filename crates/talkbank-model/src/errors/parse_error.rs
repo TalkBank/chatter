@@ -14,6 +14,7 @@ use miette::Diagnostic;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::num::NonZeroUsize;
 use thiserror::Error;
 
 use super::builder::ParseErrorBuilder;
@@ -29,7 +30,7 @@ pub(crate) struct SourceCodeWithOffset {
     name: String,
     source: String,
     /// 1-indexed line number where `source` starts in the original file
-    line_offset: usize,
+    line_offset: NonZeroUsize,
 }
 
 impl SourceCodeWithOffset {
@@ -37,7 +38,7 @@ impl SourceCodeWithOffset {
     pub(super) fn new(
         name: impl Into<String>,
         source: impl Into<String>,
-        line_offset: usize,
+        line_offset: NonZeroUsize,
     ) -> Self {
         Self {
             name: name.into(),

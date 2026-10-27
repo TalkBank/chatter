@@ -155,7 +155,7 @@ impl WriteChat for IDHeader {
     ///
     /// Optional fields are emitted as empty segments so output remains stable
     /// for tools that expect the trailing delimiter.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str("@ID:\t")?;
         self.language.write_chat(w)?;
         w.write_char('|')?;
@@ -163,7 +163,7 @@ impl WriteChat for IDHeader {
         w.write_str(self.corpus.as_str())?;
         w.write_char('|')?;
 
-        write!(w, "{}", self.speaker)?;
+        crate::model::WriteChat::write_chat(&self.speaker, w)?;
         w.write_char('|')?;
 
         if let Some(ref age) = self.age {
@@ -182,11 +182,11 @@ impl WriteChat for IDHeader {
         w.write_char('|')?;
 
         if let Some(ref ses) = self.ses {
-            write!(w, "{}", ses)?;
+            crate::model::WriteChat::write_chat(&ses, w)?;
         }
         w.write_char('|')?;
 
-        write!(w, "{}", self.role)?;
+        crate::model::WriteChat::write_chat(&self.role, w)?;
         w.write_char('|')?;
 
         if let Some(ref education) = self.education {

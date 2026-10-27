@@ -55,7 +55,7 @@ fn authored_bullet_constructs_preserve_timing_and_continuation() {
                 .content
                 .iter()
                 .filter_map(|item| match item {
-                    UtteranceContent::InternalBullet(bullet) => Some(bullet),
+                    UtteranceContent::InternalBullet(bullet) => bullet.as_parsed(),
                     _ => None,
                 })
                 .collect();
@@ -67,6 +67,7 @@ fn authored_bullet_constructs_preserve_timing_and_continuation() {
                 .content
                 .bullet
                 .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
                 .expect("terminal bullet");
             for (bullet, times, spelling) in [
                 (*internal, (0, 2633), "\u{15}0_2633\u{15}"),
@@ -149,6 +150,7 @@ fn reference_dependent_bodies_preserve_media_wrapping_and_sink_refusal() {
                         BulletContentSegment::Bullet(_) => 1,
                         BulletContentSegment::Picture(_) => 2,
                         BulletContentSegment::Continuation => 3,
+                        BulletContentSegment::UnparsedBullet(_) => 4,
                     }] += 1;
                 }
                 let mut streamed = String::new();
@@ -276,6 +278,7 @@ fn reference_comment_edits_preserve_nontext_segments_and_wire_contracts() {
                         );
                     }
                     BulletContentSegment::Bullet(_)
+                    | BulletContentSegment::UnparsedBullet(_)
                     | BulletContentSegment::Picture(_)
                     | BulletContentSegment::Continuation => {
                         assert_eq!(before, after);
@@ -296,4 +299,189 @@ fn reference_comment_edits_preserve_nontext_segments_and_wire_contracts() {
         retained_payloads > 0,
         "reference comments must retain media or wrapping"
     );
+}
+
+/// Rejected main-tier media remains source, never absent or usable timing.
+#[test]
+fn rejected_main_bullets_survive_wire_and_refuse_timing_consumers() {
+    use talkbank_model::alignment::helpers::{ContentItem, walk_content};
+    use talkbank_model::{
+        BulletState, ChatFile, ChatParser, ErrorCode, ErrorCollector, TranscriptName,
+    };
+    use talkbank_transform::utterance_split::{SplitRefusal, UtteranceSplitPlan};
+
+    #[derive(Clone, Copy)]
+    enum Sanitization {
+        PreservesTiming,
+        RefusesOrphan,
+    }
+
+    fn check(parser: &impl ChatParser, source: &str, sanitization: Sanitization) {
+        let errors = ErrorCollector::new();
+        let file = parser
+            .parse_chat_file(source, 0, &errors)
+            .into_option()
+            .expect("recovered file");
+        assert!(
+            errors
+                .to_vec()
+                .iter()
+                .any(|e| e.code == ErrorCode::InvalidMediaBullet),
+            "{}",
+            parser.parser_name()
+        );
+        let output = file.to_chat_string();
+        let wire = serde_json::to_string(&file).expect("wire");
+        assert!(wire.contains("unparsed"));
+        let decoded: ChatFile = serde_json::from_str(&wire).expect("recovery JSON");
+        assert_eq!(decoded.to_chat_string(), output);
+        for document in [&file, &decoded] {
+            let utterance = document.utterances().next().expect("utterance");
+            assert!(utterance.main.content.has_unparsed_bullets());
+            let mut rejected = Vec::new();
+            walk_content(&utterance.main.content.content, None, &mut |item| {
+                if let ContentItem::InternalBullet(BulletState::Unparsed { unparsed }) = item {
+                    rejected.push(unparsed);
+                }
+            });
+            if let Some(BulletState::Unparsed { unparsed }) = &utterance.main.content.bullet {
+                rejected.push(unparsed);
+                let parents = document
+                    .utterances()
+                    .enumerate()
+                    .map(|(i, _)| {
+                        talkbank_transform::transcript_merge::DonorIdx::new(
+                            talkbank_model::UtteranceIdx::new(i),
+                        )
+                    })
+                    .collect();
+                assert!(
+                    talkbank_transform::transcript_merge::SourceBoundDonorSelection::bind(
+                        document, document, parents
+                    )
+                    .is_err(),
+                    "rejected terminal cannot establish donor coordinates"
+                );
+                assert!(
+                    utterance.media_bullet().is_none(),
+                    "rejected terminal cannot promote internal timing"
+                );
+                let errors = ErrorCollector::new();
+                let (unchanged, outcome) = talkbank_transform::rediarize::rediarize(
+                    document,
+                    &talkbank_transform::rediarize::DiarizationTimeline::new(Vec::new()),
+                    None,
+                    &errors,
+                )
+                .expect("admitted participant declaration");
+                assert_eq!(
+                    unchanged.utterances().next().expect("retained").main,
+                    utterance.main
+                );
+                assert_eq!(
+                    outcome.flagged[0].reason,
+                    talkbank_transform::rediarize::FlagReason::UnparsedBullet
+                );
+            }
+            assert_eq!(rejected.len(), 1);
+            for raw in rejected {
+                assert!(source.contains(raw.source()));
+                assert!(output.contains(raw.source()));
+                let result = talkbank_transform::redact::sanitize(
+                    document.clone(),
+                    &talkbank_transform::redact::SanitizationPolicy::strict(),
+                );
+                match sanitization {
+                    Sanitization::PreservesTiming => {
+                        let sanitized = result.expect("redaction preserves timing source");
+                        assert!(sanitized.to_chat_string().contains(raw.source()));
+                    }
+                    Sanitization::RefusesOrphan => {
+                        assert!(matches!(
+                            result,
+                            Err(talkbank_transform::redact::RedactError::OrphanAnnotation)
+                        ));
+                    }
+                }
+                if let Some(span) = raw.location().span() {
+                    assert_eq!(&source[span.to_range()], raw.source());
+                }
+            }
+            assert!(matches!(
+                UtteranceSplitPlan::for_morphology(utterance, &[0, 1]),
+                Err(SplitRefusal::UnparsedTiming)
+            ));
+            let errors = ErrorCollector::new();
+            document.validate(&errors, TranscriptName::Anonymous);
+            assert!(
+                errors
+                    .to_vec()
+                    .iter()
+                    .any(|e| e.code == ErrorCode::InvalidMediaBullet)
+            );
+            assert!(
+                !errors.to_vec().iter().any(|e| e.code.as_str() == "E544"),
+                "rejected timing is not missing timing"
+            );
+        }
+    }
+
+    let root = workspace_root();
+    let specs = talkbank_parser_tests::error_specs::load(root).expect("specs");
+    let spec = specs
+        .iter()
+        .find(|s| s.filename == "E360.md")
+        .expect("E360");
+    let native = talkbank_parser_re2c::Re2cParser::new();
+    let tree = TreeSitterParser::new().expect("parser");
+    for (title, native_sanitization) in [
+        (
+            "Timestamps too large to be timestamps",
+            Sanitization::PreservesTiming,
+        ),
+        (
+            "Nested overflow retains surrounding content without invented timing",
+            Sanitization::PreservesTiming,
+        ),
+        (
+            "Internal overflow retains words on both sides",
+            Sanitization::PreservesTiming,
+        ),
+        (
+            "Rejected final timing does not promote an earlier inline bullet",
+            Sanitization::PreservesTiming,
+        ),
+        // Native recovery retains this unattached postcode as an orphan
+        // annotation. Its sanitizer refusal is independent of bullet recovery;
+        // the primary parser retains a structured terminal postcode instead.
+        (
+            "Rejected explicit terminal slot does not absorb an inline bullet",
+            Sanitization::RefusesOrphan,
+        ),
+    ] {
+        let source = spec
+            .examples()
+            .iter()
+            .find(|e| e.title.as_deref() == Some(title))
+            .expect("example")
+            .chat
+            .as_str();
+        check(&native, source, native_sanitization);
+        check(&tree, source, Sanitization::PreservesTiming);
+        assert!(
+            tree.admit_replacing_tiers(
+                source,
+                talkbank_parser::ReplacementTiers::WordTiming,
+                TranscriptName::Anonymous
+            )
+            .is_err(),
+            "tier replacement cannot admit rejected main timing"
+        );
+        // A media declaration cannot turn numeric rejection into missing timing.
+        if !source.contains("@Media:") {
+            let with_media = source.replacen("*CHI:", "@Media:\tsession, audio\n*CHI:", 1);
+            check(&native, &with_media, native_sanitization);
+            check(&tree, &with_media, Sanitization::PreservesTiming);
+        }
+    }
 }

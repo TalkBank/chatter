@@ -1,5 +1,6 @@
 ---
-source: rust/crates/talkbank-tree-sitter-parser/src/parser/chat_file_parser/header_dispatch/tests.rs
+source: crates/talkbank-parser/src/parser/chat_file_parser/header_dispatch/tests.rs
+assertion_line: 101
 expression: result
 ---
 Ok(
@@ -10,19 +11,23 @@ Ok(
                     speaker_code: SpeakerCode(
                         "CHI",
                     ),
-                    name: None,
-                    role: ParticipantRole(
-                        "Child",
-                    ),
+                    details: Complete {
+                        name: None,
+                        role: ParticipantRole(
+                            "Child",
+                        ),
+                    },
                 },
                 ParticipantEntry {
                     speaker_code: SpeakerCode(
                         "MOT",
                     ),
-                    name: None,
-                    role: ParticipantRole(
-                        "Mother",
-                    ),
+                    details: Complete {
+                        name: None,
+                        role: ParticipantRole(
+                            "Mother",
+                        ),
+                    },
                 },
             ],
         ),

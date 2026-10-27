@@ -1,12 +1,8 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
-assertion_line: 98
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng"
-  ],
   "lines": [
     {
       "header": {
@@ -33,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Child",
+            "details": {
+              "name": null,
+              "role": "Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           }
         ],
@@ -276,41 +278,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "media": {
-    "filename": "media-bullets",
-    "media_type": "video"
-  },
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "2;00.",
-        "corpus": "sample",
-        "language": [
-          "eng"
-        ],
-        "role": "Child",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Child"
-    },
-    "MOT": {
-      "birth_date": null,
-      "code": "MOT",
-      "id": {
-        "corpus": "sample",
-        "language": [
-          "eng"
-        ],
-        "role": "Mother",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    }
-  }
+  ]
 }

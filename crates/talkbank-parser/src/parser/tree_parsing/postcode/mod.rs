@@ -30,24 +30,22 @@ pub fn parse_postcode_node<'tree>(
     let text = typed.text();
 
     // Strip "[+ " prefix and "]" suffix
-    let code = text
-        .strip_prefix("[+ ")
-        .and_then(|s| s.strip_suffix(']'))
-        .map(|s| s.trim_end());
+    let code = text.strip_prefix("[+ ").and_then(|s| s.strip_suffix(']'));
 
-    match code {
-        Some(c) if !c.is_empty() => ParseOutcome::parsed(Postcode::new(span_of(node), c)),
-        _ => {
-            errors.report(ParseError::new(
-                ErrorCode::InvalidPostcode,
-                Severity::Error,
-                DiagnosticLocation::new(span_of(node)),
-                ErrorContext::new(source, span_of(node), "postcode"),
-                "Postcode is missing required content".to_string(),
-            ));
-            ParseOutcome::rejected()
-        }
+    let value = match code {
+        Some(payload) => Postcode::from_lexed(span_of(node), payload, text),
+        None => Postcode::unparsed(span_of(node), text),
+    };
+    if value.text().is_none() {
+        errors.report(ParseError::new(
+            ErrorCode::InvalidPostcode,
+            Severity::Error,
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, span_of(node), "postcode"),
+            "Postcode is missing required content".to_string(),
+        ));
     }
+    ParseOutcome::parsed(value)
 }
 
 #[cfg(test)]

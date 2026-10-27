@@ -27,10 +27,10 @@ their actual calls. They do not establish that every permitted panic is
 necessary or justified. Historical retrace/annotation examples are not a
 current exception inventory.
 
-The public, documentation-hidden `tests_support::load_fixture` also has a
-panic allowance. It deliberately fails on unavailable or empty fixtures instead
-of letting tests pass vacuously. It is test support but is compiled as a public
-library API, not solely under `cfg(test)`.
+Fixture loading lives only in the integration target's `fixture_utils` module.
+Its nonempty fixture type refuses unavailable or empty files before exposing
+entries, and the requesting test reports that refusal as a failure. The former
+public `tests_support` module and its production panic allowance are removed.
 
 Build-script allowances and test-only attributes are separate from runtime
 parser guarantees. This guide supplies no new lint or panic-freedom receipt.

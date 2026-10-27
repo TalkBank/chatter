@@ -103,7 +103,8 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
         let input = self.source.source();
 
         let errors_sink = crate::error::ErrorCollector::new();
-        let outcome = convert_word_node(self.source, &errors_sink);
+        let outcome =
+            convert_word_node(self.source, &errors_sink).map(|lowered| lowered.into_word());
         let tier_errors = errors_sink.into_vec();
         if tier_errors
             .iter()
@@ -114,8 +115,8 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
 
         // The producer's successful outcome cannot enter a rejection fallback.
         match outcome {
-            ParseOutcome::Parsed(word) => Ok(word),
-            ParseOutcome::Rejected => {
+            Ok(ParseOutcome::Parsed(word)) => Ok(word),
+            Ok(ParseOutcome::Rejected) | Err(_) => {
                 let mut errors = ParseErrors::from(tier_errors);
                 if errors.is_empty() {
                     errors.push(ParseError::new(

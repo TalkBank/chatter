@@ -152,49 +152,48 @@ impl Serialize for MachineTime {
 /// database of an older schema is reported, not migrated, and also exits 0.
 /// Exits 1 when the cache cannot be read (including a database a newer build
 /// wrote) or the report cannot be written.
-pub fn cache_stats(format: crate::cli::OutputFormat) {
-    let fail = |action: &str, error: &dyn fmt::Display| -> ! {
+pub fn cache_stats(format: crate::cli::OutputFormat) -> crate::exit_codes::CommandResult {
+    let fail = |action: &str, error: &dyn fmt::Display| -> crate::exit_codes::CommandStop {
         eprintln!("Error: Failed to {action}: {error}");
-        std::process::exit(1);
+        crate::exit_codes::ReportedFailure::Input.into()
     };
-    let found = CacheOnDisk::inspect().unwrap_or_else(|e| fail("open cache", &e));
+    let found = CacheOnDisk::inspect().map_err(|e| fail("open cache", &e))?;
     let report = match &found {
         CacheOnDisk::Absent(absent) => Report::Absent(absent),
         CacheOnDisk::OlderSchema(older) => Report::OlderSchema(older),
-        CacheOnDisk::Current(cache) => Report::Current(
-            cache
-                .stats()
-                .unwrap_or_else(|e| fail("read cache stats", &e)),
-        ),
+        CacheOnDisk::Current(cache) => {
+            Report::Current(cache.stats().map_err(|e| fail("read cache stats", &e))?)
+        }
     };
 
     match format {
         crate::cli::OutputFormat::Json => {
             match serde_json::to_string_pretty(&CacheStatistics::new(&report)) {
                 Ok(json_str) => outln!("{}", json_str),
-                Err(e) => fail("serialize JSON", &e),
+                Err(e) => return Err(fail("serialize JSON", &e)),
             }
         }
-        crate::cli::OutputFormat::Text => print_text(&report),
+        crate::cli::OutputFormat::Text => print_text(&report)?,
     }
+    Ok(())
 }
 
 /// The human-readable report: a sentence for a directory with nothing to
 /// count, else the table, whose three storage facts one exhaustive match
 /// over the cache's three storage states decides.
-fn print_text(report: &Report<'_>) {
+fn print_text(report: &Report<'_>) -> crate::exit_codes::CommandResult {
     const NO_FILE: &str = "(no cache file)";
     let stats = match report {
         Report::Absent(absent) => {
             outln!("No cache database at {}", absent.database().display());
-            return;
+            return Ok(());
         }
         Report::OlderSchema(older) => {
             outln!(
                 "The cache database at {} has an older schema; the next `chatter validate` or `chatter cache clear` migrates it.",
                 older.database().display()
             );
-            return;
+            return Ok(());
         }
         Report::Current(stats) => stats,
     };
@@ -239,6 +238,7 @@ fn print_text(report: &Report<'_>) {
     outln!("Cache Size:      {size}");
     outln!("Total Entries:   {}", stats.total_entries);
     outln!("Last Modified:   {modified}");
+    Ok(())
 }
 
 #[cfg(test)]

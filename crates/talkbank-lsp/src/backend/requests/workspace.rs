@@ -12,11 +12,21 @@ pub(super) async fn handle_workspace_symbol(
     let query = &params.query;
     let mut all_symbols = Vec::new();
 
-    for entry in backend.documents.iter() {
-        let uri = entry.key();
-        let doc = entry.value();
-        let symbols = features::workspace_symbols_for_document(uri, &doc.source, query);
-        all_symbols.extend(symbols);
+    // Drop the map guards before the analysis owner reopens a document.
+    let uris: Vec<_> = backend
+        .documents
+        .iter()
+        .map(|entry| entry.key().clone())
+        .collect();
+    for uri in uris {
+        if let Some(symbols) =
+            crate::backend::chat_file_cache::with_current_analysis(backend, &uri, |analysis| {
+                features::workspace_symbols_for_document(&uri, analysis, query)
+            })
+            .map_err(|error| tower_lsp::jsonrpc::Error::invalid_params(error.to_string()))?
+        {
+            all_symbols.extend(symbols);
+        }
     }
 
     if all_symbols.is_empty() {

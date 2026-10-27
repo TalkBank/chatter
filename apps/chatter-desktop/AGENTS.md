@@ -75,7 +75,7 @@ bridge and native interaction evidence remain separate.
 
 | Feature | TUI implementation | Desktop status |
 |---------|-------------------|----------------|
-| **Progress throttling** | Configurable file-stride between redraws | Not yet implemented, React batches DOM updates via `requestAnimationFrame` which provides some natural throttling |
+| **Progress throttling** | Configurable file-stride between redraws | **Implemented**: ordered updates flush each animation frame or after 50 completed files; lifecycle and terminal events flush immediately |
 | **Streaming vs complete states** | Two distinct UI modes during/after validation | **Implemented**: ProgressBar shows different content per phase |
 | **Progress header** | "Done \| X files with errors / Y files" + gauge | **Implemented**: tree header shows "N files with errors / M total"; gated on `phase === "finished"` via `shouldShowAllFilesValid`, never derived from a still-streaming partial file set (fixed 2026-07-06) |
 
@@ -224,6 +224,9 @@ the `code` command).
 4. On macOS: `Chatter.app/Contents/Resources/chatter` → `/usr/local/bin/chatter`
 
 This is a proposed bundling workflow, not a shipped installation command.
+Do not register an installer until the resource, user action and installation
+boundary ship together. Installation must stage the replacement before changing
+an existing executable and preserve that executable if installation fails.
 It requires the build pipeline to produce both binaries and separate review
 of installation permissions and platform behavior.
 

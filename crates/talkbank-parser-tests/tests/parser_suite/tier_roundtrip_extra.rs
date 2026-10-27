@@ -114,7 +114,7 @@ fn sin_tier_to_content(tier: &SinTier) -> String {
         if i > 0 {
             content.push(' ');
         }
-        let _ = item.write_chat(&mut content);
+        content.push_str(&item.to_chat_string());
     }
     content
 }

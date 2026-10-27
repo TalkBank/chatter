@@ -97,14 +97,14 @@ pub const SURFACE_GROUPS: &[SurfaceGroup] = &[
     SurfaceGroup {
         scope: SurfaceScope::TopLevel,
         family: SurfaceFamily::Formatting,
-        commands: &["normalize", "clean", "new-file", "fix"],
+        commands: &["format", "new", "fix"],
         coverage: FORMATTING_COVERAGE,
         note: "single-file normalization, inspection, scaffold, and repair commands",
     },
     SurfaceGroup {
         scope: SurfaceScope::TopLevel,
         family: SurfaceFamily::Conversion,
-        commands: &["to-json", "from-json", "show-alignment"],
+        commands: &["convert", "inspect"],
         coverage: CONVERSION_COVERAGE,
         note: "JSON conversion and alignment inspection commands",
     },
@@ -118,14 +118,14 @@ pub const SURFACE_GROUPS: &[SurfaceGroup] = &[
     SurfaceGroup {
         scope: SurfaceScope::TopLevel,
         family: SurfaceFamily::Schema,
-        commands: &["schema"],
+        commands: &["schema", "checks", "commands"],
         coverage: SCHEMA_COVERAGE,
         note: "JSON schema printing surface",
     },
     SurfaceGroup {
         scope: SurfaceScope::TopLevel,
         family: SurfaceFamily::Maintenance,
-        commands: &["update"],
+        commands: &["experimental"],
         coverage: MAINTENANCE_COVERAGE,
         note: "in-process self-update against GitHub Releases (experimental)",
     },
@@ -148,13 +148,7 @@ pub const SURFACE_GROUPS: &[SurfaceGroup] = &[
 /// directions are asserted, so this list cannot rot either: an entry naming a
 /// command that no longer exists fails just as loudly as an unaccounted-for
 /// command.
-pub const UNPUBLISHED_TOP_LEVEL: &[(&str, &str)] = &[
-    ("adjudicate", "experimental: merge-conflict adjudication"),
-    ("debug", "maintainer diagnostics, not a user-facing surface"),
-    ("rediarize", "experimental: speaker re-diarization"),
-    ("sanity-scan", "experimental: corpus-wide sanity sweep"),
-    ("speaker-id", "experimental: speaker identification"),
-];
+pub const UNPUBLISHED_TOP_LEVEL: &[(&str, &str)] = &[];
 
 /// Look up the reviewed surface-group metadata for one published family.
 pub fn surface_group(family: SurfaceFamily) -> &'static SurfaceGroup {

@@ -1,4 +1,4 @@
-//! `chatter debug retag-language`, corpus-wide correction of a mislabelled code.
+//! `chatter experimental transform retag-language`, corpus-wide correction of a mislabelled code.
 
 use std::path::PathBuf;
 
@@ -9,7 +9,7 @@ use super::*;
 
 /// Retag every occurrence of one language code as another, in place.
 ///
-/// Implements `chatter debug retag-language --from X --to Y`. A code is named by
+/// Implements `chatter experimental transform retag-language --from X --to Y`. A code is named by
 /// `@Languages`, by `[- code]` utterance scopes and by `word@s:code` markers,
 /// and all of them move together; a file naming it with a `<a b> [@s:code]`
 /// span is REFUSED rather than partially retagged, because moving three
@@ -21,24 +21,39 @@ use super::*;
 /// A file that cannot be opened for in-place editing is reported and
 /// skipped, so one bad file does not kill a multi-file run; see
 /// [`InPlace::open`] for what that covers.
-pub fn run_retag_language(paths: &[PathBuf], from: &str, to: &str) {
-    let from = parse_code(from);
-    let to = parse_code(to);
+pub fn run_retag_language(
+    paths: &[PathBuf],
+    from: &str,
+    to: &str,
+    commit: Commit,
+) -> crate::exit_codes::CommandResult {
+    let from = parse_code(from)?;
+    let to = parse_code(to)?;
     if from == to {
-        die("--from and --to are the same code; nothing to retag");
+        return Err(die("--from and --to are the same code; nothing to retag"));
     }
 
-    let (files, parser) = super::transcripts_and_parser(paths);
+    let (files, parser) = super::transcripts_and_parser(paths)?;
     let (mut files_changed, mut declarations, mut scopes, mut markers) = (0usize, 0, 0, 0);
     let mut refused: Vec<PathBuf> = Vec::new();
+    let mut declaration_refusals = 0usize;
 
     for path in files {
-        let Some(mut open) = InPlace::open(&parser, path) else {
+        let Some(mut open) = InPlace::open(&parser, path.clone()) else {
+            refused.push(path);
             continue;
         };
 
         let stats = match retag_language(open.model_mut(), &from, &to) {
             Ok(stats) => stats,
+            Err(RetagRefusal::Declaration(reason)) => {
+                declaration_refusals += 1;
+                eprintln!(
+                    "Refusing language retag for {}: {reason}",
+                    open.path().display()
+                );
+                continue;
+            }
             Err(RetagRefusal::NamesCodeInSpan) => {
                 refused.push(open.path().to_path_buf());
                 continue;
@@ -47,19 +62,31 @@ pub fn run_retag_language(paths: &[PathBuf], from: &str, to: &str) {
         if stats.is_empty() {
             continue;
         }
-        if let Committed::Wrote = open.commit(Commit::Write) {
-            files_changed += 1;
-            declarations += stats.declarations;
-            scopes += stats.utterance_scopes;
-            markers += stats.word_markers;
+        let path = open.path().to_owned();
+        match open.commit(commit) {
+            Ok(Committed::Wrote | Committed::WouldWrite) => {
+                files_changed += 1;
+                declarations += stats.declarations;
+                scopes += stats.utterance_scopes;
+                markers += stats.word_markers;
+            }
+            Ok(Committed::Unchanged) => {}
+            Err(error) => {
+                eprintln!("ERROR: cannot publish {}: {error}", path.display());
+                refused.push(path);
+            }
         }
     }
 
-    if files_changed == 0 {
+    let action = match commit {
+        Commit::Write => "Retagged",
+        Commit::DryRun => "Would retag",
+    };
+    if files_changed == 0 && declaration_refusals == 0 && refused.is_empty() {
         outln!("No {from} occurrences to retag.");
     } else {
         outln!(
-            "Retagged {from} -> {to} in {files_changed} file(s): \
+            "{action} {from} -> {to} in {files_changed} file(s): \
              {declarations} declaration(s), {scopes} utterance scope(s), {markers} word marker(s)."
         );
     }
@@ -69,18 +96,20 @@ pub fn run_retag_language(paths: &[PathBuf], from: &str, to: &str) {
     // the old code.
     if !refused.is_empty() {
         outln!(
-            "\nREFUSED {} file(s) naming {from} in a `<...> [@s:{from}]` span, which this \
-             cannot rewrite. They are UNCHANGED and still name the old code:",
+            "\nREFUSED {} file(s) that cannot be rewritten. They are UNCHANGED and still name the old code:",
             refused.len()
         );
         for path in &refused {
             outln!("  {}", path.display());
         }
     }
+    if !refused.is_empty() || declaration_refusals > 0 {
+        return Err(crate::exit_codes::ReportedFailure::Input.into());
+    }
+    Ok(())
 }
 
 /// Parse a CLI-supplied language code, refusing anything the model rejects.
-fn parse_code(code: &str) -> LanguageCode {
-    LanguageCode::new(code)
-        .unwrap_or_else(|e| die(&format!("not a valid language code `{code}`: {e:?}")))
+fn parse_code(code: &str) -> crate::exit_codes::CommandResult<LanguageCode> {
+    LanguageCode::new(code).map_err(|e| die(&format!("not a valid language code `{code}`: {e:?}")))
 }

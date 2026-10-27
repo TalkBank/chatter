@@ -9,4 +9,4 @@
 
 mod parse;
 
-pub(crate) use parse::parse_replacement;
+pub(in crate::parser) use parse::parse_replacement;

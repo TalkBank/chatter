@@ -1,36 +1,79 @@
 //! Source-bound byte offsets and UTF-16 LSP positions.
 //!
-//! LSP defaults to UTF-16 code units. Indexed and standalone conversions share
+//! LSP defaults to UTF-16 code units. Default indexed and standalone conversions share
 //! the same column calculation, clamp out-of-range positions to line/document
 //! ends, and round positions inside an encoded character down to its boundary.
+//! Exact projection instead refuses offsets that require rounding.
 
 use tower_lsp::lsp_types::*;
+
+mod lines;
+pub(crate) use lines::protocol_lines;
+use lines::{ProtocolLine, split_lines};
 
 /// An index borrowing the exact source whose line starts it records.
 ///
 /// Build once for many conversions; callers cannot pair it with another text.
 pub struct LineIndex<'a> {
     text: &'a str,
-    line_starts: Vec<usize>,
+    first: ProtocolLine<'a>,
+    remaining: Vec<ProtocolLine<'a>>,
 }
 
 impl<'a> LineIndex<'a> {
     /// Build the source-bound index in O(n) time.
     pub fn new(text: &'a str) -> Self {
-        let mut line_starts = vec![0];
-        line_starts.extend(
-            text.bytes()
-                .enumerate()
-                .filter_map(|(i, byte)| (byte == b'\n').then_some(i + 1)),
-        );
-        Self { text, line_starts }
+        let (first, remaining) = split_lines(text);
+        Self {
+            text,
+            first,
+            remaining: remaining.collect(),
+        }
     }
 
     /// Find the line in O(log n), then count UTF-16 units up to the offset.
     pub fn offset_to_position(&self, offset: usize) -> Position {
+        self.position_and_line(offset).0
+    }
+
+    /// Project an offset and its original line text through the same index.
+    pub(crate) fn position_and_line(&self, offset: usize) -> (Position, &'a str) {
         let offset = boundary_offset(self.text, offset);
-        let line = self.line_starts.partition_point(|&start| start <= offset) - 1;
-        position_on_line(self.text, line, self.line_starts[line], offset)
+        let (line, content) = self.line_at(offset);
+        (position_on_line(line, content, offset), content.text())
+    }
+
+    /// Project without rounding. Interior UTF-8/CRLF offsets and values outside
+    /// the source or protocol integer space have no exact editor position.
+    pub(crate) fn exact_position_and_line(&self, offset: usize) -> Option<(Position, &'a str)> {
+        if !self.text.is_char_boundary(offset) {
+            return None;
+        }
+        let (line, content) = self.line_at(offset);
+        let prefix = content.text().get(..offset.checked_sub(content.start())?)?;
+        Some((
+            Position {
+                line: u32::try_from(line).ok()?,
+                character: u32::try_from(prefix.encode_utf16().count()).ok()?,
+            },
+            content.text(),
+        ))
+    }
+
+    fn line_at(&self, offset: usize) -> (usize, ProtocolLine<'a>) {
+        let line = self.byte_to_line(offset);
+        let content = if line == 0 {
+            self.first
+        } else {
+            self.remaining[line - 1]
+        };
+        (line, content)
+    }
+
+    /// Zero-based protocol line, including the final empty line after an EOL.
+    pub(crate) fn byte_to_line(&self, offset: usize) -> usize {
+        self.remaining
+            .partition_point(|line| line.start() <= offset)
     }
 }
 
@@ -43,10 +86,9 @@ fn boundary_offset(text: &str, offset: usize) -> usize {
     offset
 }
 
-/// Both entry points use the same column convention, including CRLF ends.
-fn position_on_line(text: &str, line: usize, start: usize, offset: usize) -> Position {
-    let prefix = &text[start..offset];
-    let prefix = prefix.strip_suffix('\r').unwrap_or(prefix);
+/// Offsets within an atomic line ending project to the preceding line end.
+fn position_on_line(line: usize, content: ProtocolLine<'_>, offset: usize) -> Position {
+    let prefix = &content.text()[..offset.min(content.end()) - content.start()];
     Position {
         // Saturate only if the document exceeds the protocol's integer space.
         line: u32::try_from(line).unwrap_or(u32::MAX),
@@ -54,40 +96,37 @@ fn position_on_line(text: &str, line: usize, start: usize, offset: usize) -> Pos
     }
 }
 
-/// Convert one byte offset without allocating an index. O(n) in the prefix.
+/// Convert one byte offset without allocating an index. O(n) worst case.
 pub fn offset_to_position(text: &str, offset: usize) -> Position {
     let offset = boundary_offset(text, offset);
-    let mut line = 0;
-    let mut start = 0;
-    for (i, byte) in text.bytes().take(offset).enumerate() {
-        if byte == b'\n' {
-            line += 1;
-            start = i + 1;
+    let (mut content, remaining) = split_lines(text);
+    let mut number = 0;
+    for line in remaining {
+        if line.start() > offset {
+            break;
         }
+        number += 1;
+        content = line;
     }
-    position_on_line(text, line, start, offset)
+    position_on_line(number, content, offset)
 }
 
 /// Convert a UTF-16 LSP position to a UTF-8 byte boundary in one pass.
 ///
-/// Columns beyond a line clamp before its CRLF/LF terminator. A column between
+/// Columns beyond a line clamp before its LF/CRLF/CR terminator. A column between
 /// surrogate units clamps to the character's start. Missing lines clamp to EOF.
 pub fn position_to_offset(text: &str, position: Position) -> usize {
-    let mut start = 0;
-    for (line, content) in text.split_inclusive('\n').enumerate() {
+    for (line, content) in protocol_lines(text).enumerate() {
         if line == position.line as usize {
-            let content = content.strip_suffix('\n').unwrap_or(content);
-            let content = content.strip_suffix('\r').unwrap_or(content);
             let mut units = 0;
-            for (byte, ch) in content.char_indices() {
+            for (byte, ch) in content.text().char_indices() {
                 if units + ch.len_utf16() > position.character as usize {
-                    return start + byte;
+                    return content.start() + byte;
                 }
                 units += ch.len_utf16();
             }
-            return start + content.len();
+            return content.end();
         }
-        start += content.len();
     }
     text.len()
 }

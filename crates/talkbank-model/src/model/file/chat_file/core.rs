@@ -5,10 +5,8 @@
 //! - [Participants header](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)
 //! - [ID header](https://talkbank.org/0info/manuals/CHAT.html#ID_Header)
 
-use crate::model::{ChatOptionFlags, Header, LanguageCodes, MediaHeader, Participant, SpeakerCode};
 use crate::validation::{Validate, ValidationContext};
 use crate::{ErrorSink, LineMap};
-use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -19,7 +17,7 @@ use crate::Line;
 /// Top-level CHAT transcript model.
 ///
 /// `ChatFile` preserves transcript line ordering and carries parser-derived
-/// participant metadata plus optional runtime indexing (`line_map`).
+/// headers plus optional runtime indexing (`line_map`).
 ///
 /// # Structure
 ///
@@ -56,58 +54,6 @@ pub struct ChatFile {
     /// - @End header at the end
     pub lines: ChatFileLines,
 
-    /// Structured participant metadata (derived from `@Participants` + `@ID` + `@Birth`).
-    ///
-    /// Populated during parsing by matching:
-    /// - @Participants entries with their corresponding @ID headers
-    /// - Optional `@Birth of <CODE>` headers
-    ///
-    /// Each participant listed in @Participants MUST have a corresponding @ID header.
-    /// This is validated during parsing (E522 error if missing).
-    ///
-    /// # Example
-    ///
-    /// For a CHAT file with:
-    /// ```chat
-    /// @Participants:    CHI Ruth Target_Child, INV Chiat Investigator
-    /// @ID:    eng|chiat|CHI|10;03.||||Target_Child|||
-    /// @ID:    eng|chiat|INV|||||Investigator|||
-    /// @Birth of CHI:    28-JUN-2001
-    /// ```
-    ///
-    /// This map will contain:
-    /// - CHI => Participant { code: "CHI", name: Some("Ruth"), id: {...}, birth_date: Some("28-JUN-2001") }
-    /// - INV => Participant { code: "INV", name: Some("Chiat"), id: {...}, birth_date: None }
-    ///
-    /// # Note
-    ///
-    /// Uses `#[serde(default)]` for backwards compatibility with existing JSON.
-    ///
-    /// Participants are stored in an `IndexMap` so serialization preserves the declared order
-    /// from @Participants/@ID headers, ensuring deterministic JSON output.
-    #[serde(default)]
-    pub participants: IndexMap<SpeakerCode, Participant>,
-
-    /// Languages from `@Languages` header. Empty if absent.
-    ///
-    /// Auto-extracted from `lines` during construction. The first code is the
-    /// transcript default language.
-    #[serde(default)]
-    pub languages: LanguageCodes,
-
-    /// Option flags from `@Options` header. Empty if absent.
-    ///
-    /// Auto-extracted from `lines` during construction.
-    #[serde(default)]
-    pub options: ChatOptionFlags,
-
-    /// Media info from `@Media` header. `None` if absent.
-    ///
-    /// Auto-extracted from `lines` during construction. Only the first
-    /// `@Media` header is captured (CHAT files have at most one).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub media: Option<Box<MediaHeader>>,
-
     /// Byte-offset line index for O(log n) offset-to-line lookups.
     ///
     /// `Some(...)` for files parsed from source text; `None` for programmatically
@@ -120,85 +66,19 @@ pub struct ChatFile {
     pub line_map: Option<LineMap>,
 }
 
-/// Scan `lines` once to extract `@Languages`, `@Options`, and `@Media` fields.
-fn extract_header_fields(
-    lines: &[Line],
-) -> (LanguageCodes, ChatOptionFlags, Option<Box<MediaHeader>>) {
-    let mut languages = LanguageCodes::default();
-    let mut options = ChatOptionFlags::default();
-    let mut media: Option<Box<MediaHeader>> = None;
-
-    for line in lines {
-        if let Line::Header { header, .. } = line {
-            match header.as_ref() {
-                Header::Languages { codes } => {
-                    languages = codes.clone();
-                }
-                Header::Options { options: opt_flags } => {
-                    options = opt_flags.clone();
-                }
-                Header::Media(m) if media.is_none() => {
-                    media = Some(Box::new(m.clone()));
-                }
-                _ => {}
-            }
-        }
-    }
-
-    (languages, options, media)
-}
-
 impl ChatFile {
-    /// Build a mutable file from parsed lines with empty participant map.
-    ///
-    /// Use when participant metadata has not been assembled yet (for example,
-    /// intermediate parser stages before header post-processing).
+    /// Build a mutable file whose metadata is derived from its current headers.
     pub fn new(lines: Vec<Line>) -> Self {
-        let (languages, options, media) = extract_header_fields(&lines);
         Self {
             lines: lines.into(),
-            participants: IndexMap::new(),
-            languages,
-            options,
-            media,
             line_map: None,
         }
     }
 
-    /// Build a mutable file with parser-populated participant metadata.
-    ///
-    /// This constructor is used once `@Participants`/`@ID` reconciliation has
-    /// produced the participant map but validation has not run yet.
-    pub fn with_participants(
-        lines: Vec<Line>,
-        participants: IndexMap<SpeakerCode, Participant>,
-    ) -> Self {
-        let (languages, options, media) = extract_header_fields(&lines);
+    /// Build a mutable file with its source byte-offset index.
+    pub fn with_line_map(lines: Vec<Line>, line_map: LineMap) -> Self {
         Self {
             lines: lines.into(),
-            participants,
-            languages,
-            options,
-            media,
-            line_map: None,
-        }
-    }
-
-    /// Build a mutable file with participants and offset line map.
-    ///
-    /// Use when source text is available and offset lookups should be preserved.
-    pub fn with_line_map(
-        lines: Vec<Line>,
-        participants: IndexMap<SpeakerCode, Participant>,
-        line_map: LineMap,
-    ) -> Self {
-        let (languages, options, media) = extract_header_fields(&lines);
-        Self {
-            lines: lines.into(),
-            participants,
-            languages,
-            options,
-            media,
             line_map: Some(line_map),
         }
     }

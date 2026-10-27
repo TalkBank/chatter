@@ -87,12 +87,9 @@ impl<'source> SourceIndex<'source> {
 impl LineMap {
     /// Build a `LineMap` from source text. Single O(n) pass.
     pub fn new(source: &str) -> Self {
-        let mut line_starts = vec![0usize];
-        for (i, byte) in source.bytes().enumerate() {
-            if byte == b'\n' {
-                line_starts.push(i + 1);
-            }
-        }
+        let line_starts = super::physical_lines::PhysicalLines::new(source)
+            .map(|line| line.start())
+            .collect();
         Self { line_starts }
     }
 
@@ -132,7 +129,7 @@ impl LineMap {
 
     /// Byte offset just past the end of a line (exclusive), clamped to `source_len`.
     ///
-    /// For lines that end with `\n`, the returned offset is the byte *after* the `\n`.
+    /// For terminated lines, the returned offset is after the complete LF, CRLF, or CR.
     /// For the last line (or a line beyond the file), returns `source_len`.
     #[inline]
     pub fn line_end(&self, line: usize, source_len: usize) -> usize {
@@ -145,7 +142,7 @@ impl LineMap {
         }
     }
 
-    /// Total number of lines (including a final empty line after trailing `\n`).
+    /// Total number of lines (including a final empty line after a trailing terminator).
     #[inline]
     pub fn line_count(&self) -> usize {
         self.line_starts.len()
@@ -155,6 +152,37 @@ impl LineMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mixed_terminators_preserve_every_byte_coordinate() {
+        let source = "é\r\n日\rx\n\r";
+        let index = SourceIndex::new(source);
+        let expected = [
+            (0, 0),
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 0),
+            (1, 1),
+            (1, 2),
+            (1, 3),
+            (2, 0),
+            (2, 1),
+            (3, 0),
+            (4, 0),
+            (4, 1),
+        ];
+        assert_eq!(index.lines().line_count(), 5);
+        for (offset, position) in expected.into_iter().enumerate() {
+            assert_eq!(index.line_col_of(offset), position, "byte {offset}");
+            let direct = crate::LineColumn::of_offset(offset, source);
+            assert_eq!(
+                (direct.line.get(), direct.column.get()),
+                (position.0 + 1, position.1 + 1),
+                "byte {offset}"
+            );
+        }
+    }
 
     /// Empty input still has one logical line at offset 0.
     #[test]

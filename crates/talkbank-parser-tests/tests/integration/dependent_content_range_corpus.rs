@@ -238,11 +238,10 @@ fn dependent_content_ranges_admit_only_ordered_contained_geometry() {
     }
 }
 
-/// Surviving source boundary: token exhaustion is not physical EOF when the
-/// native lexer stops at an embedded NUL. Do not mint an endpoint or turn
-/// malformed caller input into an internal range-construction failure.
+/// Surviving source boundary: an embedded NUL is a malformed byte, not EOF.
+/// Recovery retains the real body endpoint and the following source tiers.
 #[test]
-fn dependent_content_ranges_do_not_invent_eof_after_lexer_stops() {
+fn dependent_content_ranges_do_not_treat_nul_as_eof() {
     for (kind, original, stopped) in [
         ("mor", "verb|start .", "verb|start\0 ."),
         ("com", "before café", "before\0 café"),
@@ -262,23 +261,25 @@ fn dependent_content_ranges_do_not_invent_eof_after_lexer_stops() {
             !errors.is_empty(),
             "stopped malformed source requires diagnostics"
         );
-        if let ParseOutcome::Parsed(file) = outcome {
-            let mut retained = 0;
-            for entry in file.utterances().flat_map(|turn| &turn.dependent_tiers) {
-                if entry.kind() == kind {
-                    assert!(
-                        entry.content_span().is_none(),
-                        "no selected ending was consumed"
-                    );
-                    retained += 1;
-                }
+        let file = outcome
+            .into_option()
+            .expect("malformed body retains document");
+        let entries: Vec<_> = file
+            .utterances()
+            .flat_map(|turn| &turn.dependent_tiers)
+            .filter(|entry| entry.kind() == kind)
+            .collect();
+        assert_eq!(entries.len(), 3, "NUL does not hide subsequent tiers");
+        let body = entries[0].content_span().expect("observed body endpoint");
+        assert_eq!(&source[body.to_range()], stopped);
+        let last = entries[2].content_span().expect("following body endpoint");
+        assert_eq!(
+            &source[last.to_range()],
+            if kind == "mor" {
+                "verb|finish ."
+            } else {
+                "after résumé"
             }
-            if kind == "com" {
-                assert_eq!(
-                    retained, 1,
-                    "actual retained text-tier geometry stays unknown"
-                );
-            }
-        }
+        );
     }
 }

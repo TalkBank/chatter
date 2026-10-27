@@ -14,7 +14,11 @@ use super::{
     ActTier, AddTier, CodTier, ComTier, ExpTier, GpxTier, GraTier, IntTier, MorTier, PhoTier,
     SinTier, SitTier, SpaTier, WorTier,
 };
-use crate::model::NonEmptyString;
+use crate::model::RecoveryText;
+
+#[cfg(test)]
+#[path = "label_admission_tests.rs"]
+mod label_admission_tests;
 
 /// Unified representation of all dependent tier types.
 ///
@@ -83,6 +87,33 @@ pub enum DependentTier {
     /// Morphology tier (%mor)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier>
     Mor(MorTier),
+
+    /// Unparsed morphology source. Preserves the tier slot but is always invalid.
+    UnparsedMor(super::UnparsedTier),
+
+    /// Unparsed grammar source, retained without inventing a dependency graph.
+    UnparsedGra(super::UnparsedTier),
+
+    /// Unparsed actual phonology source; retains identity without parsed items.
+    UnparsedPho(super::UnparsedTier),
+
+    /// Unparsed model phonology source; retains identity without parsed items.
+    UnparsedMod(super::UnparsedTier),
+
+    /// Unparsed gesture/sign source; retains identity without parsed items.
+    UnparsedSin(super::UnparsedTier),
+
+    /// Unparsed word-timing source; retains identity without trusted timing items.
+    UnparsedWor(super::UnparsedTier),
+
+    /// Unparsed phone alignment source, retained without inventing alignment pairs.
+    UnparsedPhoaln(super::UnparsedTier),
+
+    /// Unparsed phone interval source, retained without inventing intervals.
+    UnparsedXphoint(super::UnparsedTier),
+
+    /// Rejected text source, preserved without silently deleting malformed tokens.
+    UnparsedText(super::UnparsedTextTier),
 
     /// Grammatical relations tier (%gra)
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
@@ -191,7 +222,7 @@ pub enum DependentTier {
     /// recognized CHAT tiers. Validators reject these as an error (E605): the
     /// supported dependent-tier set is closed, so an unrecognized non-`%x` tier
     /// makes the file invalid.
-    Unsupported(UserDefinedDependentTier),
+    Unsupported(UnsupportedDependentTier),
 }
 
 /// A simple text-only dependent tier with span tracking.
@@ -209,8 +240,8 @@ pub struct TextTier {
     /// Plain text payload, absent when the tier declares nothing.
     ///
     /// Optional because an empty tier is something a FILE can contain, and a
-    /// parser's job is to say what the file contains. `NonEmptyString` alone
-    /// forced a parser meeting `%eng:` with no content to invent one: the re2c
+    /// parser's job is to say what the file contains. The former nonempty-only
+    /// constructor forced a parser meeting `%eng:` with no content to invent one: the re2c
     /// backend substituted a single space, which made the tier look well
     /// formed and the whole file read as VALID where the tree-sitter backend
     /// reported errors. A type that cannot express what the input says is a
@@ -229,7 +260,7 @@ pub struct TextTier {
     /// it on 2026-08-16 rather than write E330's spec or mint a third code.
     /// `DependentTier::empty_content_location` is where a tier answers it.
     ///
-    pub content: Option<NonEmptyString>,
+    pub content: Option<RecoveryText>,
 
     /// Source span for error reporting (not serialized to JSON)
     #[serde(skip, default = "crate::Location::unlocated")]
@@ -243,7 +274,7 @@ impl TextTier {
     /// This constructor is used for `%alt/%coh/%def/...` style tiers that do
     /// not carry structured token alignment. Parser paths typically call
     /// [`Self::with_span`] immediately after construction.
-    pub fn new(location: impl Into<crate::Location>, content: NonEmptyString) -> Self {
+    pub fn new(location: impl Into<crate::Location>, content: RecoveryText) -> Self {
         Self {
             content: Some(content),
             location: location.into(),
@@ -299,20 +330,34 @@ impl std::fmt::Display for TextTier {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct UserDefinedDependentTier {
     /// The tier label including the 'x' prefix (e.g., "xmor" for %xmor).
-    pub label: NonEmptyString,
+    pub label: super::UserDefinedDependentTierLabel,
     /// The free-form text content of the tier, or `None` when the line
     /// declared a tier and gave it nothing.
     ///
     /// `Option` because the empty case is REAL CHAT that a parser can meet, and
-    /// E756 exists to report it. While this was `NonEmptyString` the state the
+    /// E756 exists to report it. Before explicit empty-tier recovery the state the
     /// rule checks for was unrepresentable, so each parser had to invent a way
     /// round it: the re2c parser fabricated a single space (which tripped E756
     /// by accident, right answer for the wrong reason) and the tree-sitter
     /// parser dropped the tier and reported a generic parse error instead. The
     /// two disagreed because the model gave them no honest option.
-    pub content: Option<NonEmptyString>,
+    pub content: Option<RecoveryText>,
 
     /// Source span for error reporting (not serialized to JSON)
+    #[serde(skip, default = "crate::Location::unlocated")]
+    #[schemars(skip)]
+    pub location: crate::Location,
+}
+
+/// An observed unsupported tier, retained for diagnostics and serialization.
+/// Its recovery label is deliberately distinct from an admitted custom label.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+pub struct UnsupportedDependentTier {
+    /// Observed label, without the percent sign.
+    pub label: RecoveryText,
+    /// Observed free-form body, absent when the tier has no body.
+    pub content: Option<RecoveryText>,
+    /// Source location, omitted from the AST wire format.
     #[serde(skip, default = "crate::Location::unlocated")]
     #[schemars(skip)]
     pub location: crate::Location,
@@ -324,10 +369,19 @@ impl super::WriteChat for DependentTier {
     /// Structured variants delegate to their own `WriteChat` implementations so
     /// tier-specific formatting rules stay local. Simple text variants use a
     /// fixed `%tag:\t` prefix followed by raw payload text.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
+            DependentTier::UnparsedText(t) => t.write_chat(w),
             // Structured tiers, delegate to tier's WriteChat impl
             DependentTier::Mor(t) => t.write_chat(w),
+            DependentTier::UnparsedMor(t)
+            | DependentTier::UnparsedGra(t)
+            | DependentTier::UnparsedPho(t)
+            | DependentTier::UnparsedMod(t)
+            | DependentTier::UnparsedSin(t)
+            | DependentTier::UnparsedWor(t)
+            | DependentTier::UnparsedPhoaln(t)
+            | DependentTier::UnparsedXphoint(t) => t.write_chat(w),
             DependentTier::Gra(t) => t.write_chat(w),
             DependentTier::Pho(t) => t.write_chat(w),
             DependentTier::Mod(t) => t.write_chat(w),
@@ -345,21 +399,54 @@ impl super::WriteChat for DependentTier {
             DependentTier::Spa(t) => t.write_chat(w),
 
             // Simple text tiers (just string content)
-            DependentTier::Alt(s) => write!(w, "%alt:\t{}", s),
-            DependentTier::Coh(s) => write!(w, "%coh:\t{}", s),
-            DependentTier::Def(s) => write!(w, "%def:\t{}", s),
-            DependentTier::Eng(s) => write!(w, "%eng:\t{}", s),
-            DependentTier::Err(s) => write!(w, "%err:\t{}", s),
-            DependentTier::Fac(s) => write!(w, "%fac:\t{}", s),
-            DependentTier::Flo(s) => write!(w, "%flo:\t{}", s),
+            DependentTier::Alt(s) => {
+                w.write_str("%alt:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Coh(s) => {
+                w.write_str("%coh:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Def(s) => {
+                w.write_str("%def:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Eng(s) => {
+                w.write_str("%eng:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Err(s) => {
+                w.write_str("%err:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Fac(s) => {
+                w.write_str("%fac:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Flo(s) => {
+                w.write_str("%flo:\t")?;
+                w.write_str(s.as_str())
+            }
             DependentTier::Modsyl(t) => t.write_chat(w),
             DependentTier::Phosyl(t) => t.write_chat(w),
             DependentTier::Phoaln(t) => t.write_chat(w),
             DependentTier::Xphoint(t) => t.write_chat(w),
-            DependentTier::Gls(s) => write!(w, "%gls:\t{}", s),
-            DependentTier::Ort(s) => write!(w, "%ort:\t{}", s),
-            DependentTier::Par(s) => write!(w, "%par:\t{}", s),
-            DependentTier::Tim(t) => write!(w, "%tim:\t{}", t),
+            DependentTier::Gls(s) => {
+                w.write_str("%gls:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Ort(s) => {
+                w.write_str("%ort:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Par(s) => {
+                w.write_str("%par:\t")?;
+                w.write_str(s.as_str())
+            }
+            DependentTier::Tim(t) => {
+                w.write_str("%tim:\t")?;
+                w.write_str(t.as_str())
+            }
 
             // Word timing tier, delegate to WriteChat
             DependentTier::Wor(t) => t.write_chat(w),
@@ -367,15 +454,33 @@ impl super::WriteChat for DependentTier {
             // User-defined tier (%xLABEL:\tcontent)
             // Label already includes 'x' prefix (e.g., "xmor" for %xmor)
             DependentTier::UserDefined(tier) => match &tier.content {
-                Some(content) => write!(w, "%{}:\t{}", tier.label, content),
+                Some(content) => {
+                    w.write_str("%")?;
+                    crate::model::WriteChat::write_chat(&tier.label, w)?;
+                    w.write_str(":\t")?;
+                    crate::model::WriteChat::write_chat(&content, w)
+                }
                 // An empty tier roundtrips as the bare line it came from.
-                None => write!(w, "%{}:\t", tier.label),
+                None => {
+                    w.write_str("%")?;
+                    crate::model::WriteChat::write_chat(&tier.label, w)?;
+                    w.write_str(":\t")
+                }
             },
 
             // Unsupported/unknown tier, same serialization as UserDefined
             DependentTier::Unsupported(tier) => match &tier.content {
-                Some(content) => write!(w, "%{}:\t{}", tier.label, content),
-                None => write!(w, "%{}:\t", tier.label),
+                Some(content) => {
+                    w.write_str("%")?;
+                    crate::model::WriteChat::write_chat(&tier.label, w)?;
+                    w.write_str(":\t")?;
+                    crate::model::WriteChat::write_chat(&content, w)
+                }
+                None => {
+                    w.write_str("%")?;
+                    crate::model::WriteChat::write_chat(&tier.label, w)?;
+                    w.write_str(":\t")
+                }
             },
         }
     }

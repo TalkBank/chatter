@@ -38,7 +38,7 @@ impl TreeSitterParser {
 
         let mut lines = parse_lines(self, input, errors);
 
-        // Build participant map from headers
+        // Inspect headers and report the canonical participant join.
         let all_headers: Vec<Header> = lines
             .iter()
             .filter_map(|line| match line {
@@ -47,19 +47,15 @@ impl TreeSitterParser {
             })
             .collect();
 
-        let participants = build_participants_from_lines(&lines).report_into(errors);
+        build_participants_from_lines(&lines).report_diagnostics(errors);
 
         let ca_mode = headers_enable_ca_mode(&all_headers);
         if ca_mode {
             normalize_ca_omissions(&mut lines);
         }
 
-        info!(
-            "Streaming parse completed: {} lines, {} participants",
-            lines.len(),
-            participants.len()
-        );
+        info!("Streaming parse completed: {} lines", lines.len());
 
-        ChatFile::with_line_map(lines, participants, LineMap::new(input))
+        ChatFile::with_line_map(lines, LineMap::new(input))
     }
 }

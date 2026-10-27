@@ -65,9 +65,7 @@ macro_rules! define_text_tier {
             /// Prefer [`WriteChat::write_chat`] in streaming contexts to avoid
             /// intermediate allocation.
             pub fn to_chat(&self) -> String {
-                let mut s = String::new();
-                let _ = self.write_chat(&mut s);
-                s
+                crate::model::ChatString::render(|w| self.write_chat(w))
             }
         }
 
@@ -76,7 +74,7 @@ macro_rules! define_text_tier {
             ///
             /// The `%tag:\t` prefix is fixed per tier type, and payload emission is
             /// delegated to [`BulletContent`] to preserve inline timing markers.
-            fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+            fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
                 w.write_str(concat!("%", $prefix, ":\t"))?;
                 self.content.write_chat(w)
             }

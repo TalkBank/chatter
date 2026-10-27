@@ -45,6 +45,22 @@ The desktop links the same validation engine as the CLI. Keep CHAT semantics in
 the shared Rust implementation; use canonical specs/reference files for desktop
 boundary tests rather than inventing a second fixture oracle.
 
+### Source revisions and Open in CLAN
+
+Every available diagnostic source context carries a Rust-issued `SourceRevision`
+of the exact source used for presentation. The frontend forwards that identity
+alongside the admitted coordinates. Opening in CLAN reads the file again and
+rejects a changed revision with an instruction to revalidate. Missing files
+remain read failures; missing or malformed revisions fail request deserialization.
+
+The resolved target owns its checked path, coordinates and message, and dispatch
+consumes that target. This removes the separate unchecked path at dispatch and
+prevents callers from constructing resolved coordinates directly. The bridge
+controls cover unchanged bytes, shifted lines, same-length edits, restored bytes
+and deleted files; the frontend control checks unchanged revision forwarding.
+These checks do not establish native Apple Event delivery or prevent another
+process from editing the file after admission and before CLAN reads it.
+
 ### File outcomes and completion
 
 `validationState.ts::fileOutcome` projects a streamed `FileEntry` into a
@@ -111,6 +127,32 @@ text verbatim. JSON export retains its existing wire representation. Neither
 per-file export is a whole-run coverage certificate; cancellation/session metadata
 is not presently included, as documented in the user guide.
 
+Regular report export shares staged publication with CLI audit output. Source
+identity admission precedes staging; missing sources and aliases refuse export.
+`ReportWriter::finish` must flush successfully before it yields publication
+ownership. Failed writes discard staging, preserve existing reports and leave
+new destinations absent. Unix runtime tests impose a child-only file-size limit
+to exercise real write failures in both export formats. Other runtime controls
+cover symlink target selection, retained permissions and unchanged sibling hard
+links. Shared owner tests cover abandonment, destination replacement and dangling
+symlinks. Non-regular outputs remain streams; concurrent hostile filesystem
+mutation and native save-dialog behavior are outside these tests.
+
+### Streaming delivery and reducer cost
+
+Each run owns an ordered, nonempty event buffer. File results flush on the next
+animation frame or at 50 completed files. Lifecycle and terminal events flush
+immediately; terminal delivery closes the buffer. Disposal discards unpublished
+updates, and a cancelled frame cannot flush a newer buffer.
+
+The reducer exposes a read-only file map and copies it only on the first file
+update in a delivery. A counted-iteration test checks that 100 updates to an
+existing 100-file population visit those 100 entries once, while preserving the
+previous snapshot. This measures copying work, not wall-clock responsiveness or
+whole-run linear complexity. Capability tests cover frame/threshold delivery,
+terminal flushing, disposal and replacement-run isolation. Native observation
+is still required to qualify responsiveness and cancellation in the webview.
+
 ### Before calling a desktop candidate ready
 
 Run the focused frontend seam tests, compile the production frontend, and run
@@ -153,17 +195,21 @@ cd apps/chatter-desktop && npm run test:unit
 
 # Rust contract/integration tests
 cargo test -p chatter-desktop --test validation_bridge
+
+# Run ownership across startup, replacement and cancellation
+cargo test -p chatter-desktop --lib validation_session
 ```
 
 ### What they cover
 
 | Test | What it verifies |
 |------|-----------------|
-| `apps/chatter-desktop/tests/unit/validationRunner.test.cjs` | Validation capability uses centralized command names, subscribes before invoke, and disposes listeners exactly once |
+| `apps/chatter-desktop/tests/unit/validationRunner.test.cjs` | Run-scoped events and cancellation, pending listener/startup disposal, startup ordering and retry, and exactly-once listener cleanup |
+| `validation_session::tests` | Runtime-entered pending/running ownership, stale cancellation/completion, scoped event envelopes and required nonempty run identity; these are headless boundaries, not native UI observations |
 | `apps/chatter-desktop/tests/unit/validationState.test.cjs` | Validation reducer computes relative file names and merges diagnostics/status immutably |
 | `reference_corpus_no_hard_errors` | every file under `corpus/reference/` produces zero `Severity::Error` (warnings allowed) |
 | `event_lifecycle_has_correct_sequence` | Discovering → Started → FileComplete×N → Finished ordering |
-| `frontend_events_serialize_to_expected_json_shape` | Every event has `type` field; camelCase field names match TypeScript types; diagnostics include `renderedText` |
+| `frontend_events_serialize_to_expected_json_shape` | Inner validation events retain their `type` field and camelCase payload; diagnostics include `renderedText`. The session owner adds the outer run identity. |
 | `protocol_contracts_serialize_to_expected_json_shape` | Rust command/event constants and request payloads stay aligned with the TypeScript protocol module |
 | `single_file_validation` | Single-file path validates exactly the selected file |
 | `finished_stats_match_file_events` | Typed valid, invalid, parse-error and internal-failure counts account for the population; FileComplete count matches |

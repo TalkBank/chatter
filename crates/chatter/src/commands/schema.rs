@@ -18,10 +18,11 @@ const SCHEMA_URL: &str = "https://talkbank.org/schemas/v0.1/chat-file.json";
 /// downstream tooling can validate against the exact version currently deployed by talkbank-chat. When
 /// `--url-only` is set, it prints the official `talkbank.org` URL so external consumers can rely on the
 /// same canonical schema without bundling the binary.
-pub fn run_schema(url_only: bool) {
+pub fn run_schema(url_only: bool) -> crate::exit_codes::CommandResult {
     if url_only {
         outln!("{SCHEMA_URL}");
     } else {
         out!("{SCHEMA_JSON}");
     }
+    Ok(())
 }

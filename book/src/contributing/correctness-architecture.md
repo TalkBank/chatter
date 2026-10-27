@@ -80,20 +80,16 @@ names a rule by its `ErrorCode` VARIANT, not by its number, and the number is
 what a maintainer writes in comments; any scan for "is this code applied" must
 use the registry's `variant` field over non-comment code.
 
-**The fabricated-AST population is two populations.** Constructions that pass
-the same string twice are `Word::simple`, correct by construction. Those that
-pass two different string literals state a raw text carrying CHAT markers and a
-cleaned text without them independently, with nothing forcing the second to be
-what cleaning the first produces; and the constructor stores the cleaned string
-as a single flat text element, where a parse of the same word would produce
-structured content naming the marker. Such tests may assert on shapes the parser
-cannot produce, which is this page's central claim. They cannot be fixed in
-place, because the crate cannot parse; they move to one that can. The
-remainder is concentrated in `talkbank-model`, the crate without a parser
-dependency, as a consequence rather than a coincidence. The ratchet that holds
-the count excludes comments and string literals, because prose about the hazard
-must not score as the hazard, and a measure that errs toward undercounting
-would mask a real addition.
+**Plain construction and parsed syntax have different contracts.**
+`Word::new(location, WordText::new(text)?)` constructs one plain lexical leaf;
+`non_empty_literal!` supplies compile-time admission for literal text. The old
+`Word::simple` and unchecked word/text constructors have been removed. Neither
+plain construction nor nonempty admission parses CHAT markers: a literal
+`un+do` is not a structured compound. Tests of authored CHAT must obtain their
+values from a parser, while constructor, wire-format and validation-policy tests
+remain at the model boundary. JSON recovery still admits malformed payloads and
+requires validation. The fabrication ratchet excludes comments and string
+literals, so historical explanations of removed APIs do not count as live calls.
 
 **The grammar corpus is self-certifying where it is generated.** No construct
 spec declares an expected tree, and the branch that could set one is
@@ -745,7 +741,7 @@ possible wrong value AND deletes tests, with the count.
 
 | # | Change | Made unrepresentable | Tests deleted | What breaks |
 |---|---|---|---|---|
-| 1 | `Word` gets a structured body (segments joined by compound and clitic boundaries, at most one primary stress per segment, shortenings as balanced pairs); `Word::new_unchecked` becomes `#[cfg(test)]` and the fields go private | leading and trailing `+`, `++`, misplaced stress and lengthening, secondary stress without primary, empty content, unbalanced shortening | **36** (34 in `validation/word/{tests,snapshot_tests}.rs`, 2 parser regressions) | 147 fabricating test sites; both parsers' word builders move from mutate-then-patch to one fallible constructor; 11 error codes leave the model layer and become parse diagnostics; the `WordContents` wire format changes |
+| 1 | `Word` gets a structured body (segments joined by compound and clitic boundaries, at most one primary stress per segment, shortenings as balanced pairs); unchecked constructors are now removed, while the remaining structural constraints and private-field admission still need assessment | leading and trailing `+`, `++`, misplaced stress and lengthening, secondary stress without primary, empty content, unbalanced shortening | **36** (34 in `validation/word/{tests,snapshot_tests}.rs`, 2 parser regressions) | 147 fabricating test sites; both parsers' word builders move from mutate-then-patch to one fallible constructor; 11 error codes leave the model layer and become parse diagnostics; the `WordContents` wire format changes |
 | 2 | Fragment coordinates are typed: `FragmentSource` witnesses the caller's document space and `Synthetic<T>` the wrapper's, mintable only by the wrapper's lowering and leavable only through its `rebase*`; coverage checks take `Synthetic<Span>`. Done 2026-10-18 in this form rather than as three offset newtypes: the spaces that needed separating were the wrapper's and the caller's, and a phase type on the lowered VALUE closes the omitted-rebase route where offset newtypes would only have renamed the arithmetic. Found one real omission (`parse_header` never rebased) and removed the nested wrappers of the participant and MOR-word fragments | rebasing a span into the wrong space, omitting the rebase, a silent clamp | the offset-arithmetic tests of `context_public_api.rs` that pinned subtraction by hand | `WrappedFragment`, `ParsedFragment`, `HeaderFragment`, the single-item lowerers |
 | 3 | The header preamble becomes typed slots plus nested `GemScope`s built once at the boundary | duplicate single-only headers, missing required headers, wrong header order, unmatched and mismatched gems | **35** (24 + 11 in `validation/header/`) | `ChatFile::validate*` takes a preamble instead of scraping lines, which forces row 4 |
 | 4 | `ChatFile` drops its four cached header-derived fields and `pub lines` | a cached `languages`/`options` drifting from the lines they came from; a JSON roundtrip that omits them silently yielding `ca_mode = false` on a CA file | few directly | 23 `ChatFile::new` sites and every consumer reading the cached fields; deliberate wire-format change |

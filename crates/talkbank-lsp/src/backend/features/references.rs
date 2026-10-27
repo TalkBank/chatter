@@ -1,8 +1,8 @@
 //! Find all references for speaker codes.
 //!
 //! Implements `textDocument/references`, when the cursor is on a speaker code,
-//! returns all locations where that speaker code appears in the document:
-//! - `@Participants` header entries
+//! returns parsed occurrences of that speaker code in the document:
+//! - `@Participants` entries when `includeDeclaration` is enabled
 //! - `@ID` header speaker fields
 //! - `*SPEAKER:` main tier prefixes
 //! - `@Birth of SPEAKER`, `@L1 of SPEAKER` headers
@@ -11,10 +11,9 @@ use tower_lsp::lsp_types::*;
 use tree_sitter::Tree;
 
 use super::super::utils;
+use super::speaker_occurrence::{SpeakerOccurrence, SpeakerRole};
 use crate::backend::requests::{find_ancestor_kind, walk_nodes};
-use talkbank_parser::node_types::{
-    BIRTH_OF_HEADER, BIRTHPLACE_OF_HEADER, ID_SPEAKER, L1_OF_HEADER, SPEAKER,
-};
+use talkbank_parser::node_types::{ID_SPEAKER, SPEAKER};
 
 /// Finds all references to the speaker code at the given position.
 pub fn references(
@@ -24,8 +23,12 @@ pub fn references(
     position: Position,
     include_declaration: bool,
 ) -> Option<Vec<Location>> {
-    let speaker_name = find_speaker_name_at_position(tree, doc, position)?;
-    let locations = collect_speaker_locations(tree, uri, doc, &speaker_name, include_declaration);
+    let scope = match include_declaration {
+        true => ReferenceScope::WithDeclaration,
+        false => ReferenceScope::ReferencesOnly,
+    };
+    let speaker = find_speaker_at_position(tree, doc, position)?;
+    let locations = collect_speaker_locations(tree, uri, doc, speaker.code(), scope);
     if locations.is_empty() {
         None
     } else {
@@ -33,36 +36,33 @@ pub fn references(
     }
 }
 
-/// Extracts the speaker code text at the given position.
-fn find_speaker_name_at_position(tree: &Tree, doc: &str, position: Position) -> Option<String> {
+/// Wire inclusion is admitted once; consumers exhaustively match the scope.
+#[derive(Clone, Copy)]
+enum ReferenceScope {
+    ReferencesOnly,
+    WithDeclaration,
+}
+
+impl ReferenceScope {
+    fn includes(self, role: SpeakerRole) -> bool {
+        match (self, role) {
+            (Self::ReferencesOnly, SpeakerRole::Declaration) => false,
+            (Self::ReferencesOnly, SpeakerRole::Reference)
+            | (Self::WithDeclaration, SpeakerRole::Declaration | SpeakerRole::Reference) => true,
+        }
+    }
+}
+
+fn find_speaker_at_position<'tree, 'source>(
+    tree: &'tree Tree,
+    doc: &'source str,
+    position: Position,
+) -> Option<SpeakerOccurrence<'tree, 'source>> {
     let offset = utils::position_to_offset(doc, position);
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
-
-    if let Some(speaker_node) = find_ancestor_kind(node, SPEAKER) {
-        return speaker_node
-            .utf8_text(doc.as_bytes())
-            .ok()
-            .map(String::from);
-    }
-
-    if let Some(id_speaker_node) = find_ancestor_kind(node, ID_SPEAKER) {
-        return id_speaker_node
-            .utf8_text(doc.as_bytes())
-            .ok()
-            .map(String::from);
-    }
-
-    // Check @Birth of / @L1 of headers
-    if node.kind() == SPEAKER
-        && let Some(parent) = node.parent()
-        && (parent.kind() == BIRTH_OF_HEADER
-            || parent.kind() == L1_OF_HEADER
-            || parent.kind() == BIRTHPLACE_OF_HEADER)
-    {
-        return node.utf8_text(doc.as_bytes()).ok().map(String::from);
-    }
-
-    None
+    let speaker =
+        find_ancestor_kind(node, SPEAKER).or_else(|| find_ancestor_kind(node, ID_SPEAKER))?;
+    SpeakerOccurrence::read(speaker, doc)
 }
 
 /// Collects all locations of a speaker code in the document.
@@ -71,30 +71,21 @@ fn collect_speaker_locations(
     uri: &Url,
     doc: &str,
     speaker_name: &str,
-    _include_declaration: bool,
+    scope: ReferenceScope,
 ) -> Vec<Location> {
     let mut locations = Vec::new();
     let root = tree.root_node();
 
     walk_nodes(root, |node| {
-        let matches = match node.kind() {
-            SPEAKER | ID_SPEAKER => node
-                .utf8_text(doc.as_bytes())
-                .ok()
-                .is_some_and(|t| t == speaker_name),
-            _ => false,
-        };
-
-        if matches {
+        if let Some(occurrence) = SpeakerOccurrence::read(node, doc)
+            && occurrence.code() == speaker_name
+            && scope.includes(occurrence.role())
+        {
             locations.push(Location {
                 uri: uri.clone(),
-                range: Range {
-                    start: utils::offset_to_position(doc, node.start_byte()),
-                    end: utils::offset_to_position(doc, node.end_byte()),
-                },
+                range: occurrence.range(),
             });
         }
-
         None::<()>
     });
 
@@ -106,19 +97,17 @@ mod tests {
     use super::*;
     use crate::test_fixtures::parse_tree_incremental as parse_tree;
 
-    const PREAMBLE: &str =
-        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n";
+    const SOURCE: &str =
+        include_str!("../../../../../corpus/reference/core/basic-conversation.cha");
 
     #[test]
     fn test_references_finds_all_speaker_occurrences() {
-        let input = format!(
-            "{PREAMBLE}@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n*CHI:\tmore .\n@End\n"
-        );
-        let tree = parse_tree(&input);
+        let input = SOURCE;
+        let tree = parse_tree(input);
         let uri = Url::parse("file:///test.cha").unwrap();
 
         let line = input.lines().position(|l| l.starts_with("*CHI:")).unwrap() as u32;
-        let refs = references(&tree, &uri, &input, Position { line, character: 1 }, true);
+        let refs = references(&tree, &uri, input, Position { line, character: 1 }, true);
         assert!(refs.is_some());
         // @Participants CHI + @ID CHI + 2x *CHI: = 4
         assert_eq!(refs.unwrap().len(), 4);
@@ -126,12 +115,12 @@ mod tests {
 
     #[test]
     fn test_references_returns_none_for_non_speaker() {
-        let input = format!("{PREAMBLE}*CHI:\thello .\n@End\n");
-        let tree = parse_tree(&input);
+        let input = SOURCE;
+        let tree = parse_tree(input);
         let uri = Url::parse("file:///test.cha").unwrap();
 
         let line = input.lines().position(|l| l.starts_with("*CHI:")).unwrap() as u32;
-        let refs = references(&tree, &uri, &input, Position { line, character: 6 }, true);
+        let refs = references(&tree, &uri, input, Position { line, character: 6 }, true);
         assert!(refs.is_none());
     }
 }

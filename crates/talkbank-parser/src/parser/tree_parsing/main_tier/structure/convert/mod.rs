@@ -21,9 +21,7 @@ use crate::generated_traversal::{
     AsRawNode, KindAdmitted, MainTierChildren, MainTierNode, NodeSlot, Raw, RequiredPresence,
     SlotView, SourceBound, SourceSlice, SourceSlotView,
 };
-use crate::model::{
-    Bullet, Linker, MainTier, Postcode, Terminator, TierSeparator, UtteranceContent,
-};
+use crate::model::{Linker, MainTier, Postcode, Terminator, TierSeparator, UtteranceContent};
 
 use super::super::content::{MainTierRegion, classify_main_tier_recovery};
 use crate::parser::node_span::span_of;
@@ -160,12 +158,9 @@ pub fn convert_main_tier_node<'tree>(
     // Reading its bytes is a separate, fallible source-ownership boundary.
     let SourceSlotView::Present(body) = associated.field_child_5().slot().view();
     let tier = match body.read() {
-        Ok(tier_body) => body::parse_tier_body(tier_body, errors).map_err(|fault| {
-            ReportedMainTierError::report(
-                crate::parser::typed_cst::cst_failure_diagnostic(node, source, fault),
-                errors,
-            )
-        }),
+        Ok(tier_body) => {
+            body::parse_tier_body(tier_body, errors).map_err(ReportedMainTierError::from)
+        }
         Err(error) => Err(ReportedMainTierError::report(
             ParseError::new(
                 ErrorCode::InternalError,
@@ -264,7 +259,7 @@ pub(super) struct TierBodyData {
     pub content: Vec<UtteranceContent>,
     pub terminator: Option<Terminator>,
     pub postcodes: Vec<Postcode>,
-    pub bullet: Option<Bullet>,
+    pub bullet: Option<talkbank_model::BulletState>,
 }
 
 /// Byte offset just past the main tier's `tab`, when the tab actually parsed.

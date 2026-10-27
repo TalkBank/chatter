@@ -4,7 +4,7 @@
 //! not tests of construction invariants or fabricated source/CST pairs.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use talkbank_model::model::{DependentTier, DependentTierEntry, GraCompleteness, ParseHealthTier};
+use talkbank_model::model::{DependentTier, DependentTierEntry, ParseHealthTier};
 use talkbank_model::{
     ChatFile, ChatParser, ErrorCode, ErrorCollector, ParseOutcome, SemanticEq, Span,
     TranscriptName, Utterance,
@@ -32,8 +32,14 @@ enum Tier {
 impl Tier {
     fn matches(self, entry: &DependentTierEntry) -> bool {
         match self {
-            Self::Mor => matches!(entry.tier, DependentTier::Mor(_)),
-            Self::Gra => matches!(entry.tier, DependentTier::Gra(_)),
+            Self::Mor => matches!(
+                entry.tier,
+                DependentTier::Mor(_) | DependentTier::UnparsedMor(_)
+            ),
+            Self::Gra => matches!(
+                entry.tier,
+                DependentTier::Gra(_) | DependentTier::UnparsedGra(_)
+            ),
             Self::Com => matches!(entry.tier, DependentTier::Com(_)),
             Self::Eng => matches!(entry.tier, DependentTier::Eng(_)),
             Self::Xnote => {
@@ -144,65 +150,33 @@ fn native_contract(
                 .expect("native GRA identity");
             let actual = talkbank_parser::api::tiers::parse_gra_tier(node, &errors)
                 .expect("native root range admission");
-            let control = candidate
-                .control()
-                .file()
-                .utterances()
-                .nth(MIDDLE)
-                .expect("control middle");
-            let expected = &control.gra_tier().expect("control GRA").relations()[1];
-            if actual.location != talkbank_model::Location::Located(candidate.span())
-                || !actual
-                    .relations()
-                    .first()
-                    .is_some_and(|relation| relation.semantic_eq(expected))
-            {
-                failures.push(
-                    "native retained PUNCT relation lost identity or its tier's source range"
-                        .into(),
-                );
+            if !matches!(actual, talkbank_model::ParseOutcome::Rejected) {
+                failures.push("rejected native GRA must not expose a partial graph".into());
             }
-            match case.policy {
+            let expected_code = match case.policy {
                 Policy::GraLexical(code) => {
-                    if carrier != Carrier::Healthy
-                        || actual.completeness() != GraCompleteness::Truncated
-                        || actual.relations().len() != 1
-                        || !errors.to_vec().iter().any(|error| error.code == code)
-                    {
-                        failures.push(format!(
-                            "native lexical GRA retention: {actual:?}, {:?}",
-                            errors.to_vec()
-                        ));
-                    }
+                    assert_eq!(carrier, Carrier::Healthy);
+                    code
                 }
                 Policy::GraError => {
-                    if carrier != Carrier::Recovery
-                        || actual.completeness() != GraCompleteness::Whole
-                        || actual.relations().len() != 1
-                        || !errors.is_empty()
-                    {
-                        failures.push(format!(
-                            "ERROR-owned prefix is not a declared relation: {actual:?}, {:?}",
-                            errors.to_vec()
-                        ));
-                    }
+                    assert_eq!(carrier, Carrier::Recovery);
+                    ErrorCode::UnparsableContent
                 }
                 Policy::GraIndexDeletion => {
-                    if carrier != Carrier::Recovery
-                        || actual.completeness() != GraCompleteness::Truncated
-                        || actual.relations().len() != 1
-                        || !errors
-                            .to_vec()
-                            .iter()
-                            .any(|error| error.code == ErrorCode::MalformedGrammarRelation)
-                    {
-                        failures.push(format!(
-                            "zero-width declared index must reject its relation: {actual:?}, {:?}",
-                            errors.to_vec()
-                        ));
-                    }
+                    assert_eq!(carrier, Carrier::Recovery);
+                    ErrorCode::MalformedGrammarRelation
                 }
                 Policy::Mor | Policy::TextRecovery | Policy::EmptyText => panic!("non-GRA policy"),
+            };
+            if !errors
+                .to_vec()
+                .iter()
+                .any(|error| error.code == expected_code)
+            {
+                failures.push(format!(
+                    "missing native GRA rejection diagnostic {expected_code:?}: {:?}",
+                    errors.to_vec()
+                ));
             }
         }
         Tier::Com => {
@@ -400,65 +374,49 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
     }
     match case.policy {
         Policy::Mor => {
-            if !middle.mor_tier().is_some_and(|mor| mor.is_empty()) {
-                failures.push("document MOR recovery must preserve an empty tier slot".into());
-            }
-            if middle.gra_tier().expect("healthy GRA").completeness() != GraCompleteness::Whole {
-                failures.push("MOR recovery withdrew healthy GRA own-tier completeness".into());
-            }
-        }
-        Policy::GraLexical(_) => {
-            let gra = middle.gra_tier().expect("retained partial GRA");
-            if gra.completeness() != GraCompleteness::Truncated || gra.relations().len() != 1 {
-                failures.push(format!(
-                    "document partial GRA lost its lowering receipt: {gra:?}"
-                ));
-            }
-            let expected = &control
-                .file()
-                .utterances()
-                .nth(MIDDLE)
-                .expect("control middle")
-                .gra_tier()
-                .expect("control GRA")
-                .relations()[1];
-            if !gra
-                .relations()
-                .first()
-                .is_some_and(|relation| relation.semantic_eq(expected))
+            if middle.mor_tier().is_some()
+                || !entry(middle, Tier::Mor)
+                    .is_some_and(|entry| matches!(entry.tier, DependentTier::UnparsedMor(_)))
             {
-                failures.push("document partial GRA changed the retained PUNCT identity".into());
+                failures.push("document MOR recovery must preserve an unparsed tier slot".into());
             }
+            assert!(
+                middle.gra_tier().is_some(),
+                "MOR recovery retains healthy GRA"
+            );
         }
-        Policy::GraError | Policy::GraIndexDeletion => {
-            let gra = middle.gra_tier().expect("document GRA placeholder");
-            if gra.completeness() != GraCompleteness::Unknown || !gra.relations().is_empty() {
-                failures.push(format!(
-                    "document recovery must not claim native lowering retention: {gra:?}"
-                ));
-            }
+        Policy::GraLexical(_) | Policy::GraError | Policy::GraIndexDeletion => {
+            assert!(
+                middle.gra_tier().is_none(),
+                "recovery cannot expose a graph"
+            );
+            let retained = entry(middle, Tier::Gra).expect("retained raw GRA slot");
+            let DependentTier::UnparsedGra(raw) = &retained.tier else {
+                panic!("expected explicit GRA recovery");
+            };
+            assert_eq!(raw.source(), candidate.tier_input());
         }
         Policy::TextRecovery => {
             let retained = entry(middle, case.tier);
             match case.tier {
-                Tier::Com => {
-                    if !retained.is_some_and(|tier| {
-                        tier.location() == talkbank_model::Location::Located(candidate.span())
-                    }) {
-                        failures.push("comment recovery lost its real placeholder slot".into());
-                    }
-                }
-                Tier::Eng | Tier::Xnote => {
+                Tier::Com | Tier::Eng | Tier::Xnote => {
                     if retained.is_some() {
                         failures
                             .push("unreadable text body was fabricated as a retained tier".into());
                     }
+                    if findings
+                        .iter()
+                        .any(|error| error.code == ErrorCode::EmptyDependentTier)
+                    {
+                        failures.push("body rejection manufactured empty-tier validation".into());
+                    }
                 }
                 Tier::Mor | Tier::Gra => panic!("structured text policy"),
             }
-            if middle.gra_tier().expect("intact GRA").completeness() != GraCompleteness::Whole {
-                failures.push("text recovery changed intact GRA completeness".into());
-            }
+            assert!(
+                middle.gra_tier().is_some(),
+                "text recovery retains intact GRA"
+            );
         }
         Policy::EmptyText => {
             let retained = entry(middle, candidate.tier()).expect("empty text tier is retained");
@@ -499,8 +457,14 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
         }
     }
     let alignments = file.validate_alignments();
-    let expected_warnings =
-        usize::from(!health.can_align_main_to_mor()) + usize::from(!health.can_align_mor_to_gra());
+    // Alignment warnings describe withheld comparisons of parsed tiers.
+    // Raw recovery has its own explicit invalidity; it exposes no graph to compare.
+    let expected_warnings = if middle.mor_tier().is_some() {
+        usize::from(!health.can_align_main_to_mor())
+            + usize::from(middle.gra_tier().is_some() && !health.can_align_mor_to_gra())
+    } else {
+        0
+    };
     if !alignments.is_empty() {
         failures.push(format!(
             "file alignment validation must skip tainted domains: {alignments:?}"
@@ -563,13 +527,6 @@ fn observe(control: &admitted::Control, case: Case, failures: &mut Vec<String>) 
             .any(|utterance| !utterance.parse_health().is_unknown())
     {
         failures.push("wire import changed semantics or fabricated parser trust".into());
-    }
-    if decoded
-        .utterances()
-        .filter_map(|utterance| utterance.gra_tier())
-        .any(|gra| gra.completeness() != GraCompleteness::Unknown)
-    {
-        failures.push("wire import fabricated GRA lowering evidence".into());
     }
 }
 

@@ -12,6 +12,40 @@ enum Api {
     Sin,
 }
 
+/// Only body APIs have a standalone native tier outcome.
+#[derive(Clone, Copy)]
+enum BodyApi {
+    Pho,
+    Sin,
+}
+
+impl BodyApi {
+    fn public_api(self) -> Api {
+        match self {
+            Self::Pho => Api::Pho,
+            Self::Sin => Api::Sin,
+        }
+    }
+
+    fn check_native(self, input: &str, faulty: bool) {
+        use talkbank_parser_re2c::parser;
+        let location = match self {
+            Self::Pho => parser::parse_pho_tier(input).map(|tier| tier.location),
+            Self::Sin => parser::parse_sin_tier(input).map(|tier| tier.location),
+        };
+        match location {
+            ParseOutcome::Parsed(location) => {
+                assert!(!faulty, "malformed group became a successful tier");
+                assert_eq!(
+                    location.span(),
+                    Some(talkbank_model::Span::new(0, input.len()))
+                );
+            }
+            ParseOutcome::Rejected => assert!(faulty, "authored control rejected"),
+        }
+    }
+}
+
 fn observe(
     parser: &impl ChatParser,
     source: &str,
@@ -124,7 +158,7 @@ fn dependent_group_contents_cannot_disappear_without_error() -> Result<(), Strin
             "%pho:",
             "‹a b›",
             "‹›",
-            Api::Pho,
+            BodyApi::Pho,
         ),
         (
             "tiers/pho-groupings.cha",
@@ -132,7 +166,7 @@ fn dependent_group_contents_cannot_disappear_without_error() -> Result<(), Strin
             "%mod:",
             "‹a b›",
             "‹›",
-            Api::Pho,
+            BodyApi::Pho,
         ),
         (
             "annotation/groups-sign.cha",
@@ -140,7 +174,7 @@ fn dependent_group_contents_cannot_disappear_without_error() -> Result<(), Strin
             "%sin:",
             "〔c d〕",
             "〔〕",
-            Api::Sin,
+            BodyApi::Sin,
         ),
     ] {
         let reference =
@@ -165,12 +199,13 @@ fn dependent_group_contents_cannot_disappear_without_error() -> Result<(), Strin
                 .find(|line| line.starts_with(prefix))
                 .expect("reference dependent tier");
             let (_, body) = dependent.split_once('\t').expect("authored separator");
+            body_api.check_native(body, faulty);
             let utterance = format!("{main}\n{dependent}\n");
             for (api, input) in [
                 (Api::File, source.as_str()),
                 (Api::Utterance, utterance.as_str()),
                 (Api::Dependent, dependent),
-                (body_api, body),
+                (body_api.public_api(), body),
             ] {
                 for origin in [0, "Préface café\n".len()] {
                     let reports = [

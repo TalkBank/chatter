@@ -21,9 +21,13 @@ format for language research used by TalkBank. It provides:
   establish validity or preserve parser provenance.
 
 The model is parser-independent: it represents the result of parsing
-but does not depend on any particular parser. Both the canonical
-tree-sitter parser (`talkbank-parser`) and the alternate re2c parser
-(`talkbank-parser-re2c`) produce `ChatFile` values from this crate.
+but does not depend on any particular parser. The Tree-sitter backend
+(`talkbank-parser`) and re2c backend (`talkbank-parser-re2c`) are peers that
+produce `ChatFile` values from this crate. Tree-sitter was prototyped first;
+it does not own the model's design. Both parsers may drive model changes,
+including explicit malformed or recovery states. Prefer extending this shared
+representation to maintaining duplicate semantic ASTs. See
+[backend ownership](https://github.com/TalkBank/chatter/blob/main/book/src/architecture/parser-backends.md#equal-backends-one-shared-model).
 
 ## Key Types
 
@@ -42,10 +46,10 @@ The accepted result owns a read-only model and records the rule selection,
 alignment coverage, transcript name and warnings. Errors or incomplete parse
 provenance return the rejected model and diagnostics for repair.
 
-Use the [library recipes](../../book/src/chatter/integrating/library-usage.md)
+Use the [library recipes](https://github.com/TalkBank/chatter/blob/main/book/src/chatter/integrating/library-usage.md)
 for runnable parsing, validation, model traversal and serialization examples.
 Those examples are included from compiled test source rather than maintained
-independently here. The [model architecture](../../book/src/architecture/chat-model/chat-model.md)
+independently here. The [model architecture](https://github.com/TalkBank/chatter/blob/main/book/src/architecture/chat-model/chat-model.md)
 describes checked construction and the mutable/accepted boundary.
 
 `validate_with_policy` selects structural or tier-alignment coverage explicitly.

@@ -1,7 +1,7 @@
 //! Speaker extraction for `talkbank/getSpeakers`.
 
 use serde::Serialize;
-use talkbank_model::model::{Header, Line};
+use talkbank_model::model::ParticipantDeclarationError;
 
 use crate::backend::state::Backend;
 
@@ -14,9 +14,9 @@ struct SpeakerInfo {
     /// CHAT speaker code.
     code: String,
     /// Participant display name.
-    name: String,
+    name: Option<String>,
     /// Participant role label.
-    role: String,
+    role: Option<String>,
 }
 
 /// Handle `talkbank/getSpeakers`.
@@ -25,28 +25,44 @@ pub(crate) fn handle_get_speakers(
     request: &DocumentUriRequest,
 ) -> Result<serde_json::Value, crate::backend::LspBackendError> {
     let (_, chat_file) = get_document_and_chat_file(backend, &request.uri)?;
-    let speakers = extract_speakers(&chat_file);
+    let speakers = extract_speakers(&chat_file)?;
     serde_json::to_value(&speakers).map_err(Into::into)
 }
 
-/// Extract declared speakers from the `@Participants` header if present.
-fn extract_speakers(chat_file: &talkbank_model::model::ChatFile) -> Vec<SpeakerInfo> {
-    for line in &chat_file.lines {
-        if let Line::Header { header, .. } = line
-            && let Header::Participants { entries } = header.as_ref()
-        {
-            return entries
-                .iter()
-                .map(|p| SpeakerInfo {
-                    code: p.speaker_code.as_str().to_string(),
-                    name: p
-                        .name
-                        .as_ref()
-                        .map_or(String::new(), |n| n.as_str().to_string()),
-                    role: p.role.as_str().to_string(),
-                })
-                .collect();
-        }
+/// Extract speakers only from one admitted shared-model declaration.
+fn extract_speakers(
+    chat_file: &talkbank_model::model::ChatFile,
+) -> Result<Vec<SpeakerInfo>, ParticipantDeclarationError> {
+    Ok(chat_file
+        .participant_declaration()?
+        .iter()
+        .map(|participant| SpeakerInfo {
+            code: participant.speaker_code.as_str().to_owned(),
+            name: participant.name().map(|name| name.as_str().to_owned()),
+            role: participant.role().map(|role| role.as_str().to_owned()),
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
+
+    #[test]
+    fn missing_declared_role_is_null_even_when_id_supplies_metadata() {
+        let source = include_str!(
+            "../../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E513_1.cha"
+        );
+        let file = talkbank_parser::TreeSitterParser::new()
+            .expect("parser")
+            .parse_chat_file(source)
+            .expect_built();
+        let speakers = extract_speakers(&file).expect("admitted declaration");
+        assert_eq!(speakers.len(), 1);
+        assert_eq!(speakers[0].code, "CHI");
+        assert!(speakers[0].role.is_none());
+        let wire = serde_json::to_value(speakers).expect("wire");
+        assert!(wire[0]["role"].is_null());
     }
-    vec![]
 }

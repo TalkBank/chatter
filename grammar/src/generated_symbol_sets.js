@@ -14,5 +14,6 @@ export const WORD_SEGMENT_FORBIDDEN_START_BASE = ",;:!?.()\\[\\]{}⌈⌉⌊⌋�
 export const WORD_SEGMENT_FORBIDDEN_REST_BASE = ",;:!?.()\\[\\]{}⌈⌉⌊⌋〔〕\\\\\\^ˈˌ←→↖↗↘↙⇗⇘<>≈≋";
 export const WORD_SEGMENT_FORBIDDEN_COMMON = "\\u0015\\u0001\\u0002\\u0003\\u0004\\u0007\\u0008\\t\\n\\r ‹›\"“”‘’„@*&%‡+=~∞≡$";
 
+export const SCOPED_MARKER_LABEL_SYMBOLS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@%_\\-";
 export const EVENT_SEGMENT_FORBIDDEN_BASE = "&,;!?.()\\[\\]⌈⌉⌊⌋〔〕\\\\←→↖↗↘↙⇗⇘<>≈≋";
 export const EVENT_SEGMENT_FORBIDDEN_COMMON = "\\u0015\\u0001\\u0002\\u0003\\u0004\\u0007\\u0008\\t\\n\\r ‹›\"“”@*%+~∞≡";

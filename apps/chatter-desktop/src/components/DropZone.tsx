@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import {
   useDesktopEnvironmentCapability,
   useValidationTargetCapability,
 } from "../runtime/DesktopRuntimeContext";
 import type { ThemePreference } from "../hooks/useTheme";
+import { TargetSelection } from "../runtime/capabilities/targetSelection";
 
 interface Props {
   onPath: (path: string) => void;
@@ -23,6 +24,17 @@ export default function DropZone({
   const environment = useDesktopEnvironmentCapability();
   const validationTarget = useValidationTargetCapability();
   const [dragging, setDragging] = useState(false);
+  const selection = useRef<TargetSelection | null>(null);
+
+  useLayoutEffect(() => {
+    if (disabled) return;
+    const current = new TargetSelection(validationTarget, onPath, (message) => window.alert(message));
+    selection.current = current;
+    return () => {
+      current.close();
+      selection.current = null;
+    };
+  }, [disabled, onPath, validationTarget]);
 
   const handleDragOver = useCallback((event: DragEvent) => {
     event.preventDefault();
@@ -50,18 +62,9 @@ export default function DropZone({
 
   const handleSelectedTargets = useCallback(
     (paths: string[]) => {
-      if (disabled) return;
-
-      const filtered = paths.filter(Boolean);
-      if (filtered.length === 0) return;
-      if (filtered.length !== 1) {
-        window.alert("Chatter validates one .cha file or one folder at a time.");
-        return;
-      }
-
-      onPath(filtered[0]);
+      selection.current?.select(paths);
     },
-    [disabled, onPath],
+    [],
   );
 
   useEffect(() => {
@@ -103,30 +106,6 @@ export default function DropZone({
     };
   }, [environment, handleSelectedTargets, validationTarget]);
 
-  const chooseFile = useCallback(async () => {
-    try {
-      const selected = await validationTarget.chooseValidationFile();
-      if (selected) {
-        handleSelectedTargets([selected]);
-      }
-    } catch (error) {
-      console.error("failed to choose file:", error);
-      alert(`Choose file failed: ${error}`);
-    }
-  }, [handleSelectedTargets, validationTarget]);
-
-  const chooseFolder = useCallback(async () => {
-    try {
-      const selected = await validationTarget.chooseValidationFolder();
-      if (selected) {
-        handleSelectedTargets([selected]);
-      }
-    } catch (error) {
-      console.error("failed to choose folder:", error);
-      alert(`Choose folder failed: ${error}`);
-    }
-  }, [handleSelectedTargets, validationTarget]);
-
   const shortTarget = lastTarget
     ? lastTarget.split(/[\\/]/).slice(-2).join("/")
     : null;
@@ -138,16 +117,16 @@ export default function DropZone({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <button onClick={chooseFile} disabled={disabled}>
+      <button onClick={() => void selection.current?.choose("file")} disabled={disabled}>
         Choose File
       </button>
-      <button onClick={chooseFolder} disabled={disabled}>
+      <button onClick={() => void selection.current?.choose("folder")} disabled={disabled}>
         Choose Folder
       </button>
       {!disabled && lastTarget && shortTarget ? (
         <span
           className="last-target-hint"
-          onClick={() => onPath(lastTarget)}
+          onClick={() => handleSelectedTargets([lastTarget])}
           title={lastTarget}
         >
           Last: {shortTarget}. Re-validate?

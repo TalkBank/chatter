@@ -253,7 +253,7 @@ impl Terminator {
 
 impl WriteChat for Terminator {
     /// Serializes the canonical CHAT token for this terminator.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             Terminator::Period { .. } => w.write_char('.'),
             Terminator::Question { .. } => w.write_char('?'),

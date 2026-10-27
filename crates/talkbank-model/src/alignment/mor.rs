@@ -254,10 +254,16 @@ fn build_alignment_preview(main: &MainTier, mor: &MorTier) -> String {
             Some(item) => item.as_str(),
             None => "<none>",
         };
-        let _ = std::fmt::Write::write_fmt(
-            &mut out,
-            format_args!("{:>3}: {} | {}\n", idx, main_item, mor_item),
-        );
+        let index = idx.to_string();
+        for _ in index.len()..3 {
+            out.push(' ');
+        }
+        out.push_str(&index);
+        out.push_str(": ");
+        out.push_str(main_item);
+        out.push_str(" | ");
+        out.push_str(mor_item);
+        out.push('\n');
     }
 
     out

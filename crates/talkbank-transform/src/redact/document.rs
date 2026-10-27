@@ -1,8 +1,7 @@
 //! Top-level orchestration.
 
-use smol_str::SmolStr;
 use talkbank_model::alignment::helpers::{ContentItemMut, walk_content_mut};
-use talkbank_model::{ChatFile, Event, EventType, Freecode, Line, OtherSpokenEvent, WriteChat};
+use talkbank_model::{ChatFile, EventType, Freecode, Line, OtherSpokenEvent, Word, WriteChat};
 
 use super::dependent_tier::{keep_dependent_tier, sanitize_dependent_tier};
 use super::error::RedactError;
@@ -29,9 +28,7 @@ impl SanitizedDocument {
 
     /// Serializes the sanitized document to a fresh `String`.
     pub fn to_chat_string(&self) -> String {
-        let mut out = String::new();
-        let _ = self.write_chat(&mut out);
-        out
+        self.inner.to_chat_string()
     }
 }
 
@@ -41,15 +38,25 @@ pub fn sanitize(
     _policy: &SanitizationPolicy,
 ) -> Result<SanitizedDocument, RedactError> {
     let mut state = PlaceholderState::new();
+    let event_replacement = EventType::new("redacted")?;
 
     for line in input.lines.as_mut_slice().iter_mut() {
         match line {
             Line::Header { header, .. } => {
-                sanitize_header(header);
+                sanitize_header(header)?;
             }
             Line::Utterance(utt) => {
+                if utt
+                    .main
+                    .content
+                    .postcodes
+                    .iter()
+                    .any(|code| code.text().is_none())
+                {
+                    return Err(RedactError::UnparsedPostcode);
+                }
                 for header in utt.preceding_headers.iter_mut() {
-                    sanitize_header(header);
+                    sanitize_header(header)?;
                 }
 
                 utt.dependent_tiers
@@ -60,12 +67,19 @@ pub fn sanitize(
                     WorPlan::decide(&utt.main, utt.dependent_tiers.iter().map(|e| &e.tier));
 
                 let main_content = utt.main.content.content.as_mut_slice();
+                let mut rejection = None;
                 walk_content_mut(main_content, None, &mut |item| {
-                    sanitize_content_item(item, &mut state);
+                    if let Err(error) = sanitize_content_item(item, &mut state, &event_replacement)
+                    {
+                        rejection = Some(error);
+                    }
                 });
+                if let Some(error) = rejection {
+                    return Err(error);
+                }
 
                 for entry in utt.dependent_tiers.iter_mut() {
-                    sanitize_dependent_tier(&mut entry.tier, &mut state);
+                    sanitize_dependent_tier(&mut entry.tier, &mut state)?;
                 }
                 wor_plan.apply(
                     &utt.main,
@@ -80,8 +94,13 @@ pub fn sanitize(
 }
 
 /// Single-pass redaction of every leaf item visited by `walk_content_mut`.
-fn sanitize_content_item(item: ContentItemMut<'_>, state: &mut PlaceholderState) {
+fn sanitize_content_item(
+    item: ContentItemMut<'_>,
+    state: &mut PlaceholderState,
+    event_replacement: &EventType,
+) -> Result<(), RedactError> {
     match item {
+        ContentItemMut::OrphanAnnotation(_) => return Err(RedactError::OrphanAnnotation),
         ContentItemMut::Word(word) => sanitize_word(word, state),
         ContentItemMut::ReplacedWord(replaced) => {
             sanitize_word(&mut replaced.word, state);
@@ -89,13 +108,17 @@ fn sanitize_content_item(item: ContentItemMut<'_>, state: &mut PlaceholderState)
                 sanitize_word(word, state);
             }
         }
-        ContentItemMut::Event(event) => InlineRedaction::Event(event).apply(),
-        ContentItemMut::Freecode(fc) => InlineRedaction::Freecode(fc).apply(),
+        ContentItemMut::Event(event) => event.event_type = event_replacement.clone(),
+        ContentItemMut::Freecode(fc) => {
+            if fc.text().is_none() { return Err(RedactError::UnparsedFreecode); }
+            InlineRedaction::Freecode(fc).apply();
+        },
         ContentItemMut::OtherSpokenEvent(ose) => InlineRedaction::OtherSpokenEvent(ose).apply(),
         ContentItemMut::Separator(_)
         | ContentItemMut::Pause(_)
         | ContentItemMut::Action(_)
         | ContentItemMut::OverlapPoint(_)
+        // Both parsed timing and explicit rejected source survive redaction.
         | ContentItemMut::InternalBullet(_)
         | ContentItemMut::LongFeatureBegin(_)
         | ContentItemMut::LongFeatureEnd(_)
@@ -105,13 +128,13 @@ fn sanitize_content_item(item: ContentItemMut<'_>, state: &mut PlaceholderState)
         | ContentItemMut::NonvocalEnd(_)
         | ContentItemMut::NonvocalSimple(_) => {}
     }
+    Ok(())
 }
 
 /// An exclusive inline target, distinct from free-text header/tier payloads.
 /// Consuming this target applies a delimiter-free token: square brackets belong
 /// to the enclosing CHAT syntax and cannot be nested into these payloads.
 enum InlineRedaction<'a> {
-    Event(&'a mut Event),
     Freecode(&'a mut Freecode),
     OtherSpokenEvent(&'a mut OtherSpokenEvent),
 }
@@ -120,9 +143,14 @@ impl InlineRedaction<'_> {
     fn apply(self) {
         const TOKEN: &str = "redacted";
         match self {
-            Self::Event(event) => event.event_type = EventType::new(TOKEN),
-            Self::Freecode(code) => code.text = SmolStr::new(TOKEN),
-            Self::OtherSpokenEvent(event) => event.text = SmolStr::new(TOKEN),
+            Self::Freecode(code) => *code = Freecode::new(code.location, TOKEN),
+            Self::OtherSpokenEvent(event) => {
+                let word = event.word_mut();
+                *word = Word::new(
+                    word.location,
+                    talkbank_model::non_empty_literal!("redacted").into(),
+                );
+            }
         }
     }
 }

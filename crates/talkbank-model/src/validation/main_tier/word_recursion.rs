@@ -1,4 +1,4 @@
-//! Word validation at every depth through the shared structural owner.
+//! Word and required group-annotation validation at every depth through the shared structural owner.
 //!
 //! Each item establishes its annotation-selected language scope before its
 //! payload is validated. Replaced words retain their own validation (including
@@ -9,7 +9,9 @@
 
 use crate::ErrorSink;
 use crate::alignment::helpers::LanguageScope;
-use crate::model::{ContentAnnotation, ContentStructure, UtteranceContent, WordRef};
+use crate::model::{
+    ContentAnnotation, ContentStructure, GroupRef, LeafContent, UtteranceContent, WordRef,
+};
 use crate::validation::{Validate, ValidationContext};
 use std::borrow::Cow;
 
@@ -29,8 +31,8 @@ fn entering<'a>(
     }
 }
 
-/// Validate every word-like item in `items`, recursing through all containers.
-pub(crate) fn validate_words_at_every_depth(
+/// Validate words and required angle annotations, recursing through all containers.
+pub(crate) fn validate_content_at_every_depth(
     items: &[UtteranceContent],
     context: &ValidationContext,
     errors: &impl ErrorSink,
@@ -57,9 +59,26 @@ fn validate_structure(
             }
             return;
         }
-        ContentStructure::Group(group) => group.content(),
+        ContentStructure::Group(group) => {
+            match group {
+                GroupRef::Angle(angle) => angle.validate_recovery(errors),
+                GroupRef::Quotation(_) | GroupRef::Pho(_) | GroupRef::Sin(_) => {}
+            }
+            group.content()
+        }
         ContentStructure::Retrace(retrace) => &retrace.inner().content,
-        ContentStructure::Leaf(_) => return,
+        ContentStructure::Leaf(leaf) => {
+            match leaf.content {
+                LeafContent::Interposed(word) => word.validate(context, errors),
+                LeafContent::OverlapPoint(point) => point.validate(context, errors),
+                LeafContent::Pause
+                | LeafContent::Spoken
+                | LeafContent::Notation
+                | LeafContent::UnderlineBegin(_)
+                | LeafContent::UnderlineEnd(_) => {}
+            }
+            return;
+        }
     };
     for item in &content.content {
         validate_structure(item.structure(), context, errors);

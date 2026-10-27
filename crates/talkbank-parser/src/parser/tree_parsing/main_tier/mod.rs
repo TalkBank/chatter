@@ -20,4 +20,7 @@ pub mod content;
 pub mod structure;
 pub mod word;
 
+#[cfg(test)]
+mod range_admission_contracts;
+
 // Re-export public API

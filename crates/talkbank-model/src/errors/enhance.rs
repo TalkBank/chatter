@@ -110,10 +110,14 @@ pub(super) fn project(
     let first_line = line_map.line_of(min_byte);
     let context_start = line_map.line_start(first_line);
     let mut context_end = line_map.line_end(last_line, source_len);
-    // Only strip an unreferenced newline. Never shorten an admitted span.
-    if context_end > max_byte && full_source.as_bytes().get(context_end - 1) == Some(&b'\n') {
-        context_end -= 1;
-    }
+    // Strip only the unreferenced part of the final physical terminator.
+    // Never shorten an admitted span, including one ending inside CRLF.
+    let window = &full_source[context_start..context_end];
+    let content = window
+        .strip_suffix("\r\n")
+        .or_else(|| window.strip_suffix(['\r', '\n']))
+        .unwrap_or(window);
+    context_end = (context_start + content.len()).max(max_byte);
     let context_text = &full_source[context_start..context_end];
     let mapped = if requires_raw_display(&error.code) {
         PlainDisplayResult::unformatted(context_text)
@@ -140,7 +144,7 @@ pub(super) fn project(
     let context = DiagnosticContext {
         source_text: mapped.into_text(),
         span: display_span,
-        first_line: first_line + 1,
+        first_line: LineColumn::from_zero_based(first_line, 0).line,
     };
     Ok(DiagnosticPresentation::new(
         primary,
@@ -164,6 +168,25 @@ mod tests {
             "Test error",
         );
         SourceDiagnostic::with_index(raw, &SourceIndex::new(source))
+    }
+
+    #[test]
+    fn physical_terminators_preserve_excerpt_and_admitted_spans() {
+        for ending in ["\n", "\r\n", "\r"] {
+            let source = format!("first{ending}érror{ending}last");
+            let start = "first".len() + ending.len();
+            for end in start + "érror".len()..=start + "érror".len() + ending.len() {
+                let rendered = render(&source, start, end, ErrorCode::UnknownError);
+                let presentation = rendered.presentation().expect("admitted range");
+                assert_eq!(
+                    presentation.position(),
+                    crate::LineColumn::from_zero_based(1, 0)
+                );
+                assert_eq!(presentation.context().first_line(), 2);
+                assert_eq!(presentation.context().source_text(), &source[start..end]);
+                assert_eq!(presentation.context().span().to_range(), 0..end - start);
+            }
+        }
     }
 
     #[test]

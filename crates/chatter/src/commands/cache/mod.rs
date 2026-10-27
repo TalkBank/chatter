@@ -17,12 +17,13 @@ pub use clear::cache_clear;
 pub use stats::cache_stats;
 
 /// Dispatch one `chatter cache` subcommand to its concrete implementation.
-pub fn run_cache_command(command: CacheCommands) {
+pub fn run_cache_command(command: CacheCommands) -> crate::exit_codes::CommandResult {
     match command {
         CacheCommands::Stats { format } => cache_stats(format),
         CacheCommands::Clear {
             scope: crate::cli::ClearScope(scope),
             mode: crate::cli::Flag(mode),
         } => cache_clear(scope, mode),
-    }
+    }?;
+    Ok(())
 }

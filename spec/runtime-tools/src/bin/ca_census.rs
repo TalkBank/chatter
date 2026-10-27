@@ -314,6 +314,7 @@ fn item_kind(item: &ContentItem<'_>) -> &'static str {
         ContentItem::OverlapPoint(_) => "overlap_point",
         ContentItem::OtherSpokenEvent(_) => "other_spoken_event",
         ContentItem::Freecode(_) => "freecode",
+        ContentItem::OrphanAnnotation(_) => "orphan_annotation",
         ContentItem::InternalBullet(_) => "internal_bullet",
         ContentItem::LongFeatureBegin(_) => "long_feature_begin",
         ContentItem::LongFeatureEnd(_) => "long_feature_end",

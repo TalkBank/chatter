@@ -7,13 +7,18 @@
 use std::path::Path;
 
 /// Print the banner for an alignment visualization run.
-pub(super) fn render_intro(input: &Path) {
+pub(super) fn render_intro(input: &Path) -> crate::exit_codes::CommandResult {
     outln!("Alignment visualization for: {}", input.display());
     outln!("{}", "=".repeat(80));
+    Ok(())
 }
 
 /// Print one utterance header line before per-tier alignment rows.
-pub(super) fn render_utterance_header(utterance_index: usize, speaker: &str, main_content: &str) {
+pub(super) fn render_utterance_header(
+    utterance_index: usize,
+    speaker: &str,
+    main_content: &str,
+) -> crate::exit_codes::CommandResult {
     outln!();
     outln!(
         "Utterance #{} - {}:\t{}",
@@ -22,4 +27,5 @@ pub(super) fn render_utterance_header(utterance_index: usize, speaker: &str, mai
         main_content
     );
     outln!("{:-<80}", "");
+    Ok(())
 }

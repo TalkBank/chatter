@@ -36,6 +36,11 @@ pub enum RoundtripResult {
 /// Why a roundtrip failed.
 #[derive(Debug)]
 pub enum RoundtripFailure {
+    /// The parser rejected the first serialization; there is no second model.
+    Reparse {
+        /// Findings refer to the serialized text, not the original input.
+        diagnostics: Vec<talkbank_model::ParseError>,
+    },
     /// The model would not serialize on the given pass.
     Serialization {
         /// Which of the two passes refused.
@@ -64,6 +69,20 @@ impl RoundtripFailure {
     #[must_use]
     pub fn reason(&self) -> String {
         match self {
+            Self::Reparse { diagnostics } => {
+                let mut reason = "Roundtrip reparse rejected the serialized output".to_owned();
+                for diagnostic in diagnostics {
+                    use std::fmt::Write;
+                    // Writing to a String cannot fail.
+                    let _ = write!(
+                        reason,
+                        "\n{}: {}",
+                        diagnostic.code.as_str(),
+                        diagnostic.message
+                    );
+                }
+                reason
+            }
             Self::Serialization { pass, error } => {
                 let which = match pass {
                     SerializationPass::First => 1,
@@ -81,7 +100,7 @@ impl RoundtripFailure {
     #[must_use]
     pub fn diff(&self) -> Option<&str> {
         match self {
-            Self::Serialization { .. } => None,
+            Self::Serialization { .. } | Self::Reparse { .. } => None,
             Self::Mismatch { diff } => Some(diff),
         }
     }
@@ -108,7 +127,15 @@ pub(super) fn run_roundtrip(
     // roundtrip checks serialization fidelity, not content validity)
     let reparse_sink = ErrorCollector::new();
     let reparsed = parser.parse_chat_file_streaming(&serialized_a, &reparse_sink);
-    CompletedDiagnostics::admit(reparse_sink.into_vec())?;
+    let completed = CompletedDiagnostics::admit(reparse_sink.into_vec())?;
+    let reparsed = match reparsed {
+        talkbank_model::ParseOutcome::Parsed(file) => file,
+        talkbank_model::ParseOutcome::Rejected => {
+            return Ok(RoundtripResult::Failed(RoundtripFailure::Reparse {
+                diagnostics: completed.into_diagnostics(),
+            }));
+        }
+    };
 
     // Serialize again (pass 2 output)
     let mut serialized_b = String::new();

@@ -24,6 +24,56 @@ use tempfile::tempdir;
 
 use crate::common::CliHarness;
 
+#[test]
+fn rediarize_refuses_unspellable_tracks_before_output() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let source = include_str!("../../../../corpus/reference/content/media-bullets.cha");
+    let input = dir.path().join("media-bullets.cha");
+    let turns = dir.path().join("turns.json");
+    let output = dir.path().join("output.cha");
+    let summary = dir.path().join("summary.json");
+    fs::write(&input, source)?;
+    let mut failures = Vec::new();
+    for track in [
+        "", "A B", "CH:I", "A|B", "\n@End", "\u{15}", "CHILDREN", "🦀", "A.B", "A\"B",
+    ] {
+        fs::write(&output, "retained CHAT output")?;
+        fs::write(&summary, "retained summary")?;
+        fs::write(
+            &turns,
+            serde_json::to_vec(&serde_json::json!({"turns":[{
+                "track": track, "start_ms": 0, "end_ms": 6000000
+            }]}))?,
+        )?;
+        let result = harness
+            .chatter_cmd()
+            .args(["experimental", "speakers", "rediarize"])
+            .arg(&input)
+            .arg("--turns")
+            .arg(&turns)
+            .arg("-o")
+            .arg(&output)
+            .arg("--summary-json")
+            .arg(&summary)
+            .output()?;
+        if result.status.code() != Some(2)
+            || !String::from_utf8_lossy(&result.stderr).contains("track at index 0")
+            || fs::read_to_string(&output)? != "retained CHAT output"
+            || fs::read_to_string(&summary)? != "retained summary"
+        {
+            failures.push(format!(
+                "{track:?}: status {:?}, stderr {}",
+                result.status.code(),
+                String::from_utf8_lossy(&result.stderr)
+            ));
+        }
+        assert_eq!(fs::read_to_string(&input)?, source);
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    Ok(())
+}
+
 /// Anonymous-2-speaker donor whose SECOND track really holds two
 /// different voices across time (the Rev under-count shape): a good
 /// diarizer splits `PAR1`'s two utterances into `PAR1` + `PAR2`.
@@ -70,6 +120,8 @@ fn rediarize_splits_merged_track() -> Result<(), TestError> {
     fs::write(&turns, TURNS_THREE_VOICES)?;
 
     let output = harness.run_output(&[
+        "experimental",
+        "speakers",
         "rediarize",
         input.to_str().expect("utf-8 temp path"),
         "--turns",
@@ -170,6 +222,8 @@ fn rediarize_writes_summary_json() -> Result<(), TestError> {
     )?;
 
     let output = harness.run_output(&[
+        "experimental",
+        "speakers",
         "rediarize",
         input.to_str().expect("utf-8 temp path"),
         "--turns",
@@ -229,6 +283,8 @@ fn rediarize_counts_same_track_overlap_once_in_summary_json() -> Result<(), Test
     )?;
 
     let output = harness.run_output(&[
+        "experimental",
+        "speakers",
         "rediarize",
         input.to_str().expect("utf-8 temp path"),
         "--turns",
@@ -277,6 +333,8 @@ fn rediarize_rejects_inverted_span() -> Result<(), TestError> {
     )?;
 
     let output = harness.run_output(&[
+        "experimental",
+        "speakers",
         "rediarize",
         input.to_str().expect("utf-8 temp path"),
         "--turns",
@@ -315,6 +373,8 @@ fn rediarize_reports_flagged_utterances() -> Result<(), TestError> {
     )?;
 
     let output = harness.run_output(&[
+        "experimental",
+        "speakers",
         "rediarize",
         input.to_str().expect("utf-8 temp path"),
         "--turns",
@@ -329,5 +389,164 @@ fn rediarize_reports_flagged_utterances() -> Result<(), TestError> {
         summary.contains("2 flagged"),
         "summary should report the flagged count:\n{summary}"
     );
+    Ok(())
+}
+
+#[test]
+fn rediarize_refuses_source_and_output_aliases_before_truncation() -> Result<(), TestError> {
+    #[derive(Clone, Copy)]
+    enum Alias {
+        Direct,
+        Hard,
+        #[cfg(unix)]
+        Symbolic,
+    }
+    fn alias(
+        source: &std::path::Path,
+        destination: &std::path::Path,
+        kind: Alias,
+    ) -> std::path::PathBuf {
+        match kind {
+            Alias::Direct => source.to_owned(),
+            Alias::Hard => {
+                fs::hard_link(source, destination).unwrap();
+                destination.to_owned()
+            }
+            #[cfg(unix)]
+            Alias::Symbolic => {
+                std::os::unix::fs::symlink(source, destination).unwrap();
+                destination.to_owned()
+            }
+        }
+    }
+    let harness = CliHarness::new()?;
+    for kind in [
+        Alias::Direct,
+        Alias::Hard,
+        #[cfg(unix)]
+        Alias::Symbolic,
+    ] {
+        #[derive(Clone, Copy)]
+        enum Destination {
+            Chat,
+            Summary,
+        }
+        for (destination, source_name) in [
+            (Destination::Chat, "input.cha"),
+            (Destination::Chat, "turns.json"),
+            (Destination::Summary, "input.cha"),
+            (Destination::Summary, "turns.json"),
+            (Destination::Summary, "output.cha"),
+        ] {
+            let dir = tempdir()?;
+            let input = dir.path().join("input.cha");
+            let turns = dir.path().join("turns.json");
+            let output = dir.path().join("output.cha");
+            let summary = dir.path().join("summary.json");
+            let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+            fs::write(&input, source)?;
+            fs::write(&turns, r#"{"turns":[]}"#)?;
+            fs::write(&output, "existing CHAT output")?;
+            fs::write(&summary, "existing summary")?;
+            let aliased = alias(
+                &dir.path().join(source_name),
+                &dir.path().join("alias"),
+                kind,
+            );
+            let (output_path, summary_path) = match destination {
+                Destination::Chat => (&aliased, &summary),
+                Destination::Summary => (&output, &aliased),
+            };
+            let result = harness.run_output(&[
+                "experimental",
+                "speakers",
+                "rediarize",
+                input.to_str().unwrap(),
+                "--turns",
+                turns.to_str().unwrap(),
+                "-o",
+                output_path.to_str().unwrap(),
+                "--summary-json",
+                summary_path.to_str().unwrap(),
+            ])?;
+            assert_eq!(result.status.code(), Some(1));
+            assert!(String::from_utf8_lossy(&result.stderr).contains("alias"));
+            assert!(result.stdout.is_empty());
+            assert_eq!(fs::read_to_string(&input)?, source);
+            assert_eq!(fs::read_to_string(&turns)?, r#"{"turns":[]}"#);
+            assert_eq!(fs::read_to_string(&output)?, "existing CHAT output");
+            assert_eq!(fs::read_to_string(&summary)?, "existing summary");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn rediarize_checks_summary_destination_before_stdout() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let input = dir.path().join("input.cha");
+    let turns = dir.path().join("turns.json");
+    let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+    fs::write(&input, source)?;
+    fs::write(&turns, r#"{"turns":[]}"#)?;
+    let result = harness.run_output(&[
+        "experimental",
+        "speakers",
+        "rediarize",
+        input.to_str().unwrap(),
+        "--turns",
+        turns.to_str().unwrap(),
+        "--summary-json",
+        input.to_str().unwrap(),
+    ])?;
+    assert_eq!(result.status.code(), Some(1));
+    assert!(result.stdout.is_empty());
+    assert_eq!(fs::read_to_string(input)?, source);
+    Ok(())
+}
+
+#[test]
+fn rediarize_prepares_both_destinations_before_replacing_existing_outputs() -> Result<(), TestError>
+{
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let input = dir.path().join("input.cha");
+    let turns = dir.path().join("turns.json");
+    let output = dir.path().join("output.cha");
+    let missing_parent = dir.path().join("absent/summary.json");
+    let summary = dir.path().join("summary.json");
+    let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
+    fs::write(&input, source)?;
+    fs::write(&turns, r#"{"turns":[]}"#)?;
+    let old = "prior output must survive preparation failure".repeat(100);
+    fs::write(&output, &old)?;
+    let run = |summary: &std::path::Path| {
+        harness.run_output(&[
+            "experimental",
+            "speakers",
+            "rediarize",
+            input.to_str().unwrap(),
+            "--turns",
+            turns.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+            "--summary-json",
+            summary.to_str().unwrap(),
+        ])
+    };
+    let refused = run(&missing_parent)?;
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(fs::read_to_string(&output)?, old);
+    fs::write(&summary, &old)?;
+    let accepted = run(&summary)?;
+    crate::common::assert_success(&accepted, "distinct rediarize destinations");
+    let actual = fs::read_to_string(&output)?;
+    assert!(actual.ends_with("@End\n"));
+    assert!(!actual.contains("prior output"));
+    let receipt: serde_json::Value = serde_json::from_str(&fs::read_to_string(summary)?).unwrap();
+    assert_eq!(receipt["unchanged"], 4);
+    assert_eq!(fs::read_to_string(input)?, source);
+    assert_eq!(fs::read_to_string(turns)?, r#"{"turns":[]}"#);
     Ok(())
 }

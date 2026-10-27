@@ -25,6 +25,7 @@ use std::io::Write as _;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 
 use talkbank_parser::TreeSitterParser;
 use talkbank_transform::{

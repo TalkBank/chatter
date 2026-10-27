@@ -39,7 +39,7 @@ pub(crate) use errors::{
     MainTierRegion, classify_main_tier_recovery, illegal_curly_quote_error, misplaced_linker_error,
     report_tree_shape,
 };
-pub(crate) use recovery::{MainTierBodyCarrier, surface_main_tier_sink};
+pub(crate) use recovery::surface_main_tier_sink;
 
 // Re-export overlap_point parser for use in structure parsing
 pub(crate) use base::{parse_overlap_point, parse_overlap_point_token};

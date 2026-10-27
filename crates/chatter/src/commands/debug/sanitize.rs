@@ -1,56 +1,61 @@
-//! `chatter debug sanitize`, protected-corpus redaction.
+//! `chatter experimental transform redact`, protected-corpus redaction.
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
+use talkbank_transform::report_destination::{ReportDestinationError, StagedReportDestination};
 
 use super::*;
 
 /// Sanitize a single CHAT file and write the result to `output_path` (or
 /// stdout when `None`).
 ///
-/// Implements `chatter debug sanitize`. Runs the strict sanitization
+/// Implements `chatter experimental transform redact`. Runs the strict sanitization
 /// policy from `talkbank-transform::redact`. See the book's sanitizer guide
 /// for the retained metadata and manual privacy-review boundary.
 ///
-/// A file that parses with diagnostics but still builds a model (a
-/// healthy region alongside a malformed one) is sanitized anyway: the
-/// diagnostics are reported on stderr as a warning, not treated as fatal.
-/// Only a file that cannot build a model at all (see
-/// [`talkbank_parser::ParseProduct::Unbuildable`]) aborts the run.
-pub fn run_sanitize(input: &Path, output_path: Option<&Path>) {
+/// Source-bound sanitization checks the unedited model for dropped/reordered
+/// source content before redacting it. Recovery diagnostics are reported, but
+/// are not themselves fatal. Internal faults, unbuildable parses, source loss
+/// and unsupported lexical recovery refuse before opening any destination.
+pub fn run_sanitize(input: &Path, output_path: Option<&Path>) -> crate::exit_codes::CommandResult {
     let mut source_handle = File::open(input)
         .and_then(same_file::Handle::from_file)
-        .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", input.display())));
+        .map_err(|e| die(&format!("cannot read {}: {e}", input.display())))?;
     let mut source = String::new();
     source_handle
         .as_file_mut()
         .read_to_string(&mut source)
-        .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", input.display())));
-    let parser = super::parser();
-    let Some(parsed) = parse_or_report(&parser, input, &source) else {
-        std::process::exit(1);
-    };
-
+        .map_err(|e| die(&format!("cannot read {}: {e}", input.display())))?;
+    let parser = super::parser()?;
+    let errors = talkbank_model::ErrorCollector::new();
     let policy = talkbank_transform::redact::SanitizationPolicy::strict();
-    let sanitized = talkbank_transform::redact::sanitize(parsed, &policy)
-        .unwrap_or_else(|e| die(&format!("sanitize failed for {}: {e}", input.display())));
+    let result =
+        talkbank_transform::parse_source_with_parser(&parser, &source).sanitize(&policy, &errors);
+    let diagnostics = errors.into_vec();
+    if !diagnostics.is_empty() {
+        eprintln!(
+            "WARNING: {} parse diagnostic(s) for {}: {}",
+            diagnostics.len(),
+            input.display(),
+            talkbank_model::ParseErrors::from(diagnostics)
+        );
+    }
+    let sanitized =
+        result.map_err(|e| die(&format!("sanitize failed for {}: {e}", input.display())))?;
     let chat_text = sanitized.to_chat_string();
 
     match output_path {
-        Some(path) => DistinctOutput::open(&source_handle, path)
+        Some(path) => DistinctOutput::open(input, &source_handle, path)
             .and_then(|output| output.write(chat_text.as_bytes()))
-            .unwrap_or_else(|e| die(&format!("cannot write {}: {e}", path.display()))),
-        None => std::io::stdout()
-            .lock()
-            .write_all(chat_text.as_bytes())
-            .unwrap_or_else(|e| crate::stdout::closed(e)),
+            .map_err(|e| die(&format!("cannot write {}: {e}", path.display())))?,
+        None => out!("{chat_text}"),
     }
+    Ok(())
 }
 
-/// An opened destination whose identity differs from the retained source.
-/// Only this capability can truncate/write; neither operation reopens a path.
-struct DistinctOutput(same_file::Handle);
+/// A staged destination distinct from the retained source identity.
+struct DistinctOutput(StagedReportDestination);
 
 #[derive(Debug, thiserror::Error)]
 enum OutputError {
@@ -63,28 +68,22 @@ enum OutputError {
 }
 
 impl DistinctOutput {
-    fn open(source: &same_file::Handle, path: &Path) -> Result<Self, OutputError> {
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(path)?;
-        let output = same_file::Handle::from_file(file)?;
-        if source == &output {
-            return Err(OutputError::SourceAlias);
-        }
-        Ok(Self(output))
+    fn open(input: &Path, source: &same_file::Handle, path: &Path) -> Result<Self, OutputError> {
+        StagedReportDestination::admit_opened(path, input, source)
+            .map(Self)
+            .map_err(|error| match error {
+                ReportDestinationError::SourceAlias(_) => OutputError::SourceAlias,
+                ReportDestinationError::Io(error)
+                | ReportDestinationError::SourceIdentity { source: error, .. } => {
+                    OutputError::Io(error)
+                }
+            })
     }
 
-    fn write(mut self, bytes: &[u8]) -> Result<(), OutputError> {
-        let file = self.0.as_file_mut();
-        // Streams/devices have no replaceable length. Preserve their write
-        // behavior while truncating ordinary files only after admission.
-        if file.metadata()?.is_file() {
-            file.set_len(0)?;
-        }
-        file.write_all(bytes)?;
-        file.flush()?;
+    fn write(self, bytes: &[u8]) -> Result<(), OutputError> {
+        let mut writer = self.0.into_writer()?;
+        writer.write_all(bytes)?;
+        writer.finish()?.publish()?;
         Ok(())
     }
 }

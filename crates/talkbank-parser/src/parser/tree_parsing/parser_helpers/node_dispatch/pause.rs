@@ -6,7 +6,7 @@
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{AsRawNode, PauseTokenNode};
-use crate::model::{Pause, PauseDuration, PauseTimedDuration};
+use crate::model::{Pause, PauseDuration, TimedPause};
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
@@ -49,21 +49,18 @@ pub(crate) fn parse_pause_node(
                 return ParseOutcome::rejected();
             };
 
-            if duration_text.is_empty() {
+            let Ok(duration) = TimedPause::new(duration_text) else {
                 errors.report(ParseError::new(
                     ErrorCode::TreeParsingError,
                     Severity::Error,
                     DiagnosticLocation::new(span_of(node)),
                     ErrorContext::new(source, span_of(node), duration_text),
-                    "pause_token duration is empty",
+                    "pause_token duration has invalid CHAT spelling",
                 ));
                 return ParseOutcome::rejected();
-            }
+            };
 
-            ParseOutcome::parsed(Pause::new(
-                span,
-                PauseDuration::Timed(PauseTimedDuration::new(duration_text.to_string())),
-            ))
+            ParseOutcome::parsed(Pause::new(span, PauseDuration::Timed(duration)))
         }
     }
 }

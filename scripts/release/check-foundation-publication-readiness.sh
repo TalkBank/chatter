@@ -170,7 +170,13 @@ echo
 echo "==> Checking package contents for first-wave crates"
 for package_name in "${first_wave[@]}"; do
     echo "  - ${package_name}"
-    cargo package --list -p "${package_name}" --locked "${allow_dirty[@]}" >/dev/null
+    package_files="$(cargo package --list -p "${package_name}" --locked "${allow_dirty[@]}")"
+    if [[ "$package_name" == talkbank-transform ]]; then
+        if ! printf '%s\n' "$package_files" | grep -Fx 'schema/chat-file.schema.json' >/dev/null; then
+            echo "error: talkbank-transform package omits its embedded CHAT schema" >&2
+            exit 1
+        fi
+    fi
 done
 
 echo

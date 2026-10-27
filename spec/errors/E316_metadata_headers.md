@@ -102,6 +102,25 @@ chat = '''
 *CHI:	hello .
 @End
 '''
+
+[[example]]
+title = 'A continuation cannot add a second Types triple'
+level = 'header'
+claim = 'violates'
+notes = 'The Types production contains exactly three fields. A continuation cannot start another triple after the group field; preserving only the first triple would silently discard source.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng, fra, spa
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Types:	long, toyplay, TD
+	cross, narrative, SLI
+@Situation:	café α — jeu partagé
+*CHI:	hello .
+@End
+'''
+
 +++
 
 **Status:** Current
@@ -113,6 +132,8 @@ chat = '''
 separated by commas. Optional spaces around those commas do not change the
 fields. Truncating the header after design is not a complete Types declaration.
 Internal whitespace, punctuation and non-ASCII text do not match those atoms.
+The complete body contains one triple; a second triple on a continuation is
+not part of the Types production.
 
 The legal controls combine an ordered ISO 639-3 language list, the Types fields
 and Unicode free text in `@Situation`. Unicode situation text is not a language

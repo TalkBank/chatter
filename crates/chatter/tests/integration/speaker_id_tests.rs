@@ -23,6 +23,154 @@ use tempfile::tempdir;
 
 use crate::common::CliHarness;
 
+#[test]
+fn speaker_id_chat_output_preserves_input_aliases() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let donor = dir.path().join("donor.cha");
+    fs::write(&donor, FIX_ASR_ANON_2SPK)?;
+    let hard_link = dir.path().join("hard.cha");
+    fs::hard_link(&donor, &hard_link)?;
+    let destinations = vec![donor.clone(), hard_link];
+    #[cfg(unix)]
+    let destinations = {
+        let mut destinations = destinations;
+        let symlink = dir.path().join("symbolic.cha");
+        std::os::unix::fs::symlink(&donor, &symlink)?;
+        destinations.push(symlink);
+        destinations
+    };
+    for destination in destinations {
+        harness
+            .chatter_cmd()
+            .args(["experimental", "speakers", "map"])
+            .arg(&donor)
+            .args(["--mapping", "PAR0=drop,PAR1=INV:Investigator", "-o"])
+            .arg(destination)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("output aliases input"));
+        assert_eq!(fs::read_to_string(&donor)?, FIX_ASR_ANON_2SPK);
+    }
+    let unrelated = dir.path().join("output.cha");
+    fs::write(&unrelated, "old unrelated output")?;
+    harness
+        .chatter_cmd()
+        .args(["experimental", "speakers", "map"])
+        .arg(&donor)
+        .args(["--mapping", "PAR0=drop,PAR1=INV:Investigator", "-o"])
+        .arg(&unrelated)
+        .assert()
+        .success();
+    assert!(fs::read_to_string(unrelated)?.contains("*INV:"));
+    assert_eq!(fs::read_to_string(&donor)?, FIX_ASR_ANON_2SPK);
+    Ok(())
+}
+
+#[test]
+fn speaker_id_chat_output_preserves_reference_and_replay() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let donor = dir.path().join("donor.cha");
+    let reference = dir.path().join("reference.cha");
+    fs::write(&donor, FIX_DONOR_CLEAN_WINNER)?;
+    fs::write(&reference, FIX_REF_CHI_FROG)?;
+    harness
+        .chatter_cmd()
+        .args(["experimental", "speakers", "match"])
+        .arg(&donor)
+        .arg("--reference")
+        .arg(&reference)
+        .args([
+            "--anchor",
+            "CHI",
+            "--inserted-role",
+            "INV:Investigator",
+            "-o",
+        ])
+        .arg(&reference)
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("output aliases input"));
+    assert_eq!(fs::read_to_string(reference)?, FIX_REF_CHI_FROG);
+    fs::write(&donor, FIX_DONOR_REPLAY)?;
+    let replay = dir.path().join("overrides.toml");
+    fs::write(&replay, FIX_OVERRIDE_FILE)?;
+    harness
+        .chatter_cmd()
+        .args(["experimental", "speakers", "replay"])
+        .arg(&donor)
+        .arg("--override-file")
+        .arg(&replay)
+        .args(["--session-id", "donor", "-o"])
+        .arg(&replay)
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("output aliases input"));
+    assert_eq!(fs::read_to_string(replay)?, FIX_OVERRIDE_FILE);
+    assert_eq!(fs::read_to_string(donor)?, FIX_DONOR_REPLAY);
+    Ok(())
+}
+
+#[test]
+fn speaker_id_chat_output_preserves_recorded_artifacts() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let donor = dir.path().join("donor.cha");
+    let reference = dir.path().join("reference.cha");
+    fs::write(&donor, FIX_DONOR_CLEAN_WINNER)?;
+    fs::write(&reference, FIX_REF_CHI_FROG)?;
+    enum Artifact {
+        MatchReport,
+        Override,
+        Pending,
+    }
+    for kind in [Artifact::MatchReport, Artifact::Override, Artifact::Pending] {
+        let option = match kind {
+            Artifact::MatchReport => "--write-match-report",
+            Artifact::Override => "--write-override",
+            Artifact::Pending => "--write-pending",
+        };
+        let artifact = dir.path().join(option);
+        if let Artifact::Pending = kind {
+            // High-confidence reference matching leaves this existing artifact
+            // alone; final CHAT output must preserve it too.
+            fs::write(&artifact, "retained pending evidence")?;
+        }
+        harness
+            .chatter_cmd()
+            .args(["experimental", "speakers", "match"])
+            .arg(&donor)
+            .arg("--reference")
+            .arg(&reference)
+            .args(["--anchor", "CHI", "--inserted-role", "INV:Investigator"])
+            .arg(option)
+            .arg(&artifact)
+            .arg("-o")
+            .arg(&artifact)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("output aliases input"));
+        let text = fs::read_to_string(&artifact)?;
+        match kind {
+            Artifact::MatchReport => {
+                let report: serde_json::Value = serde_json::from_str(&text)?;
+                assert_eq!(report["outcome"], "accepted");
+            }
+            Artifact::Override => {
+                let record =
+                    talkbank_transform::speaker_id::OverrideFile::read_or_default(&artifact)
+                        .expect("retained valid override");
+                assert!(record.get("donor").is_some());
+            }
+            Artifact::Pending => assert_eq!(text, "retained pending evidence"),
+        }
+    }
+    assert_eq!(fs::read_to_string(donor)?, FIX_DONOR_CLEAN_WINNER);
+    assert_eq!(fs::read_to_string(reference)?, FIX_REF_CHI_FROG);
+    Ok(())
+}
+
 /// Anonymous-2-speaker donor fixture for the explicit-mapping smoke
 /// test. ASR systems commonly emit `PAR0`, `PAR1`, ... as
 /// placeholder speaker codes; the operator listens to the audio and
@@ -61,7 +209,7 @@ fn speaker_id_explicit_basic() -> Result<(), TestError> {
 
     harness
         .chatter_cmd()
-        .arg("speaker-id")
+        .args(["experimental", "speakers", "map"])
         .arg(&input)
         .arg("--mapping")
         .arg("PAR0=drop,PAR1=INV:Investigator")
@@ -138,7 +286,7 @@ fn speaker_id_explicit_basic() -> Result<(), TestError> {
 /// stderr (a warning, not an error: deterministic runs must keep working) so
 /// the configured context is not silently ignored.
 #[test]
-fn speaker_id_deterministic_warns_session_context_ignored() -> Result<(), TestError> {
+fn speaker_mapping_refuses_irrelevant_provider_options() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let dir = tempdir()?;
     let input = dir.path().join("asr-anon.cha");
@@ -152,7 +300,7 @@ fn speaker_id_deterministic_warns_session_context_ignored() -> Result<(), TestEr
 
     harness
         .chatter_cmd()
-        .arg("speaker-id")
+        .args(["experimental", "speakers", "map"])
         .arg(&input)
         .arg("--mapping")
         .arg("PAR0=drop,PAR1=INV:Investigator")
@@ -161,14 +309,15 @@ fn speaker_id_deterministic_warns_session_context_ignored() -> Result<(), TestEr
         .arg("-o")
         .arg(&out)
         .assert()
-        .success()
+        .code(2)
         .stderr(
-            predicate::str::contains("--session-context").and(predicate::str::contains("holistic")),
+            predicate::str::contains("--session-context")
+                .and(predicate::str::contains("unexpected argument")),
         );
 
     assert!(
-        out.exists(),
-        "the deterministic run must still produce its output (warning, not error)"
+        !out.exists(),
+        "an irrelevant provider option must be refused before publication"
     );
     Ok(())
 }
@@ -227,7 +376,7 @@ fn speaker_id_reference_low_confidence_exits_4() -> Result<(), TestError> {
 
     harness
         .chatter_cmd()
-        .arg("speaker-id")
+        .args(["experimental", "speakers", "match"])
         .arg(&donor)
         .arg("--reference")
         .arg(&reference)
@@ -283,7 +432,7 @@ fn speaker_id_match_report_records_input_read_failures() -> Result<(), TestError
 
         harness
             .chatter_cmd()
-            .arg("speaker-id")
+            .args(["experimental", "speakers", "match"])
             .arg(&donor)
             .arg("--reference")
             .arg(&reference)
@@ -324,7 +473,7 @@ fn speaker_id_match_report_records_support_and_refuses_overwrite() -> Result<(),
     let command = || {
         let mut command = harness.chatter_cmd();
         command
-            .arg("speaker-id")
+            .args(["experimental", "speakers", "match"])
             .arg(&donor)
             .arg("--reference")
             .arg(&reference)
@@ -378,7 +527,7 @@ fn speaker_id_reference_writes_pending_on_low_confidence() -> Result<(), TestErr
 
     harness
         .chatter_cmd()
-        .arg("speaker-id")
+        .args(["experimental", "speakers", "match"])
         .arg(&donor)
         .arg("--reference")
         .arg(&reference)
@@ -480,7 +629,7 @@ fn speaker_id_reference_writes_override_and_match_report() -> Result<(), TestErr
 
     harness
         .chatter_cmd()
-        .arg("speaker-id")
+        .args(["experimental", "speakers", "match"])
         .arg(&donor)
         .arg("--reference")
         .arg(&reference)
@@ -607,7 +756,7 @@ fn speaker_id_override_file_replay() -> Result<(), TestError> {
 
     harness
         .chatter_cmd()
-        .arg("speaker-id")
+        .args(["experimental", "speakers", "replay"])
         .arg(&donor)
         .arg("--override-file")
         .arg(&overrides)

@@ -24,7 +24,7 @@ Language Server Protocol. It uses tree-sitter for incremental parsing and the
 
 ## Editor Integration
 
-Follow the book's [Editor Integration tutorial](../../book/src/chatter/user-guide/editor-integration.md)
+Follow the book's [Editor Integration tutorial](https://github.com/TalkBank/chatter/blob/main/book/src/chatter/user-guide/editor-integration.md)
 for installation, an actual Neovim configuration, an edit/diagnostic exercise
 and troubleshooting. Use stdio transport, `*.cha` files and the `chat` language
 identifier. Let the client launch the selected executable; running it alone in
@@ -36,7 +36,7 @@ by every generic LSP client.
 
 ## Lifecycle verification
 
-The [LSP testing guide](../../book/src/contributing/lsp-testing.md) owns the
+The [LSP testing guide](https://github.com/TalkBank/chatter/blob/main/book/src/contributing/lsp-testing.md) owns the
 manual drill, logging limits, focused process-test commands and shutdown/exit
 contract. The server library remains a thin protocol adapter over shared CHAT
 semantics; embedders are responsible for their runtime and logging setup.

@@ -2,6 +2,129 @@
 
 use talkbank_model::{ChatParser, ErrorCode, ErrorCollector, ParseOutcome, Span};
 
+#[test]
+fn header_separator_findings_keep_their_source_line_across_transports() {
+    use crate::fixture_utils::LineEnding;
+
+    #[derive(Clone, Copy, Debug)]
+    enum Separator {
+        MissingTab,
+        Valid,
+        MissingColon,
+    }
+    #[derive(Clone, Copy, Debug)]
+    enum Api {
+        File,
+        Header,
+    }
+    let specs = talkbank_parser_tests::error_specs::load(
+        talkbank_parser_tests::repo_paths::workspace_root(),
+    )
+    .unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E303.md")
+        .unwrap();
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    let mut failures = Vec::new();
+    for (title, header, separator) in [
+        (
+            "A space after the header colon",
+            "@Situation: at home",
+            Separator::MissingTab,
+        ),
+        (
+            "Nothing between the colon and the value",
+            "@Comment:note",
+            Separator::MissingTab,
+        ),
+        (
+            "A single TAB after the colon",
+            "@Situation:\tat home",
+            Separator::Valid,
+        ),
+        (
+            "Deleting the separator and value leaves the colon at end of line",
+            "@Comment:",
+            Separator::MissingTab,
+        ),
+        (
+            "A nonbreaking space cannot replace the header TAB",
+            "@Comment:\u{a0}a note",
+            Separator::MissingTab,
+        ),
+        (
+            "A multiword header name with its required TAB",
+            "@Recording Quality:\t4",
+            Separator::Valid,
+        ),
+        (
+            "Delete only the TAB after a multiword header name",
+            "@Recording Quality:4",
+            Separator::MissingTab,
+        ),
+        (
+            "Deleting the colon does not make the retained TAB missing",
+            "@Recording Quality\t4",
+            Separator::MissingColon,
+        ),
+        (
+            "A multiword free-text header with its required TAB",
+            "@Tape Location:\tsegment one",
+            Separator::Valid,
+        ),
+        (
+            "Deleting the TAB in a multiword free-text header",
+            "@Tape Location:segment one",
+            Separator::MissingTab,
+        ),
+    ] {
+        let example = spec
+            .examples()
+            .iter()
+            .find(|example| example.title.as_deref() == Some(title))
+            .unwrap();
+        assert!(example.chat.as_str().lines().any(|line| line == header));
+        for ending in LineEnding::ALL {
+            for origin in [0, "Préface café\n".len()] {
+                for api in [Api::File, Api::Header] {
+                    let source = match api {
+                        Api::File => ending.apply(example.chat.as_str()),
+                        Api::Header => ending.apply(header),
+                    };
+                    let errors = ErrorCollector::new();
+                    let parsed = match api {
+                        Api::File => parser.parse_chat_file(&source, origin, &errors).map(|_| ()),
+                        Api::Header => parser.parse_header(&source, origin, &errors).map(|_| ()),
+                    };
+                    let diagnostics = errors.into_vec();
+                    if let Separator::Valid = separator
+                        && (!matches!(parsed, ParseOutcome::Parsed(())) || !diagnostics.is_empty())
+                    {
+                        failures.push(format!("{title}/{ending:?}/{origin}/{api:?}: valid control {parsed:?}, {diagnostics:?}"));
+                    }
+                    let expected = match separator {
+                        Separator::MissingTab => {
+                            let start = origin + source.find(header).unwrap();
+                            vec![Some(Span::new(start, start + header.len()))]
+                        }
+                        Separator::Valid | Separator::MissingColon => vec![],
+                    };
+                    let actual: Vec<_> = diagnostics
+                        .iter()
+                        .filter(|diagnostic| diagnostic.code == ErrorCode::SyntaxError)
+                        .map(|diagnostic| diagnostic.location.span())
+                        .collect();
+                    if actual != expected {
+                        failures.push(format!("{title}/{ending:?}/{origin}/{api:?}: expected {expected:?}, got {actual:?}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// Recovery preserves the written scope without inventing a retrace marker.
 /// Serialization and diagnostic retention are separate external contracts.
 #[test]
@@ -230,4 +353,61 @@ fn file_recovery_diagnostics_use_their_original_lexer_regions() {
     }
     assert_eq!(measured, 84);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Leading and trailing carets belong to a word and receive the placement
+/// diagnostic; the lexer must not manufacture a second, marker-only word.
+#[test]
+fn syllable_pause_edges_report_placement_without_empty_words() {
+    use talkbank_model::model::TranscriptName;
+
+    enum Expected {
+        PlacementError,
+        Legal,
+    }
+
+    let specs = talkbank_parser_tests::error_specs::load(
+        talkbank_parser_tests::repo_paths::workspace_root(),
+    )
+    .unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E252.md")
+        .unwrap();
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    for (index, expected) in [
+        (0, Expected::PlacementError),
+        (1, Expected::PlacementError),
+        (2, Expected::Legal),
+    ] {
+        for ending in crate::fixture_utils::LineEnding::ALL {
+            let source = ending.apply(spec.examples()[index].chat.as_str());
+            let errors = ErrorCollector::new();
+            let ParseOutcome::Parsed(mut file) = parser.parse_chat_file(&source, 0, &errors) else {
+                panic!("expected parsed syllable-pause example {index}");
+            };
+            file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+            let diagnostics = errors.into_vec();
+            match expected {
+                Expected::PlacementError => {
+                    assert!(
+                        diagnostics
+                            .iter()
+                            .any(|error| error.code.as_str() == "E252"),
+                        "example {index} {ending:?}: {diagnostics:?}"
+                    );
+                    assert!(
+                        !diagnostics
+                            .iter()
+                            .any(|error| error.code.as_str() == "E209"),
+                        "example {index} {ending:?}: spurious empty word: {diagnostics:?}"
+                    );
+                }
+                Expected::Legal => assert!(
+                    diagnostics.is_empty(),
+                    "legal example {index} {ending:?}: {diagnostics:?}"
+                ),
+            }
+        }
+    }
 }

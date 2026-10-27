@@ -3,349 +3,179 @@
 
 use crate::ast;
 use crate::source_text::SourceText;
-use crate::token::Token;
+use crate::token::{HeaderKind, Token};
 use talkbank_model::model::*;
 
-/// Convert a parsed header to model Header.
-pub fn header_to_model(h: &ast::HeaderParsed<'_>, source: SourceText<'_>) -> Header {
-    let (prefix, content) = match h {
-        ast::HeaderParsed::Participants(participants) => {
-            return Header::Participants {
-                entries: ParticipantEntries::new(
-                    participants
-                        .entries
-                        .iter()
-                        .map(ParticipantEntry::from)
-                        .collect(),
-                ),
-            };
-        }
-        ast::HeaderParsed::Other { prefix, content } => (prefix, content),
+/// Convert a located header using its admitted source owner.
+///
+/// A caller cannot replace the source used to place header media bullets:
+///
+/// ```compile_fail
+/// use talkbank_parser_re2c::{ast::LocatedHeader, convert::header_to_model};
+/// use talkbank_parser_re2c::source_text::SourceText;
+/// fn replace_source(header: &LocatedHeader<'_>, foreign: &str) {
+///     header_to_model(header, SourceText::new(foreign));
+/// }
+/// ```
+pub fn header_to_model(located: &ast::LocatedHeader<'_>) -> Header {
+    let h = located.header();
+    let source = located.source();
+    let (original, prefix, content) = match h {
+        ast::HeaderParsed::Shared(header) => return header.clone(),
+        ast::HeaderParsed::Other {
+            source,
+            prefix,
+            content,
+        } => (*source, prefix, content),
     };
-    let prefix_text = prefix.text();
-
-    // Join all content token texts for free-text headers.
-    // Preserve continuation newlines.
-    let all_content: String = content.iter().map(|t| t.text()).collect::<String>();
-
+    let all_content: String = content.iter().map(|token| token.text()).collect();
     match prefix {
         Token::HeaderUtf8(_) => Header::Utf8,
         Token::HeaderBegin(_) => Header::Begin,
         Token::HeaderEnd(_) => Header::End,
         Token::HeaderBlank(_) => Header::Blank,
         Token::HeaderNewEpisode(_) => Header::NewEpisode,
-        Token::HeaderPrefix(p) if p.text().contains("@Languages") => {
-            // `Token::LanguageCode`'s lexer rule requires at least one
-            // character (mirrors the tree-sitter grammar's
-            // `language_code: $ => /[a-z]{2,4}/`), so the text is
-            // guaranteed non-empty here; `.expect()` is defensive only
-            // (this crate's file-level `expect_used` allow covers exactly
-            // this kind of lexer-guaranteed-non-empty case).
-            let codes: Vec<LanguageCode> = content
-                .iter()
-                .filter(|t| matches!(t, Token::LanguageCode(_)))
-                .map(|t| {
-                    LanguageCode::new(t.text()).expect("lexed language_code token is non-empty")
-                })
-                .collect();
-            Header::Languages {
-                codes: LanguageCodes::new(codes),
-            }
+        Token::HeaderPrefix(prefix) => {
+            named_header_to_model(prefix.kind(), content, &all_content, original, source)
         }
-        Token::HeaderPrefix(p) if p.text().contains("@ID") => {
-            // Token struct carries all 10 fields directly, no splitting needed
-            if let Some(Token::IdFields {
-                language,
-                corpus,
-                speaker,
-                age,
-                sex,
-                group,
-                ses,
-                role,
-                education,
-                custom,
-            }) = content.iter().find(|t| !matches!(t, Token::Whitespace(_)))
-            {
-                // Language field can be comma-separated: "eng, ara". Filter
-                // empty pieces (e.g. a malformed "eng,,ara") before
-                // constructing, mirroring the canonical tree-sitter side's
-                // `id/parse.rs` guard, so a filtered-non-empty `.expect()`
-                // is provably safe rather than reachable on malformed input.
-                let lang_codes: Vec<LanguageCode> = language
-                    .split(',')
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty())
-                    .map(|s| {
-                        LanguageCode::new(s).expect("filtered non-empty by the preceding filter")
-                    })
-                    .collect();
-                let mut id = IDHeader::from_languages(
-                    LanguageCodes::new(lang_codes),
-                    SpeakerCode::new(*speaker),
-                    ParticipantRole::new(*role),
-                );
-                if !corpus.is_empty() {
-                    id = id.with_corpus(*corpus);
-                }
-                if !age.is_empty() {
-                    id = id.with_age(*age);
-                }
-                if !group.is_empty() {
-                    id = id.with_group(*group);
-                }
-                if !ses.is_empty() {
-                    id = id.with_ses(*ses);
-                }
-                if !education.is_empty() {
-                    id = id.with_education(*education);
-                }
-                if !custom.is_empty() {
-                    id = id.with_custom_field(*custom);
-                }
-                if !sex.is_empty() {
-                    id = id.with_sex(talkbank_model::model::Sex::from_text(sex));
-                }
-                return Header::ID(id);
-            }
-            Header::Unknown {
-                text: WarningText::new(format!("{prefix_text}{all_content}")),
-                parse_reason: Some("malformed @ID".to_string()),
-                suggested_fix: None,
-            }
-        }
-        Token::HeaderPrefix(p) if p.text().contains("@Types") => {
-            if let Some(Token::TypesFields {
-                design,
-                activity,
-                group,
-            }) = content.iter().find(|t| !matches!(t, Token::Whitespace(_)))
-            {
-                return Header::Types(TypesHeader::new(*design, *activity, *group));
-            }
-            Header::Unknown {
-                text: WarningText::new(all_content),
-                parse_reason: Some("malformed @Types".to_string()),
-                suggested_fix: None,
-            }
-        }
-        Token::HeaderPrefix(p) if p.text().contains("@Media") => {
-            // Media content is MediaWord/MediaFilename tokens separated by Comma
-            let words: Vec<&str> = content
-                .iter()
-                .filter(|t| matches!(t, Token::MediaWord(_) | Token::MediaFilename(_)))
-                .map(|t| t.text())
-                .collect();
-            // Whitespace directly before the FIRST comma (the lexer's `" "+`
-            // is greedy, so it is one token), as the tree-sitter grammar's
-            // `optional($.whitespaces)` child before the comma. Recorded as
-            // provenance so the validation rule (E767) fires for this front end
-            // too; the tree-sitter parser records the same fact from its
-            // `optional($.whitespaces)` child. Reporting it from one parser's
-            // lowering is what made the two disagree when E767 was introduced.
-            let whitespace_before_comma = content
-                .iter()
-                .position(|t| matches!(t, Token::Comma(_)))
-                .and_then(|comma| comma.checked_sub(1))
-                .and_then(|before| match &content[before] {
-                    Token::Whitespace(gap) => Some(*gap),
-                    _ => None,
-                });
-            // The lexer splits on the comma, so a well-formed header always
-            // satisfies the filename invariant; going through the checked
-            // constructor keeps this parser honest if that ever stops holding,
-            // and keeps it reporting what the tree-sitter front end reports,
-            // which degrades the same way for the same reasons.
-            //
-            // The two failures are kept DISTINCT rather than collapsed into one
-            // "malformed" verdict: too few fields and an unusable filename are
-            // different things to tell a transcriber, and the previous `.ok()`
-            // made an invalid filename indistinguishable from a missing comma.
-            let media = match words.as_slice() {
-                // The slice pattern is what licences reading the second field,
-                // so the arity check and the use cannot drift apart.
-                [filename, media_type, ..] => {
-                    match talkbank_model::model::MediaFilename::parse(filename) {
-                        Ok(filename) => Ok((filename, *media_type)),
-                        Err(err) => Err(err.to_string()),
-                    }
-                }
-                _ => Err("malformed @Media".to_string()),
-            };
-            match media {
-                Ok((filename, media_type)) => {
-                    let mut mh = MediaHeader::new(filename, MediaType::from_text(media_type));
-                    if let Some(gap) = whitespace_before_comma {
-                        // The gap is the whitespace token's own bytes.
-                        mh = mh.with_whitespace_before_comma(super::locate(source, gap));
-                    }
-                    if let Some(status) = words.get(2) {
-                        mh = mh.with_status(MediaStatus::from_text(status));
-                    }
-                    Header::Media(mh)
-                }
-                Err(parse_reason) => Header::Unknown {
-                    text: WarningText::new(all_content),
-                    parse_reason: Some(parse_reason),
-                    suggested_fix: None,
-                },
-            }
-        }
-        Token::HeaderPrefix(p) if p.text().contains("@Comment") => Header::Comment {
-            content: tokens_to_bullet_content(content),
-        },
-        Token::HeaderPrefix(p) if p.text().contains("@Date") => Header::Date {
+        Token::HeaderBirthOf(speaker) => Header::Birth {
+            participant: SpeakerCode::new(speaker.text()),
             date: ChatDate::new(&all_content),
         },
-        Token::HeaderPrefix(p) if p.text().contains("@Situation") => Header::Situation {
-            text: SituationDescription::new(&all_content),
-        },
-        Token::HeaderPrefix(p) if p.text().contains("@Location:") => Header::Location {
-            location: LocationDescription::new(&all_content),
-        },
-        Token::HeaderPrefix(p) if p.text().contains("@Activities") => Header::Activities {
-            activities: ActivitiesDescription::new(&all_content),
-        },
-        Token::HeaderPrefix(p) if p.text().contains("@PID") => Header::Pid {
-            pid: PidValue::new(&all_content),
-        },
-        Token::HeaderPrefix(p) if p.text().contains("@Options") => {
-            let flags: Vec<ChatOptionFlag> = all_content
-                .split(',')
-                .map(|s| ChatOptionFlag::from_text(s.trim()))
-                .collect();
-            Header::Options {
-                options: ChatOptionFlags::new(flags),
-            }
-        }
-        Token::HeaderBirthOf(speaker) => {
-            // Token carries tag-extracted speaker code directly
-            Header::Birth {
-                participant: SpeakerCode::new(speaker.text()),
-                date: ChatDate::new(&all_content),
-            }
-        }
         Token::HeaderBirthplaceOf(speaker) => Header::Birthplace {
             participant: SpeakerCode::new(speaker.text()),
             place: BirthplaceDescription::new(&all_content),
         },
-        // @L1 of values are ISO 639-3 codes (typed model migration,
-        // 2026-07-16); an empty value cannot form a code and mirrors the
-        // tree-sitter path's unknown-header fallback.
         Token::HeaderL1Of(speaker) => match LanguageCode::new(&all_content) {
             Ok(language) => Header::L1Of {
                 participant: SpeakerCode::new(speaker.text()),
                 language,
             },
-            Err(_empty) => Header::Unknown {
-                text: WarningText::new(all_content),
+            Err(_) => Header::Unknown {
+                text: WarningText::new(original),
                 parse_reason: Some("Empty language value in @L1 of header".to_string()),
                 suggested_fix: None,
             },
         },
-        Token::HeaderPrefix(p) if p.text().contains("@Bg") => Header::BeginGem {
-            label: if all_content.is_empty() {
-                None
-            } else {
-                Some(gem_label(content))
-            },
+        _ => unknown_header(original),
+    }
+}
+
+fn unknown_header(original: &str) -> Header {
+    Header::Unknown {
+        text: WarningText::new(original),
+        parse_reason: None,
+        suggested_fix: None,
+    }
+}
+
+/// Exact lexical identity selects semantics; unsupported names retain source.
+#[deny(clippy::wildcard_enum_match_arm)]
+fn named_header_to_model(
+    kind: HeaderKind,
+    content: &[Token<'_>],
+    text: &str,
+    original: &str,
+    source: SourceText<'_>,
+) -> Header {
+    match kind {
+        HeaderKind::Comment => Header::Comment {
+            content: tokens_to_bullet_content(content, source),
         },
-        Token::HeaderPrefix(p) if p.text().starts_with("@G:") || p.text() == "@G" => {
-            Header::LazyGem {
-                label: if all_content.is_empty() {
-                    None
-                } else {
-                    Some(gem_label(content))
-                },
-            }
-        }
-        Token::HeaderPrefix(p) if p.text().contains("@Eg") => Header::EndGem {
-            label: if all_content.is_empty() {
-                None
-            } else {
-                Some(gem_label(content))
-            },
+        HeaderKind::Date => Header::Date {
+            date: ChatDate::new(text),
         },
-        _ => {
-            // All other headers, use the appropriate model type based on prefix
-            let ct = &all_content;
-            if prefix_text.contains("@Font") {
-                Header::Font {
-                    font: FontSpec::new(ct),
-                }
-            } else if prefix_text.contains("@Window") {
-                Header::Window {
-                    geometry: WindowGeometry::new(ct),
-                }
-            } else if prefix_text.contains("@Color words") {
-                Header::ColorWords {
-                    colors: ColorWordList::new(ct),
-                }
-            } else if prefix_text.contains("@Recording Quality") {
-                Header::RecordingQuality {
-                    quality: RecordingQuality::from_text(ct),
-                }
-            } else if prefix_text.contains("@Transcription") {
-                Header::Transcription {
-                    transcription: Transcription::from_text(ct),
-                }
-            } else if prefix_text.contains("@Number") {
-                Header::Number {
-                    number: Number::from_text(ct),
-                }
-            } else if prefix_text.contains("@Room Layout") {
-                Header::RoomLayout {
-                    layout: RoomLayoutDescription::new(ct),
-                }
-            } else if prefix_text.contains("@Tape Location") {
-                Header::TapeLocation {
-                    location: TapeLocationDescription::new(ct),
-                }
-            } else if prefix_text.contains("@Time Duration") {
-                Header::TimeDuration {
-                    duration: TimeDurationValue::new(ct),
-                }
-            } else if prefix_text.contains("@Time Start") {
-                Header::TimeStart {
-                    start: TimeStartValue::new(ct),
-                }
-            } else if prefix_text.contains("@Transcriber") {
-                Header::Transcriber {
-                    transcriber: TranscriberName::new(ct),
-                }
-            } else if prefix_text.contains("@Warning") {
-                Header::Warning {
-                    text: WarningText::new(ct),
-                }
-            } else if prefix_text.contains("@Page") {
-                Header::Page {
-                    page: PageNumber::new(ct),
-                }
-            } else if prefix_text.contains("@Videos") {
-                Header::Videos {
-                    videos: VideoSpec::new(ct),
-                }
-            } else if prefix_text.starts_with("@T:") || prefix_text == "@T" {
-                Header::T {
-                    text: TDescription::new(ct),
-                }
-            } else if prefix_text.contains("@Bck") {
-                Header::Bck {
-                    bck: BackgroundDescription::new(ct),
-                }
-            } else {
-                Header::Unknown {
-                    text: WarningText::new(format!("{prefix_text}{ct}")),
-                    parse_reason: None,
-                    suggested_fix: None,
-                }
-            }
-        }
+        HeaderKind::Situation => Header::Situation {
+            text: SituationDescription::new(text),
+        },
+        HeaderKind::Location => Header::Location {
+            location: LocationDescription::new(text),
+        },
+        HeaderKind::Activities => Header::Activities {
+            activities: ActivitiesDescription::new(text),
+        },
+        HeaderKind::Pid => Header::Pid {
+            pid: PidValue::new(text),
+        },
+        HeaderKind::Options => Header::Options {
+            options: ChatOptionFlags::new(
+                text.split(',')
+                    .map(|s| ChatOptionFlag::from_text(s.trim()))
+                    .collect(),
+            ),
+        },
+        HeaderKind::BeginGem => Header::BeginGem {
+            label: (!text.is_empty()).then(|| gem_label(content)),
+        },
+        HeaderKind::EndGem => Header::EndGem {
+            label: (!text.is_empty()).then(|| gem_label(content)),
+        },
+        HeaderKind::LazyGem => Header::LazyGem {
+            label: (!text.is_empty()).then(|| gem_label(content)),
+        },
+        HeaderKind::Font => Header::Font {
+            font: FontSpec::new(text),
+        },
+        HeaderKind::Window => Header::Window {
+            geometry: WindowGeometry::new(text),
+        },
+        HeaderKind::ColorWords => Header::ColorWords {
+            colors: ColorWordList::new(text),
+        },
+        HeaderKind::RecordingQuality => Header::RecordingQuality {
+            quality: RecordingQuality::from_text(text),
+        },
+        HeaderKind::Transcription => Header::Transcription {
+            transcription: Transcription::from_text(text),
+        },
+        HeaderKind::Number => Header::Number {
+            number: Number::from_text(text),
+        },
+        HeaderKind::RoomLayout => Header::RoomLayout {
+            layout: RoomLayoutDescription::new(text),
+        },
+        HeaderKind::TapeLocation => Header::TapeLocation {
+            location: TapeLocationDescription::new(text),
+        },
+        HeaderKind::TimeDuration => Header::TimeDuration {
+            duration: TimeDurationValue::new(text),
+        },
+        HeaderKind::TimeStart => Header::TimeStart {
+            start: TimeStartValue::new(text),
+        },
+        HeaderKind::Transcriber => Header::Transcriber {
+            transcriber: TranscriberName::new(text),
+        },
+        HeaderKind::Warning => Header::Warning {
+            text: WarningText::new(text),
+        },
+        HeaderKind::Videos => Header::Videos {
+            videos: VideoSpec::new(text),
+        },
+        HeaderKind::T => Header::T {
+            text: TDescription::new(text),
+        },
+        HeaderKind::Bck => Header::Bck {
+            bck: BackgroundDescription::new(text),
+        },
+        // Structured declarations are lowered by the dispatcher. A raw
+        // representation of one is not an admitted structured header.
+        HeaderKind::Types
+        | HeaderKind::Page
+        | HeaderKind::Id
+        | HeaderKind::Languages
+        | HeaderKind::Participants
+        | HeaderKind::Media
+        | HeaderKind::Thumbnail
+        | HeaderKind::Unknown => unknown_header(original),
     }
 }
 
 /// Convert a sequence of content tokens to BulletContent, preserving continuations.
-pub(crate) fn tokens_to_bullet_content(tokens: &[Token<'_>]) -> BulletContent {
+pub(crate) fn tokens_to_bullet_content(
+    tokens: &[Token<'_>],
+    source: SourceText<'_>,
+) -> BulletContent {
     let mut segments = Vec::new();
     for tok in tokens {
         match tok {
@@ -355,12 +185,17 @@ pub(crate) fn tokens_to_bullet_content(tokens: &[Token<'_>]) -> BulletContent {
             Token::Continuation(_) => {
                 segments.push(BulletContentSegment::continuation());
             }
-            Token::MediaBullet { bullet } => {
-                if let Some(times) = bullet.times() {
-                    let (start_ms, end_ms) = times.pair();
+            Token::MediaBullet { bullet } => match bullet.times().map(|times| times.pair()) {
+                Some((0, 0)) | None => {
+                    segments.push(BulletContentSegment::UnparsedBullet(UnparsedBullet::new(
+                        super::locate(source, bullet.text()),
+                        bullet.text(),
+                    )));
+                }
+                Some((start_ms, end_ms)) => {
                     segments.push(BulletContentSegment::bullet(start_ms, end_ms));
                 }
-            }
+            },
             Token::InlinePic(s) => {
                 // The token's payload is the tag-extracted filename.
                 segments.push(BulletContentSegment::picture(s.text()));
@@ -374,23 +209,6 @@ pub(crate) fn tokens_to_bullet_content(tokens: &[Token<'_>]) -> BulletContent {
     BulletContent::new(segments)
 }
 
-/// Convert participant words [SPK, Name, Role] to ParticipantEntry.
-pub(crate) fn participant_words_to_entry(words: &[&str]) -> ParticipantEntry {
-    // Slice shapes bind the optional name to the admitted interior fields.
-    // Preserve all name words, not only a three-field special case.
-    let (speaker, name, role) = match words {
-        [] => ("", None, ""),
-        [speaker] => (*speaker, None, ""),
-        [speaker, role] => (*speaker, None, *role),
-        [speaker, name @ .., role] => (*speaker, Some(ParticipantName::new(name.join(" "))), *role),
-    };
-    ParticipantEntry {
-        speaker_code: SpeakerCode::new(speaker),
-        name,
-        role: ParticipantRole::new(role),
-    }
-}
-
 /// A continuation token separates logical label words; it is not label data.
 fn gem_label(content: &[Token<'_>]) -> GemLabel {
     let text: String = content
@@ -401,29 +219,4 @@ fn gem_label(content: &[Token<'_>]) -> GemLabel {
         })
         .collect();
     GemLabel::new(text)
-}
-
-// ═══════════════════════════════════════════════════════════════
-// %mor conversions
-// ═══════════════════════════════════════════════════════════════
-
-impl<'a> From<&ast::MorWordParsed<'a>> for MorWord {
-    fn from(w: &ast::MorWordParsed<'a>) -> Self {
-        let mut word = MorWord::new(PosCategory::new(w.pos), MorStem::new(w.lemma));
-        for f in &w.features {
-            word = word.with_feature(MorFeature::new(*f));
-        }
-        word
-    }
-}
-
-impl<'a> From<&ast::MorItem<'a>> for Mor {
-    fn from(item: &ast::MorItem<'a>) -> Self {
-        let main = MorWord::from(&item.main);
-        let mut mor = Mor::new(main);
-        for clitic in &item.post_clitics {
-            mor = mor.with_post_clitic(MorWord::from(clitic));
-        }
-        mor
-    }
 }

@@ -165,7 +165,20 @@ impl std::fmt::Display for GeneratedPosition {
 /// Evidence that a producer failure has already been sent to the owning sink.
 /// Constructed only after reporting the fault; callers stop lowering instead
 /// of inventing replacement fields or emitting a second CHAT diagnostic.
-pub(in crate::parser) struct ReportedCstFailure;
+pub(in crate::parser) struct ReportedCstFailure(());
+
+impl ReportedCstFailure {
+    /// Report a producer fault before issuing the evidence that stops lowering.
+    pub(in crate::parser) fn report(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+        fault: impl Into<CstFailure>,
+        errors: &impl ErrorSink,
+    ) -> Self {
+        report_cst_failure(node, source, fault, errors);
+        Self(())
+    }
+}
 
 /// Extraction under the canonical grammar's admitted kind proof.
 ///
@@ -201,10 +214,7 @@ pub(in crate::parser) fn report_admission<T>(
     source: &str,
     errors: &impl ErrorSink,
 ) -> Result<T, ReportedCstFailure> {
-    result.map_err(|fault| {
-        report_cst_failure(node, source, fault, errors);
-        ReportedCstFailure
-    })
+    result.map_err(|fault| ReportedCstFailure::report(node, source, fault, errors))
 }
 
 /// Report producer failure at the boundary that still owns the source node.
@@ -239,13 +249,20 @@ pub(in crate::parser) fn read_source_field<'tree, 'source, T: SourceBoundKind<'t
     field: SourceField<'_, 'tree, 'source, T>,
     errors: &impl ErrorSink,
 ) -> Option<SourceBound<'tree, 'source, T>> {
-    match field.read() {
-        Ok(bound) => Some(bound),
-        Err(error) => {
-            report_cst_failure(field.raw_node(), field.source(), error, errors);
-            None
-        }
-    }
+    read_source_field_result(field, errors).ok()
+}
+
+/// Preserve a source-read refusal separately from ordinary syntax recovery.
+pub(in crate::parser) fn read_source_field_result<'tree, 'source, T: SourceBoundKind<'tree>>(
+    field: SourceField<'_, 'tree, 'source, T>,
+    errors: &impl ErrorSink,
+) -> Result<SourceBound<'tree, 'source, T>, ReportedCstFailure> {
+    report_admission(
+        field.read().map_err(Into::into),
+        field.raw_node(),
+        field.source(),
+        errors,
+    )
 }
 
 #[cfg(test)]
@@ -264,9 +281,13 @@ mod tests {
             .expect("parse");
         for refusal in [
             AdmittedRefusal::ForeignLanguage,
+            AdmittedRefusal::ContradictedKindProof,
             AdmittedRefusal::WrongRequiredParent,
             AdmittedRefusal::ContradictedPresenceProof,
         ] {
+            // Exercise reporting at the refusal boundary, not a fabricated
+            // tree that violates the compiled grammar's proof. Kind admission
+            // and required-position admission have distinct refusal variants.
             let sink = ErrorCollector::new();
             let result =
                 report_admission::<()>(Err(refusal.into()), parsed.root_node(), source, &sink);

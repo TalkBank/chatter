@@ -23,7 +23,7 @@ serde_json = { workspace = true }
 talkbank-model = { workspace = true }
 tree-sitter-highlight = { workspace = true }
 talkbank-parser = { workspace = true }
-talkbank-transform = { workspace = true }
+talkbank-transform = { workspace = true, default-features = false }
 thiserror = { workspace = true } #unified
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
@@ -37,6 +37,8 @@ name = "talkbank-lsp"
 path = "src/bin/talkbank-lsp.rs"
 
 [dev-dependencies]
+talkbank-parser-tests = { path = "../talkbank-parser-tests" }
+tempfile.workspace = true
 insta = { workspace = true }
 
 # This crate finished its panic-site audit on 2026-04-29 (see

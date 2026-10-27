@@ -235,6 +235,20 @@ fn positional_when_a_filler_is_timed() -> Result<(), TestError> {
         sidecar("&-dt there .", &wor)?,
         WorTimingSidecar::Positional { count: 2 }
     );
+    let parsed = utterance("&-dt there .", Some(&wor))?;
+    let matched = parsed
+        .main
+        .wor_projection()
+        .bind_present_timing(parsed.wor_tier().expect("fixture has a WOR tier"))
+        .expect("filler slots must count-match");
+    assert_eq!(
+        matched
+            .main_display_texts()
+            .map(|text| text.as_str())
+            .collect::<Vec<_>>(),
+        ["dt", "there"],
+        "admitted display text omits the category marker without losing the filler slot"
+    );
     Ok(())
 }
 

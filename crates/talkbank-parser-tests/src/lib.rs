@@ -15,10 +15,11 @@
 //! Shared parser test harness, golden fixtures, and equivalence infrastructure.
 //!
 //! This crate provides the testing backbone for TalkBank's two-parser strategy.
-//! The tree-sitter parser (canonical, GLR-based, error-recovering) and the direct
-//! parser (experimental, chumsky combinators, with selective recovery/leniency)
-//! must produce semantically identical [`talkbank_model::ChatFile`] ASTs on all
-//! well-formed full-file input. This crate enforces that contract.
+//! Tree-sitter and the native re2c backend are peers producing the shared
+//! [`talkbank_model::ChatFile`]. Tree-sitter was prototyped first; neither backend
+//! owns the model or defines correctness for the other. Each must satisfy the
+//! specification independently, alongside semantic agreement on supported
+//! well-formed full-file input.
 //!
 //! It should not assume tree-sitter fragment helpers are the oracle for direct-
 //! parser fragment semantics. Fragment and recovery behavior need independent

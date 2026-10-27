@@ -223,7 +223,7 @@ impl WriteChat for UntranscribedStatus {
     ///
     /// Serialization is intentionally lossless and normalization-free because
     /// downstream tooling relies on the exact marker token.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.canonical())
     }
 }

@@ -31,11 +31,8 @@ fn lex(input: &str) -> Vec<Token<'_>> {
 }
 
 /// Lex input starting from a specific condition (for isolated tier parsing).
-fn lex_with(input: &str, condition: usize) -> Vec<Token<'_>> {
-    let mut s = input.to_string();
-    s.push('\0');
-    let s: &str = Box::leak(s.into_boxed_str());
-    Lexer::new(s, condition).map(|(t, _)| t).collect()
+fn lex_with(input: &str, condition: talkbank_parser_re2c::lexer::StartCondition) -> Vec<Token<'_>> {
+    Lexer::new(input, condition).map(|(t, _)| t).collect()
 }
 
 // ── Main tier structure ─────────────────────────────────────────
@@ -128,15 +125,46 @@ fn lex_all_terminators() {
     ];
 
     for (input, check) in &cases {
-        let tokens = lex(input);
-        let terminator = tokens
-            .iter()
-            .rev()
-            .find(|t| !matches!(t, Token::Newline(_) | Token::Whitespace(_)));
-        assert!(
-            terminator.is_some_and(check),
-            "input {input:?}: expected terminator, got {terminator:?}"
-        );
+        for newline in ["\n", "\r\n", "\r"] {
+            let input = input.replace('\n', newline);
+            let tokens = lex(&input);
+            let terminator = tokens
+                .iter()
+                .rev()
+                .find(|t| !matches!(t, Token::Newline(_) | Token::Whitespace(_)));
+            assert!(
+                terminator.is_some_and(check),
+                "input {input:?}: expected terminator, got {terminator:?}"
+            );
+            // The grammar boundary produces the same located shared value as the
+            // public fragment API, including its origin shift. CA tails stay absent.
+            use talkbank_model::{ChatParser, ErrorCollector, ParseOutcome, Span, Terminator};
+            let token = terminator.unwrap();
+            let begin = input.rfind(token.text()).unwrap();
+            let native = talkbank_parser_re2c::parser::parse_main_tier(&input).unwrap();
+            assert_eq!(
+                native.tier_body.terminator,
+                Terminator::try_from_chat_str(
+                    Span::new(begin, begin + token.text().len()),
+                    token.text()
+                )
+            );
+            for origin in [0, 200] {
+                let errors = ErrorCollector::new();
+                let ParseOutcome::Parsed(shared) = talkbank_parser_re2c::Re2cParser::new()
+                    .parse_main_tier(&input, origin, &errors)
+                else {
+                    panic!("reference terminator must parse: {input:?}");
+                };
+                assert_eq!(
+                    shared.content.terminator,
+                    Terminator::try_from_chat_str(
+                        Span::new(origin + begin, origin + begin + token.text().len()),
+                        token.text()
+                    )
+                );
+            }
+        }
     }
 }
 
@@ -1470,10 +1498,7 @@ fn lex_never_panics_on_arbitrary_input() {
         "%mor:\t\x07|\x08 .\n",
     ];
     for input in &inputs {
-        let mut s = input.to_string();
-        s.push('\0');
-        let s: &str = Box::leak(s.into_boxed_str());
-        let tokens: Vec<_> = Lexer::new(s, 0).collect();
+        let tokens: Vec<_> = Lexer::new(input, COND_INITIAL).collect();
         let _ = tokens; // just verify no panic
     }
 }
@@ -1508,7 +1533,7 @@ fn lex_corpus_main_tiers_no_panic() {
                     if line.starts_with('*') {
                         total += 1;
                         let input = format!("{line}\n\0");
-                        let tokens: Vec<_> = Lexer::new(&input, 0).collect();
+                        let tokens: Vec<_> = Lexer::new(&input, COND_INITIAL).collect();
                         assert!(!tokens.is_empty(), "empty lex for: {line}");
                     }
                 }
@@ -1609,10 +1634,8 @@ fn lex_pause_not_shortening() {
     ] {
         let tokens = lex_with(input, COND_MAIN_CONTENT);
         assert!(
-            !tokens
-                .iter()
-                .any(|t| matches!(t, Token::Word { .. } | Token::Shortening(_))),
-            "{expected}: '{input}' should NOT produce Word or Shortening, got {tokens:?}"
+            !tokens.iter().any(|t| matches!(t, Token::Word { .. })),
+            "{expected}: '{input}' should NOT produce a word, got {tokens:?}"
         );
     }
 }
@@ -1691,10 +1714,6 @@ fn lex_standalone_shortening_is_word() {
     assert!(
         tokens.iter().any(|t| matches!(t, Token::Word { .. })),
         "standalone (parens) should produce Word, got {tokens:?}"
-    );
-    assert!(
-        !tokens.iter().any(|t| matches!(t, Token::Shortening(_))),
-        "standalone (parens) should NOT produce bare Shortening sub-token"
     );
 }
 
@@ -1796,14 +1815,14 @@ fn parse_file_filler_with_bullet() {
     let parsed = talkbank_parser_re2c::parser::parse_chat_file(input);
     // Find the utterance
     let utterance = parsed
-        .lines
+        .lines()
         .iter()
         .find(|l| matches!(l, talkbank_parser_re2c::ast::Line::Utterance(_)));
     assert!(utterance.is_some(), "should have one utterance");
     if let Some(talkbank_parser_re2c::ast::Line::Utterance(u)) = utterance {
-        let content_len = u.main_tier.tier().tier_body.contents.len();
+        let content_len = u.main_tier().tier().tier_body.contents.len();
         eprintln!("File-level content items: {content_len}");
-        for (i, item) in u.main_tier.tier().tier_body.contents.iter().enumerate() {
+        for (i, item) in u.main_tier().tier().tier_body.contents.iter().enumerate() {
             eprintln!("  [{i}] {:?}", std::mem::discriminant(item));
         }
         assert!(
@@ -1888,4 +1907,70 @@ fn lex_error_marker_with_colon() {
         has_error_marker,
         "should have ErrorMarkerAnnotation, got {tokens:?}"
     );
+}
+
+/// NUL is a forbidden source character (E315), not permission to ignore a tail.
+/// Substitute it for the authored forbidden control to exercise the public
+/// lexical boundary independently of the parser's whole-input control check.
+#[test]
+fn lexical_nul_is_reported_without_truncating_the_source() {
+    use talkbank_parser_re2c::{lex as inspect, lex_line, lexer::StartCondition};
+    let authored = include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E315_1.cha"
+    );
+    assert_eq!(authored.matches('\u{1}').count(), 1);
+    let source = authored.replace('\u{1}', "\0");
+    let nul = source.find('\0').unwrap();
+    let result = inspect(&source);
+    assert!(!result.is_clean(), "NUL must not become clean EOF");
+    let errors = result.errors();
+    assert!(errors.iter().any(|error| error.span() == (nul..nul + 1)));
+    assert_eq!(result.tokens().last().unwrap().1.end, source.len());
+    assert!(result.error_report().contains("\\0"));
+
+    for condition in [
+        StartCondition::Initial,
+        StartCondition::MainContent,
+        StartCondition::MorContent,
+        StartCondition::GraContent,
+        StartCondition::PhoContent,
+        StartCondition::SinContent,
+        StartCondition::TierContent,
+        StartCondition::ComContent,
+        StartCondition::UserTierContent,
+        StartCondition::HeaderContent,
+        StartCondition::IdContent,
+        StartCondition::TypesContent,
+        StartCondition::LanguagesContent,
+        StartCondition::ParticipantsContent,
+        StartCondition::MediaContent,
+    ] {
+        for input in [&source[nul..], &source[nul..nul + 1]] {
+            let result = lex_line(input, condition);
+            assert!(!result.is_clean(), "{condition:?} {input:?}");
+            let errors = result.errors();
+            let first = errors.first().expect("the NUL is an error");
+            assert_eq!(first.span(), 0..1, "{condition:?}");
+            assert!(matches!(first.token(), Token::ErrorUnrecognized("\0")));
+            assert_eq!(first.context(), "unrecognized character");
+            assert!(result.error_report().contains("[0-1]"));
+            assert!(result.error_report().contains("\\0"));
+            let mut end = 0;
+            for (_, span) in result.tokens() {
+                assert_eq!(span.start, end, "no skipped source in {condition:?}");
+                assert!(span.end > span.start);
+                assert!(input.get(span.clone()).is_some());
+                end = span.end;
+            }
+            assert_eq!(end, input.len(), "no omitted tail in {condition:?}");
+            let mut lexer = Lexer::new(input, condition);
+            while lexer.next().is_some() {}
+            assert!(lexer.next().is_none());
+            assert!(lexer.next().is_none());
+        }
+        let empty = lex_line("", condition);
+        assert!(empty.is_clean());
+        assert!(empty.tokens().is_empty());
+        assert!(empty.error_report().is_empty());
+    }
 }

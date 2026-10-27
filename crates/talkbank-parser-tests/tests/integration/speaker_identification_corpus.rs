@@ -671,8 +671,8 @@ fn reference_speaker_decision_survives_override_persistence_and_replay() {
         .expect("persisted mapping admission");
     assert_eq!(replay, mapping);
     assert_eq!(
-        apply_mapping_chat(&chat, &replay),
-        apply_mapping_chat(&chat, &mapping)
+        apply_mapping_chat(&chat, &replay).expect("admitted participant declaration"),
+        apply_mapping_chat(&chat, &mapping).expect("admitted participant declaration")
     );
 
     use talkbank_transform::speaker_id::OverrideFileError;
@@ -939,8 +939,10 @@ fn reference_lexical_ranking_retains_support_across_confidence_and_wire_boundari
 
     for removed in ["CHI", "MOT"] {
         let mapping = parse_mapping_spec(&format!("{removed}=drop")).expect("operator removal");
-        let reduced = strict_parse(parser.parse_chat_file(&apply_mapping_chat(&basic, &mapping)))
-            .expect("transformed reference syntax");
+        let reduced = strict_parse(parser.parse_chat_file(
+            &apply_mapping_chat(&basic, &mapping).expect("admitted participant declaration"),
+        ))
+        .expect("transformed reference syntax");
         let error = identify_mapping(&basic, &anchor, &reduced, threshold)
             .expect_err("one donor track cannot be discriminated");
         let SpeakerIdError::DonorTooFewSpeakers { speakers } = error else {

@@ -20,6 +20,7 @@
 
 use talkbank_model::WriteChat;
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 use talkbank_transform::redact::{SanitizationPolicy, sanitize};
 
 /// Parses `cha` and runs the strict sanitizer; returns the serialized output.
@@ -114,7 +115,7 @@ fn t02_wor_per_word_offsets_byte_exact() {
                 "*PAR:\tthe cat sat . {b}1000_2000{b}\n%wor:\tthe {b}1000_1100{b} cat {b}1100_1500{b} sat {b}1500_2000{b} .\n"
             ),
             format!(
-                "*PAR:\tw1 w2 w3 . {b}1000_2000{b}\n%wor:\tw1 {b}1000_1100{b} w2 {b}1100_1500{b} w3 {b}1500_2000{b} .\n"
+                "*PAR:\tworda wordb wordc . {b}1000_2000{b}\n%wor:\tworda {b}1000_1100{b} wordb {b}1100_1500{b} wordc {b}1500_2000{b} .\n"
             ),
         ),
         (
@@ -123,7 +124,7 @@ fn t02_wor_per_word_offsets_byte_exact() {
                 "*PAR:\tthe xxx cat sat . {b}1000_2000{b}\n%wor:\tthe {b}1000_1100{b} cat {b}1100_1500{b} sat {b}1500_2000{b} .\n"
             ),
             format!(
-                "*PAR:\tw1 xxx w2 w3 . {b}1000_2000{b}\n%wor:\tw1 {b}1000_1100{b} w2 {b}1100_1500{b} w3 {b}1500_2000{b} .\n"
+                "*PAR:\tworda xxx wordb wordc . {b}1000_2000{b}\n%wor:\tworda {b}1000_1100{b} wordb {b}1100_1500{b} wordc {b}1500_2000{b} .\n"
             ),
         ),
         (
@@ -132,7 +133,7 @@ fn t02_wor_per_word_offsets_byte_exact() {
                 "*PAR:\tthe cat sat . {b}1000_2000{b}\n%wor:\tthe {b}1000_1100{b} xxx {b}1100_1500{b} sat {b}1500_2000{b} .\n"
             ),
             format!(
-                "*PAR:\tw1 w2 w3 . {b}1000_2000{b}\n%wor:\tw4 {b}1000_1100{b} xxx {b}1100_1500{b} w5 {b}1500_2000{b} .\n"
+                "*PAR:\tworda wordb wordc . {b}1000_2000{b}\n%wor:\twordd {b}1000_1100{b} xxx {b}1100_1500{b} worde {b}1500_2000{b} .\n"
             ),
         ),
         (
@@ -141,7 +142,7 @@ fn t02_wor_per_word_offsets_byte_exact() {
                 "*PAR:\tthe &+fr cat sat . {b}1000_2000{b}\n%wor:\tthe {b}900_1000{b} fr {b}1000_1050{b} cat {b}1100_1500{b} sat {b}1500_2000{b} .\n"
             ),
             format!(
-                "*PAR:\tw1 &+w2 w3 w4 . {b}1000_2000{b}\n%wor:\tw5 {b}900_1000{b} w6 {b}1000_1050{b} w7 {b}1100_1500{b} w8 {b}1500_2000{b} .\n"
+                "*PAR:\tworda &+wordb wordc wordd . {b}1000_2000{b}\n%wor:\tworde {b}900_1000{b} wordf {b}1000_1050{b} wordg {b}1100_1500{b} wordh {b}1500_2000{b} .\n"
             ),
         ),
         (
@@ -150,7 +151,7 @@ fn t02_wor_per_word_offsets_byte_exact() {
                 "*PAR:\tthe cat . {b}1000_2000{b}\n%wor:\tdog {b}1000_1100{b} cat {b}1100_1500{b} .\n"
             ),
             format!(
-                "*PAR:\tw1 w2 . {b}1000_2000{b}\n%wor:\tw3 {b}1000_1100{b} w4 {b}1100_1500{b} .\n"
+                "*PAR:\tworda wordb . {b}1000_2000{b}\n%wor:\twordc {b}1000_1100{b} wordd {b}1100_1500{b} .\n"
             ),
         ),
         (
@@ -159,7 +160,7 @@ fn t02_wor_per_word_offsets_byte_exact() {
                 "*PAR:\tmail+man cat . {b}1000_2000{b}\n%wor:\tmail+man {b}1000_1100{b} cat {b}1100_1500{b} .\n"
             ),
             format!(
-                "*PAR:\tw1+w1 w2 . {b}1000_2000{b}\n%wor:\tw1w1 {b}1000_1100{b} w2 {b}1100_1500{b} .\n"
+                "*PAR:\tworda+worda wordb . {b}1000_2000{b}\n%wor:\twordaworda {b}1000_1100{b} wordb {b}1100_1500{b} .\n"
             ),
         ),
     ];
@@ -205,8 +206,14 @@ fn t05_word_content_replaced_with_placeholders() {
             "source word {word:?} leaked into output:\n{out}"
         );
     }
-    assert!(out.contains("w1"), "expected w1 placeholder, got:\n{out}");
-    assert!(out.contains("w6"), "expected w6 placeholder, got:\n{out}");
+    assert!(
+        out.contains("worda"),
+        "expected worda placeholder, got:\n{out}"
+    );
+    assert!(
+        out.contains("wordf"),
+        "expected wordf placeholder, got:\n{out}"
+    );
 }
 
 #[test]
@@ -486,8 +493,8 @@ fn every_dependent_tier_kind_is_redacted_or_dropped_as_its_rule_says() {
     // `%wor` repeats the main tier's words beside their timings, so it
     // carries the main tier's placeholders (the same token per aligned
     // word, which `%wor` corroboration compares) and keeps the timings.
-    expect_line("*PAR:", "*PAR:\tw1 .");
-    expect_line("%wor:", "%wor:\tw1 \u{15}0_100\u{15} .");
+    expect_line("*PAR:", "*PAR:\tworda .");
+    expect_line("%wor:", "%wor:\tworda \u{15}0_100\u{15} .");
     // `%mor` keeps its shape and loses its lemma.
     let mor = lines
         .iter()

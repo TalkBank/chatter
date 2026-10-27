@@ -14,7 +14,8 @@ use talkbank_model::ParseOutcome;
 use talkbank_model::dependent_tier::DependentTier;
 use talkbank_model::model::Line;
 use talkbank_model::{
-    ErrorCode, ErrorCollector, ErrorSink, FragmentSource, ParseError, Severity, TeeErrorSink,
+    ErrorCode, ErrorCollector, ErrorSink, FragmentSource, ParseError, Severity, SpanShift,
+    TeeErrorSink,
 };
 
 use crate::parser::TreeSitterParser;
@@ -74,9 +75,9 @@ const MAIN_TIER_LINE: &str = "*CHI:\thello .\n";
 /// # Span Adjustment
 ///
 /// Parsed objects have spans relative to the wrapper and are typed as such
-/// (`Synthetic<_>`); `WrappedFragment::rebase_tier` is the one exit, moving
-/// them into the caller's document coordinates after clamping the tier's own
-/// extent to the caller's input.
+/// (`Synthetic<_>`). Project the tier's wrapper-owned extent, select the
+/// caller-owned payload, then consume it through `WrappedFragment::rebase`.
+/// Only a completely admitted payload reaches the caller's document space.
 ///
 /// # Type Parameters
 ///
@@ -91,7 +92,7 @@ const MAIN_TIER_LINE: &str = "*CHI:\thello .\n";
 /// * `offset` - Byte offset in the original document
 /// * `errors` - User's error sink for real-time reporting
 /// * `extractor` - Function to extract the specific tier type from `DependentTier`
-pub(crate) fn wrapper_parse_tier<T, F>(
+pub(crate) fn wrapper_parse_tier<T: SpanShift, F>(
     parser: &TreeSitterParser,
     tier_header: &str,
     input: &str,
@@ -105,7 +106,9 @@ where
     let ParseOutcome::Parsed(source) = FragmentSource::admit(input, offset, errors) else {
         return ParseOutcome::rejected();
     };
-    wrapper_parse_tier_with_suffix(parser, tier_header, source, "", errors, extractor)
+    wrapper_parse_tier_with_suffix(parser, tier_header, source, "", errors, |tier| {
+        extractor(tier).ok_or(TierProjectionError::WrongKind)
+    })
 }
 
 /// [`wrapper_parse_tier`] over an already admitted source, with synthetic
@@ -113,7 +116,7 @@ where
 /// (`" ."` gives a lone `%mor` word its companion terminator). The appended
 /// text is wrapper-owned: it lies outside the caller's input like the tier
 /// label does, so the tier's clamped extent and every diagnostic exclude it.
-pub(crate) fn wrapper_parse_tier_with_suffix<T, F>(
+pub(crate) fn wrapper_parse_tier_with_suffix<T: SpanShift, F>(
     parser: &TreeSitterParser,
     tier_header: &str,
     source: FragmentSource<'_>,
@@ -122,7 +125,7 @@ pub(crate) fn wrapper_parse_tier_with_suffix<T, F>(
     extractor: F,
 ) -> ParseOutcome<T>
 where
-    F: FnOnce(DependentTier) -> Option<T>,
+    F: FnOnce(DependentTier) -> Result<T, TierProjectionError>,
 {
     // Caller line endings are source evidence too. Supply a wrapper newline
     // only if the original input did not supply one; never shorten the owner's
@@ -180,7 +183,7 @@ pub(crate) fn wrapper_parse_generic_tier(
     };
 
     match CompleteTierFragment::parse(parser, &fragment, errors) {
-        ParseOutcome::Parsed(tier) => tier.project(Some, errors),
+        ParseOutcome::Parsed(tier) => tier.project(Ok, errors),
         ParseOutcome::Rejected => ParseOutcome::Rejected,
     }
 }
@@ -193,6 +196,12 @@ fn tier_suffix(input: &str) -> std::borrow::Cow<'static, str> {
     } else {
         std::borrow::Cow::Owned(format!("\n{MINIMAL_CHAT_SUFFIX}"))
     }
+}
+
+/// Distinguish an internal wrapper mismatch from a refused item projection.
+pub(crate) enum TierProjectionError {
+    WrongKind,
+    InvalidShape(&'static str),
 }
 
 /// The single tier lowered from this wrapper, covering all caller content.
@@ -256,24 +265,40 @@ impl<'fragment, 'input> CompleteTierFragment<'fragment, 'input> {
         ParseOutcome::Rejected
     }
 
-    /// Hand the lowered tier to the caller's extractor. The wrapper's label
-    /// selected the body grammar, so the tier IS the kind the extractor asks
-    /// for; an extractor that still declines has met a wrapper that lowered
-    /// another kind under that label, which is this crate's fault, reported
-    /// once here as an internal error rather than left to seven silent arms.
-    fn project<T>(
+    /// Select the caller-owned payload while it remains synthetic. A wrong
+    /// tier kind is an internal wrapper failure; a refused item shape is an
+    /// input finding. Only the selected payload undergoes checked rebasing.
+    fn project<T: SpanShift>(
         self,
-        extractor: impl FnOnce(DependentTier) -> Option<T>,
+        extractor: impl FnOnce(DependentTier) -> Result<T, TierProjectionError>,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<T> {
-        match extractor(self.fragment.rebase_tier(self.tier)) {
-            Some(tier) => ParseOutcome::Parsed(tier),
-            None => {
-                errors.report(ParseError::at_span(
-                    ErrorCode::InternalError,
+        // Select the caller-owned payload before translating. In particular,
+        // a lone MOR word never returns its wrapper's companion terminator.
+        let selected = self.fragment.project_tier(self.tier).try_map(extractor);
+        match selected {
+            Ok(value) => match self.fragment.rebase(value) {
+                Ok(value) => ParseOutcome::Parsed(value),
+                Err(failure) => {
+                    errors.report_vec(failure.into_error_vec());
+                    ParseOutcome::Rejected
+                }
+            },
+            Err(reason) => {
+                let (code, message) = match reason {
+                    TierProjectionError::WrongKind => (
+                        ErrorCode::InternalError,
+                        "The tier wrapper lowered a dependent tier of a different kind than its label selects",
+                    ),
+                    TierProjectionError::InvalidShape(message) => {
+                        (ErrorCode::InvalidWordFormat, message)
+                    }
+                };
+                errors.report(self.fragment.whole_input_error(
+                    code,
                     Severity::Error,
-                    self.fragment.input_document_span(),
-                    "The tier wrapper lowered a dependent tier of a different kind than its label selects",
+                    self.fragment.input(),
+                    message,
                 ));
                 ParseOutcome::Rejected
             }

@@ -1,10 +1,11 @@
-//! `chatter debug` subcommands, internal debugging / audit /
+//! `chatter experimental transform` subcommands, internal debugging / audit /
 //! sanitization tools.
 
-use clap::{Subcommand, ValueEnum};
+use crate::cli::catalog::{Contract, Shape, command_tree};
+use clap::ValueEnum;
 use std::path::PathBuf;
 
-/// Scope selector for `chatter debug join-retrace --scope`.
+/// Scope selector for `chatter experimental transform join-retrace --scope`.
 ///
 /// Selects which dangling-retrace kinds are eligible for the join transform.
 /// See [`talkbank_transform::join_retrace::RetraceJoinScope`] for the
@@ -22,25 +23,29 @@ pub enum JoinRetraceScope {
     Corrections,
     /// Join ANY dangling retrace kind (including `[/]` Partial) with the
     /// immediately-following same-speaker utterance, with NO repeat-prefix
-    /// match required. Use `--dry-run` first to review proposed joins (Wave 3b).
+    /// match required. Use `the default preview` first to review proposed joins (Wave 3b).
     All,
 }
 
-/// Internal debugging subcommands under `chatter debug`.
-#[derive(Subcommand)]
+command_tree! {
+/// Specialist transforms under `chatter experimental transform`.
 pub enum DebugCommands {
     /// Rewrite whole-utterance runs of `@s` into utterance precodes (`[- LANG]`).
     ///
     /// Walks `.cha` files under the given paths, detects the same E255
     /// whole-utterance language-switch pattern that `chatter validate` rejects,
-    /// and rewrites qualifying utterances in place. Files that need no changes
+    /// and previews qualifying utterances. `--apply` publishes them in place. Files that need no changes
     /// are left untouched.
-    FixS {
+    LanguageRuns {
         /// Path to CHAT file(s) or directory trees to rewrite in place.
+        #[arg(required = true)]
         path: Vec<PathBuf>,
-    },
+        /// Publish the proposed edits; without this flag only preview.
+        #[command(flatten)]
+        commit: super::Flag<crate::commands::debug::Commit>,
+    } => Shape::Leaf(Contract::LanguageRuns),
 
-    /// Retag every occurrence of one language code as another, in place.
+    /// Preview retagging one language code as another; --apply publishes.
     ///
     /// A language code is named four ways, by `@Languages`, by a `[- code]`
     /// utterance scope, by a `word@s:code` marker and by a `<a b> [@s:code]`
@@ -60,8 +65,12 @@ pub enum DebugCommands {
         to: String,
 
         /// Path to CHAT file(s) or directory trees to rewrite in place.
+        #[arg(required = true)]
         path: Vec<PathBuf>,
-    },
+        /// Publish the proposed edits; without this flag only preview.
+        #[command(flatten)]
+        commit: super::Flag<crate::commands::debug::Commit>,
+    } => Shape::Leaf(Contract::RetagLanguage),
 
     /// Join dangling-retrace utterances (E370) with their successor.
     ///
@@ -78,16 +87,17 @@ pub enum DebugCommands {
     /// - `all` (Wave 3b): joins ANY dangling retrace kind, including `[/]`
     ///   where the successor does NOT repeat the retraced material. Covers
     ///   genuine child-language disfluencies (false starts, partial words,
-    ///   fillers). Use `--dry-run` first to review proposed joins.
+    ///   fillers). Use `the default preview` first to review proposed joins.
     ///
     /// When either side carried dependent tiers (`%mor`/`%gra`/...), those
     /// tiers are dropped on the joined utterance and reported as needing
     /// re-morphotag.
     JoinRetrace {
         /// Path to CHAT file(s) or directory trees to repair in place.
+        #[arg(required = true)]
         path: Vec<PathBuf>,
 
-        /// Write the joins, or with `--dry-run` only report them.
+        /// Write the joins, or with `the default preview` only report them.
         #[command(flatten)]
         commit: super::Flag<crate::commands::debug::Commit>,
 
@@ -96,35 +106,7 @@ pub enum DebugCommands {
         /// also `[//]`/`[///]`/`[/-]`. `all`: any kind, no prefix match.
         #[arg(long, value_enum, default_value_t = JoinRetraceScope::Repetition)]
         scope: JoinRetraceScope,
-    },
-
-    /// Analyze CA overlap markers (⌈⌉⌊⌋): pairing, temporal consistency, orphans
-    OverlapAudit {
-        /// Path to CHAT file(s) or directory
-        path: Vec<PathBuf>,
-
-        /// Write a new JSON-lines report (one object per file with overlaps).
-        /// Refuses existing paths. Failed runs may retain a partial report.
-        #[arg(long, value_name = "PATH")]
-        database: Option<PathBuf>,
-    },
-
-    /// Audit linker and special terminator usage across a corpus
-    ///
-    /// Analyzes cross-utterance pairing correctness for linkers (+<, ++, +^,
-    /// +", +,, +≋, +≈) and special terminators (+..., +/., +//., +"/.etc.).
-    /// Reports frequency tables, pairing violations, orphaned terminators,
-    /// and +< overlap block patterns.
-    LinkerAudit {
-        /// Path to CHAT file(s) or directory
-        path: Vec<PathBuf>,
-
-        /// Write per-anomaly JSON lines to a new file, refusing existing paths.
-        /// Records carry an utterance index, context and a suggested fix.
-        /// Failed runs may retain a partial report; suggestions require review.
-        #[arg(long, value_name = "PATH")]
-        anomalies: Option<PathBuf>,
-    },
+    } => Shape::Leaf(Contract::JoinRetrace),
 
     /// Sanitize a CHAT file for protected-corpus debugging, strip
     /// contributor lexical content while preserving structure.
@@ -134,13 +116,14 @@ pub enum DebugCommands {
     /// preserving timing bullets, %wor offsets, speaker codes, POS
     /// tags, language markers, and structural counts. Intended for use
     /// before loading a protected `.cha` into LLM-assisted debugging
-    /// tools. See `talkbank/docs/protected-corpus-debugging-workflow.md`.
-    Sanitize {
+    /// tools. Redaction preserves identifiers and structure; it is not an anonymity guarantee.
+    Redact {
         /// Path to a single .cha file to sanitize.
         input: PathBuf,
 
         /// Output path. If omitted, writes to stdout.
         #[arg(short, long, value_name = "PATH")]
         output: Option<PathBuf>,
-    },
+    } => Shape::Leaf(Contract::Redact),
+}
 }

@@ -13,4 +13,4 @@ pub mod clan_ud_mapping;
 mod newtypes;
 
 pub use clan_ud_mapping::clan_to_ud_upos;
-pub use newtypes::{MorFeature, MorStem, PosCategory};
+pub use newtypes::{MorFeature, MorFeatureShapeError, MorStem, PosCategory};

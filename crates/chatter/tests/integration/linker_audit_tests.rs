@@ -9,7 +9,7 @@ fn fixture() -> PathBuf {
 
 fn audit(input: &Path, report: &Path) -> std::process::Output {
     crate::common::chatter_cmd()
-        .args(["debug", "linker-audit"])
+        .args(["inspect", "linkers"])
         .arg(input)
         .arg("--anomalies")
         .arg(report)

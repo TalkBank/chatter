@@ -46,11 +46,11 @@ mod tests {
     /// speaker parsing ambiguous.
     #[test]
     fn test_speaker_id_with_colon_invalid() {
-        let entry = ParticipantEntry {
-            speaker_code: SpeakerCode::new("CH:I"),
-            name: None,
-            role: ParticipantRole::new("Child"),
-        };
+        let entry = ParticipantEntry::new(
+            SpeakerCode::new("CH:I"),
+            None,
+            ParticipantRole::new("Child"),
+        );
 
         let header = Header::Participants {
             entries: vec![entry].into(),
@@ -78,11 +78,8 @@ mod tests {
     /// The assertion specifically checks that no invalid-character diagnostics are emitted.
     #[test]
     fn test_speaker_id_valid() {
-        let entry = ParticipantEntry {
-            speaker_code: SpeakerCode::new("CHI"),
-            name: None,
-            role: ParticipantRole::new("Child"),
-        };
+        let entry =
+            ParticipantEntry::new(SpeakerCode::new("CHI"), None, ParticipantRole::new("Child"));
 
         let header = Header::Participants {
             entries: vec![entry].into(),

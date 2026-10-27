@@ -7,35 +7,31 @@
 //! cached cleaned text without a separate raw-spelling synchronization step.
 
 use talkbank_model::non_empty_literal;
-use talkbank_model::{Word, WordContent, WordShortening, WordText};
+use talkbank_model::{Word, WordContent, WordContents, WordShortening, WordText};
 
 use super::placeholder::{PlaceholderState, PlaceholderToken};
 
 /// Sanitizer decision for one typed word-content leaf.
 ///
 /// A closed enum makes every future [`WordContent`] variant choose explicitly
-/// between preservation and replacement. Replacement data travels with the
-/// decision, so no separate flag can claim content changed when it did not, or
-/// forget to apply a replacement that matters for privacy.
-enum ContentRedaction {
-    Preserve,
-    Replace(WordContent),
+/// between lexical runs, delimited shortening and structural preservation.
+/// Adjacent lexical leaves have no surface delimiter: replacing them separately
+/// would concatenate placeholders that collapse into one leaf when reparsed.
+enum ContentRedaction<'a> {
+    TextRun,
+    PhoneticRun,
+    Shortening,
+    Structural(&'a WordContent),
 }
 
-fn redact_content(content: &WordContent, placeholder: &PlaceholderToken) -> ContentRedaction {
+fn classify_content(content: &WordContent) -> ContentRedaction<'_> {
     match content {
-        WordContent::Text(_) => ContentRedaction::Replace(WordContent::Text(WordText::from(
-            placeholder.text().clone(),
-        ))),
+        WordContent::Text(_) => ContentRedaction::TextRun,
         // A @u phonetic form is SPOKEN content: it can encode a name
         // phonetically, so it must be redacted like text, never preserved as a
         // structural marker.
-        WordContent::Phonetic(_) => ContentRedaction::Replace(WordContent::Phonetic(
-            talkbank_model::WordPhonetic::from(placeholder.text().clone()),
-        )),
-        WordContent::Shortening(_) => ContentRedaction::Replace(WordContent::Shortening(
-            WordShortening::from(non_empty_literal!("x")),
-        )),
+        WordContent::Phonetic(_) => ContentRedaction::PhoneticRun,
+        WordContent::Shortening(_) => ContentRedaction::Shortening,
         // Structural / prosodic markers, preserved verbatim. Listed
         // explicitly (not `_ => {}`) so a new WordContent variant fails to
         // compile here, forcing an explicit redact-vs-preserve decision for
@@ -49,7 +45,46 @@ fn redact_content(content: &WordContent, placeholder: &PlaceholderToken) -> Cont
         | WordContent::UnderlineBegin(_)
         | WordContent::UnderlineEnd(_)
         | WordContent::CompoundMarker(_)
-        | WordContent::CliticBoundary(_) => ContentRedaction::Preserve,
+        | WordContent::CliticBoundary(_) => ContentRedaction::Structural(content),
+    }
+}
+
+/// Completed redaction with one replacement per undelimited lexical run.
+struct RedactedContents(WordContents);
+
+impl RedactedContents {
+    fn from_content(content: &WordContents, placeholder: &PlaceholderToken) -> Self {
+        let mut leaves = content.iter().map(classify_content).peekable();
+        let mut output = smallvec::SmallVec::new();
+        while let Some(leaf) = leaves.next() {
+            output.push(match leaf {
+                ContentRedaction::TextRun => {
+                    while leaves
+                        .next_if(|next| matches!(next, ContentRedaction::TextRun))
+                        .is_some()
+                    {}
+                    WordContent::Text(WordText::from(placeholder.text().clone()))
+                }
+                ContentRedaction::PhoneticRun => {
+                    while leaves
+                        .next_if(|next| matches!(next, ContentRedaction::PhoneticRun))
+                        .is_some()
+                    {}
+                    WordContent::Phonetic(talkbank_model::WordPhonetic::from(
+                        placeholder.text().clone(),
+                    ))
+                }
+                ContentRedaction::Shortening => {
+                    WordContent::Shortening(WordShortening::from(non_empty_literal!("x")))
+                }
+                ContentRedaction::Structural(content) => content.clone(),
+            });
+        }
+        Self(WordContents::new(output))
+    }
+
+    fn apply(self, word: &mut Word) {
+        word.replace_content(self.0);
     }
 }
 
@@ -63,12 +98,7 @@ pub(crate) fn sanitize_word(word: &mut Word, state: &mut PlaceholderState) {
     }
 
     let placeholder = PlaceholderToken::word(state.next());
-    for i in 0..word.content().len() {
-        match redact_content(&word.content()[i], &placeholder) {
-            ContentRedaction::Preserve => {}
-            ContentRedaction::Replace(replacement) => word.replace_content_at(i, replacement),
-        }
-    }
+    RedactedContents::from_content(word.content(), &placeholder).apply(word);
 }
 
 #[cfg(test)]
@@ -83,13 +113,16 @@ mod tests {
     /// is replaced.
     #[test]
     fn lexical_redaction_cannot_retain_untrusted_cleaned_text() {
-        let mut word = Word::simple(talkbank_model::Location::Unlocated, "private-name");
+        let mut word = Word::new(
+            talkbank_model::Location::Unlocated,
+            talkbank_model::WordText::from(talkbank_model::non_empty_literal!("private-name")),
+        );
         let mut state = PlaceholderState::new();
 
         sanitize_word(&mut word, &mut state);
 
-        assert_eq!(word.raw_text(), "w1");
-        assert_eq!(word.cleaned_text(), "w1");
+        assert_eq!(word.raw_text(), "worda");
+        assert_eq!(word.cleaned_text(), "worda");
     }
 
     /// Derived JSON spelling must serialize the complete typed
@@ -117,6 +150,6 @@ mod tests {
 
         sanitize_word(&mut word, &mut state);
 
-        assert_eq!(word.raw_text(), "&-w1");
+        assert_eq!(word.raw_text(), "&-worda");
     }
 }

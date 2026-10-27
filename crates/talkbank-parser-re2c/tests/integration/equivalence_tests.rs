@@ -22,8 +22,13 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
 
 mod comparison;
+mod language_precodes;
 mod marker_chain;
+mod phonological_pauses;
 mod reference_fragments;
+mod reference_leaf_fragments;
+mod reference_typed_fragments;
+mod reference_utterances;
 
 use crate::fixture_utils::LineEnding;
 use comparison::{ComparisonBatch, compare_parses};
@@ -123,7 +128,7 @@ fn internal_warning_refuses_reference_model() {
 fn equivalence_mor_tier() -> Result<(), String> {
     let (ts, re2c) = both_parsers();
 
-    let entries = talkbank_parser_re2c::tests_support::load_fixture("tier_mor");
+    let entries = crate::fixture_utils::load_fixture("tier_mor");
     // No empty guard: `load_fixture` refuses a fixture that yields no
     // entries, so this loop cannot run zero times and report a pass.
 
@@ -151,7 +156,7 @@ fn equivalence_mor_tier() -> Result<(), String> {
 fn equivalence_gra_tier() -> Result<(), String> {
     let (ts, re2c) = both_parsers();
 
-    let entries = talkbank_parser_re2c::tests_support::load_fixture("tier_gra");
+    let entries = crate::fixture_utils::load_fixture("tier_gra");
     // No empty guard: `load_fixture` refuses a fixture that yields no
     // entries, so this loop cannot run zero times and report a pass.
 

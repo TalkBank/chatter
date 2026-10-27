@@ -342,9 +342,14 @@ fn fragment_source_admission_checks_byte_extent_and_reports_once() {
     };
     assert_eq!(source.input(), input);
     assert!(errors.is_empty());
-    assert_eq!(source.rebase(Span::new(0, 2)), Span::new(limit - 2, limit));
     assert_eq!(
-        source.rebase(talkbank_model::Location::Unlocated),
+        source.rebase(Span::new(0, 2)).expect("contained span"),
+        Span::new(limit - 2, limit)
+    );
+    assert_eq!(
+        source
+            .rebase(talkbank_model::Location::Unlocated)
+            .expect("unlocated value"),
         talkbank_model::Location::Unlocated
     );
     // A range whose end does not exist is refused once, without a location.
@@ -478,14 +483,19 @@ fn fragment_source_rebases_labels_without_rebasing_snippets() {
     // A wrapper far into the document rebases without allocating a giant source.
     let wrapper_start = i32::MAX as usize + 100;
     assert_eq!(
-        source.rebase_from(
-            Span::new(wrapper_start + 2, wrapper_start + 4),
-            wrapper_start
-        ),
+        source
+            .rebase_from(
+                Span::new(wrapper_start + 2, wrapper_start + 4),
+                wrapper_start
+            )
+            .expect("contained synthetic span"),
         Span::new(19, 21)
     );
     let zero = FragmentSource::new("a é", 0).expect("zero-origin source");
-    assert_eq!(zero.rebase(Span::new(2, 4)), Span::new(2, 4));
+    assert_eq!(
+        zero.rebase(Span::new(2, 4)).expect("contained span"),
+        Span::new(2, 4)
+    );
 }
 
 /// talkbank-parser: the parser's public methods return

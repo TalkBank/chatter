@@ -79,7 +79,13 @@ fn walk_underline_balance_in_content(
                 LeafContent::UnderlineEnd(marker) => {
                     apply_underline_end(begin_spans, marker.or(location), errors);
                 }
-                LeafContent::Spoken | LeafContent::Notation => {}
+                LeafContent::Interposed(word) => {
+                    walk_underline_balance_in_word(word, begin_spans, location, errors);
+                }
+                LeafContent::Pause
+                | LeafContent::Spoken
+                | LeafContent::Notation
+                | LeafContent::OverlapPoint(_) => {}
             }
             return;
         }

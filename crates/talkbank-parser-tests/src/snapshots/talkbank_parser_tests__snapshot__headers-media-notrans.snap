@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           },
           {
-            "name": null,
-            "role": "Target_Child",
+            "details": {
+              "name": null,
+              "role": "Target_Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           }
         ],
@@ -114,42 +117,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "media": {
-    "filename": "headers-media-notrans",
-    "media_type": "video",
-    "status": "notrans"
-  },
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "1;10.04",
-        "corpus": "sample",
-        "language": [
-          "eng"
-        ],
-        "role": "Target_Child",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Target_Child"
-    },
-    "MOT": {
-      "birth_date": null,
-      "code": "MOT",
-      "id": {
-        "corpus": "sample",
-        "language": [
-          "eng"
-        ],
-        "role": "Mother",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    }
-  }
+  ]
 }

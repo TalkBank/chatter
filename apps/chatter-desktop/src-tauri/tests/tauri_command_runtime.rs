@@ -107,14 +107,8 @@ const COMMAND_COVERAGE: &[(&str, Coverage)] = &[
         "cancel_validation",
         Coverage::Excused(
             "takes tauri::State, which has no constructor outside a running app; \
-             its body only sets a flag and cannot block",
-        ),
-    ),
-    (
-        "install_cli",
-        Coverage::Excused(
-            "takes AppHandle, and its effect is writing an executable into the \
-             user's PATH, which a test must not do",
+             delegates to runtime-entered validation_session tests covering \
+             pending/running ownership and stale cancellation",
         ),
     ),
     (
@@ -218,10 +212,19 @@ fn export_results_writes_inside_a_runtime() {
 fn text_export_writes_each_files_label_as_shown() {
     let directory = tempfile::tempdir().expect("export test directory");
     let path = directory.path().join("failures.txt");
+    let read = directory.path().join("read.cha");
+    let pending = directory.path().join("pending.cha");
+    for source in [&read, &pending] {
+        std::fs::write(
+            source,
+            include_bytes!("../../../../corpus/reference/core/basic-conversation.cha"),
+        )
+        .expect("reference source");
+    }
     let results = serde_json::json!([
-        {"path":"read.cha", "errors":[], "status":{"type":"readError", "message":"permission denied"},
+        {"path":read, "errors":[], "status":{"type":"readError", "message":"permission denied"},
          "statusLabel":"Read error: permission denied"},
-        {"path":"pending.cha", "errors":[], "status":null, "statusLabel":"Validation pending"}
+        {"path":pending, "errors":[], "status":null, "statusLabel":"Validation pending"}
     ]);
     tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(text_request(
         results.to_string(),
@@ -234,6 +237,60 @@ fn text_export_writes_each_files_label_as_shown() {
         "pending.cha\nValidation pending",
     ] {
         assert!(text.contains(expected), "missing {expected:?} in {text:?}");
+    }
+}
+
+/// Report admission protects valid inputs in both export formats.
+#[test]
+fn export_refuses_source_aliases_in_both_formats() {
+    for format in [ExportFormat::Json, ExportFormat::Text] {
+        let directory = tempfile::tempdir().expect("export directory");
+        let input = directory.path().join("source.cha");
+        let original = include_bytes!("../../../../corpus/reference/core/basic-conversation.cha");
+        std::fs::write(&input, original).expect("reference source");
+        let hard_link = directory.path().join("report.json");
+        std::fs::hard_link(&input, &hard_link).expect("hard link");
+        let mut aliases = vec![input.clone(), hard_link];
+        #[cfg(unix)]
+        {
+            let symlink = directory.path().join("report.txt");
+            std::os::unix::fs::symlink(&input, &symlink).expect("symlink");
+            aliases.push(symlink);
+        }
+        let other = directory.path().join("other.cha");
+        std::fs::write(&other, original).expect("other reference source");
+        // Valid files are hidden from the tree but retained in export results.
+        let results = serde_json::json!([{
+            "path": other, "errors": [], "status": {"type":"valid", "cacheHit":false},
+            "statusLabel":"Valid"
+        }, {
+            "path": input, "errors": [], "status": {"type":"valid", "cacheHit":false},
+            "statusLabel":"Valid"
+        }])
+        .to_string();
+        for path in aliases {
+            let result =
+                tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(
+                    chatter_desktop_lib::protocol::commands::ExportResultsRequest {
+                        results: results.clone(),
+                        format,
+                        path: path.to_string_lossy().into_owned(),
+                    },
+                ));
+            assert!(
+                matches!(
+                    result,
+                    Err(chatter_desktop_lib::errors::ExportError::Destination(
+                        talkbank_transform::report_destination::ReportDestinationError::SourceAlias(
+                            _
+                        )
+                    ))
+                ),
+                "source alias must be refused: {}",
+                path.display()
+            );
+            assert_eq!(std::fs::read(&input).expect("preserved source"), original);
+        }
     }
 }
 
@@ -253,9 +310,15 @@ fn text_request(
 fn text_export_preserves_rendering_and_refuses_malformed_input_before_writing() {
     let directory = tempfile::tempdir().expect("export test directory");
     let path = directory.path().join("results.txt");
+    let source = directory.path().join("sample.cha");
+    std::fs::write(
+        &source,
+        include_bytes!("../../../../corpus/reference/core/basic-conversation.cha"),
+    )
+    .expect("reference source");
     let rendered = "W109: normalize name\n  │ media snippet\n  ╰─ advice\n";
     let results = serde_json::json!([{
-        "path":"sample.cha", "errors":[{"renderedText":rendered}],
+        "path":source, "errors":[{"renderedText":rendered}],
         "status":{"type":"roundtripFailed", "cacheHit":false, "reason":"model changed"},
         "statusLabel":"Roundtrip failed: model changed"
     }]);
@@ -282,5 +345,193 @@ fn text_export_preserves_rendering_and_refuses_malformed_input_before_writing() 
             original,
             "malformed input must not overwrite a prior export"
         );
+    }
+}
+
+/// Existing separate reports remain replaceable. Malformed payloads or lost
+/// source identity leave the previous report intact in either format.
+#[test]
+fn export_replaces_reports_only_with_admitted_sources() {
+    use chatter_desktop_lib::errors::ExportError;
+    use talkbank_transform::report_destination::ReportDestinationError;
+    for format in [ExportFormat::Json, ExportFormat::Text] {
+        let directory = tempfile::tempdir().expect("export directory");
+        let input = directory.path().join("source.cha");
+        let original = include_bytes!("../../../../corpus/reference/core/basic-conversation.cha");
+        std::fs::write(&input, original).expect("reference source");
+        let path = directory.path().join("report.txt");
+        std::fs::write(
+            &path,
+            "old report contents that must be replaced, including their tail".repeat(100),
+        )
+        .expect("prior report");
+        let results = serde_json::json!([{
+            "path": input, "errors": [], "status": {"type":"valid", "cacheHit":false},
+            "statusLabel":"Valid", "retainedExtension":{"message":"preserved"}
+        }]);
+        let export = |results: String| {
+            tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(
+                chatter_desktop_lib::protocol::commands::ExportResultsRequest {
+                    results,
+                    format,
+                    path: path.to_string_lossy().into_owned(),
+                },
+            ))
+        };
+        export(results.to_string()).expect("replace distinct report");
+        let expected = match format {
+            ExportFormat::Json => serde_json::to_string_pretty(&results).expect("expected JSON"),
+            ExportFormat::Text => format!("{}\nValid", input.display()),
+        };
+        assert_eq!(std::fs::read_to_string(&path).expect("report"), expected);
+        assert_eq!(std::fs::read(&input).expect("source"), original);
+        for malformed in ["null", "{}", "[{\"errors\":[]}]", "not JSON"] {
+            assert!(matches!(
+                export(malformed.to_string()),
+                Err(ExportError::MalformedResults { .. })
+            ));
+            assert_eq!(std::fs::read_to_string(&path).expect("report"), expected);
+        }
+        std::fs::remove_file(&input).expect("source disappears after validation");
+        assert!(matches!(
+            export(results.to_string()),
+            Err(ExportError::Destination(
+                ReportDestinationError::SourceIdentity { .. }
+            ))
+        ));
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("preserved report"),
+            expected
+        );
+    }
+}
+
+/// Exercise actual filesystem write failures in a child so the size limit never
+/// affects the test runner or another test. The child still enters Tauri's runtime.
+#[cfg(unix)]
+#[test]
+fn export_write_failure_preserves_reports() {
+    const CHILD_DIRECTORY: &str = "CHATTER_EXPORT_LIMIT_TEST_DIRECTORY";
+    match std::env::var_os(CHILD_DIRECTORY) {
+        Some(directory) => {
+            let directory = std::path::PathBuf::from(directory);
+            let results = std::fs::read_to_string(directory.join("request.json")).unwrap();
+            for (format, name) in [(ExportFormat::Json, "json"), (ExportFormat::Text, "text")] {
+                for state in ["existing", "absent"] {
+                    let path = directory.join(format!("{name}-{state}.txt"));
+                    let result = tauri::async_runtime::block_on(
+                        chatter_desktop_lib::commands::export_results(
+                            chatter_desktop_lib::protocol::commands::ExportResultsRequest {
+                                results: results.clone(),
+                                format,
+                                path: path.to_string_lossy().into_owned(),
+                            },
+                        ),
+                    );
+                    assert!(
+                        matches!(
+                            result,
+                            Err(chatter_desktop_lib::errors::ExportError::Write { .. })
+                        ),
+                        "{result:?}"
+                    );
+                }
+            }
+        }
+        None => {
+            let directory = tempfile::tempdir().unwrap();
+            let input = directory.path().join("source.cha");
+            let original =
+                include_bytes!("../../../../corpus/reference/core/basic-conversation.cha");
+            std::fs::write(&input, original).unwrap();
+            let results = serde_json::json!([{
+                "path": input, "errors": [], "statusLabel": "Valid"
+            }]);
+            std::fs::write(directory.path().join("request.json"), results.to_string()).unwrap();
+            for name in ["json", "text"] {
+                std::fs::write(
+                    directory.path().join(format!("{name}-existing.txt")),
+                    "previous report",
+                )
+                .unwrap();
+            }
+            let output = std::process::Command::new("/bin/sh")
+                .args([
+                    "-c",
+                    "trap '' XFSZ; ulimit -f 0 || exit 90; exec \"$@\"",
+                    "export-limit",
+                ])
+                .arg(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "export_write_failure_preserves_reports",
+                    "--nocapture",
+                ])
+                .env(CHILD_DIRECTORY, directory.path())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+            assert!(
+                String::from_utf8_lossy(&output.stdout).contains("test result: ok. 1 passed"),
+                "the limited child must execute its runtime test: {output:?}"
+            );
+            for name in ["json", "text"] {
+                assert_eq!(
+                    std::fs::read_to_string(directory.path().join(format!("{name}-existing.txt")))
+                        .unwrap(),
+                    "previous report"
+                );
+                assert!(!directory.path().join(format!("{name}-absent.txt")).exists());
+            }
+            assert_eq!(std::fs::read(input).unwrap(), original);
+            assert_eq!(
+                std::fs::read_dir(directory.path()).unwrap().count(),
+                4,
+                "staged files must be cleaned up"
+            );
+        }
+    }
+}
+
+/// Publication follows an existing symlink, preserves permissions and replaces
+/// one directory entry without modifying sibling hard links to the old report.
+#[cfg(unix)]
+#[test]
+fn export_publication_preserves_links_and_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    for format in [ExportFormat::Json, ExportFormat::Text] {
+        let directory = tempfile::tempdir().unwrap();
+        let report = directory.path().join("report.txt");
+        let link = directory.path().join("link.txt");
+        let sibling = directory.path().join("sibling.txt");
+        std::fs::write(&report, "previous report").unwrap();
+        std::fs::set_permissions(&report, std::fs::Permissions::from_mode(0o640)).unwrap();
+        std::fs::hard_link(&report, &sibling).unwrap();
+        std::os::unix::fs::symlink(&report, &link).unwrap();
+        tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(
+            chatter_desktop_lib::protocol::commands::ExportResultsRequest {
+                results: "[]".into(),
+                format,
+                path: link.to_string_lossy().into_owned(),
+            },
+        ))
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&report).unwrap(),
+            match format {
+                ExportFormat::Json => "[]",
+                ExportFormat::Text => "",
+            }
+        );
+        assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
+        assert_eq!(
+            std::fs::metadata(&report).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+        assert_eq!(
+            std::fs::read_to_string(&sibling).unwrap(),
+            "previous report"
+        );
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 3);
     }
 }

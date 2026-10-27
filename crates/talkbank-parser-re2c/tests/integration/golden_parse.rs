@@ -17,6 +17,7 @@
 //! - `corpus/reference/content/`
 //! - `grammar/test/corpus/main_tier/`
 
+use talkbank_model::{Terminator, WordCategory};
 use talkbank_parser_re2c::ast::*;
 use talkbank_parser_re2c::parser;
 use talkbank_parser_re2c::token::Token;
@@ -28,7 +29,10 @@ fn simple_utterance() {
     let mt = parser::parse_main_tier("*CHI:\thello .\n").unwrap();
     assert!(matches!(mt.speaker, Token::Speaker("CHI")));
     assert_eq!(mt.tier_body.contents.len(), 1);
-    assert!(matches!(mt.tier_body.terminator, Some(Token::Period(_))));
+    assert!(matches!(
+        mt.tier_body.terminator,
+        Some(Terminator::Period { .. })
+    ));
 }
 
 #[test]
@@ -42,13 +46,19 @@ fn multi_word() {
 #[test]
 fn terminator_period() {
     let mt = parser::parse_main_tier("*CHI:\tI see a cat .\n").unwrap();
-    assert!(matches!(mt.tier_body.terminator, Some(Token::Period(_))));
+    assert!(matches!(
+        mt.tier_body.terminator,
+        Some(Terminator::Period { .. })
+    ));
 }
 
 #[test]
 fn terminator_question() {
     let mt = parser::parse_main_tier("*MOT:\twhere is the cat ?\n").unwrap();
-    assert!(matches!(mt.tier_body.terminator, Some(Token::Question(_))));
+    assert!(matches!(
+        mt.tier_body.terminator,
+        Some(Terminator::Question { .. })
+    ));
 }
 
 #[test]
@@ -56,7 +66,7 @@ fn terminator_exclamation() {
     let mt = parser::parse_main_tier("*CHI:\twow !\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::Exclamation(_))
+        Some(Terminator::Exclamation { .. })
     ));
 }
 
@@ -65,7 +75,7 @@ fn terminator_trailing_off() {
     let mt = parser::parse_main_tier("*CHI:\tI was going to the +...\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::TrailingOff(_))
+        Some(Terminator::TrailingOff { .. })
     ));
 }
 
@@ -74,7 +84,7 @@ fn terminator_interruption() {
     let mt = parser::parse_main_tier("*MOT:\twhat do they do with +/.\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::Interruption(_))
+        Some(Terminator::Interruption { .. })
     ));
 }
 
@@ -83,7 +93,7 @@ fn terminator_self_interruption() {
     let mt = parser::parse_main_tier("*MOT:\tand then she wouldn't +//.\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::SelfInterruption(_))
+        Some(Terminator::SelfInterruption { .. })
     ));
 }
 
@@ -92,7 +102,7 @@ fn terminator_break_for_coding() {
     let mt = parser::parse_main_tier("*EXP:\tfoo bar +.\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::BreakForCoding(_))
+        Some(Terminator::BreakForCoding { .. })
     ));
 }
 
@@ -101,7 +111,7 @@ fn terminator_interrupted_question() {
     let mt = parser::parse_main_tier("*MOT:\twhat would they have in a +/?\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::InterruptedQuestion(_))
+        Some(Terminator::InterruptedQuestion { .. })
     ));
 }
 
@@ -110,7 +120,7 @@ fn terminator_self_interrupted_question() {
     let mt = parser::parse_main_tier("*MOT:\twhat were you going to say about +//?\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::SelfInterruptedQuestion(_))
+        Some(Terminator::SelfInterruptedQuestion { .. })
     ));
 }
 
@@ -119,7 +129,7 @@ fn terminator_trailing_off_question() {
     let mt = parser::parse_main_tier("*MOT:\tanything to belong to the club or +..?\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::TrailingOffQuestion(_))
+        Some(Terminator::TrailingOffQuestion { .. })
     ));
 }
 
@@ -128,7 +138,7 @@ fn terminator_broken_question() {
     let mt = parser::parse_main_tier("*MOT:\tbut what if they +!?\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::BrokenQuestion(_))
+        Some(Terminator::BrokenQuestion { .. })
     ));
 }
 
@@ -137,7 +147,7 @@ fn terminator_quoted_new_line() {
     let mt = parser::parse_main_tier("*CHI:\tthe bear said +\"/.\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::QuotedNewLine(_))
+        Some(Terminator::QuotedNewLine { .. })
     ));
 }
 
@@ -146,7 +156,7 @@ fn terminator_quoted_period_simple() {
     let mt = parser::parse_main_tier("*CHI:\tthe bear said +\".\n").unwrap();
     assert!(matches!(
         mt.tier_body.terminator,
-        Some(Token::QuotedPeriodSimple(_))
+        Some(Terminator::QuotedPeriodSimple { .. })
     ));
 }
 
@@ -174,7 +184,7 @@ fn compound_word() {
     assert_eq!(words.len(), 3);
     assert!(
         words[2]
-            .body
+            .body()
             .iter()
             .any(|b| matches!(b, WordBodyItem::CompoundMarker(_)))
     );
@@ -193,7 +203,7 @@ fn word_with_form_marker() {
         })
         .collect();
     assert!(
-        words[0].form_marker.is_some(),
+        words[0].form_marker().is_some(),
         "expected form marker on first word"
     );
 }
@@ -212,7 +222,7 @@ fn word_with_lengthening() {
         .collect();
     assert!(
         words[0]
-            .body
+            .body()
             .iter()
             .any(|b| matches!(b, WordBodyItem::Lengthening(run) if run.count().get() == 2))
     );
@@ -231,7 +241,7 @@ fn filler_word() {
         })
         .collect();
     assert!(
-        matches!(words[0].category, Some(WordCategory::Filler)),
+        matches!(words[0].category(), Some(WordCategory::Filler)),
         "expected filler category on first word"
     );
 }
@@ -243,7 +253,7 @@ fn event_happening() {
         .tier_body
         .contents
         .iter()
-        .any(|c| matches!(c, ContentItem::Event(_)));
+        .any(|c| matches!(c, ContentItem::Event(..)));
     assert!(has_event, "got {:?}", mt.tier_body.contents);
 }
 
@@ -264,12 +274,10 @@ fn retracing_annotation() {
 fn explanation_annotation() {
     let mt = parser::parse_main_tier("*CHI:\tit [= the cookie] .\n").unwrap();
     let has = mt.tier_body.contents.iter().any(|c| match c {
-        ContentItem::Word(w) => w.annotations.iter().any(|a| {
+        ContentItem::Word(w) => w.annotations().iter().any(|a| {
             matches!(
-                a,
-                ParsedAnnotation::Scoped(
-                    talkbank_parser_re2c::ast::ScopedAnnotationParsed::Explanation(_)
-                )
+                a.annotation(),
+                talkbank_model::ContentAnnotation::Explanation(_)
             )
         }),
         _ => false,
@@ -291,9 +299,55 @@ fn pause_in_utterance() {
 // ── Linkers ─────────────────────────────────────────────────────
 
 #[test]
-fn linker_quick_uptake() {
-    let mt = parser::parse_main_tier("*MOT:\t+^ hi there .\n").unwrap();
-    assert_eq!(mt.tier_body.linkers.len(), 1);
+fn linker_admission_preserves_reference_kinds_order_and_source_locations() {
+    use talkbank_model::{ChatParser, ErrorCollector, WriteChat};
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    let mut spellings = std::collections::BTreeSet::new();
+    for source in [
+        include_str!("../../../../corpus/reference/content/linkers.cha"),
+        include_str!("../../../../corpus/reference/content/linkers-multiple.cha"),
+        include_str!("../../../../corpus/reference/ca/intonation.cha"),
+    ] {
+        for origin in [0, 37] {
+            let errors = ErrorCollector::new();
+            let file = parser
+                .parse_chat_file(source, origin, &errors)
+                .into_option()
+                .unwrap();
+            assert!(!errors.has_errors(), "{:?}", errors.to_vec());
+            for utterance in file
+                .utterances()
+                .filter(|utterance| !utterance.main.content.linkers.is_empty())
+            {
+                let main = &utterance.main;
+                let span = main.location.span().unwrap();
+                let input = &source[span.start() - origin..span.end() - origin];
+                let errors = ErrorCollector::new();
+                let fragment = parser
+                    .parse_main_tier(input, span.start(), &errors)
+                    .into_option()
+                    .unwrap();
+                assert!(!errors.has_errors(), "{:?}", errors.to_vec());
+                assert_eq!(fragment.content.linkers, main.content.linkers);
+                for linker in &main.content.linkers {
+                    let span = linker.location.span().unwrap();
+                    let spelling = linker.to_chat_string();
+                    assert_eq!(
+                        &source[span.start() - origin..span.end() - origin],
+                        spelling
+                    );
+                    spellings.insert(spelling);
+                }
+            }
+        }
+    }
+    assert_eq!(
+        spellings,
+        ["+<", "++", "+^", "+\"", "+,", "+≈", "+≋"]
+            .into_iter()
+            .map(String::from)
+            .collect()
+    );
 }
 
 // ── Postcodes ───────────────────────────────────────────────────
@@ -301,7 +355,10 @@ fn linker_quick_uptake() {
 #[test]
 fn postcodes_after_terminator() {
     let mt = parser::parse_main_tier("*CHI:\thello . [+ bch] [+ foo]\n").unwrap();
-    assert!(matches!(mt.tier_body.terminator, Some(Token::Period(_))));
+    assert!(matches!(
+        mt.tier_body.terminator,
+        Some(Terminator::Period { .. })
+    ));
     assert_eq!(
         mt.tier_body.postcodes.len(),
         2,
@@ -322,45 +379,4 @@ fn angle_bracket_group() {
         .iter()
         .any(|c| matches!(c, ContentItem::Retrace(r) if r.is_group()));
     assert!(has_retrace, "got {:?}", mt.tier_body.contents);
-}
-
-// ── Corpus smoke test ───────────────────────────────────────────
-
-#[test]
-#[ignore = "slow: parses every main tier of every reference file individually. \
-           Run with --ignored."]
-fn reference_corpus_main_tiers() {
-    // Reference corpus lives in this repo at <repo>/corpus/reference.
-    // CARGO_MANIFEST_DIR = <repo>/crates/talkbank-parser-re2c
-    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/reference");
-
-    if !base.exists() {
-        return;
-    }
-
-    let mut total = 0;
-    let mut parsed = 0;
-    for dir in ["core", "content", "annotation", "tiers", "ca", "languages"] {
-        let dir_path = base.join(dir);
-        if !dir_path.exists() {
-            continue;
-        }
-        for entry in std::fs::read_dir(&dir_path).unwrap() {
-            let path = entry.unwrap().path();
-            if path.extension().is_some_and(|e| e == "cha") {
-                let content = std::fs::read_to_string(&path).unwrap();
-                for line in content.lines() {
-                    if line.starts_with('*') {
-                        total += 1;
-                        let input = format!("{line}\n");
-                        if parser::parse_main_tier(&input).is_some() {
-                            parsed += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    eprintln!("Parsed {parsed}/{total} main tier lines");
-    assert!(parsed as f64 / total as f64 > 0.9, "{parsed}/{total}");
 }

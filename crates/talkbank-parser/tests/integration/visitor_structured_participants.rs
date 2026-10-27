@@ -158,9 +158,9 @@ fn participants_header_three_entries_decodes_to_exact_payload() {
         headers[0],
         concat!(
             r#"Participants { entries: ParticipantEntries(["#,
-            r#"ParticipantEntry { speaker_code: SpeakerCode("MOT"), name: None, role: ParticipantRole("Mother") }, "#,
-            r#"ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Target_Child") }, "#,
-            r#"ParticipantEntry { speaker_code: SpeakerCode("FAT"), name: None, role: ParticipantRole("Father") }"#,
+            r#"ParticipantEntry { speaker_code: SpeakerCode("MOT"), details: Complete { name: None, role: ParticipantRole("Mother") } }, "#,
+            r#"ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Target_Child") } }, "#,
+            r#"ParticipantEntry { speaker_code: SpeakerCode("FAT"), details: Complete { name: None, role: ParticipantRole("Father") } }"#,
             r#"]) }"#,
         ),
         "@Participants three-entry fixture must reproduce the pre-migration payload"
@@ -187,8 +187,8 @@ fn participants_header_two_entries_with_name_decodes_to_exact_payload() {
         headers[0],
         concat!(
             r#"Participants { entries: ParticipantEntries(["#,
-            r#"ParticipantEntry { speaker_code: SpeakerCode("NAR"), name: Some(ParticipantName("Narrator")), role: ParticipantRole("Investigator") }, "#,
-            r#"ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Target_Child") }"#,
+            r#"ParticipantEntry { speaker_code: SpeakerCode("NAR"), details: Complete { name: Some(ParticipantName("Narrator")), role: ParticipantRole("Investigator") } }, "#,
+            r#"ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Target_Child") } }"#,
             r#"]) }"#,
         ),
         "@Participants two-entry with name must reproduce the pre-migration payload"
@@ -214,7 +214,7 @@ fn participants_header_single_entry_decodes_to_exact_payload() {
         headers[0],
         concat!(
             r#"Participants { entries: ParticipantEntries(["#,
-            r#"ParticipantEntry { speaker_code: SpeakerCode("CHI"), name: None, role: ParticipantRole("Child") }"#,
+            r#"ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }"#,
             r#"]) }"#,
         ),
         "@Participants single-entry must reproduce the pre-migration payload"

@@ -1,0 +1,26 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Authored full-document controls from spec/constructs/utterance/wor_*.md.
+	These are independently authored examples, not derived corpus transcripts.
+	Matching main/dependent endings retain WOR alignment across adjacent turns.
+	The tag-marker pair retains a separator in each tier; no timing is invented.
+*CHI:	hello +"/.
+%wor:	hello +"/.
+*CHI:	hello +//.
+%wor:	hello +//.
+*CHI:	hello +...
+%wor:	hello +...
+*CHI:	hello +/.
+%wor:	hello +/.
+*CHI:	hello „ .
+%wor:	hello „ .
+*CHI:	hello +/?
+%wor:	hello +/?
+*CHI:	hello +..?
+%wor:	hello +..?
+*CHI:	hello +//?
+%wor:	hello +//?
+@End

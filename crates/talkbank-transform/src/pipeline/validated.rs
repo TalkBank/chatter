@@ -3,8 +3,8 @@
 use std::borrow::Cow;
 use talkbank_model::model::TranscriptName;
 use talkbank_model::validation::{ValidChatFile, ValidationFailure, ValidationPolicy};
+use talkbank_model::{ChatParser, ParseProduct};
 use talkbank_model::{CompletedDiagnostics, ErrorSink, InternalFailure};
-use talkbank_parser::{ParseProduct, TreeSitterParser};
 
 /// One source parse, before its admission or release for editing.
 /// The source and product can only be paired by the parser entry point.
@@ -43,6 +43,29 @@ impl<'source> ParsedSourceChat<'source> {
             source: Cow::Borrowed(self.source),
             file,
         })
+    }
+
+    /// Sanitize this exact source parse only after its unedited serialization
+    /// retains ordered, disjoint source-line witnesses (ignoring whitespace).
+    /// This checks for source loss before intentional redaction, not CHAT validity
+    /// or semantic equivalence. Recovery diagnostics are forwarded unchanged.
+    /// Internal failures and unbuildable parses never produce sanitized output.
+    pub fn sanitize(
+        self,
+        policy: &crate::redact::SanitizationPolicy,
+        errors: &impl ErrorSink,
+    ) -> Result<crate::redact::SanitizedDocument, crate::redact::SourceSanitizationError> {
+        errors.report_all(self.product.diagnostics().to_vec());
+        CompletedDiagnostics::admit(self.product.diagnostics().to_vec())?;
+        match self.product {
+            ParseProduct::Built { file, .. } => {
+                super::Rewrite::of(&file, self.source)?;
+                Ok(crate::redact::sanitize(file, policy)?)
+            }
+            ParseProduct::Unbuildable { .. } => {
+                Err(crate::redact::SourceSanitizationError::Unbuildable)
+            }
+        }
     }
 
     /// Release the unchecked producer outcome, discarding source admission
@@ -117,12 +140,12 @@ impl<'source> AdmittedSourceChat<'source> {
 /// Parse source once, retaining an opaque source/product pair for policy
 /// selection before admission. This does not certify validity or recovery.
 pub fn parse_source_with_parser<'source>(
-    parser: &TreeSitterParser,
+    parser: &impl ChatParser,
     source: &'source str,
 ) -> ParsedSourceChat<'source> {
     ParsedSourceChat {
         source,
-        product: parser.parse_chat_file(source),
+        product: ParseProduct::parse(parser, source),
     }
 }
 
@@ -150,13 +173,13 @@ pub enum ValidatedParseError {
 /// Unlike optional-validation APIs, this function cannot return unchecked output.
 /// All parse diagnostics are forwarded before model validation starts.
 pub fn parse_validated_with_parser(
-    parser: &TreeSitterParser,
+    parser: &impl ChatParser,
     content: &str,
     policy: ValidationPolicy,
     name: TranscriptName<'_>,
     errors: &impl ErrorSink,
 ) -> Result<ValidChatFile, ValidatedParseError> {
-    admit_product(parser.parse_chat_file(content), policy, name, errors)
+    admit_product(ParseProduct::parse(parser, content), policy, name, errors)
 }
 
 /// One admission boundary for every complete parse attempt, before severity
@@ -190,6 +213,8 @@ mod tests {
     use super::*;
     use talkbank_model::validation::AlignmentValidation;
     use talkbank_model::{ErrorCollector, NullErrorSink, RuleSelection};
+    use talkbank_parser::TreeSitterParser;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
 
     const SOURCE: &str =
         include_str!("../../../../corpus/reference/languages/eng-conversation.cha");
@@ -214,6 +239,22 @@ mod tests {
                 diagnostics: vec![diagnostic.clone()],
             },
         ] {
+            let sanitizer_errors = ErrorCollector::new();
+            let source_parse = ParsedSourceChat {
+                source: SOURCE,
+                product: product.clone(),
+            };
+            assert!(matches!(
+                source_parse.sanitize(
+                    &crate::redact::SanitizationPolicy::strict(),
+                    &sanitizer_errors
+                ),
+                Err(crate::redact::SourceSanitizationError::Internal(_))
+            ));
+            assert_eq!(
+                sanitizer_errors.into_vec()[0].code,
+                talkbank_model::ErrorCode::InternalError
+            );
             let was_built = product.is_built();
             let sink = ErrorCollector::new();
             let result = admit_product(

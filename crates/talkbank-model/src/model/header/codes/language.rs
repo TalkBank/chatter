@@ -87,11 +87,49 @@ pub struct LanguageCode(Arc<str>);
 pub enum LanguageCodeError {
     /// The input string was empty.
     ///
-    /// Use [`LanguageCode::empty`] for parser recovery when a language field
-    /// is missing; that sentinel is a real, valid code (`"und"`), never a
-    /// silently-accepted empty value.
-    #[error("language code cannot be empty; use LanguageCode::empty() for parser recovery")]
+    /// Missing source data must remain explicit in its owning recovery state.
+    #[error("language code cannot be empty")]
     Empty,
+}
+
+/// A language token admitted by the shared CHAT language-code rules.
+///
+/// Unlike the recovery-capable [`LanguageCode`], this value proves the code's
+/// shape, placeholder policy and registry membership. It has no deserializer;
+/// imported data must pass the same admission before a rewrite promotes it.
+///
+/// ```compile_fail
+/// let admitted: talkbank_model::RegisteredLanguageCode =
+///     serde_json::from_str("\"qzz\"").unwrap();
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisteredLanguageCode(LanguageCode);
+
+impl RegisteredLanguageCode {
+    /// Borrow the admitted token.
+    pub fn as_code(&self) -> &LanguageCode {
+        &self.0
+    }
+
+    /// Consume the evidence when inserting its token into the mutable model.
+    pub fn into_code(self) -> LanguageCode {
+        self.0
+    }
+}
+
+impl TryFrom<LanguageCode> for RegisteredLanguageCode {
+    type Error = Vec<ParseError>;
+
+    fn try_from(code: LanguageCode) -> Result<Self, Self::Error> {
+        let errors = crate::ErrorCollector::new();
+        code.report_code_issues(DiagnosticLocation::Unlocated, &errors);
+        let diagnostics = errors.into_vec();
+        if diagnostics.is_empty() {
+            Ok(Self(code))
+        } else {
+            Err(diagnostics)
+        }
+    }
 }
 
 impl LanguageCode {
@@ -99,9 +137,8 @@ impl LanguageCode {
     ///
     /// # Errors
     ///
-    /// Returns [`LanguageCodeError::Empty`] if `value` is empty. Use
-    /// [`empty`](Self::empty) for parser recovery when a language field is
-    /// missing.
+    /// Returns [`LanguageCodeError::Empty`] if `value` is empty. Missing data
+    /// must remain explicit in its owning recovery state, never become `und`.
     pub fn new(value: impl AsRef<str>) -> Result<Self, LanguageCodeError> {
         let s = value.as_ref();
         if s.is_empty() {
@@ -111,17 +148,8 @@ impl LanguageCode {
         }
     }
 
-    /// Sentinel for parser recovery when a language field is missing.
-    ///
-    /// This produces a `LanguageCode` with the placeholder value `"und"`
-    /// (ISO 639-3 "undetermined"), which is a valid 3-letter code that
-    /// signals "language not specified." It passes format validation but
-    /// can be detected by downstream code.
-    pub fn empty() -> Self {
-        Self(crate::model::language_interner().intern("und"))
-    }
-
-    /// Whether this is the "undetermined" sentinel from parser recovery.
+    /// Whether the explicitly supplied code is ISO 639-3 `und` (undetermined).
+    /// This says nothing about parser recovery or source-field presence.
     pub fn is_undetermined(&self) -> bool {
         self.0.as_ref() == "und"
     }
@@ -137,7 +165,7 @@ impl LanguageCode {
 
 impl crate::model::WriteChat for LanguageCode {
     /// Writes the raw code token with no additional normalization.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(&self.0)
     }
 }
@@ -324,6 +352,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn registered_admission_preserves_recovery_and_checks_the_shared_rules() {
+        for text in ["", "en", "ENG", "xxx", "qzz"] {
+            let wire = serde_json::to_string(text).expect("string wire");
+            let code: LanguageCode = serde_json::from_str(&wire).expect("recovery import");
+            let errors = RegisteredLanguageCode::try_from(code.clone())
+                .expect_err("invalid code cannot authorize promotion");
+            assert!(!errors.is_empty());
+            assert!(
+                errors
+                    .iter()
+                    .all(|error| error.code == ErrorCode::InvalidLanguageCode)
+            );
+            assert_eq!(serde_json::to_string(&code).expect("recovery export"), wire);
+        }
+        for text in ["eng", "spa", "nle", "und"] {
+            let code = LanguageCode::new(text).expect("nonempty code");
+            let admitted = RegisteredLanguageCode::try_from(code.clone()).expect("registry code");
+            assert_eq!(admitted.as_code(), &code);
+            assert_eq!(admitted.into_code(), code);
+        }
+    }
+
+    #[test]
     fn new_accepts_valid_code() {
         let code = LanguageCode::new("eng").expect("non-empty literal");
         assert_eq!(code.as_str(), "eng");
@@ -347,8 +398,8 @@ mod tests {
     }
 
     #[test]
-    fn empty_produces_undetermined() {
-        let code = LanguageCode::empty();
+    fn explicitly_authored_undetermined_is_preserved() {
+        let code = LanguageCode::new("und").expect("explicit nonempty code");
         assert_eq!(code.as_str(), "und");
         assert!(code.is_undetermined());
     }
@@ -403,7 +454,7 @@ mod tests {
     /// Deserialization is deliberately LENIENT (parse-don't-validate): an empty
     /// code deserializes successfully via the `#[serde(transparent)]` derive, even
     /// though `new("")` rejects it for programmatic construction. This mirrors the
-    /// sibling `NonEmptyString` (see its `test_deserialize_empty_allowed_but_invalid`):
+    /// sibling `RecoveryText` (see its `test_deserialize_empty_allowed_but_invalid`):
     /// the `from-json` ingress reconstructs the model faithfully and the separate
     /// `Validate` pass flags domain violations (see the companion test below).
     ///

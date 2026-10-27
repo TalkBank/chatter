@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Child",
+            "details": {
+              "name": null,
+              "role": "Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           }
         ],
@@ -301,46 +304,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [
-    "CA"
-  ],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "2;06.",
-        "corpus": "corpus",
-        "custom_field": "custom field",
-        "education": "graduate",
-        "group": "TD",
-        "language": [
-          "eng"
-        ],
-        "role": "Child",
-        "ses": "UC",
-        "sex": "male",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Child"
-    },
-    "MOT": {
-      "birth_date": null,
-      "code": "MOT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Mother",
-        "ses": "White,MC",
-        "sex": "female",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    }
-  }
+  ]
 }

@@ -94,9 +94,21 @@ form/language/POS fields retain readable slices instead of five independent
 fallible reads. A range failure rejects the word with an internal diagnostic;
 it cannot turn an unreadable optional field into an omitted marker. Displaced
 recovery remains reported on failure and after successful field lowering.
-Nested word-body extraction, lexical/nonempty admission and recovery are
-unchanged. This is a selected-carrier transition, not a whole-tree prepass or
-a claim of faster parsing; its larger transient layout is measured separately.
+Word-body and shortening producers now consume that same transition. The six
+piece choices retain readable leaves; decoding no longer performs a fallible
+source read per piece. Lexical/nonempty admission and recovery remain separate.
+The word/replacement, nonword and quotation annotation hosts, angle/phonology/
+sign groups, scoped lists, code-switch wrappers and tier bodies likewise admit
+their selected ranges at the producer. Kind and required-presence proofs survive;
+the range phase does not certify nested payload validity. The four bracketed
+cores' required-presence proof excludes delimiter ERROR/absence, so their dead
+delimiter reporters and the angle-group extent fallback are removed. Lexical
+MISSING delimiters still supply their actual zero-width positions. The precode
+decoder needs only its syntax outcome after its enclosing tier-body admission;
+source refusal cannot be mistaken for an absent or malformed precode.
+These are selected-carrier transitions, not a whole-tree prepass or a claim of
+faster parsing; transient carrier layout and counted admission work are separate
+from throughput measurements.
 The language suffix is deliberately one immediate token, not a structured
 code-list CST. Its adapter takes only the source-bound `WordLangSuffixNode`;
 spelling admission retains that owner through atomic candidate conversion.
@@ -109,6 +121,17 @@ Replacement extraction uses the same proof for its first and repeated word
 slots. No word-position counter is needed to describe an impossible
 composite Missing state. Zero-width words, unreadable source, delimiter recovery,
 Error/Absent slots and refusal of an empty replacement remain separate checks.
+
+Main-tier linkers, endings, final-code groups and bullet timestamp fields also
+consume selected-range admission at their producers. Linker decoding accepts
+only its source-owned node, not a node plus independently chosen text; its
+failure prevents tier-body construction after sibling recovery is reported.
+Ending decoding uses one readable carrier rather than zipping raw and associated
+iterations or reprojecting the bullet group. Linker source order and lexical
+placeholders are retained. Bullet recovery refusal, numeric overflow precedence
+and start-before-end leading-zero reports stay separate from source readability.
+The existing postcode token decoder and shared terminator mapping remain the
+policy owners; this migration adds no grammar, validity or wire-format rule.
 
 MOR item collection has a private one-way admission state. Items and failure
 health cannot be supplied independently to finalization. Any item, separator or
@@ -197,20 +220,14 @@ There is no separately pairable field/context input. Index, head and label
 admission retains its existing order and numeric/empty checks; source faults
 propagate as `CstFailure` to dispatch
 instead of dropping a relation and misclassifying a producer failure as CHAT
-invalidity. Recovery and declared-versus-lowered completeness remain explicit.
-`GraLowering` records each Present relation's actual parsed/rejected outcome,
-then consumes the mutable phase into `GraLoweringReceipt`. That immutable
-receipt owns the retained relations and their derived completeness; consuming
-it constructs the tier without a separate vector, declaration counter or
-caller-supplied Whole/Truncated claim. Whole-contents recovery has a named
-lost-contents receipt and invents no relation. Error/Absent recovery siblings
-keep their existing classification rather than becoming extra declarations.
-Both parsers use this owner; re2c also retains the receipt until its consuming
-utterance attachment derives the coarser parse-health taint from the same fact.
-Public hand-built tiers and JSON readback remain Unknown, which is judged rather
-than withheld. Recorded retention is not source-origin or CHAT-validity proof.
-Document `has_error` recovery retains its separate Unknown, real-span placeholder
-and summary report; it does not become native lost-contents evidence. Tier
+invalidity. `GraLowering` records each declared relation's actual outcome and
+consumes collection with `finish(location) -> ParseOutcome<GraTier>`. Any
+rejection irreversibly rejects the graph. Root syntax recovery also rejects,
+including text outside declared relation slots. Diagnostics continue to be
+collected; neither parser constructs a partial graph or a completeness flag.
+File parsing retains the original tier as UnparsedGra, including through JSON;
+fragment parsing returns rejection. Builders and JSON import do not certify
+source origin or CHAT validity. Tier
 admission is total (`tier_parsers::admission::TierAdmission`, since
 2026-10-19): a source-bound tier is either a consumed `TierRecovery`, which
 only the whole-tier reporter accepts, or a `HealthyTier`, the proof that no
@@ -415,12 +432,14 @@ projection and checked reads. There is no independent source-string argument
 to mismatch with a bullet, and unreadable fields report producer failure rather
 than masquerading as missing timestamps. This changes neither overflow nor
 leading-zero policy.
-The default and canonical parser is the tree-sitter parser
-(`talkbank-parser`). A second implementation, `talkbank-parser-re2c`,
-exists alongside it as an experimental, incomplete alternative, not an
-authority for CHAT validity. It targets the same `ChatFile` model and is opt-in via
-`chatter validate --parser re2c`. The LSP and all production paths
-default to the tree-sitter parser.
+The Tree-sitter backend (`talkbank-parser`) and re2c backend
+(`talkbank-parser-re2c`) have equal standing in the
+[shared model's design](parser-backends.md#equal-backends-one-shared-model).
+Tree-sitter was prototyped first and is currently the CLI default and
+incremental LSP backend. Select re2c with `chatter validate --parser re2c`.
+Those implementation facts do not grant either parser ownership of the model
+or authority to define CHAT validity. Both can motivate shared-model changes,
+including explicit malformed or recovery states.
 
 The finite reference workflow checks editor-facing source ownership after
 lowering: byte offsets at main/dependent-tier starts and interiors select the
@@ -614,9 +633,10 @@ still names nonterminal kinds, which tree-sitter never inserts MISSING (its
 runtime inserts only terminal leaves), but each such variant carries a
 `NarrowedMissing<K, _>`: under the broad proof that is the placeholder,
 under `KindAdmitted` it is the uninhabited `Never`. A consumer that extracts
-under the admitted proof therefore handles a nonterminal head with an empty
-match (`contents`, `content_item`, `separator`, `long_feature` and
-`nonvocal` do). A tree contradicting the proof never reaches such a
+under the admitted proof can handle a nonterminal head with an empty
+match (`separator`, `long_feature` and `nonvocal` do). A consumer that only
+reports missing syntax needs no conversion of the missing head. A tree
+contradicting the proof never reaches such a
 consumer: extraction refuses it, and the refusal is reported once as a
 producer fault. A consumer that extracts broadly still receives the
 placeholder. A consumer that interprets the
@@ -706,6 +726,22 @@ failure as fragment shape. Its private classified-input state retains either
 the complete document envelope or the exact input requiring scaffolding. A
 valid no-transcription document may contain no utterance; the helper then
 reports MissingMainTier without reclassifying the document as a fragment.
+
+Both backends' single-utterance APIs admit their parsed population through
+`SingleUtterance`. Zero or multiple utterances cannot produce this owner; its
+consuming projection releases the sole utterance without another count check.
+Headers and attached dependent tiers remain supported, including a complete
+document containing one utterance. A document containing several utterances is
+rejected instead of silently returning its first one. Use `parse_chat_file`
+when the caller needs a whole document. Cardinality admission does not certify
+CHAT validity or remove parser recovery diagnostics.
+
+The native word-body scanner admits `ClosedShortening` only after consuming an
+observed closing parenthesis and nonempty content. Its consuming projection
+constructs the body item without an end-of-input substitute for the delimiter.
+`WordBodyError` distinguishes unclosed shortenings from empty lexical segments;
+the rich-word grammar propagates either failure as rejection. This boundary
+proves delimiter presence and non-emptiness, not full CHAT validity.
 
 Inline pictures additionally admit their decoded text into a private nonempty
 filename value before conversion to an owned string. Its constructor checks both
@@ -1073,6 +1109,18 @@ The utterance-body versus inside-brackets distinction still owns E759 behavior,
 and angle-edge whitespace still owns E750. Range refusals and recovery sinks
 remain visible.
 
+Only present `contents` choices become content leaves. Missing whitespace or
+overlap markers are reported as missing syntax, with no attempt to decode a
+present token from their empty text. The shared walker returns a producer
+failure for an absent required first selection or an unreadable selected
+range, rather than a successful partial vector. Its displaced-node sink is
+still surfaced on failure. The bracketed adapter reports that failure once
+and returns a rejected outcome; all four enclosure callers retain the
+rejection while reporting their remaining delimiters and displaced recovery.
+An absent required `content_item` selection is likewise a producer fault,
+not silent rejection. These policies do not change the separate separator
+placeholder policy described below.
+
 Standalone-word conversion also requires a producer-bound word. Base-content
 choice dispatch retains that association through annotated words and replacement
 sequences; fragment lowering never detaches its admitted word. The independent
@@ -1184,7 +1232,7 @@ over all CHAT input. Error reporting has a separate
 
 ## TreeSitterParser API
 
-`TreeSitterParser` is the concrete canonical parser handle. Reuse an instance
+`TreeSitterParser` is the concrete Tree-sitter backend handle. Reuse an instance
 across calls. The shared `talkbank_model::ChatParser` trait also supports
 generic callers and backend parity tests; both tree-sitter and re2c implement
 it. Its sink methods are generic, so the trait is not a `dyn` trait object.
@@ -1368,12 +1416,13 @@ the tree-sitter parser has no callers of it.
 The document grammar admits an absent `@UTF8` anchor as an explicit optional
 slot. Lowering consumes that generated slot and retains the present headers
 and utterances without inventing an encoding declaration. Shared validation
-still rejects the file with E503. The canonical parser retains the present headers rather than
+still rejects the file with E503. The Tree-sitter backend retains the present headers rather than
 discarding the document and reporting them as missing. The authored E503 example and its declaration-present
 control exercise this recovery; CLAN CHECK reports the corresponding CHECK (69).
 
-The re2c file parser carries each header's lexer extent and separator together
-in `HeaderProvenance`. Lowering uses that extent instead of an unknown span,
+The re2c file parser carries each header's syntax, admitted source slice and
+separator together in `LocatedHeader`. Lowering derives the original full-buffer
+source and lexer extent from that owner, without accepting a replacement source,
 so shared missing-header diagnostics derive a real EOF from the final header.
 The cross-backend `missing_encoding_keeps_the_document_and_locates_the_single_refusal`
 test checks retained utterances, exact diagnostics, and EOF locations at zero,

@@ -148,6 +148,7 @@ fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
         .content
         .bullet
         .as_ref()
+        .and_then(talkbank_model::BulletState::as_parsed)
         .expect("timed gem")
         .timing
         .start_ms;
@@ -159,6 +160,7 @@ fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
         .content
         .bullet
         .as_ref()
+        .and_then(talkbank_model::BulletState::as_parsed)
         .expect("timed gem")
         .timing
         .end_ms;
@@ -177,22 +179,31 @@ fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
             })
             .nth(index)
             .expect("exterior donor row");
-        let original = row.main.content.bullet.as_ref().expect("timed donor");
+        let original = row
+            .main
+            .content
+            .bullet
+            .as_ref()
+            .and_then(talkbank_model::BulletState::as_parsed)
+            .expect("timed donor");
         // Deliberate input-boundary mutation, not an authorized output retiming.
         // The new interval has no claimed source span.
-        row.main.content.bullet = Some(if before_gem {
-            talkbank_model::model::Bullet::new(
-                talkbank_model::Location::Unlocated,
-                original.timing.start_ms,
-                gem_start,
-            )
-        } else {
-            talkbank_model::model::Bullet::new(
-                talkbank_model::Location::Unlocated,
-                gem_end,
-                original.timing.end_ms,
-            )
-        });
+        row.main.content.bullet = Some(
+            (if before_gem {
+                talkbank_model::model::Bullet::new(
+                    talkbank_model::Location::Unlocated,
+                    original.timing.start_ms,
+                    gem_start,
+                )
+            } else {
+                talkbank_model::model::Bullet::new(
+                    talkbank_model::Location::Unlocated,
+                    gem_end,
+                    original.timing.end_ms,
+                )
+            })
+            .into(),
+        );
         let wire = touching.to_chat_string();
         let selected = SourceBoundDonorSelection::bind(&touching, &touching, parents())
             .expect("mutated donor bound to its own coordinates")
@@ -237,7 +248,13 @@ fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
             .utterances()
             .nth(placement.donor.utterance().raw())
             .expect("receipt names actual selected donor row");
-        let bullet = original.main.content.bullet.as_ref().expect("timed donor");
+        let bullet = original
+            .main
+            .content
+            .bullet
+            .as_ref()
+            .and_then(talkbank_model::BulletState::as_parsed)
+            .expect("timed donor");
         assert_eq!(
             placement.donor_interval,
             bullet.timing.start_ms..=bullet.timing.end_ms

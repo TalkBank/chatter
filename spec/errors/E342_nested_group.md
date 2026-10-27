@@ -30,6 +30,96 @@ chat = '''
 *CHI:	<before <hello> after> [!] .
 @End
 '''
+
+[[example]]
+title = 'An annotated inner scope inside a quotation'
+level = 'utterance'
+claim = 'legal'
+notes = 'The regular inner scope retains its own uncertainty annotation.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	“<hello> [?]” .
+@End
+'''
+
+[[example]]
+title = 'Delete only the inner annotation inside a quotation'
+level = 'utterance'
+claim = 'violates'
+notes = 'Delete only [?] from the paired control, retaining its preceding space and the outer delimiters. The inner angle-bracket scope still requires its own annotation.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	“<hello> ” .
+@End
+'''
+
+[[example]]
+title = 'An annotated inner scope inside a phonological group'
+level = 'utterance'
+claim = 'legal'
+notes = 'The regular inner scope retains its own uncertainty annotation.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	‹<hello> [?]› .
+@End
+'''
+
+[[example]]
+title = 'Delete only the inner annotation inside a phonological group'
+level = 'utterance'
+claim = 'violates'
+notes = 'Delete only [?] from the paired control, retaining its preceding space and the outer delimiters. The inner angle-bracket scope still requires its own annotation.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	‹<hello> › .
+@End
+'''
+
+[[example]]
+title = 'An annotated inner scope inside a sign group'
+level = 'utterance'
+claim = 'legal'
+notes = 'The regular inner scope retains its own uncertainty annotation.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	〔<hello> [?]〕 .
+@End
+'''
+
+[[example]]
+title = 'Delete only the inner annotation inside a sign group'
+level = 'utterance'
+claim = 'violates'
+notes = 'Delete only [?] from the paired control, retaining its preceding space and the outer delimiters. The inner angle-bracket scope still requires its own annotation.'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	〔<hello> 〕 .
+@End
+'''
 +++
 
 ## Description
@@ -39,10 +129,19 @@ scope's annotation cannot stand in for a missing inner annotation.
 
 ## Expected Behavior
 
-Reject the malformed nested scope. In this example the grammar cannot retain
-a typed group and instead reports a whole-tier ERROR through E316; the more
-specific E342 slot diagnostic is subsumed. Do not invent a retrace or reconstruct
-group structure from that ERROR text. Recovered output is not a repaired control.
+Reject every scope whose required inner annotation is missing. In the original
+angle-group deletion (example 2), the grammar cannot retain a typed inner group
+and instead reports a whole-tier ERROR through E316; E342 is subsumed. Do not
+reconstruct group structure from that ERROR text.
+
+Examples 4, 6 and 8 retain a typed bare inner Group inside the quotation,
+phonological group and sign group. The parser emits E342 at the missing marker
+position immediately before the outer closing delimiter. It retains the inner
+word and written brackets without inventing an annotation or retrace. The
+paired controls are clean and roundtrip byte for byte. Invalid recovery output
+omits the now-unused annotation whitespace; it is not byte-exact input or a
+repaired control. Its bare group remains invalid during model validation too,
+including after JSON readback without source coordinates.
 
 ## CHAT Rule
 

@@ -13,12 +13,13 @@ use crate::editor_target::editor_target_span;
 use talkbank_model::model::ChatFile;
 use talkbank_parser::node_types::{
     GRA_CONTENTS, GRA_DEPENDENT_TIER, GRA_RELATION, MOR_CONTENT, MOR_CONTENTS, MOR_DEPENDENT_TIER,
-    PARTICIPANT, PARTICIPANTS_HEADER, SPEAKER,
+    SPEAKER,
 };
 use tower_lsp::lsp_types::*;
 use tree_sitter::{Node, Tree};
 
 use crate::alignment::finders::get_alignable_content_by_index;
+use crate::backend::features::speaker_occurrence::{SpeakerOccurrence, SpeakerRole};
 use crate::backend::utils;
 
 /// Handles goto definition.
@@ -53,13 +54,6 @@ pub(crate) fn goto_definition(
 // ---------------------------------------------------------------------------
 // Tree-sitter node utilities (used across request handlers)
 // ---------------------------------------------------------------------------
-
-/// Finds child by kind.
-pub(crate) fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .find(|child| child.kind() == kind)
-}
 
 /// Finds ancestor kind.
 pub(crate) fn find_ancestor_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
@@ -118,33 +112,15 @@ fn find_participant_definition_in_tree(
     doc: &str,
     speaker: &str,
 ) -> Option<Location> {
-    let root = tree.root_node();
-    walk_nodes(root, |node| {
-        if node.kind() != PARTICIPANTS_HEADER {
-            return None;
+    walk_nodes(tree.root_node(), |node| {
+        let occurrence = SpeakerOccurrence::read(node, doc)?;
+        match occurrence.role() {
+            SpeakerRole::Declaration if occurrence.code() == speaker => Some(Location {
+                uri: uri.clone(),
+                range: occurrence.range(),
+            }),
+            SpeakerRole::Declaration | SpeakerRole::Reference => None,
         }
-
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            if child.kind() != PARTICIPANT {
-                continue;
-            }
-
-            if let Some(code_node) = find_child_by_kind(child, SPEAKER)
-                && let Ok(code_text) = code_node.utf8_text(doc.as_bytes())
-                && code_text == speaker
-            {
-                return Some(Location {
-                    uri: uri.clone(),
-                    range: Range {
-                        start: utils::offset_to_position(doc, code_node.start_byte()),
-                        end: utils::offset_to_position(doc, code_node.end_byte()),
-                    },
-                });
-            }
-        }
-
-        None
     })
 }
 

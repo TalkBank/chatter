@@ -22,43 +22,32 @@
 
 use std::process::Command;
 
-/// The experimental merge surface. `merge-preflight` is an internal module,
-/// not a CLI command, so it is intentionally absent.
-const MERGE_COMMANDS: &[&str] = &["speaker-id", "adjudicate", "sanity-scan"];
-
-/// Each merge command's own `--help` must flag it as experimental.
+/// Experimental workflows are discoverable under one explicit namespace.
 #[test]
-fn merge_command_help_marks_experimental() {
-    for &cmd in MERGE_COMMANDS {
-        let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
-            .args([cmd, "--help"])
+fn experimental_command_help_is_scoped() {
+    for path in [
+        vec!["experimental"],
+        vec!["experimental", "speakers"],
+        vec!["experimental", "review"],
+        vec!["experimental", "transform"],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
+            .args(&path)
+            .arg("--help")
             .output()
-            .unwrap_or_else(|e| panic!("failed to run chatter {cmd} --help: {e}"));
-        let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
-        assert!(
-            text.contains("experimental"),
-            "`chatter {cmd} --help` does not mark the command experimental:\n{text}"
-        );
+            .expect("help subprocess");
+        assert!(output.status.success());
+        let help = String::from_utf8_lossy(&output.stdout);
+        assert!(help.contains("chatter experimental"), "{help}");
     }
-}
-
-/// The top-level `chatter --help` listing must flag each merge command as
-/// experimental on its own line.
-#[test]
-fn top_level_help_marks_merge_commands_experimental() {
-    let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
+    let output = Command::new(env!("CARGO_BIN_EXE_chatter"))
         .arg("--help")
         .output()
-        .expect("failed to run chatter --help");
-    let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
-    for &cmd in MERGE_COMMANDS {
-        let line = text
-            .lines()
-            .find(|l| l.trim_start().starts_with(cmd))
-            .unwrap_or_else(|| panic!("no `{cmd}` entry in chatter --help:\n{text}"));
-        assert!(
-            line.contains("experimental"),
-            "`{cmd}` line in `chatter --help` is not marked experimental: {line:?}"
-        );
-    }
+        .expect("root help");
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        help.lines()
+            .any(|line| line.trim_start().starts_with("experimental")
+                && line.contains("Experimental"))
+    );
 }

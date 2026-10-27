@@ -28,6 +28,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
+mod lowering;
+use lowering::{WorItemRejected, WorLowering};
+
 use crate::generated_traversal::{
     AsRawNode, BulletNode, ChoiceSlot, KindAdmitted, KindSlot, LangcodeNode, NoChild, NodeSlot,
     SlotView, SourceBound, SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
@@ -64,7 +67,7 @@ use talkbank_model::ParseOutcome;
 pub fn parse_wor_tier<'tree>(
     typed: SourceBound<'tree, '_, WorDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<WorTier, crate::CstFailure> {
+) -> Result<ParseOutcome<WorTier>, crate::CstFailure> {
     let source = typed.source();
     let node = typed.node().raw_node();
     let span = span_of(node);
@@ -80,13 +83,13 @@ pub fn parse_wor_tier<'tree>(
 /// Decode the `wor_tier_body` node into a `WorTier` (langcode, items, terminator),
 /// driven by the generated `extract_wor_tier_body` visitor.
 ///
-/// Each of the four typed fields is handled explicitly; the returned tier has no
-/// span yet (the caller attaches the dep-tier span).
+/// Each typed field is handled explicitly. Item rejection prevents constructing
+/// a partial tier; successful construction receives the owning tier location.
 fn parse_wor_tier_body<'tree>(
     location: impl Into<talkbank_model::Location>,
     typed: SourceBound<'tree, '_, WorTierBodyNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<WorTier, crate::CstFailure> {
+) -> Result<ParseOutcome<WorTier>, crate::CstFailure> {
     let source = typed.source();
     let associated = typed.extract_canonical()?;
     let children = associated.children();
@@ -118,11 +121,14 @@ fn parse_wor_tier_body<'tree>(
     // gra/pho/sin separator helpers; the NEW backend models it explicitly since it
     // does not use `--skip whitespaces`). Iterate the typed elements, pairing each
     // bullet with its preceding word.
-    let mut items: Vec<WorItem> = Vec::with_capacity(children.child_1.slot().len());
+    let mut items = WorLowering::new(children.child_1.slot().len());
     for element in associated.field_child_1().slot().iter() {
         match element.slot().view() {
             SourceSlotView::Present(pair) => {
-                push_wor_item(pair.field_child_0().slot(), errors, &mut items);
+                items = match push_wor_item(pair.field_child_0().slot(), errors, items) {
+                    Ok(next) => next,
+                    Err(WorItemRejected) => return Ok(ParseOutcome::Rejected),
+                };
                 push_wor_separator(pair.field_child_1().slot(), errors, "wor_tier_body");
                 for bad in pair.field_unexpected().iter() {
                     surface_displaced(&[bad.raw_node()], "wor_tier_body", source, errors);
@@ -160,9 +166,11 @@ fn parse_wor_tier_body<'tree>(
         | SlotView::Absent(NoChild) => {}
     }
 
-    Ok(WorTier::new(location, items)
-        .with_terminator(terminator)
-        .with_language_code(language_code))
+    Ok(ParseOutcome::Parsed(
+        WorTier::new(location, items.finish())
+            .with_terminator(terminator)
+            .with_language_code(language_code),
+    ))
 }
 
 /// Handle the separating `whitespaces` token trailing each `wor_tier_body`
@@ -195,35 +203,12 @@ fn push_wor_separator<'tree>(
     }
 }
 
-/// Decode one `wor_tier_body` element, extending `items` with the resulting word or
-/// separator, or pairing a bullet onto the preceding word.
+/// Decode one source item into the pending association phase.
 ///
-/// The item-choice slot ([`WorTierBodyChild1Child0Choice`]) is matched EXHAUSTIVELY
-/// (no `_` catch-all), reproducing the removed per-child loop byte for byte:
-///
-/// - `Present`: the classified item alternative (NEW backend carries a typed leaf
-///   wrapper per variant, so each is unwrapped via [`AsRawNode::raw_node`]; OLD
-///   carried a bare `Node`):
-///   - `WorWordItem`: `wor_word_item` is a `standalone_word`; extract the word and
-///     push it as `WorItem::Word` (the old `WOR_WORD_ITEM` arm).
-///   - `Bullet`: pair the parsed bullet with the PRECEDING word via
-///     `items.last_mut()` (the old `BULLET` arm; the word/bullet pairing).
-///   - `Comma` / `TagMarker` / `VocativeMarker`: push a `WorItem::Separator`
-///     carrying the marker text and span (the old `COMMA | TAG_MARKER |
-///     VOCATIVE_MARKER` arm).
-/// - `Error` / `Unexpected`: report `unexpected_node_error` (the old `_` arm; ERROR
-///   nodes route through the shared error analyzer). No model value is invented.
-/// - `Missing` / `Absent`: nothing reported, nothing pushed. The `Missing` payload
-///   is the generated `WorTierBodyChild1Child0Missing`, typed by kind; under
-///   the admitted proof its rule kinds (`bullet`, `wor_word_item`) are
-///   uninhabited, and a MISSING comma, tag or vocative marker is not content
-///   the author wrote, so nothing is
-///   pushed (no fabricated separator) and the whole-tree backstop reports the
-///   node. This honors the "no fabricated model values during recovery" rule.
-///
-/// This mixed lexical/composite choice retains Missing and other recovery
-/// states. Compiled admission excludes Missing at the nested standalone-word
-/// slot; source ownership does not certify the whole tier as clean.
+/// A bullet consumes the immediately preceding untimed word. Completed items
+/// cannot receive another bullet. A missing, unreadable or rejected item refuses
+/// the whole tier instead of constructing a partial timing model. The file owner
+/// then retains original source; fragments return explicit rejection.
 fn push_wor_item<'tree>(
     slot: SourceField<
         '_,
@@ -236,13 +221,13 @@ fn push_wor_item<'tree>(
         >,
     >,
     errors: &impl ErrorSink,
-    items: &mut Vec<WorItem>,
-) {
+    mut items: WorLowering,
+) -> Result<WorLowering, WorItemRejected> {
     let source = slot.source();
     match slot.view() {
         SourceSlotView::Present(item) => {
             let Some(item) = read_source_field(item, errors) else {
-                return;
+                return Err(WorItemRejected);
             };
             match item.view() {
                 WorTierBodyChild1Child0ChoiceBoundView::WorWordItem(word_item) => {
@@ -252,17 +237,19 @@ fn push_wor_item<'tree>(
                         source,
                         errors,
                     ) else {
-                        return;
+                        return Err(WorItemRejected);
                     };
                     let word_children = associated.children();
                     surface_displaced(&word_children.unexpected, "wor_word_item", source, errors);
                     match associated.field_content().slot().view() {
                         SourceSlotView::Present(word_node) => {
                             if let Some(word_node) = read_source_field(word_node, errors)
-                                && let ParseOutcome::Parsed(word) =
-                                    convert_word_node(word_node, errors)
+                                && let Ok(lowered) = convert_word_node(word_node, errors)
+                                && let ParseOutcome::Parsed(word) = lowered.into_word()
                             {
-                                items.push(WorItem::Word(Box::new(word)));
+                                items = items.push(WorItem::Word(Box::new(word)));
+                            } else {
+                                return Err(WorItemRejected);
                             }
                         }
                         SourceSlotView::Error(bad) => {
@@ -271,27 +258,31 @@ fn push_wor_item<'tree>(
                                 source,
                                 "wor_word_item",
                             ));
+                            return Err(WorItemRejected);
                         }
-                        SourceSlotView::Absent(NoChild) => {}
+                        SourceSlotView::Absent(NoChild) => return Err(WorItemRejected),
                     }
                 }
                 WorTierBodyChild1Child0ChoiceBoundView::Bullet(bullet_node) => {
-                    // Pair this bullet with the preceding word (if any).
-                    if let Some(bullet) = parse_inline_bullet(bullet_node, errors)
-                        && let Some(WorItem::Word(word)) = items.last_mut()
-                    {
-                        word.inline_bullet = Some(bullet);
-                    }
+                    let bullet = parse_inline_bullet(bullet_node, errors).ok_or(WorItemRejected)?;
+                    items = items.attach(bullet).inspect_err(|_| {
+                        errors.report(talkbank_model::ParseError::at_span(
+                            talkbank_model::ErrorCode::UnparsableContent,
+                            talkbank_model::Severity::Error,
+                            span_of(bullet_node.raw_node()),
+                            "WOR timing bullet requires an immediately preceding untimed word",
+                        ));
+                    })?;
                 }
                 // Retain each marker's checked source slice through model construction.
                 WorTierBodyChild1Child0ChoiceBoundView::Comma(marker) => {
-                    push_marker_separator(marker, items);
+                    items = push_marker_separator(marker, items);
                 }
                 WorTierBodyChild1Child0ChoiceBoundView::TagMarker(marker) => {
-                    push_marker_separator(marker, items);
+                    items = push_marker_separator(marker, items);
                 }
                 WorTierBodyChild1Child0ChoiceBoundView::VocativeMarker(marker) => {
-                    push_marker_separator(marker, items);
+                    items = push_marker_separator(marker, items);
                 }
             }
         }
@@ -301,10 +292,14 @@ fn push_wor_item<'tree>(
                 source,
                 "wor_tier_body",
             ));
+            return Err(WorItemRejected);
         }
-        SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) => {}
+        SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) => {
+            return Err(WorItemRejected);
+        }
         SourceSlotView::Unexpected(never) => match never {},
     }
+    Ok(items)
 }
 
 /// Push a tag-marker separator (`comma` / `tag_marker` / `vocative_marker`) onto
@@ -316,12 +311,12 @@ fn push_wor_item<'tree>(
 /// the marker cannot be silently dropped through a second decoding attempt.
 fn push_marker_separator<'tree, T: SourceBoundKind<'tree>>(
     marker: SourceBound<'tree, '_, T>,
-    items: &mut Vec<WorItem>,
-) {
+    items: WorLowering,
+) -> WorLowering {
     items.push(WorItem::Separator {
         text: marker.text().to_string(),
         location: span_of(marker.raw_node()).into(),
-    });
+    })
 }
 
 /// Extract language code from a `langcode` node.

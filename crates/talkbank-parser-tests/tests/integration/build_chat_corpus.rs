@@ -184,7 +184,7 @@ fn reference_descriptions_preserve_main_tiers_and_participant_demographics() {
                             if let Some(entry) = entries
                                 .iter()
                                 .find(|entry| entry.speaker_code.as_str() == participant.id)
-                                && let Some(name) = &entry.name
+                                && let Some(name) = entry.name()
                             {
                                 participant = participant.with_name(name.as_str());
                             }
@@ -406,7 +406,7 @@ fn reference_descriptions_preserve_main_tiers_and_participant_demographics() {
                 .find(|e| e.speaker_code.as_str() == participant.id)
                 .expect("built participant entry");
             assert_eq!(
-                entry.name.as_ref().map(|name| name.as_str()),
+                entry.name().map(|name| name.as_str()),
                 participant.name.as_deref()
             );
             let l1 = built.lines.iter().find_map(|line| match line {
@@ -446,7 +446,12 @@ fn reference_descriptions_preserve_main_tiers_and_participant_demographics() {
         {
             let mut timed = desc.clone();
             let mut content = original.main.content.clone();
-            let bullet = content.bullet.take().expect("observed terminal timing");
+            let bullet = content
+                .bullet
+                .take()
+                .expect("observed terminal timing")
+                .into_parsed()
+                .expect("valid reference timing");
             let row = &mut timed.utterances[index];
             row.text = content.to_content_string();
             row.start_ms = Some(bullet.timing.start_ms);

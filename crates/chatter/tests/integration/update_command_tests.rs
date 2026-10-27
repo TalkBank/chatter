@@ -63,7 +63,7 @@ fn write_receipt(home: &std::path::Path, package: &str, owner: &str) {
 
 fn update_with_receipts(home: &std::path::Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_chatter"))
-        .arg("update")
+        .args(["experimental", "update"])
         .env_remove("AXOUPDATER_CONFIG_WORKING_DIR")
         .env("AXOUPDATER_CONFIG_PATH", home)
         .env("HOME", home)
@@ -146,12 +146,12 @@ fn current_receipt_precedes_legacy_receipt() {
 #[test]
 fn top_level_help_lists_update_command() {
     let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
-        .arg("--help")
+        .args(["experimental", "--help"])
         .output()
         .expect("failed to run chatter --help");
     let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
     assert!(
-        text.contains("usage: chatter "),
+        text.contains("usage: chatter experimental "),
         "the package rename must not change the executable's help identity:\n{text}"
     );
     assert!(
@@ -167,7 +167,7 @@ fn top_level_help_lists_update_command() {
 #[test]
 fn update_help_describes_in_process_self_update() {
     let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
-        .args(["update", "--help"])
+        .args(["experimental", "update", "--help"])
         .output()
         .expect("failed to run chatter update --help");
     let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
@@ -190,7 +190,7 @@ fn update_help_describes_in_process_self_update() {
 fn update_without_install_receipt_fails_gracefully() {
     let home = isolated_home("noreceipt");
     let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
-        .arg("update")
+        .args(["experimental", "update"])
         .env("HOME", home.path())
         .env("XDG_CONFIG_HOME", home.path().join(".config"))
         .output()
@@ -261,7 +261,7 @@ fn update_does_not_delegate_to_a_sibling_updater_binary() {
     }
 
     let output = Command::new(&relocated)
-        .arg("update")
+        .args(["experimental", "update"])
         .env("PATH", dir) // the only place a sibling could be discovered
         .env("HOME", dir) // no install receipt -> in-process update refuses gracefully
         .env("XDG_CONFIG_HOME", dir.join(".config"))

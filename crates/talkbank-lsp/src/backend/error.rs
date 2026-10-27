@@ -57,6 +57,33 @@ impl Display for TierName {
 /// `match` on.
 #[derive(Debug, Error)]
 pub enum LspBackendError {
+    /// A real search match has no exact protocol range, for example because an
+    /// endpoint splits a CRLF pair. Never round it to a different selection.
+    #[error(
+        "Search match {start}..{end} cannot be represented exactly in editor coordinates; use complete line endings"
+    )]
+    UnrepresentableSearchMatch {
+        /// Original start byte.
+        start: usize,
+        /// Original exclusive end byte.
+        end: usize,
+    },
+
+    /// A model span does not select a UTF-8 slice of the current document.
+    #[error("Source span {start}..{end} is invalid for a {source_len}-byte document")]
+    InvalidSourceSpan {
+        /// Requested start byte.
+        start: usize,
+        /// Requested exclusive end byte.
+        end: usize,
+        /// Current document length in bytes.
+        source_len: usize,
+    },
+
+    /// Current headers cannot establish one participant declaration.
+    #[error(transparent)]
+    ParticipantDeclaration(#[from] talkbank_model::model::ParticipantDeclarationError),
+
     /// A required dependent tier is absent from the utterance.
     #[error("No {tier} tier found")]
     MissingTier {
@@ -135,6 +162,10 @@ pub enum LspBackendError {
     /// than retry.
     #[error("Document not found")]
     DocumentNotFound,
+
+    /// The graph request's cursor does not select an utterance.
+    #[error("No utterance at cursor position")]
+    NoUtteranceAtPosition,
 
     /// A regular-expression input failed to compile. Raised by the
     /// scoped-find handler when the user supplies an invalid pattern.

@@ -20,7 +20,7 @@ impl UtteranceContent {
     /// escape conventions stay centralized with the owning type. This function
     /// is intentionally side-effect free and never performs normalization, so
     /// parsed surface distinctions are preserved through roundtrip writes.
-    pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             UtteranceContent::Word(word) => word.write_chat(w),
             UtteranceContent::AnnotatedWord(ann) => ann.write_chat(w),
@@ -37,6 +37,7 @@ impl UtteranceContent {
             UtteranceContent::Action(action) => action.write_chat(w),
             UtteranceContent::AnnotatedAction(ann) => ann.write_chat(w),
             UtteranceContent::Freecode(freecode) => freecode.write_chat(w),
+            UtteranceContent::OrphanAnnotation(raw) => raw.write_chat(w),
             UtteranceContent::Separator(sep) => sep.write_chat(w),
             UtteranceContent::OverlapPoint(marker) => marker.write_chat(w),
             UtteranceContent::InternalBullet(bullet) => bullet.write_chat(w),

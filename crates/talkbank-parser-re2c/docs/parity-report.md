@@ -63,6 +63,187 @@ error cannot mask missing detection.
 
 ## Measured snapshot
 
+### Retained specification typed dependent bodies
+
+`error_parity::tier_population::retained_spec_typed_bodies_preserve_fragment_error_detection`
+selects parser-owned body extents using each retained tier's model label. This
+includes explicit raw recovery when body geometry exists. It never derives body
+boundaries from source prefixes or substitutes an empty body for missing geometry.
+Each selected fragment owns its API identity; that identity is also part of the
+comparison key, so equal text used by different typed methods cannot share a result.
+
+The finite authored deck supplies 3,195 body observations for nine API families:
+MOR, GRA, PHO (including MOD), SIN, ACT, COD, COM, ADD and WOR. All 2,195 distinct
+comparisons pass with 272 required detections; 10,585 identical observations reuse
+results. Nine known empty COM bodies are measured. Three MOR and 33 WOR observations
+have no body extent and are reported separately. EXP, GPX, INT, SPA and SIT have
+no body witnesses in this deck; their existing reference and isolated controls
+remain separate evidence.
+
+Both overloads run at local/document origins under three newline transports,
+with implicit or full document-option context. These typed-body observations
+are parse-only, including caller-range checks and internal-failure refusal.
+No new parser defect surfaced. Passing this selection does not prove complete
+typed-API coverage, shared validation, omitted-source recovery or every fault
+within a multi-fault body.
+
+### Retained specification word fragments
+
+`error_parity::tier_population::retained_spec_words_preserve_fragment_error_detection`
+selects original word spans from every retained main tier in the authored error
+deck. The shared structural walk includes nested and interposed words, annotated
+words and the original word of a replacement. It does not synthesize words from
+replacement text or use the alignment walk, which excludes interposed speech.
+
+The 11,669 source observations pass 7,239 distinct comparisons with 1,070 required
+detections; 39,437 identical observations reuse results. Both word APIs run at
+local/document origins under authored, CRLF and CR transports. Shared word
+validation runs separately under standalone defaults and the invocation's CA
+policy. The document owner, full context key, source bounds and internal-failure
+refusal are shared with the tier populations below.
+
+No new parser defect surfaced. These are retained lexical slices, not all source
+tokens or every word rejected before model construction. Enclosing code-switch
+annotations and participant/language declarations are not carried into standalone
+word validation. Parent annotations, replacement text, whole-file relationships
+and isolated faults outside this finite selection retain their own obligations.
+
+### Retained specification main-tier fragments
+
+`error_parity::tier_population::retained_spec_main_tiers_preserve_fragment_error_detection`
+selects every retained main tier from the authored error deck under authored,
+CRLF and CR transports. The parsed-document owner binds source bytes, origin
+and option context. Both main-tier APIs run at local and document origins.
+Main-tier model validation runs as a separate phase under the corresponding
+standalone policy, with CA enabled for explicit CA context. Participant/language
+declarations, whole-file relationships and alignment are outside this policy.
+
+All 12,691 distinct comparisons pass, including 4,620 required detections.
+The 6,476 retained source observations request 25,904 comparisons; 13,213
+identical observations reuse results under the complete invocation key. Returned
+payload spans stay within their caller's input; rejection needs an error and
+internal failure never satisfies detection.
+
+The initial parse-only comparison exposed known phase differences in E233,
+E245, E253 and E306: the primary parser can reject syntax whose retained native
+model is rejected by the shared validator. The phased check respects those
+architectures. Existing isolated parse-only controls remain unchanged. This
+population found no new parser defect and proves neither complete recovery nor
+whole-language correctness; source omitted by whole-file recovery is unmeasured.
+
+### Retained specification dependent fragments
+
+`error_parity::tier_population::retained_spec_dependent_tiers_preserve_fragment_error_detection`
+selects every retained dependent-tier extent
+from the complete authored error deck, including legal and deferred examples,
+under authored, CRLF and CR transports. A parsed-document owner supplies original
+bytes, source locations and option context together. Both generic dependent-tier
+adapters run at local and document origins. Explicit calls retain the document's
+full option context; implicit calls retain their own default policy.
+
+All 5,604 distinct comparisons pass, with 822 required error detections. The
+3,729 source-tier observations request 14,916 comparisons; 9,312 identical
+observations reuse results keyed by exact bytes, origin and complete invocation
+policy. Context equality retains unsupported option text, order and repetitions.
+Returned payload spans stay inside the caller's input, diagnosed rejection is
+required, and internal tool failures refuse measurement. No new parser defect
+was found in this population.
+
+This is a parse-only generic-fragment check. It does not apply model validation,
+alignment, whole-document relationships or each example's file-rule profile.
+Tiers omitted by whole-file recovery are outside this selection. It neither
+requires equal recovery models nor proves every malformed tier or every isolated
+fault is detected. Typed dependent-body APIs retain their separate controls.
+
+### Retained specification header fragments
+
+`error_parity::header_population` selects original-source header extents from
+every authored example's retained whole-file model under authored, CRLF and CR
+transports. Checked source slices keep each header's bytes and document origin
+together. Both header adapters run at local and document origins, with implicit
+and explicit empty fragment context. Shared `Header::validate` runs separately
+under its default context: an error may be reported by either phase. Header
+payload spans must stay within the caller's range; rejected parsing needs an
+error and internal failures never satisfy detection.
+
+The finite population retains 29,267 header observations and passes all 7,944
+distinct comparisons, with 1,812 required detections. A typed probe key contains
+the complete bytes, origin and API invocation under this fixed validation
+policy; 109,124 identical observations reuse those comparisons. The population exposed a
+Tree-sitter wrapper defect on E307's non-Latin participant example under CR:
+the synthetic leading LF extended the caller's final CR into a CRLF token,
+placing a recovered header one byte outside the input. Wrapper assembly now
+admits a separated suffix before computing capacity and constructing its source.
+The caller's bytes and checked rebasing remain intact.
+
+These are retained header fragments, not every malformed source line; a header
+not retained by whole-file parsing is outside this selection. Header validation
+does not apply whole-document relationships or the example's file-rule profile.
+This check neither requires identical recovery models nor replaces the separate
+valid-reference semantic comparison. Error reports preserve explicit unlocated
+diagnostics rather than panicking while formatting failed measurements.
+
+### Annotation-position admission
+
+The 28 authored `E316_annotation_positions.md` examples isolate word, event,
+action, group and quotation annotation positions, with seven legal controls.
+Before the repair, 14 invalid examples produced no native error under each of
+the three newline transports. The full invalid-example comparison now passes.
+
+Words admit one optional replacement before base annotations; other hosts admit
+only scoped annotations and retrace markers, with required whitespace. The
+native AST stores the replacement separately and carries only scoped annotations
+after retrace folding. Lowering no longer filters arbitrary bracket constructs
+or searches for the first replacement, so misplaced constructs remain available
+to the existing orphan-error recovery path. The shared lexical-word API also
+rejects attached annotation syntax instead of silently discarding it.
+
+The new fragment regression checks the authored main tier through main-tier and
+utterance APIs under three newline transports at two caller origins, plus bare
+and annotated word controls. Valid reference semantics and existing shared-model
+snapshots remain unchanged. Five native AST snapshots change representation;
+the experimental carrier API change is documented in the changelog. This closes
+the demonstrated silent-loss cases, not annotation-language completeness or
+cross-backend diagnostic-code equality.
+
+### Original whole-utterance fragments
+
+`equivalence_tests::reference_utterances` selects every utterance from the
+complete reference corpus under authored, CRLF and CR transports. Each slice
+starts at its original main tier and includes all attached dependent tiers;
+no utterance is reconstructed from rendered text. A checked reference-document
+owner keeps the source, parsed model and option context together.
+
+Both public utterance adapters must return a clean model with the same meaning
+as the whole-file utterance, at local and document origins. The current finite
+population passes 10,164 comparisons over 2,541 utterance observations, including
+1,962 attached dependent tiers, six multiline continuations and 396 observations
+with option context. These counts include the three transports. Missing source
+extents, absent boundary witnesses and an empty comparison population fail.
+
+Interstitial headers remain whole-file lines in this population; this contract
+does not claim source extents for builder-attached `preceding_headers`. It
+compares semantic content, not exact source-location identity or invalid-input
+recovery. The test belongs to the existing `equivalence_tests` family; these
+correctness results do not update an older source-bound coverage measurement.
+
+### Numeric phonology pauses
+
+The fifth authored examples in E737 and E738 include `(1:02.5)` on `%mod`
+and `%pho`. These are phonological words, including the numeric colon, not
+main-tier pause tokens to discard. The native lexer now admits the complete
+numeric spelling without admitting arbitrary colons in phonological words.
+The parsed word's nonempty segment list has a single construction path; the
+old empty-word pause placeholder and filtering path are removed.
+
+`equivalence_tests::phonological_pauses::authored_numeric_phonology_pauses_agree`
+passes 18 comparisons: both files under authored/CRLF/CR transport at zero and
+nonzero origins, both original-source tier fragments at two origins, and the
+numeric word at two origins. File comparisons include the declared validation
+selection and filename. This bounded regression is not construct completeness,
+source-location identity or release qualification. Existing phonology debug-AST
+snapshots remain unchanged.
+
 ### Full-file transport comparison
 
 The expanded comparison measures 1,343 examples from 300 specifications under
@@ -103,6 +284,40 @@ The existing 200 MOR, 200 GRA and six word controls remain. An additional
 reference-source comparison exercises 3,060 main-tier lexical words, 233 MOR
 bodies and 224 GRA bodies through their fragment APIs, using original source
 slices and document origins. Word calls retain the file's CA interpretation.
+The original-main-tier comparison additionally selects every main tier from the
+checked reference corpus using its model-owned source span. It preserves physical
+continuations and supplies the file's option flags to both fragment adapters.
+Each case must parse through the native low-level API, agree across adapters,
+and agree with the admitted whole-file main tier. No percentage threshold or
+missing-directory skip permits partial success. This replaces the ignored
+physical-line smoke test, which inspected only six directories and accepted
+more than 90% of its selected lines.
+
+The typed-reference fragment comparison adds ID headers and the dedicated PHO,
+SIN, ACT, COD, COM, EXP, ADD, GPX, INT, SPA, SIT and WOR body APIs. It selects
+model-owned spans from each reference document in authored, CRLF and lone-CR
+form and retains the document's option flags. Each exact slice is compared at
+zero and its original document offset. The population must contain every one
+of the thirteen routes before comparison; missing routes, empty or invalid
+source slices and recovery tiers refuse admission. PHO and MOD bodies both
+exercise the PHO body API; this does not test a MOD-specific fragment method.
+No parsed value is serialized to manufacture these source witnesses.
+
+The separate `equivalence_tests::reference_leaf_fragments` population selects
+participant entries, MOR words, GRA relations and complete PHO words (including
+compounds) through generated typed nodes in the producer-bound reference CST.
+Its source traversal retains node/text identity and propagates unreadable ranges;
+it does not reconstruct leaf text from models or assign invented model spans.
+Every route must have source witnesses before comparisons begin. A control removes
+each route independently and requires population admission to fail.
+
+The full source is transported before extracting these leaves. Each slice is
+compared through both backends at zero and its document origin, using implicit
+and document-option-context calls separately. The two invocation policies are
+not asserted to have identical semantics. These controls establish finite peer
+agreement on original reference leaves; they do not measure every possible leaf
+shape or replace independent expected-model and fault/refusal controls.
+
 These are finite semantic comparisons, not full contextual validation,
 source-span equality, recovery-model identity or canonical coverage evidence.
 
@@ -280,13 +495,19 @@ cargo test -p talkbank-parser -p talkbank-parser-re2c -p talkbank-parser-tests \
   context_public_api:: error_parity::contextual_fragments:: \
   error_parity::fragments::isolated_faults_require_errors_at_supported_fragment_boundaries \
   error_parity::remaining_fragments:: \
-  parser_fixtures::trait_ parser_fixtures::convert_ \
+  trait_contracts:: parser_fixtures::convert_ \
   fragment_corpus::contextual_fragment_contracts:: \
   fragment_corpus::invalid_timing_states_from_specs_rebase_to_document_coordinates \
   fragment_corpus::reference_dependent_tier_fragments_preserve_source_models \
   fragment_corpus::spec_documents_preserve_utterance_adapter_recovery_under_rebasing \
   fragment_corpus::dependent_composition_contracts:: --nocapture
 ```
+
+The optional native `trait_contracts` controls admit a model only after observing
+an empty diagnostic batch. A returned recovery model is insufficient. The clean
+file control uses the basic reference conversation, and an authored E522 example
+checks that a recovered file with diagnostics cannot enter that clean state.
+This is parse admission, not full validation or complete trait-surface coverage.
 
 The first canonical run retained four failures. Original line endings were
 being omitted from projected container ranges; two expectations also confused

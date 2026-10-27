@@ -6,7 +6,6 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as FmtWrite;
 use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
@@ -119,7 +118,7 @@ impl SinTier {
 
 impl WriteChat for SinTier {
     /// Serializes one full `%sin` line.
-    fn write_chat<W: FmtWrite>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str("%sin:\t")?;
         for (i, item) in self.items.iter().enumerate() {
             if i > 0 {

@@ -102,11 +102,25 @@ the server cannot infer missing participant identities, roles or languages from
 an invalid header. E308, E504 and E507 do not offer guessed values. Enter the
 intended facts yourself, then revalidate.
 
-Quick fixes require a client that advertises versioned workspace edits
+Quick fixes and speaker rename require a client that advertises versioned workspace edits
 (`workspace.workspaceEdit.documentChanges`). Other clients still receive
-diagnostics, but the server withholds quick-fix edits rather than returning an
+diagnostics, but the server withholds quick fixes and rename rather than returning an
 unversioned edit. If the buffer changes before you apply a suggested fix, request
 it again; the client must honor the document version attached to the edit.
+Quick fixes use current server findings at the requested selection or cursor,
+including when the client sends no diagnostic hints. Refactor-only and
+source-action-only requests do not return quick fixes. Invalid editor ranges
+produce no fixes; diagnostic hints cannot select findings outside the range.
+Rename edits cover the current open document only. The replacement must be a valid,
+unused speaker code. Renaming to an existing speaker is refused rather than
+merging identities; renaming to the same code makes no edits. Repair syntax
+errors before renaming, because recovery can hide speaker references. Unrelated
+validation findings do not prevent rename. Review the edits before saving.
+
+When your client enables inlay hints, alignment mismatch labels appear beside
+the affected main or GRA tier. A GRA hint remains available when only that tier
+is visible. Repairing the mismatch in the current buffer removes its hint;
+the label reports the shared alignment result, not a separate word count.
 
 ## Troubleshooting
 
@@ -124,3 +138,16 @@ observed code and a minimal synthetic reproduction. Client protocol logs may
 contain complete transcript text and paths: inspect them before sharing and
 never publish restricted participant data. Maintainers can continue with
 [LSP testing and diagnosis](../../contributing/lsp-testing.md).
+
+
+### Formatting and incomplete input
+
+On-type formatting can insert a tab after a newly typed `:` at the end of an
+unfinished `*speaker:` or `%tier:` prefix. The cursor must be exactly after
+that colon in the current buffer. It does not insert after content colons or
+when a separator is already present; this typing aid does not validate a tier.
+
+Whole-document formatting refuses to return an edit if serialization would drop
+or reorder source-line content. Correct the reported syntax issue and retry.
+Some malformed input can still be formatted when its content is retained;
+formatting does not certify validity or clear unrelated diagnostics.

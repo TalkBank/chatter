@@ -14,8 +14,10 @@ mod error;
 mod identify;
 pub mod judgment;
 mod mapping;
+mod mapping_admission;
 mod override_file;
 mod provenance;
+mod rename;
 mod types;
 
 pub use apply::{apply_mapping, apply_mapping_chat};
@@ -35,6 +37,7 @@ pub use judgment::{
     render_messages, sample_session, session_context,
 };
 pub use mapping::{MappingSpec, SpeakerAssignment, parse_mapping_spec};
+pub use mapping_admission::MappingAssignmentError;
 pub use override_file::{
     CURRENT_SCHEMA_VERSION, InsertedRoleSpec, MergeOverride, OverrideFile, OverrideFileError,
     OverrideMode, SpeakerAction,
@@ -47,3 +50,5 @@ pub use types::{
     ConfidenceMargin, ConfidenceThreshold, ConfidenceThresholdError, FiniteConfidenceMargin,
     JaccardScore, ParseConfidenceThresholdError,
 };
+
+pub use rename::{SpeakerRename, SpeakerRenameDecision, SpeakerRenameError};

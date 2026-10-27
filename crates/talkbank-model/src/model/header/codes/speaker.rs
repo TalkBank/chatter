@@ -116,7 +116,7 @@ impl SpeakerCode {
 
 impl crate::model::WriteChat for SpeakerCode {
     /// Writes the raw speaker identifier exactly as stored.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(&self.0)
     }
 }

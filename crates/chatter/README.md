@@ -17,9 +17,9 @@ candidate; see the [publication contract](https://github.com/TalkBank/chatter/bl
 ```bash
 chatter validate file.cha
 chatter validate corpus/ --format json
-chatter normalize file.cha -o normalized.cha
-chatter to-json file.cha -o file.json
-chatter from-json file.json -o file.cha
+chatter format file.cha -o normalized.cha
+chatter convert to-json file.cha -o file.json
+chatter convert from-json file.json -o file.cha
 chatter cache stats
 chatter schema
 ```

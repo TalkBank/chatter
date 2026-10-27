@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "jpn"
-  ],
   "lines": [
     {
       "header": {
@@ -32,18 +29,27 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Target_Child",
+            "details": {
+              "name": null,
+              "role": "Target_Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Father",
+            "details": {
+              "name": null,
+              "role": "Father",
+              "state": "complete"
+            },
             "speaker_code": "FAT"
           },
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           }
         ],
@@ -531,52 +537,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "1;05.22",
-        "corpus": "corpus",
-        "language": [
-          "jpn"
-        ],
-        "role": "Target_Child",
-        "sex": "male",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Target_Child"
-    },
-    "FAT": {
-      "birth_date": null,
-      "code": "FAT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "jpn"
-        ],
-        "role": "Father",
-        "speaker": "FAT"
-      },
-      "name": null,
-      "role": "Father"
-    },
-    "MOT": {
-      "birth_date": null,
-      "code": "MOT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "jpn"
-        ],
-        "role": "Mother",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    }
-  }
+  ]
 }

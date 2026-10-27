@@ -18,8 +18,7 @@ tier_body:
         annotations: []
         raw_text: so
     - Separator:
-        kind: Comma
-        text: ","
+        kind: comma
     - Word:
         category: ~
         body:
@@ -102,7 +101,7 @@ tier_body:
         annotations: []
         raw_text: I
     - Word:
-        category: Fragment
+        category: phonologicalfragment
         body:
           - Text: s
         form_marker: ~
@@ -219,8 +218,7 @@ tier_body:
         annotations: []
         raw_text: else
     - Separator:
-        kind: Comma
-        text: ","
+        kind: comma
     - Word:
         category: ~
         body:
@@ -240,7 +238,7 @@ tier_body:
         annotations: []
         raw_text: think
   terminator:
-    Question: "?"
+    type: question
   postcodes: []
   media_bullet:
     raw_text: "\u00151242185_1253254\u0015"

@@ -41,6 +41,7 @@ fn leading_zero_specs_preserve_multiplicity_order_and_overflow_precedence() {
                 .content
                 .bullet
                 .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
                 .expect("numeric bullet retained");
             for (diagnostic, role) in diagnostics.iter().zip(roles) {
                 assert_eq!(diagnostic.code, ErrorCode::LeadingZeroBulletTime, "{name}");
@@ -212,6 +213,7 @@ fn reference_overlap_summaries_distinguish_absence_from_timed_groups() {
                         .content
                         .bullet
                         .as_ref()
+                        .and_then(talkbank_model::BulletState::as_parsed)
                         .map(|bullet| (bullet.timing.start_ms, bullet.timing.end_ms))
                 );
             }

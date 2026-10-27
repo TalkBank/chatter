@@ -37,6 +37,7 @@ const CHARACTER_CLASS_KEYS = [
   'word_segment_forbidden_start_symbols',
   'word_segment_forbidden_rest_symbols',
   'word_segment_forbidden_common_symbols',
+  'scoped_marker_label_symbols',
   'event_segment_forbidden_symbols',
   'event_segment_forbidden_common_symbols',
 ];

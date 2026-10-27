@@ -85,7 +85,7 @@ impl Group {
 
 impl WriteChat for Group {
     /// Serializes `<...>` and includes preserved trailing space when present.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('<')?;
         self.content.write_chat(w)?;
         if let Some(ref space) = self.trailing_space {
@@ -113,6 +113,10 @@ impl WriteChat for Group {
 ///
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct PhoGroup {
+    /// Source extent including both group delimiters.
+    #[serde(skip, default = "crate::Location::unlocated")]
+    #[schemars(skip)]
+    pub location: crate::Location,
     /// Inner payload written between `‹` and `›`.
     pub content: BracketedContent,
 }
@@ -122,8 +126,11 @@ impl PhoGroup {
     ///
     /// Group boundaries are semantic for `%pho` alignment and must be preserved
     /// exactly during roundtrip serialization.
-    pub fn new(content: BracketedContent) -> Self {
-        Self { content }
+    pub fn new(location: impl Into<crate::Location>, content: BracketedContent) -> Self {
+        Self {
+            location: location.into(),
+            content,
+        }
     }
 
     /// Returns `true` when the inner payload has no items.
@@ -139,7 +146,7 @@ impl PhoGroup {
 
 impl WriteChat for PhoGroup {
     /// Serializes the payload inside CHAT phonological-group delimiters.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('‹')?; // U+2039 SINGLE LEFT-POINTING ANGLE QUOTATION MARK
         self.content.write_chat(w)?;
         w.write_char('›') // U+203A SINGLE RIGHT-POINTING ANGLE QUOTATION MARK
@@ -164,6 +171,10 @@ impl WriteChat for PhoGroup {
 ///
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct SinGroup {
+    /// Source extent including both group delimiters.
+    #[serde(skip, default = "crate::Location::unlocated")]
+    #[schemars(skip)]
+    pub location: crate::Location,
     /// Inner payload written between `〔` and `〕`.
     pub content: BracketedContent,
 }
@@ -173,8 +184,11 @@ impl SinGroup {
     ///
     /// Group boundaries are semantic for `%sin` alignment and must be preserved
     /// exactly during roundtrip serialization.
-    pub fn new(content: BracketedContent) -> Self {
-        Self { content }
+    pub fn new(location: impl Into<crate::Location>, content: BracketedContent) -> Self {
+        Self {
+            location: location.into(),
+            content,
+        }
     }
 
     /// Returns `true` when the inner payload has no items.
@@ -190,7 +204,7 @@ impl SinGroup {
 
 impl WriteChat for SinGroup {
     /// Serializes the payload inside CHAT sign-group delimiters.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('〔')?; // U+3014 LEFT TORTOISE SHELL BRACKET
         self.content.write_chat(w)?;
         w.write_char('〕') // U+3015 RIGHT TORTOISE SHELL BRACKET
@@ -247,7 +261,7 @@ impl Quotation {
 
 impl WriteChat for Quotation {
     /// Serializes the payload inside curly quote delimiters.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char(crate::chars::LEFT_DOUBLE_QUOTE)?;
         self.content.write_chat(w)?;
         w.write_char(crate::chars::RIGHT_DOUBLE_QUOTE)

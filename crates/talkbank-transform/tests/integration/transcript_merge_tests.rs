@@ -443,7 +443,13 @@ fn a_refused_merge_draft_admits_only_bullet_repair_before_validation() {
         let mut previous = None;
         let mut repairs = Vec::new();
         for (output, (utterance, _)) in draft.utterances_with_origin().enumerate() {
-            let Some(bullet) = utterance.main.content.bullet.as_ref() else {
+            let Some(bullet) = utterance
+                .main
+                .content
+                .bullet
+                .as_ref()
+                .and_then(talkbank_model::BulletState::as_parsed)
+            else {
                 continue;
             };
             let start = match previous {
@@ -564,13 +570,20 @@ fn merge_preserves_the_complete_reference_line_sequence() {
         })
         .enumerate()
     {
-        let mut bullet = exemplar.main.content.bullet.clone().unwrap();
+        let mut bullet = exemplar
+            .main
+            .content
+            .bullet
+            .clone()
+            .unwrap()
+            .into_parsed()
+            .unwrap();
         // Translate the fixture's span onto successive disjoint intervals;
         // duplicating its time span would create invalid speaker self-overlap.
         let shift = u64::try_from(index).unwrap() * (bullet.timing.end_ms - bullet.timing.start_ms);
         bullet.timing.start_ms += shift;
         bullet.timing.end_ms += shift;
-        utterance.main.content.bullet = Some(bullet);
+        utterance.main.content.bullet = Some(bullet.into());
         utterance.dependent_tiers = exemplar.dependent_tiers.clone();
     }
     let donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options.clone())
@@ -760,7 +773,14 @@ fn source_bound_selection_preserves_body_headers_after_removed_leading_speech() 
         })
         .nth(1)
         .unwrap();
-    let timing = &mut row.main.content.bullet.as_mut().unwrap().timing;
+    let timing = &mut row
+        .main
+        .content
+        .bullet
+        .as_mut()
+        .and_then(talkbank_model::BulletState::as_parsed_mut)
+        .unwrap()
+        .timing;
     timing.start_ms = 8000;
     timing.end_ms = 8500;
     assert!(matches!(
@@ -787,7 +807,7 @@ fn merge_language_admission_refuses_missing_repeated_and_empty_declarations() {
     .unwrap();
     for input in [MergeInput::Reference, MergeInput::Donor] {
         for problem in [
-            LanguageDeclarationProblem::Missing,
+            LanguageDeclarationProblem::Absent,
             LanguageDeclarationProblem::Repeated,
             LanguageDeclarationProblem::Empty,
         ] {
@@ -797,8 +817,9 @@ fn merge_language_admission_refuses_missing_repeated_and_empty_declarations() {
             };
             let language = changed.lines.iter().find(|line| matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::Languages { .. }))).unwrap().clone();
             match problem {
-                LanguageDeclarationProblem::Missing => changed.lines.retain(|line| !matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::Languages { .. }))),
+                LanguageDeclarationProblem::Absent => changed.lines.retain(|line| !matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::Languages { .. }))),
                 LanguageDeclarationProblem::Repeated => { let mut lines = changed.lines.take(); lines.insert(2, language); changed.lines = lines.into(); },
+                LanguageDeclarationProblem::Rejected => panic!("rejected syntax is covered by the authored parser corpus"),
                 LanguageDeclarationProblem::Empty => {
                     for line in changed.lines.as_mut_slice() {
                         if let Line::Header { header, .. } = line
@@ -958,6 +979,7 @@ fn source_order_merge_preserves_untimed_rows_and_origins_when_bracket_is_unique(
         .content
         .bullet
         .as_mut()
+        .and_then(talkbank_model::BulletState::as_parsed_mut)
         .unwrap()
         .timing;
     timing.start_ms = 7000;
@@ -1014,6 +1036,7 @@ fn source_order_merge_preserves_equal_starts_with_reference_first() {
         .content
         .bullet
         .as_mut()
+        .and_then(talkbank_model::BulletState::as_parsed_mut)
         .unwrap()
         .timing
         .start_ms = 500;
@@ -1049,6 +1072,7 @@ fn source_order_merge_preserves_overlapping_intervals_without_stamping() {
         .content
         .bullet
         .as_mut()
+        .and_then(talkbank_model::BulletState::as_parsed_mut)
         .unwrap()
         .timing;
     timing.start_ms = 1000;
@@ -1071,6 +1095,7 @@ fn source_order_merge_refuses_source_anchor_reversal() {
         .content
         .bullet
         .as_mut()
+        .and_then(talkbank_model::BulletState::as_parsed_mut)
         .unwrap()
         .timing
         .start_ms = 6000;
@@ -1125,6 +1150,7 @@ fn source_order_boundary_sections_preserve_headers_or_refuse_ambiguous_placement
         .content
         .bullet
         .as_mut()
+        .and_then(talkbank_model::BulletState::as_parsed_mut)
         .unwrap()
         .timing;
     timing.start_ms = 7000;
@@ -1291,6 +1317,7 @@ fn section_placement_uses_source_bounds_and_refuses_a_gap() {
                 .content
                 .bullet
                 .as_mut()
+                .and_then(talkbank_model::BulletState::as_parsed_mut)
                 .unwrap()
                 .timing
                 .end_ms = 5000;
@@ -1311,7 +1338,13 @@ fn section_placement_uses_source_bounds_and_refuses_a_gap() {
     let mut at_boundary = donor;
     for line in at_boundary.lines.as_mut_slice() {
         if let Line::Utterance(utterance) = line {
-            let bullet = utterance.main.content.bullet.as_mut().unwrap();
+            let bullet = utterance
+                .main
+                .content
+                .bullet
+                .as_mut()
+                .and_then(talkbank_model::BulletState::as_parsed_mut)
+                .unwrap();
             bullet.timing.end_ms += 1500;
             bullet.timing.start_ms += 1500;
         }

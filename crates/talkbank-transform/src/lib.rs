@@ -68,6 +68,7 @@
 
 // CHAT-format core: parse, serialize, validate, convert/normalize,
 // dependent-tier handling, field extraction, redaction.
+mod atomic_file;
 pub mod build_chat;
 pub mod dependent_tiers;
 pub mod extract;
@@ -79,8 +80,12 @@ pub mod parse;
 pub mod pseudonymize;
 pub mod redact;
 pub mod rediarize;
+pub mod report_destination;
 pub mod retag_language;
 pub mod serialize;
+mod speaker_headers;
+mod speaker_token;
+pub use speaker_headers::SpeakerRewriteError;
 pub mod splice;
 pub mod utterance_split;
 pub mod validate;

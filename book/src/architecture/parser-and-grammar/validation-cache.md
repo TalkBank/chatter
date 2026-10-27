@@ -535,7 +535,7 @@ flowchart LR
 - Maintenance takes a `CacheScope`: `All`, or `CacheScope::Under(prefix)`, a
   `ResolvedPrefix` (built by `ResolvedPrefix::of`, which resolves the
   directory whole), for a path and everything under it by whole components. `count(&scope)` reads
-  the database alone, so `chatter cache clear --dry-run` cannot fail on the
+  the database alone, so `chatter cache clear` cannot fail on the
   database file's metadata; `clear(&scope)` returns the rows its own delete
   removed. The `WHERE` clause for a scope is written in one place.
   `chatter cache clear` gets its scope and mode from clap: `ClearScope` and

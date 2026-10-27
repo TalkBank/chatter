@@ -63,8 +63,11 @@ pub mod offset_adjusting_sink;
 pub mod parse_error;
 /// Collection type: `ParseErrors` and `ParseResult` type alias.
 pub mod parse_errors;
+mod physical_lines;
 mod rebased_sink;
-pub use fragment_source::{FragmentRangeError, FragmentSource, MAX_PARSER_INPUT_BYTES};
+pub use fragment_source::{
+    FragmentRangeError, FragmentRebaseError, FragmentSource, MAX_PARSER_INPUT_BYTES,
+};
 /// Source location types: `DiagnosticLocation`, `ErrorLabel`, `Severity`, `ErrorVec`.
 pub mod location;
 pub mod source_location;

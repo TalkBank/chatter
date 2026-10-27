@@ -3,11 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng",
-    "hrv",
-    "spa"
-  ],
   "lines": [
     {
       "header": {
@@ -36,23 +31,35 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Child",
+            "details": {
+              "name": null,
+              "role": "Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           },
           {
-            "name": null,
-            "role": "Investigator",
+            "details": {
+              "name": null,
+              "role": "Investigator",
+              "state": "complete"
+            },
             "speaker_code": "INV"
           },
           {
-            "name": null,
-            "role": "Sister",
+            "details": {
+              "name": null,
+              "role": "Sister",
+              "state": "complete"
+            },
             "speaker_code": "SIS"
           }
         ],
@@ -376,65 +383,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "3;00.",
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Child",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Child"
-    },
-    "INV": {
-      "birth_date": null,
-      "code": "INV",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Investigator",
-        "speaker": "INV"
-      },
-      "name": null,
-      "role": "Investigator"
-    },
-    "MOT": {
-      "birth_date": null,
-      "code": "MOT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Mother",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    },
-    "SIS": {
-      "birth_date": null,
-      "code": "SIS",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Sister",
-        "speaker": "SIS"
-      },
-      "name": null,
-      "role": "Sister"
-    }
-  }
+  ]
 }

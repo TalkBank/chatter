@@ -25,7 +25,7 @@ use crate::backend::utils::{LineIndex, position_to_offset};
 struct ProposedQuickFix {
     title: String,
     edit: TextEdit,
-    diagnostic: Option<Diagnostic>,
+    diagnostic: Diagnostic,
 }
 
 impl ProposedQuickFix {
@@ -48,7 +48,7 @@ impl ProposedQuickFix {
         Some(CodeActionOrCommand::CodeAction(CodeAction {
             title: self.title,
             kind: Some(CodeActionKind::QUICKFIX),
-            diagnostics: self.diagnostic.map(|diagnostic| vec![diagnostic]),
+            diagnostics: Some(vec![self.diagnostic]),
             edit: Some(WorkspaceEdit {
                 document_changes: Some(DocumentChanges::Edits(vec![TextDocumentEdit {
                     text_document: OptionalVersionedTextDocumentIdentifier {
@@ -89,24 +89,115 @@ impl PreparedQuickFixes<'_> {
     }
 }
 
-/// Parse catalog evidence before acquiring the current-revision map guard.
-/// Client diagnostics select current server evidence; they never authorize edits.
-pub(crate) fn prepare_code_actions<'a>(
+/// Current diagnostics selected by an admitted editor range and action kind.
+/// Client diagnostic payloads are hints, never authority for an edit.
+pub(crate) struct QuickFixScope<'a> {
     revision: &'a RevisionDiagnostics,
-    requested: &[Diagnostic],
+    selected: Vec<&'a Diagnostic>,
+}
+
+impl<'a> QuickFixScope<'a> {
+    pub(crate) fn admit(
+        revision: &'a RevisionDiagnostics,
+        range: Range,
+        only: Option<&[CodeActionKind]>,
+    ) -> Option<Self> {
+        if only.is_some_and(|kinds| {
+            !kinds
+                .iter()
+                .any(|kind| kind.as_str().is_empty() || *kind == CodeActionKind::QUICKFIX)
+        }) {
+            return None;
+        }
+        let key = |position: Position| (position.line, position.character);
+        if key(range.start) > key(range.end) {
+            return None;
+        }
+        let index = LineIndex::new(revision.source());
+        for position in [range.start, range.end] {
+            if index.offset_to_position(position_to_offset(revision.source(), position)) != position
+            {
+                return None;
+            }
+        }
+        let selected = revision
+            .items()
+            .iter()
+            .filter(|diagnostic| {
+                let other = diagnostic.range;
+                // Cursor requests and point diagnostics include their boundary.
+                // Two nonempty ranges must share actual selected text.
+                if range.start == range.end || other.start == other.end {
+                    key(range.start) <= key(other.end) && key(other.start) <= key(range.end)
+                } else {
+                    key(range.start) < key(other.end) && key(other.start) < key(range.end)
+                }
+            })
+            .collect();
+        Some(Self { revision, selected })
+    }
+}
+
+/// Catalog-backed routes own their presentation label; the catalog owns edits.
+#[derive(Clone, Copy)]
+enum CatalogAction {
+    Terminator,
+    EmptyUtterance,
+    EndHeader,
+    Utf8Header,
+}
+
+impl CatalogAction {
+    fn for_code(code: ErrorCode) -> Option<Self> {
+        match code {
+            ErrorCode::MissingTerminator => Some(Self::Terminator),
+            ErrorCode::EmptyUtterance => Some(Self::EmptyUtterance),
+            ErrorCode::MissingEndHeader => Some(Self::EndHeader),
+            ErrorCode::MissingUTF8Header => Some(Self::Utf8Header),
+            _ => None,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Terminator => "Insert missing terminator",
+            Self::EmptyUtterance => "Delete empty utterance",
+            Self::EndHeader => "Insert '@End' at end of file",
+            Self::Utf8Header => "Insert '@UTF8' at start of file",
+        }
+    }
+
+    fn matches_location(
+        self,
+        location: talkbank_model::DiagnosticLocation,
+        diagnostic: &Diagnostic,
+        index: &LineIndex<'_>,
+    ) -> bool {
+        match self {
+            // Whole-file missing-header facts do not require a located token.
+            // The current source, code and message still come from diagnosis.
+            Self::EndHeader | Self::Utf8Header => true,
+            Self::Terminator | Self::EmptyUtterance => location.span().is_some_and(|span| {
+                Range::new(
+                    index.offset_to_position(span.start()),
+                    index.offset_to_position(span.end()),
+                ) == diagnostic.range
+            }),
+        }
+    }
+}
+
+/// Parse catalog evidence before acquiring the current-revision map guard.
+pub(crate) fn prepare_code_actions<'a>(
+    scope: QuickFixScope<'a>,
     parser: &TreeSitterParser,
 ) -> PreparedQuickFixes<'a> {
+    let QuickFixScope { revision, selected } = scope;
     let index = LineIndex::new(revision.source());
-    let selected: Vec<_> = revision
-        .items()
-        .iter()
-        .filter(|diagnostic| requested.contains(diagnostic))
-        .collect();
     let needs_catalog = selected.iter().any(|diagnostic| {
-        matches!(
-            fixes::diagnostic_code(diagnostic),
-            Some(ErrorCode::MissingTerminator | ErrorCode::EmptyUtterance)
-        )
+        fixes::diagnostic_code(diagnostic)
+            .and_then(CatalogAction::for_code)
+            .is_some()
     });
     let path = revision
         .uri()
@@ -128,21 +219,12 @@ pub(crate) fn prepare_code_actions<'a>(
     let mut proposals = Vec::new();
     for diagnostic in selected {
         let code = fixes::diagnostic_code(diagnostic);
-        if matches!(
-            code,
-            Some(ErrorCode::MissingTerminator | ErrorCode::EmptyUtterance)
-        ) {
+        if let Some(action) = code.and_then(CatalogAction::for_code) {
             if let Some(diagnosis) = &diagnosis {
                 for finding in diagnosis.findings().filter(|finding| {
                     Some(finding.code) == code
                         && finding.message == diagnostic.message
-                        // An unlocated finding names no client range.
-                        && finding.location.span().is_some_and(|span| {
-                            Range::new(
-                                index.offset_to_position(span.start()),
-                                index.offset_to_position(span.end()),
-                            ) == diagnostic.range
-                        })
+                        && action.matches_location(finding.location, diagnostic, &index)
                 }) {
                     if let CatalogResolution::Offered(fix) = finding.catalog() {
                         match fix.into_kind() {
@@ -159,7 +241,7 @@ pub(crate) fn prepare_code_actions<'a>(
                             }
                             FixKind::Semantic(edits) | FixKind::Mechanical(edits) => {
                                 proposals.extend(catalog_proposal(
-                                    "Delete empty utterance".into(),
+                                    action.label().into(),
                                     edits,
                                     diagnostic,
                                     revision.source(),
@@ -171,7 +253,7 @@ pub(crate) fn prepare_code_actions<'a>(
                 }
             }
         } else {
-            proposals.extend(fixes::actions_for_diagnostic(diagnostic, revision.source()));
+            proposals.extend(fixes::actions_for_diagnostic(diagnostic));
         }
     }
     PreparedQuickFixes {
@@ -180,7 +262,7 @@ pub(crate) fn prepare_code_actions<'a>(
     }
 }
 
-/// The two selected catalog rules offer single edits. Never split a multi-edit
+/// The selected catalog rules offer single edits. Never split a multi-edit
 /// proposal into independently applicable actions if that contract changes.
 fn catalog_proposal(
     title: String,
@@ -210,7 +292,7 @@ fn catalog_proposal(
         range,
         edit.replacement().as_str(),
         title,
-        Some(diagnostic),
+        diagnostic,
     ))
 }
 

@@ -3,7 +3,7 @@ import { useValidationRunnerCapability } from "../runtime/DesktopRuntimeContext"
 import type { ValidationRun } from "../runtime/desktopRuntime";
 import type { ValidationSettings } from "../protocol/desktopProtocol";
 import {
-  applyValidationEvent,
+  applyValidationEvents,
   createInitialValidationState,
   isAwaitingBackend,
   relativeDisplayName,
@@ -31,8 +31,6 @@ export function useValidation() {
   const validationRunner = useValidationRunnerCapability();
   const [state, setState] = useState<ValidationState>(createInitialValidationState);
   const runRef = useRef<ValidationRun | null>(null);
-  /** Selected validation target used for computing relative display names */
-  const rootRef = useRef<string>("");
 
   // "The backend has been silent past BACKEND_SILENCE_WARNING_MS" is a
   // property of the RUN, not of whichever component happens to be mounted
@@ -57,24 +55,25 @@ export function useValidation() {
     runRef.current = null;
   }, []);
 
-  const relativeName = useCallback((fullPath: string): string => {
-    return relativeDisplayName(fullPath, rootRef.current);
-  }, []);
-
   const startValidation = useCallback(async (path: string, settings: ValidationSettings) => {
     disposeRun();
 
-    rootRef.current = path;
-
-    // "invoked", NOT "discovering": the backend has not spoken yet, and the
-    // difference is what makes backend silence observable. See RunPhase's docs.
+    // Requesting validation does not prove that backend discovery has begun.
+    // See RunPhase's distinction between local requests and observed progress.
     setState({ ...createInitialValidationState(), run: { kind: "invoked" } });
 
+    let ownedRun: ValidationRun | null = null;
     try {
-      runRef.current = await validationRunner.startValidation(path, settings, (event) => {
-        setState((prev) => applyValidationEvent(prev, event, relativeName));
+      const run = validationRunner.startValidation(path, settings, (events) => {
+        setState((prev) => runRef.current === run
+          ? applyValidationEvents(prev, events, (fullPath) => relativeDisplayName(fullPath, path))
+          : prev);
       });
+      ownedRun = run;
+      runRef.current = run;
+      await run.ready;
     } catch (err) {
+      if (runRef.current !== ownedRun) return;
       console.error("validate command failed:", err);
       window.alert(`Validation failed: ${String(err)}`);
       disposeRun();
@@ -83,7 +82,7 @@ export function useValidation() {
         run: { kind: "aborted", reason: `Validation failed to start: ${String(err)}` },
       }));
     }
-  }, [disposeRun, relativeName, validationRunner]);
+  }, [disposeRun, validationRunner]);
 
   const cancelValidation = useCallback(async () => {
     try {
@@ -94,7 +93,6 @@ export function useValidation() {
   }, []);
 
   const reset = useCallback(() => {
-    rootRef.current = "";
     disposeRun();
     setState(createInitialValidationState());
   }, [disposeRun]);

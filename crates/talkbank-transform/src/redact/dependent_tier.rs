@@ -1,7 +1,7 @@
 //! Dependent-tier sanitization.
 
 use talkbank_model::dependent_tier::mor::analysis::MorStem;
-use talkbank_model::{BulletContent, DependentTier, NonEmptyString, TextTier};
+use talkbank_model::{BulletContent, DependentTier, RecoveryText, TextTier};
 
 use super::REDACTED_TEXT;
 use super::placeholder::{PlaceholderState, PlaceholderToken};
@@ -20,7 +20,14 @@ pub(crate) fn keep_dependent_tier(tier: &DependentTier) -> bool {
             | DependentTier::Modsyl(_)
             | DependentTier::Phosyl(_)
             | DependentTier::Phoaln(_)
+            | DependentTier::UnparsedPho(_)
+            | DependentTier::UnparsedMod(_)
+            | DependentTier::UnparsedSin(_)
+            | DependentTier::UnparsedWor(_)
+            | DependentTier::UnparsedPhoaln(_)
             | DependentTier::Xphoint(_)
+            | DependentTier::UnparsedText(_)
+            | DependentTier::UnparsedXphoint(_)
     )
 }
 
@@ -35,9 +42,14 @@ pub(crate) fn keep_dependent_tier(tier: &DependentTier) -> bool {
 /// too, which re-exposed every word the main tier had just hidden; it is
 /// rewritten by [`super::wor::WorPlan`], whose verdict is taken before the
 /// main tier changes, so this function leaves it alone.
-pub(crate) fn sanitize_dependent_tier(tier: &mut DependentTier, state: &mut PlaceholderState) {
+pub(crate) fn sanitize_dependent_tier(
+    tier: &mut DependentTier,
+    state: &mut PlaceholderState,
+) -> Result<(), super::RedactError> {
     match tier {
         DependentTier::Mor(mor) => redact_mor_tier(mor, state),
+        DependentTier::UnparsedMor(_) => return Err(super::RedactError::UnparsedMorphology),
+        DependentTier::UnparsedGra(_) => return Err(super::RedactError::UnparsedGrammar),
         // Rewritten by `WorPlan::apply`, after the main tier.
         DependentTier::Wor(_) => {}
         DependentTier::Act(t) => t.content = redacted_bullet(),
@@ -59,14 +71,19 @@ pub(crate) fn sanitize_dependent_tier(tier: &mut DependentTier, state: &mut Plac
         | DependentTier::Gls(t)
         | DependentTier::Ort(t)
         | DependentTier::Par(t) => redact_text_tier(t),
-        DependentTier::UserDefined(t) | DependentTier::Unsupported(t) => {
+        DependentTier::UserDefined(talkbank_model::UserDefinedDependentTier {
+            content, ..
+        })
+        | DependentTier::Unsupported(talkbank_model::UnsupportedDependentTier {
+            content, ..
+        }) => {
             // Only redact a tier that HAS content. An empty tier has nothing
             // to hide, and replacing its `None` with placeholder text would
             // invent content the source never had.
-            if t.content.is_some()
-                && let Ok(redacted) = NonEmptyString::new(REDACTED_TEXT)
+            if content.is_some()
+                && let Ok(redacted) = RecoveryText::new(REDACTED_TEXT)
             {
-                t.content = Some(redacted);
+                *content = Some(redacted);
             }
         }
         // Numeric / structural tiers, no lexical content.
@@ -78,8 +95,16 @@ pub(crate) fn sanitize_dependent_tier(tier: &mut DependentTier, state: &mut Plac
         | DependentTier::Modsyl(_)
         | DependentTier::Phosyl(_)
         | DependentTier::Phoaln(_)
-        | DependentTier::Xphoint(_) => {}
+        | DependentTier::UnparsedPho(_)
+        | DependentTier::UnparsedMod(_)
+        | DependentTier::UnparsedSin(_)
+        | DependentTier::UnparsedWor(_)
+        | DependentTier::UnparsedPhoaln(_)
+        | DependentTier::Xphoint(_)
+        | DependentTier::UnparsedText(_)
+        | DependentTier::UnparsedXphoint(_) => {}
     }
+    Ok(())
 }
 
 fn redacted_bullet() -> BulletContent {
@@ -93,7 +118,7 @@ fn redact_text_tier(tier: &mut TextTier) {
     // compiler raised this the moment an empty tier became representable; no
     // test covered it, because until then the state could not be built.
     if tier.content.is_some()
-        && let Ok(redacted) = NonEmptyString::new(REDACTED_TEXT)
+        && let Ok(redacted) = RecoveryText::new(REDACTED_TEXT)
     {
         tier.content = Some(redacted);
     }

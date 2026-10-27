@@ -1,12 +1,8 @@
 ---
 source: crates/talkbank-parser-tests/src/snapshot.rs
-assertion_line: 98
 expression: snapshot
 ---
 {
-  "languages": [
-    "eng"
-  ],
   "lines": [
     {
       "header": {
@@ -33,18 +29,27 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Child",
+            "details": {
+              "name": null,
+              "role": "Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           },
           {
-            "name": null,
-            "role": "Mother",
+            "details": {
+              "name": null,
+              "role": "Mother",
+              "state": "complete"
+            },
             "speaker_code": "MOT"
           },
           {
-            "name": null,
-            "role": "Father",
+            "details": {
+              "name": null,
+              "role": "Father",
+              "state": "complete"
+            },
             "speaker_code": "FAT"
           }
         ],
@@ -636,53 +641,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "options": [
-    "CA"
-  ],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "3;00.",
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Child",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Child"
-    },
-    "FAT": {
-      "birth_date": null,
-      "code": "FAT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Father",
-        "speaker": "FAT"
-      },
-      "name": null,
-      "role": "Father"
-    },
-    "MOT": {
-      "birth_date": null,
-      "code": "MOT",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "eng"
-        ],
-        "role": "Mother",
-        "speaker": "MOT"
-      },
-      "name": null,
-      "role": "Mother"
-    }
-  }
+  ]
 }

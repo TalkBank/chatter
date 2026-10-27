@@ -17,7 +17,9 @@ pub fn selection_range(document: &str, positions: &[Position]) -> Vec<SelectionR
 }
 
 fn build_selection_range(document: &str, position: Position) -> SelectionRange {
-    let lines: Vec<&str> = document.lines().collect();
+    let lines: Vec<&str> = crate::backend::utils::protocol_lines(document)
+        .map(|line| line.text())
+        .collect();
     let line_idx = position.line as usize;
 
     if line_idx >= lines.len() {

@@ -48,12 +48,43 @@ fn parity_fixture(name: &str) -> PathBuf {
 fn assert_parity_fixture_rejected(fixture: &str, code: &str) -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let path = parity_fixture(fixture);
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         text.contains(code),
         "expected {code} (surviving recovery node) in `{fixture}`, got:\n{text}"
     );
+    Ok(())
+}
+
+/// Recovery diagnoses absent content without inventing a separator to validate.
+#[test]
+fn missing_separator_recovery_has_no_empty_content_cascade() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    for (path, required, absent) in [
+        (
+            parity_fixture("CHECK_070_no_text.cha"),
+            &["E342"][..],
+            &["E253", "E306"][..],
+        ),
+        (
+            reference_fixture(
+                "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E306_separator_only_2.cha",
+            ),
+            &["E253", "E306"][..],
+            &["E342"][..],
+        ),
+    ] {
+        let output = harness.run_validate(&path, &["--refresh-cache"])?;
+        let text = combined_output(&output);
+        assert_eq!(output.status.code(), Some(1), "{text}");
+        for code in required {
+            assert!(text.contains(code), "expected {code}: {text}");
+        }
+        for code in absent {
+            assert!(!text.contains(code), "unexpected {code}: {text}");
+        }
+    }
     Ok(())
 }
 
@@ -100,7 +131,7 @@ fn missing_end_reports_e502_not_a_whole_file_e316() -> Result<(), TestError> {
         @Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n\
         *CHI:\thello world .\n";
     let path = write_fixture(dir.path(), "session.cha", content)?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         text.contains("E502"),
@@ -131,7 +162,7 @@ fn validate_inline(content: &str, parser_args: &[&str]) -> Result<String, TestEr
     let harness = CliHarness::new()?;
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "session.cha", content)?;
-    let mut args = vec!["--force"];
+    let mut args = vec!["--refresh-cache"];
     args.extend_from_slice(parser_args);
     let output = harness.run_validate(&path, &args)?;
     Ok(combined_output(&output))
@@ -215,7 +246,7 @@ fn indented_dependent_tier_message_names_the_column_rule() -> Result<(), TestErr
     let harness = CliHarness::new()?;
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "session.cha", INDENTED_DEPENDENT_TIER)?;
-    let output = harness.run_validate(&path, &["--force"])?;
+    let output = harness.run_validate(&path, &["--refresh-cache"])?;
     let text = combined_output(&output);
     assert!(
         text.contains("E326"),

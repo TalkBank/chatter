@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
-assertion_line: 92
 expression: result.unwrap()
 ---
 speaker:
@@ -45,6 +44,6 @@ tier_body:
         annotations: []
         raw_text: 诶
   terminator:
-    Period: "."
+    type: period
   postcodes: []
   media_bullet: ~

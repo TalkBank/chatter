@@ -1,83 +1,71 @@
 //! Part of the AST→model conversion (see `mod.rs`); split out for file size.
-#![allow(clippy::unreachable, clippy::unwrap_used, clippy::expect_used)]
 
 use crate::ast;
-use crate::source_text::SourceText;
 use talkbank_model::ErrorSink;
 use talkbank_model::model::CaOptionEffect;
-use talkbank_model::model::LanguagePrecode;
 use talkbank_model::model::content::word::ca::normalize_ca_omissions_in_lines;
 use talkbank_model::model::*;
-use talkbank_model::non_empty_literal;
 
 use super::*;
 
-/// Lower a main tier the line machine has placed in `source`.
+/// Lower a main tier using the source retained by its line machine.
+///
+/// A caller cannot substitute unrelated source during conversion:
+///
+/// ```compile_fail
+/// use talkbank_parser_re2c::{convert::main_tier_to_model, ast::LocatedMainTier};
+/// use talkbank_parser_re2c::source_text::SourceText;
+/// fn replace_source(tier: &LocatedMainTier<'_>, foreign: &str) {
+///     main_tier_to_model(tier, SourceText::new(foreign), &talkbank_model::NullErrorSink);
+/// }
+/// ```
 pub fn main_tier_to_model(
     located: &ast::LocatedMainTier<'_>,
-    source: SourceText<'_>,
     errors: &(impl ErrorSink + ?Sized),
 ) -> MainTier {
+    let source = located.source();
     let mt = located.tier();
     let speaker = SpeakerCode::new(mt.speaker.text());
     let content_items: Vec<UtteranceContent> = mt
         .tier_body
         .contents
         .iter()
-        .filter_map(|c| content_item_to_model(c, source))
+        .map(|c| content_item_to_model(c, source))
         .collect();
-    let terminator = mt
-        .tier_body
-        .terminator
-        .as_ref()
-        .and_then(|t| token_to_terminator(t, source));
+    let terminator = mt.tier_body.terminator.clone();
 
     let mut main_tier = MainTier::new(located.locations(), speaker, content_items, terminator);
 
-    // Install the grammar-owned terminal slot before considering a content tail.
+    // Report the shared model's retained freecode recovery at every depth.
+    talkbank_model::alignment::helpers::walk_content(
+        &main_tier.content.content,
+        None,
+        &mut |item| {
+            if let talkbank_model::alignment::helpers::ContentItem::Freecode(code) = item {
+                code.validate_recovery(errors);
+            }
+        },
+    );
+
+    // Parsed and rejected terminal bullets both occupy the shared slot.
     if let Some(bullet) = mt.tier_body.media_bullet {
-        if let Some(model) = bullet_from_token(bullet, source) {
-            main_tier = main_tier.with_bullet(model);
-        }
-    } else if !matches!(
-        mt.tier_body.contents.last(),
-        Some(ast::ContentItem::MediaBullet { bullet }) if bullet.times().is_none()
-    ) {
-        // Rejected timing still occupies its source position. Removing it must
-        // not promote an earlier inline bullet into the terminal slot.
-        main_tier.content.extract_terminal_bullet();
+        main_tier = main_tier.with_bullet(bullet_from_token(bullet, source));
     }
+    main_tier.content.extract_terminal_bullet();
 
-    // Linkers
-    if !mt.tier_body.linkers.is_empty() {
-        let linkers: Vec<Linker> = mt
-            .tier_body
-            .linkers
-            .iter()
-            .filter_map(|tok| linker_token_to_model(tok, source))
-            .collect();
-        main_tier = main_tier.with_linkers(linkers);
-    }
+    // The grammar already admitted each linker's meaning and source location.
+    main_tier = main_tier.with_linkers(mt.tier_body.linkers.clone());
 
-    // Language code ([- lang]). The token's payload is the tag-extracted
-    // code ("zho"); its lexeme is the whole `[- zho]`, where the precode is
-    // placed. Declined rather than `expect`ed on the impossible empty case: a
-    // parser has no business panicking on input, and the `[- ` lexer rule
-    // requires at least one character anyway.
-    if let Some(langcode) = mt.tier_body.langcode
-        && let Ok(code) = LanguageCode::new(langcode.text())
-    {
-        main_tier = main_tier.with_language_code(LanguagePrecode::new(
-            super::locate(source, langcode.lexeme()),
-            code,
-        ));
+    // Grammar admission owns both the code and its original location.
+    if let Some(precode) = &mt.tier_body.langcode {
+        main_tier = main_tier.with_language_code(precode.clone());
     }
 
     main_tier = main_tier.with_postcodes(
         mt.tier_body
             .postcodes
             .iter()
-            .filter_map(|postcode| postcode.to_model(source, errors))
+            .map(|postcode| postcode.to_model(source, errors))
             .collect(),
     );
 
@@ -90,37 +78,21 @@ pub fn main_tier_to_model(
 
 pub fn utterance_to_model(
     u: &ast::Utterance<'_>,
-    source: SourceText<'_>,
     errors: &(impl ErrorSink + ?Sized),
 ) -> talkbank_model::model::Utterance {
-    let main = main_tier_to_model(&u.main_tier, source, errors);
-    // One pass, so what was lowered and what that cost cannot disagree. It was
-    // two: a `filter_map` that dropped failed tiers, and a second walk of the
-    // SAME list re-deriving one taint from one AST variant. The second walk
-    // could only see the rejection the AST spells out, so a tier the lowering
-    // itself could not build whole (a `%gra` that lost a relation, a `%mor`
-    // whose `try_from` failed, a `%wor` body that would not parse) was dropped
-    // or shortened with nothing recording it, and every cross-tier check then
-    // read our own recovery as a fault in the transcript.
+    let main = main_tier_to_model(u.main_tier(), errors);
+    // Every admitted entry lowers once, retaining its recovery and separator.
     let mut parse_health = talkbank_model::model::ParseHealth::untainted();
     let dep_tiers = u
-        .dependent_tiers
+        .dependent_tiers()
         .iter()
-        .filter_map(|entry| {
-            dependent_tier_to_model(
-                &entry.tier,
-                talkbank_model::Location::Located(entry.extent),
-                source,
-                errors,
-                &mut parse_health,
-            )
-            .map(|tier| {
-                let mut lowered = DependentTierEntry::with_separator(tier, entry.separator);
-                if let Some(body) = entry.content_range {
-                    lowered.record_content_span(body);
-                }
-                lowered
-            })
+        .map(|entry| {
+            let tier = dependent_tier_to_model(entry, errors, &mut parse_health);
+            let mut lowered = DependentTierEntry::with_separator(tier, entry.separator());
+            if let Some(body) = entry.content_range() {
+                lowered.record_content_span(body);
+            }
+            lowered
         })
         .collect();
     let mut utterance = talkbank_model::model::Utterance::new(main);
@@ -132,99 +104,203 @@ pub fn utterance_to_model(
 /// Convert a parsed dependent tier to model `DependentTier`, recording on
 /// `health` anything the lowering could not build whole.
 ///
-/// Returns `None` when the conversion fails outright, and taints that tier's
-/// domain in the same step. The rule, and it holds for **every arm that
-/// returns `None` or comes back shorter**: a tier this function could not
-/// build as the author wrote it taints its own domain. Nothing downstream can
-/// otherwise tell recovery from transcription, so alignment compares a tier
-/// against a neighbour it no longer matches and reports the difference as the
-/// author's.
+/// Every admitted entry produces exactly one model tier. Rejected content
+/// retains its shared recovery variant and taints its alignment domain; no
+/// consumer can silently filter a failed conversion out of the utterance.
 ///
-/// TWO ARMS ARE OUTSIDE IT, deliberately and not yet justified: `%phoaln` and
-/// `%xphoint` bodies that will not parse become `DependentTier::Unsupported`
-/// rather than `None`, and taint nothing, although `ParseHealthTier::Phoaln`
-/// and `::Xphoint` both exist and the canonical backend taints them for the
-/// same input. It is the safe direction (nothing is suppressed) and it is a
-/// divergence, named here rather than left for the next reader to discover.
+/// Malformed phone alignment and interval bodies retain shared raw-source
+/// variants, preserving tier identity and withdrawing their alignment trust.
 pub fn dependent_tier_to_model(
-    tier: &ast::DependentTierParsed<'_>,
-    location: talkbank_model::Location,
-    source: SourceText<'_>,
+    entry: &ast::DependentTierEntryParsed<'_>,
     errors: &(impl ErrorSink + ?Sized),
     health: &mut talkbank_model::model::ParseHealth,
-) -> Option<talkbank_model::model::DependentTier> {
+) -> talkbank_model::model::DependentTier {
+    use talkbank_model::generated::phon_tier_labels::PhonTierKind;
     use talkbank_model::model::ParseHealthTier;
+    let original = entry.source();
+    let tier = entry.tier();
+    let extent = original.span();
+    let source = original.source();
+    let location = talkbank_model::Location::Located(extent);
 
-    Some(match tier {
-        ast::DependentTierParsed::RejectedMor(_) => {
+    match tier {
+        ast::DependentTierParsed::RejectedMor(tier) => {
             health.taint(ParseHealthTier::Mor);
-            return None;
+            talkbank_model::DependentTier::UnparsedMor(tier.clone())
         }
-        ast::DependentTierParsed::Mor(mor) => match mor_tier_to_model(mor, location, source) {
-            Ok(mor) => talkbank_model::model::DependentTier::Mor(mor),
-            // Was `.ok()?`, which dropped the tier and tainted nothing: the
-            // separate taint walk this replaced could only see the AST's own
-            // `RejectedMor`, so a `%mor` that failed HERE left an utterance
-            // that looks as though it never had one.
-            Err(_) => {
-                health.taint(ParseHealthTier::Mor);
-                return None;
+        ast::DependentTierParsed::RejectedPho(tier) => {
+            health.taint(ParseHealthTier::Pho);
+            talkbank_model::DependentTier::UnparsedPho(tier.clone())
+        }
+        ast::DependentTierParsed::RejectedMod(tier) => {
+            health.taint(ParseHealthTier::Mod);
+            talkbank_model::DependentTier::UnparsedMod(tier.clone())
+        }
+        ast::DependentTierParsed::RejectedSin(tier) => {
+            health.taint(ParseHealthTier::Sin);
+            talkbank_model::DependentTier::UnparsedSin(tier.clone())
+        }
+        ast::DependentTierParsed::Mor(mor) => {
+            talkbank_model::model::DependentTier::Mor(mor.clone())
+        }
+        ast::DependentTierParsed::RejectedGra(tier) => {
+            health.taint(ParseHealthTier::Gra);
+            talkbank_model::DependentTier::UnparsedGra(tier.clone())
+        }
+        ast::DependentTierParsed::Gra(gra) => talkbank_model::DependentTier::Gra(gra.clone()),
+        ast::DependentTierParsed::Pho(pho) => talkbank_model::DependentTier::Pho(pho.clone()),
+        ast::DependentTierParsed::Mod(pho) => talkbank_model::DependentTier::Mod(pho.clone()),
+        ast::DependentTierParsed::Sin(sin) => talkbank_model::DependentTier::Sin(sin.clone()),
+        ast::DependentTierParsed::RejectedWor(tier) => {
+            health.taint(ParseHealthTier::Wor);
+            talkbank_model::DependentTier::UnparsedWor(tier.clone())
+        }
+        ast::DependentTierParsed::Wor(wor) => talkbank_model::DependentTier::Wor(wor.clone()),
+        ast::DependentTierParsed::RejectedText { label } => {
+            let raw = talkbank_model::UnparsedTier::new(extent, original.text());
+            match PhonTierKind::from_label(label.as_str()) {
+                Some(PhonTierKind::Phoaln) => {
+                    health.taint(ParseHealthTier::Phoaln);
+                    talkbank_model::DependentTier::UnparsedPhoaln(raw)
+                }
+                Some(PhonTierKind::Xphoint) => {
+                    health.taint(ParseHealthTier::Xphoint);
+                    talkbank_model::DependentTier::UnparsedXphoint(raw)
+                }
+                Some(PhonTierKind::Modsyl | PhonTierKind::Phosyl) | None => {
+                    talkbank_model::DependentTier::UnparsedText(
+                        talkbank_model::UnparsedTextTier::new(label.nonempty().clone(), raw),
+                    )
+                }
             }
-        },
-        ast::DependentTierParsed::Gra(gra) => talkbank_model::model::DependentTier::Gra(
-            crate::convert::gra_tier_to_model(gra, source, errors).into_tier(location, health),
-        ),
-        ast::DependentTierParsed::Pho(pho) => {
-            talkbank_model::model::DependentTier::Pho(convert_pho_tier(
-                pho,
-                talkbank_model::model::dependent_tier::pho::PhoTierType::Pho,
-                location,
-            ))
         }
-        ast::DependentTierParsed::Mod(pho) => {
-            talkbank_model::model::DependentTier::Mod(convert_pho_tier(
-                pho,
-                talkbank_model::model::dependent_tier::pho::PhoTierType::Mod,
-                location,
-            ))
-        }
-        ast::DependentTierParsed::Sin(sin) => {
-            talkbank_model::model::DependentTier::Sin(convert_sin_tier(sin, location))
-        }
-        ast::DependentTierParsed::Wor(wor_parsed) => talkbank_model::model::DependentTier::Wor(
-            wor_tier_to_model(wor_parsed, source, location),
-        ),
-        ast::DependentTierParsed::Text { prefix, content } => {
-            let prefix_text = prefix.text();
-            // Extract tier label: "%com:\t" → "com", "%xpho:\t" → "xpho"
-            let label = prefix_text.trim_start_matches('%').trim_end_matches(":\t");
+        ast::DependentTierParsed::Text {
+            label: admitted_label,
+            content,
+        } => {
+            let label = admitted_label.as_str();
 
-            // Phon project tiers have x-prefix but are NOT user-defined
-            let is_phon_tier = matches!(label, "xmodsyl" | "xphosyl" | "xphoaln" | "xphoint");
+            // Admit the closed payload family once. The lowering consumes its
+            // kind and cannot reach a non-text variant or a panic fallback.
+            if let Some(kind) = super::plain_text::PlainTextTierKind::from_label(label) {
+                let raw_text: String = content.iter().map(|token| token.text()).collect();
+                return kind.lower(location, &raw_text);
+            }
 
-            // User-defined tiers: %x* prefix (but not phon project tiers)
-            if label.starts_with('x') && label.len() >= 2 && !is_phon_tier {
+            if let Some(kind) = PhonTierKind::from_label(label) {
+                return match kind {
+                    // Phon project syllabification tiers (with or without x prefix)
+                    PhonTierKind::Modsyl => {
+                        let raw_text: String = content.iter().map(|t| t.text()).collect();
+                        let words = talkbank_model::dependent_tier::parse_syl_content(&raw_text);
+                        talkbank_model::model::DependentTier::Modsyl(
+                            talkbank_model::dependent_tier::SylTier::new(
+                                location,
+                                talkbank_model::dependent_tier::SylTierType::Modsyl,
+                                words,
+                            ),
+                        )
+                    }
+                    PhonTierKind::Phosyl => {
+                        let raw_text: String = content.iter().map(|t| t.text()).collect();
+                        let words = talkbank_model::dependent_tier::parse_syl_content(&raw_text);
+                        talkbank_model::model::DependentTier::Phosyl(
+                            talkbank_model::dependent_tier::SylTier::new(
+                                location,
+                                talkbank_model::dependent_tier::SylTierType::Phosyl,
+                                words,
+                            ),
+                        )
+                    }
+                    PhonTierKind::Phoaln => {
+                        let raw_text: String = content.iter().map(|t| t.text()).collect();
+                        // No empty-body guard here, deliberately, and it is worth
+                        // saying why since `%xphoint` below has one.
+                        // `parse_phoaln_content` is `split_whitespace` into a
+                        // `Vec`, so an empty or whitespace-only body already yields
+                        // `Ok(vec![])`: an empty `PhoalnTier`, which is what
+                        // `PhoalnTier::is_empty` reports and E756 judges. A guard
+                        // would be a second place deciding what an empty `%phoaln`
+                        // means, agreeing with this one only by inspection.
+                        match talkbank_model::dependent_tier::parse_phoaln_content(&raw_text) {
+                            Ok(words) => talkbank_model::model::DependentTier::Phoaln(
+                                talkbank_model::dependent_tier::PhoalnTier::new(location, words),
+                            ),
+                            Err(error) => {
+                                errors.report(talkbank_model::ParseError::at_location(
+                                    talkbank_model::ErrorCode::InvalidDependentTier,
+                                    talkbank_model::Severity::Error,
+                                    location,
+                                    format!("malformed %phoaln content: {error}"),
+                                ));
+                                health.taint(ParseHealthTier::Phoaln);
+                                talkbank_model::DependentTier::UnparsedPhoaln(
+                                    talkbank_model::UnparsedTier::new(extent, original.text()),
+                                )
+                            }
+                        }
+                    }
+                    // Phon project per-phone interval tier
+                    PhonTierKind::Xphoint => {
+                        let raw_text: String = content.iter().map(|t| t.text()).collect();
+                        // This guard IS needed, unlike `%phoaln` above:
+                        // `parse_xphoint_content("")` returns `Err(EmptyGroup)`, so
+                        // without it an absent body is reported as malformed
+                        // content and the tier loses its identity to E605.
+                        if raw_text.trim().is_empty() {
+                            talkbank_model::model::DependentTier::Xphoint(
+                                talkbank_model::dependent_tier::XphointTier::new(
+                                    location,
+                                    Vec::new(),
+                                ),
+                            )
+                        } else {
+                            match talkbank_model::dependent_tier::parse_xphoint_content(&raw_text) {
+                                Ok(groups) => talkbank_model::model::DependentTier::Xphoint(
+                                    talkbank_model::dependent_tier::XphointTier::new(
+                                        location, groups,
+                                    ),
+                                ),
+                                Err(error) => {
+                                    errors.report(talkbank_model::ParseError::at_location(
+                                        talkbank_model::ErrorCode::InvalidDependentTier,
+                                        talkbank_model::Severity::Error,
+                                        location,
+                                        format!("malformed %xphoint content: {error}"),
+                                    ));
+                                    health.taint(ParseHealthTier::Xphoint);
+                                    talkbank_model::DependentTier::UnparsedXphoint(
+                                        talkbank_model::UnparsedTier::new(extent, original.text()),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                };
+            }
+
+            // Admission owns both the custom syntax and structured exclusions.
+            // Other labels continue through structured or unsupported lowering.
+            if let Ok(label) = talkbank_model::UserDefinedDependentTierLabel::new(label) {
                 let raw_text: String = content.iter().map(|t| t.text()).collect();
-                return Some(talkbank_model::model::DependentTier::UserDefined(
+                return talkbank_model::model::DependentTier::UserDefined(
                     talkbank_model::model::UserDefinedDependentTier {
-                        // The branch condition above is `label.len() >= 2`,
-                        // so the label cannot be empty here.
-                        label: NonEmptyString::new_unchecked(label),
+                        label,
                         // No fabrication. An empty tier is now representable,
                         // so this reports what it found and lets E756 judge it.
                         // It used to substitute a single space, which tripped
                         // E756 by accident: the right diagnostic for the wrong
                         // reason, and only because the model had no honest way
                         // to say "this line carried nothing".
-                        content: NonEmptyString::new(raw_text.as_str()).ok(),
+                        content: RecoveryText::new(raw_text.as_str()).ok(),
                         location,
                     },
-                ));
+                );
             }
 
             // BulletContent tiers. Each arm builds its own payload rather than
             // sharing one `let bc = ...` above the match: only these nine consume
-            // it, and hoisting it made every OTHER arm (the ten text tiers, `%tim`,
+            // it, and hoisting it made every OTHER arm (`%tim`,
             // `%wor`, the four Phon tiers, `%x*` and the fallback) build a
             // `BulletContent` (a `Vec`, a `SmolStr` per token, and a normalization
             // pass per segment) only to drop it. Over six figures of corpus files
@@ -232,69 +308,40 @@ pub fn dependent_tier_to_model(
             match label {
                 "com" => talkbank_model::model::DependentTier::Com(ComTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "act" => talkbank_model::model::DependentTier::Act(ActTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "exp" => talkbank_model::model::DependentTier::Exp(ExpTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "add" => talkbank_model::model::DependentTier::Add(AddTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "gpx" => talkbank_model::model::DependentTier::Gpx(GpxTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "int" => talkbank_model::model::DependentTier::Int(IntTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "spa" => talkbank_model::model::DependentTier::Spa(SpaTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "sit" => talkbank_model::model::DependentTier::Sit(SitTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
                 "cod" => talkbank_model::model::DependentTier::Cod(CodTier::new(
                     location,
-                    tokens_to_bullet_content(content),
+                    tokens_to_bullet_content(content, source),
                 )),
-                // TextTier tiers (plain string content)
-                "alt" | "coh" | "def" | "eng" | "err" | "fac" | "flo" | "gls" | "ort" | "par" => {
-                    let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    // No fabrication. This used to substitute a single space
-                    // for empty content, which made the tier look well formed
-                    // and the whole FILE read as valid where tree-sitter
-                    // reported errors. Saying the tier is empty is what lets
-                    // the validator reject it (E756's rule: a tier whose
-                    // content is empty declares nothing).
-                    let tt = match NonEmptyString::new(raw_text.as_str()) {
-                        Ok(text) => {
-                            talkbank_model::model::dependent_tier::TextTier::new(location, text)
-                        }
-                        Err(_) => talkbank_model::model::dependent_tier::TextTier::empty(location),
-                    };
-                    match label {
-                        "alt" => talkbank_model::model::DependentTier::Alt(tt),
-                        "coh" => talkbank_model::model::DependentTier::Coh(tt),
-                        "def" => talkbank_model::model::DependentTier::Def(tt),
-                        "eng" => talkbank_model::model::DependentTier::Eng(tt),
-                        "err" => talkbank_model::model::DependentTier::Err(tt),
-                        "fac" => talkbank_model::model::DependentTier::Fac(tt),
-                        "flo" => talkbank_model::model::DependentTier::Flo(tt),
-                        "gls" => talkbank_model::model::DependentTier::Gls(tt),
-                        "ort" => talkbank_model::model::DependentTier::Ort(tt),
-                        "par" => talkbank_model::model::DependentTier::Par(tt),
-                        _ => unreachable!(),
-                    }
-                }
                 // TimTier (structured time)
                 "tim" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
@@ -311,7 +358,7 @@ pub fn dependent_tier_to_model(
                     // identity and E756 judges it, agreeing with tree-sitter.
                     //
                     // Emptiness is tested AFTER trimming, not by
-                    // `NonEmptyString`: a body of one space is a declaration
+                    // `RecoveryText`: a body of one space is a declaration
                     // that was never made, and treating it as content made
                     // `from_text` call it a non-time and report E603, "Invalid
                     // %tim tier format: ''", ALONGSIDE E756. Two codes for one
@@ -324,7 +371,7 @@ pub fn dependent_tier_to_model(
                     // `%tim` line roundtrips to, which is a different change
                     // from the one being made here.
                     talkbank_model::model::DependentTier::Tim(
-                        match NonEmptyString::new(raw_text.as_str()) {
+                        match RecoveryText::new(raw_text.as_str()) {
                             Ok(text) if text.as_str().trim().is_empty() => {
                                 talkbank_model::dependent_tier::TimTier::empty(location)
                             }
@@ -335,139 +382,20 @@ pub fn dependent_tier_to_model(
                         },
                     )
                 }
-                // %wor tier, word tier with timing bullets.
-                //
-                // This is the FALLBACK path: a `%wor` line reaches here only
-                // after `wor_tier_parser` already failed and the line became a
-                // text tier, so re-lexing the reconstructed text is a second
-                // attempt at something that has failed once. It is kept for now
-                // (removing it means passing the original `&[Token]` through,
-                // which touches every text-tier branch) but it no longer
-                // fabricates: a tier that will not parse propagates `None`
-                // exactly as a malformed `%mor` does, rather than becoming a
-                // `%wor` tier with no words.
-                "wor" => {
-                    let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    // Original located tokens were diagnosed by the file
-                    // dispatcher; do not emit reconstructed-text coordinates.
-                    match crate::convert::wor_tier_from_input(
-                        &raw_text,
-                        &talkbank_model::NullErrorSink,
-                    ) {
-                        Some(wor) => talkbank_model::model::DependentTier::Wor(wor),
-                        // Taints for the reason the `%mor` arm above states.
-                        // `?` propagated the absence and recorded nothing.
-                        None => {
-                            health.taint(ParseHealthTier::Wor);
-                            return None;
-                        }
-                    }
-                }
-                // Phon project syllabification tiers (with or without x prefix)
-                "modsyl" | "xmodsyl" => {
-                    let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    let words = talkbank_model::dependent_tier::parse_syl_content(&raw_text);
-                    talkbank_model::model::DependentTier::Modsyl(
-                        talkbank_model::dependent_tier::SylTier::new(
-                            location,
-                            talkbank_model::dependent_tier::SylTierType::Modsyl,
-                            words,
-                        ),
-                    )
-                }
-                "phosyl" | "xphosyl" => {
-                    let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    let words = talkbank_model::dependent_tier::parse_syl_content(&raw_text);
-                    talkbank_model::model::DependentTier::Phosyl(
-                        talkbank_model::dependent_tier::SylTier::new(
-                            location,
-                            talkbank_model::dependent_tier::SylTierType::Phosyl,
-                            words,
-                        ),
-                    )
-                }
-                "phoaln" | "xphoaln" => {
-                    let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    // No empty-body guard here, deliberately, and it is worth
-                    // saying why since `%xphoint` below has one.
-                    // `parse_phoaln_content` is `split_whitespace` into a
-                    // `Vec`, so an empty or whitespace-only body already yields
-                    // `Ok(vec![])`: an empty `PhoalnTier`, which is what
-                    // `PhoalnTier::is_empty` reports and E756 judges. A guard
-                    // would be a second place deciding what an empty `%phoaln`
-                    // means, agreeing with this one only by inspection.
-                    match talkbank_model::dependent_tier::parse_phoaln_content(&raw_text) {
-                        Ok(words) => talkbank_model::model::DependentTier::Phoaln(
-                            talkbank_model::dependent_tier::PhoalnTier::new(location, words),
-                        ),
-                        Err(_) => {
-                            // No fabrication: a tier that will not parse says so.
-                            let text = NonEmptyString::new(raw_text.as_str()).ok();
-                            talkbank_model::model::DependentTier::Unsupported(
-                                talkbank_model::model::UserDefinedDependentTier {
-                                    label: non_empty_literal!("phoaln"),
-                                    content: text,
-                                    location,
-                                },
-                            )
-                        }
-                    }
-                }
-                // Phon project per-phone interval tier
-                "phoint" | "xphoint" => {
-                    let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    // This guard IS needed, unlike `%phoaln` above:
-                    // `parse_xphoint_content("")` returns `Err(EmptyGroup)`, so
-                    // without it an absent body is reported as malformed
-                    // content and the tier loses its identity to E605.
-                    if raw_text.trim().is_empty() {
-                        talkbank_model::model::DependentTier::Xphoint(
-                            talkbank_model::dependent_tier::XphointTier::new(location, Vec::new()),
-                        )
-                    } else {
-                        match talkbank_model::dependent_tier::parse_xphoint_content(&raw_text) {
-                            Ok(groups) => talkbank_model::model::DependentTier::Xphoint(
-                                talkbank_model::dependent_tier::XphointTier::new(location, groups),
-                            ),
-                            Err(_) => {
-                                // No fabrication: a tier that will not parse says so.
-                                let text = NonEmptyString::new(raw_text.as_str()).ok();
-                                talkbank_model::model::DependentTier::Unsupported(
-                                    talkbank_model::model::UserDefinedDependentTier {
-                                        label: non_empty_literal!("xphoint"),
-                                        content: text,
-                                        location,
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
                 // Fallback: unsupported tier
                 _ => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
                     talkbank_model::model::DependentTier::Unsupported(
-                        talkbank_model::model::UserDefinedDependentTier {
-                            // An empty label is not a tier named "unknown",
-                            // which is what this used to invent: a label no
-                            // file contained, reported to the operator as
-                            // though it had been read. The fallback arm is
-                            // reached only with a label the lexer matched, so
-                            // an empty one means the lexer produced something
-                            // this conversion cannot describe, and the honest
-                            // answer is to say so rather than name it.
-                            label: match NonEmptyString::new(label) {
-                                Ok(label) => label,
-                                Err(_) => return None,
-                            },
-                            content: NonEmptyString::new(raw_text.as_str()).ok(),
+                        talkbank_model::model::UnsupportedDependentTier {
+                            label: admitted_label.nonempty().clone().into(),
+                            content: RecoveryText::new(raw_text.as_str()).ok(),
                             location,
                         },
                     )
                 }
             }
         }
-    })
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -490,24 +418,17 @@ pub fn chat_file_to_model(
     file: &ast::ChatFile<'_>,
     errors: &(impl ErrorSink + ?Sized),
 ) -> talkbank_model::model::ChatFile {
-    // Derived, not passed: `ChatFile::source` IS the text the AST's slices
-    // borrow from, so taking it as a parameter would let a caller supply a
-    // different one and get `None` from every `span_of`. One owner.
-    let source = SourceText::new(file.source);
     let lines: Vec<talkbank_model::model::Line> = file
-        .lines
+        .lines()
         .iter()
         .map(|line| match line {
-            ast::Line::Header {
-                header: h,
-                provenance,
-            } => talkbank_model::model::Line::Header {
-                header: Box::new(crate::convert::header_to_model(h, source)),
-                location: provenance.span().into(),
-                separator: provenance.separator(),
+            ast::Line::Header(header) => talkbank_model::model::Line::Header {
+                header: Box::new(crate::convert::header_to_model(header)),
+                location: header.span().into(),
+                separator: header.separator(),
             },
             ast::Line::Utterance(u) => talkbank_model::model::Line::Utterance(Box::new(
-                utterance_to_model(u.as_ref(), source, errors),
+                utterance_to_model(u.as_ref(), errors),
             )),
         })
         .collect();
@@ -517,10 +438,9 @@ pub fn chat_file_to_model(
     // the 446 whole-model divergences measured over the corpus.
     //
     // Its diagnostics (E522, E523, E524) go to the caller's sink, which is
-    // the only way to reach the map.
-    let participants =
-        talkbank_model::model::participant::join::build_participants_from_lines(&lines)
-            .report_into(errors);
+    // required join-reporting boundary before returning the model.
+    talkbank_model::model::participant::join::build_participants_from_lines(&lines)
+        .report_diagnostics(errors);
 
     // `@Options: CA` REINTERPRETS a standalone (word) shortening as a CA
     // omission rather than an error. Not a leniency waiver: the same bytes mean
@@ -538,53 +458,5 @@ pub fn chat_file_to_model(
         normalize_ca_omissions_in_lines(&mut lines);
     }
 
-    talkbank_model::model::ChatFile::with_participants(lines, participants)
-}
-
-/// Lower a parsed `%wor` tier to the model.
-///
-/// The one lowering, shared by the file-level path and by
-/// `wor_tier_from_input`. Before 2026-08-08 those were two different
-/// conversions and the second one dropped timing bullets, language precodes
-/// and terminators on the floor.
-pub(crate) fn wor_tier_to_model(
-    parsed: &ast::WorTierParsed<'_>,
-    source: SourceText<'_>,
-    location: talkbank_model::Location,
-) -> WorTier {
-    use talkbank_model::model::dependent_tier::wor::WorItem;
-
-    let wor_items: Vec<WorItem> = parsed
-        .items
-        .iter()
-        .map(|item| match item {
-            ast::WorItemParsed::Word { word, bullet } => {
-                let mut w = word_from_parsed(word, source);
-                if let Some(model) = bullet.and_then(|bullet| bullet_from_token(bullet, source)) {
-                    w = w.with_inline_bullet(model);
-                }
-                WorItem::Word(Box::new(w))
-            }
-            ast::WorItemParsed::Separator { kind, text } => WorItem::Separator {
-                text: kind.chat_text().to_string(),
-                location: super::locate(source, text),
-            },
-        })
-        .collect();
-
-    let mut wor = WorTier::new(location, wor_items);
-    // The lexer hands back the code alone (`zho`); the brackets and the `- `
-    // are already stripped by the `[- ` rule's tag capture. That rule requires
-    // at least one character, so the empty case cannot arrive; it is declined
-    // rather than `expect`ed, because a parser has no business panicking on
-    // input and the tier's own diagnostics still fire.
-    if let Some(langcode) = parsed.langcode
-        && let Ok(code) = talkbank_model::model::LanguageCode::new(langcode.text())
-    {
-        wor.language_code = Some(code);
-    }
-    if let Some(t) = &parsed.terminator {
-        wor.terminator = token_to_terminator(t, source);
-    }
-    wor
+    talkbank_model::model::ChatFile::new(lines)
 }

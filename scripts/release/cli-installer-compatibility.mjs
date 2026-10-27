@@ -18,10 +18,15 @@ export function isMainModule(moduleUrl) {
     && pathToFileURL(realpathSync(entry)).href === moduleUrl;
 }
 
+// SemVer 2.0 core/prerelease grammar (https://semver.org/), with the existing
+// release policy of a leading v and no build metadata. The final assertion is
+// absolute end-of-input: JavaScript's $ also accepts a trailing line terminator.
+const releaseTagPattern = /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?![\s\S])/;
+
 export class ReleaseTag {
   #value;
   constructor(value) {
-    if (typeof value !== 'string' || !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value)) {
+    if (typeof value !== 'string' || !releaseTagPattern.test(value)) {
       throw new Error('expected an exact version tag');
     }
     this.#value = value;
@@ -29,6 +34,9 @@ export class ReleaseTag {
   }
   get value() { return this.#value; }
   get version() { return this.#value.slice(1); }
+  assertVersion(version) {
+    if (version !== this.version) throw new Error('release version differs from tag');
+  }
   assertSame(other) {
     if (this.#value !== other.#value) throw new Error('installer evidence belongs to another release');
   }
@@ -80,7 +88,7 @@ export function admitInstallerCompatibility(manifest) {
   const tag = new ReleaseTag(manifest?.announcement_tag);
   const releases = manifest?.releases?.filter(release => release.app_name === 'talkbank-chatter');
   if (releases?.length !== 1) throw new Error('expected exactly one talkbank-chatter release');
-  if (releases[0].app_version !== tag.version) throw new Error('installer producer version differs from tag');
+  tag.assertVersion(releases[0].app_version);
   const environment = releases[0].env;
   if (!environment?.install_dir_env_var || !environment?.no_modify_path_env_var) {
     throw new Error('missing installer environment mapping');

@@ -1,15 +1,14 @@
 //! Generic dependent-tier replacement helpers.
 //!
-//! When a transform regenerates a dependent tier (`%mor`, `%gra`, `%wor`, or a
-//! user-defined `%x...` tier), it must replace the existing tier of the same
-//! variant in place rather than append a duplicate. [`replace_or_add_tier`]
-//! centralizes that "upsert" so callers do not reimplement the variant-matching
-//! logic (user-defined tiers are matched on their label).
+//! When a transform regenerates a dependent tier, it replaces the first tier
+//! with the same model-owned identity in place. Parsed and recovery payloads
+//! share a slot; distinct custom labels remain distinct. [`replace_or_add_tier`]
+//! centralizes that replacement without duplicating the model's tier inventory.
 
 use smallvec::SmallVec;
 use talkbank_model::model::{DependentTier, DependentTierEntry};
 
-/// Replace an existing tier of the same variant or append a new one.
+/// Replace the first tier with the same label identity or append a new one.
 ///
 /// Takes the utterance's own `SmallVec<[DependentTierEntry; 3]>`, so this can
 /// be called directly on `utterance.dependent_tiers`. Callers still pass a
@@ -25,18 +24,10 @@ use talkbank_model::model::{DependentTier, DependentTierEntry};
 ///
 /// [`TierSeparator`]: talkbank_model::model::TierSeparator
 pub fn replace_or_add_tier(tiers: &mut SmallVec<[DependentTierEntry; 3]>, new_tier: DependentTier) {
-    let variant_matches = |existing: &DependentTier, new: &DependentTier| -> bool {
-        match (existing, new) {
-            (DependentTier::Mor(_), DependentTier::Mor(_)) => true,
-            (DependentTier::Gra(_), DependentTier::Gra(_)) => true,
-            (DependentTier::Wor(_), DependentTier::Wor(_)) => true,
-            (DependentTier::UserDefined(a), DependentTier::UserDefined(b)) => a.label == b.label,
-            _ => false,
-        }
-    };
+    let replacement_key = new_tier.key();
 
     for entry in tiers.iter_mut() {
-        if variant_matches(&entry.tier, &new_tier) {
+        if entry.tier.key() == replacement_key {
             entry.tier = new_tier;
             return;
         }
@@ -47,23 +38,23 @@ pub fn replace_or_add_tier(tiers: &mut SmallVec<[DependentTierEntry; 3]>, new_ti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use talkbank_model::model::{NonEmptyString, UserDefinedDependentTier, WorTier};
+    use talkbank_model::model::{RecoveryText, UserDefinedDependentTier, WorTier};
 
     #[test]
     fn replace_or_add_tier_user_defined_matches_by_label() {
         let mut tiers = smallvec::smallvec![];
 
         let xtra1 = DependentTier::UserDefined(UserDefinedDependentTier {
-            label: NonEmptyString::new("xtra").unwrap(),
-            content: Some(NonEmptyString::new("first").unwrap()),
+            label: talkbank_model::UserDefinedDependentTierLabel::new("xtra").unwrap(),
+            content: Some(RecoveryText::new("first").unwrap()),
             location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, xtra1);
         assert_eq!(tiers.len(), 1);
 
         let xtra2 = DependentTier::UserDefined(UserDefinedDependentTier {
-            label: NonEmptyString::new("xtra").unwrap(),
-            content: Some(NonEmptyString::new("second").unwrap()),
+            label: talkbank_model::UserDefinedDependentTierLabel::new("xtra").unwrap(),
+            content: Some(RecoveryText::new("second").unwrap()),
             location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, xtra2);
@@ -75,8 +66,8 @@ mod tests {
         assert_eq!(ud.content.as_deref(), Some("second"));
 
         let xcod = DependentTier::UserDefined(UserDefinedDependentTier {
-            label: NonEmptyString::new("xcod").unwrap(),
-            content: Some(NonEmptyString::new("code").unwrap()),
+            label: talkbank_model::UserDefinedDependentTierLabel::new("xcod").unwrap(),
+            content: Some(RecoveryText::new("code").unwrap()),
             location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, xcod);
@@ -90,9 +81,9 @@ mod tests {
         ))];
         let replacement = DependentTier::Wor(WorTier::from_words(
             talkbank_model::Location::Unlocated,
-            vec![talkbank_model::model::Word::simple(
+            vec![talkbank_model::model::Word::new(
                 talkbank_model::Location::Unlocated,
-                "hello",
+                talkbank_model::WordText::from(talkbank_model::non_empty_literal!("hello")),
             )],
         ));
 
@@ -159,8 +150,8 @@ mod tests {
         );
 
         let appended = DependentTier::UserDefined(UserDefinedDependentTier {
-            label: NonEmptyString::new("xtra").unwrap(),
-            content: Some(NonEmptyString::new("new").unwrap()),
+            label: talkbank_model::UserDefinedDependentTierLabel::new("xtra").unwrap(),
+            content: Some(RecoveryText::new("new").unwrap()),
             location: talkbank_model::Location::Unlocated,
         });
         replace_or_add_tier(&mut tiers, appended);

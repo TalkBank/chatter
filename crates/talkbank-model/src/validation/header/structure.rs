@@ -60,7 +60,8 @@ pub(crate) fn check_headers(
     source_len: usize,
 ) {
     let mut header_counts: HashMap<String, Occurrences> = HashMap::new();
-    let mut declared_participants: HashSet<SpeakerCode> = HashSet::new();
+    let roster =
+        crate::model::ParticipantRoster::from_headers(headers.iter().map(|(header, _)| *header));
     let mut id_speakers: Vec<(SpeakerCode, crate::Location)> = Vec::new();
 
     for (header, span) in headers {
@@ -69,12 +70,6 @@ pub(crate) fn check_headers(
             .entry(name_lower)
             .and_modify(|seen| seen.record(*span))
             .or_insert(Occurrences::Once);
-
-        if let Header::Participants { entries } = header {
-            for entry in entries {
-                declared_participants.insert(entry.speaker_code.clone());
-            }
-        }
 
         if let Header::ID(id_header) = header {
             id_speakers.push((id_header.speaker.clone(), *span));
@@ -197,7 +192,9 @@ pub(crate) fn check_headers(
     check_duplicate_id_headers(&id_speakers, errors);
 
     for (speaker, span) in &id_speakers {
-        if !speaker.as_str().is_empty() && !declared_participants.contains(speaker) {
+        if !speaker.as_str().is_empty()
+            && roster.membership(speaker) == crate::model::SpeakerMembership::Undeclared
+        {
             let speaker_str = speaker.as_str();
             let err = ParseError::new(
                 ErrorCode::SpeakerNotDefined,
@@ -237,7 +234,7 @@ fn check_header_order(headers: &[(&Header, crate::Location)], errors: &impl Erro
 
     for (header, span) in headers {
         match header {
-            Header::Participants { .. } => {
+            Header::Participants { .. } | Header::UnparsedParticipants(_) => {
                 saw_participants = true;
             }
             Header::Options { .. } if !saw_participants => {
@@ -255,7 +252,7 @@ fn check_header_order(headers: &[(&Header, crate::Location)], errors: &impl Erro
                 .with_suggestion("Move @Options to after the @Participants header");
                 errors.report(err);
             }
-            Header::ID(_) if !saw_participants => {
+            Header::ID(_) | Header::UnparsedID(_) if !saw_participants => {
                 let err = ParseError::new(
                     ErrorCode::HeaderOutOfOrder,
                     Severity::Error,
@@ -291,7 +288,11 @@ fn check_constant_participant_header_order(
     fn is_allowed_predecessor(header: &Header) -> bool {
         matches!(
             header,
-            Header::ID(_) | Header::Birth { .. } | Header::Birthplace { .. } | Header::L1Of { .. }
+            Header::ID(_)
+                | Header::UnparsedID(_)
+                | Header::Birth { .. }
+                | Header::Birthplace { .. }
+                | Header::L1Of { .. }
         )
     }
 
@@ -344,16 +345,23 @@ fn check_id_header_order(headers: &[(&Header, crate::Location)], errors: &impl E
     let mut saw_participants = false;
     let mut prev: Option<&Header> = None;
     for (header, span) in headers {
-        if matches!(header, Header::Participants { .. }) {
+        if matches!(
+            header,
+            Header::Participants { .. } | Header::UnparsedParticipants(_)
+        ) {
             saw_participants = true;
         }
-        if matches!(header, Header::ID(_)) {
+        if matches!(header, Header::ID(_) | Header::UnparsedID(_)) {
             // Valid immediate predecessors of an @ID: @Participants, @Options,
             // or another @ID.
             let preceded_validly = prev.is_some_and(|p| {
                 matches!(
                     p,
-                    Header::Participants { .. } | Header::Options { .. } | Header::ID(_)
+                    Header::Participants { .. }
+                        | Header::UnparsedParticipants(_)
+                        | Header::Options { .. }
+                        | Header::ID(_)
+                        | Header::UnparsedID(_)
                 )
             });
             if saw_participants && !preceded_validly {
@@ -422,12 +430,18 @@ fn check_options_header_order(headers: &[(&Header, crate::Location)], errors: &i
     let mut saw_participants = false;
     let mut prev: Option<&Header> = None;
     for (header, span) in headers {
-        if matches!(header, Header::Participants { .. }) {
+        if matches!(
+            header,
+            Header::Participants { .. } | Header::UnparsedParticipants(_)
+        ) {
             saw_participants = true;
         }
         if matches!(header, Header::Options { .. }) {
             // The only valid immediate predecessor of @Options is @Participants.
-            let preceded_validly = matches!(prev, Some(Header::Participants { .. }));
+            let preceded_validly = matches!(
+                prev,
+                Some(Header::Participants { .. } | Header::UnparsedParticipants(_))
+            );
             if saw_participants && !preceded_validly {
                 let err = ParseError::new(
                     ErrorCode::OptionsHeaderOutOfOrder,
@@ -473,176 +487,115 @@ fn check_duplicate_participants(headers: &[(&Header, crate::Location)], errors: 
     }
 }
 
-/// One or more still-open begins for a label. Closing the last begin consumes
-/// this state instead of leaving a zero-count entry in the active-scope map.
-struct OpenGemScope {
-    first: crate::Location,
-    repeated: Vec<crate::Location>,
-}
-
-impl OpenGemScope {
-    fn open(location: crate::Location) -> Self {
-        Self {
-            first: location,
-            repeated: Vec::new(),
-        }
-    }
-
-    fn reopen(&mut self, location: crate::Location) {
-        self.repeated.push(location);
-    }
-
-    fn close(mut self) -> Option<Self> {
-        self.repeated.pop().map(|_| self)
-    }
-
-    fn count(&self) -> usize {
-        std::iter::once(&self.first).chain(&self.repeated).count()
-    }
-}
-
-/// Validate that @Bg (Begin Gem) and @Eg (End Gem) markers are properly matched.
-///
-/// Checks:
-/// - E526: Every @Bg has a matching @Eg
-/// - E527: Every @Eg has a matching @Bg
-/// - E528: Labels match between paired @Bg/@Eg
-/// - E529: Nested @Bg with same label (opening @Bg while already in that scope)
-/// - E530: @G (lazy gem) inside @Bg/@Eg scope
+/// Validate gem balance using the model-owned label-scoped transitions.
+/// E526-E530 retain their diagnostic wording and authored locations.
 fn check_gem_balance(headers: &[(&Header, crate::Location)], errors: &impl ErrorSink) {
-    use std::collections::hash_map::Entry;
+    use crate::model::{GemEndFailure, GemEvent, GemState};
 
-    // Different labels may overlap; this is not a global LIFO stack.
-    // Keys borrow the authored labels; every value owns at least one begin.
-    let mut open_scopes: HashMap<Option<&str>, OpenGemScope> = HashMap::new();
-
-    for (header, span) in headers {
-        match header {
-            Header::BeginGem { label } => {
-                let key = label.as_ref().map(|l| l.as_str());
-                match open_scopes.entry(key) {
-                    Entry::Vacant(entry) => {
-                        entry.insert(OpenGemScope::open(*span));
-                    }
-                    Entry::Occupied(mut entry) => {
-                        entry.get_mut().reopen(*span);
-                        let label_str = label_or_empty(key);
+    let mut state = GemState::new();
+    for (header, location) in headers {
+        let Some(event) = state.observe(header, *location) else {
+            continue;
+        };
+        match event {
+            GemEvent::Opened | GemEvent::Closed(_) => {}
+            GemEvent::NestedBegin { label, location } => {
+                let label_str = label_or_empty(label.map(|label| label.as_str()));
+                let err = ParseError::new(
+                    ErrorCode::NestedBeginGem,
+                    Severity::Error,
+                    DiagnosticLocation::from(location),
+                    ErrorContext::new("", crate::Span::new(0, 0), ""),
+                    if label_str.is_empty() {
+                        "Nested @Bg: cannot open a new @Bg while already inside a @Bg scope with the same label".to_string()
+                    } else {
+                        format!("Nested @Bg:{0}: cannot open a new @Bg:{0} while already inside a @Bg:{0} scope", label_str)
+                    },
+                ).with_suggestion("Close the current @Bg scope with @Eg before opening another @Bg with the same label".to_string());
+                errors.report(err);
+            }
+            GemEvent::LazyInsideScope { label, location } => {
+                let label_str = label_or_empty(label.map(|label| label.as_str()));
+                let err = ParseError::new(
+                    ErrorCode::LazyGemInsideScope,
+                    Severity::Error,
+                    DiagnosticLocation::from(location),
+                    ErrorContext::new("", crate::Span::new(0, 0), ""),
+                    if label_str.is_empty() {
+                        "@G (lazy gem) cannot appear inside @Bg/@Eg scope".to_string()
+                    } else {
+                        format!(
+                            "@G:{} (lazy gem) cannot appear inside @Bg/@Eg scope",
+                            label_str
+                        )
+                    },
+                )
+                .with_suggestion(
+                    "Move @G outside of @Bg/@Eg scope, or use @Bg/@Eg markers instead".to_string(),
+                );
+                errors.report(err);
+            }
+            GemEvent::UnmatchedEnd {
+                label,
+                location,
+                reason,
+            } => {
+                let label_str = label_or_empty(label.map(|label| label.as_str()));
+                match reason {
+                    GemEndFailure::NoOpenScope => {}
+                    GemEndFailure::LabelMismatch => {
                         let err = ParseError::new(
-                            ErrorCode::NestedBeginGem,
+                            ErrorCode::GemLabelMismatch,
                             Severity::Error,
-                            DiagnosticLocation::from(*span),
+                            DiagnosticLocation::from(location),
                             ErrorContext::new("", crate::Span::new(0, 0), ""),
                             if label_str.is_empty() {
-                                "Nested @Bg: cannot open a new @Bg while already inside a @Bg scope with the same label"
-                                    .to_string()
+                                "Gem label mismatch between @Bg/@Eg markers".to_string()
                             } else {
                                 format!(
-                                    "Nested @Bg:{0}: cannot open a new @Bg:{0} while already inside a @Bg:{0} scope",
+                                    "Gem label mismatch: @Eg:{} does not match active @Bg scope",
                                     label_str
                                 )
                             },
-                        )
-                        .with_suggestion(
-                            "Close the current @Bg scope with @Eg before opening another @Bg with the same label"
-                                .to_string(),
                         );
                         errors.report(err);
                     }
                 }
-            }
-            Header::LazyGem { label } => {
-                // E530: Check if any @Bg scope is open
-                if !open_scopes.is_empty() {
-                    let label_str = label_or_empty(label.as_ref().map(|l| l.as_str()));
-                    let err = ParseError::new(
-                        ErrorCode::LazyGemInsideScope,
-                        Severity::Error,
-                        DiagnosticLocation::from(*span),
-                        ErrorContext::new("", crate::Span::new(0, 0), ""),
-                        if label_str.is_empty() {
-                            "@G (lazy gem) cannot appear inside @Bg/@Eg scope".to_string()
-                        } else {
-                            format!(
-                                "@G:{} (lazy gem) cannot appear inside @Bg/@Eg scope",
-                                label_str
-                            )
-                        },
-                    )
-                    .with_suggestion(
-                        "Move @G outside of @Bg/@Eg scope, or use @Bg/@Eg markers instead"
-                            .to_string(),
-                    );
-                    errors.report(err);
-                }
-            }
-            Header::EndGem { label } => {
-                let key = label.as_ref().map(|l| l.as_str());
-                match open_scopes.remove(&key) {
-                    Some(scope) => {
-                        if let Some(remaining) = scope.close() {
-                            open_scopes.insert(key, remaining);
-                        }
-                    }
-                    None => {
-                        if !open_scopes.is_empty() {
-                            let label_str = label_or_empty(key);
-                            let err = ParseError::new(
-                                ErrorCode::GemLabelMismatch,
-                                Severity::Error,
-                                DiagnosticLocation::from(*span),
-                                ErrorContext::new("", crate::Span::new(0, 0), ""),
-                                if label_str.is_empty() {
-                                    "Gem label mismatch between @Bg/@Eg markers".to_string()
-                                } else {
-                                    format!(
-                                        "Gem label mismatch: @Eg:{} does not match active @Bg scope",
-                                        label_str
-                                    )
-                                },
-                            );
-                            errors.report(err);
-                        }
-                        // End without any matching begin (different label)
-                        let label_str = label_or_empty(key);
-                        let err = ParseError::new(
-                            ErrorCode::UnmatchedEndGem,
-                            Severity::Error,
-                            DiagnosticLocation::from(*span),
-                            ErrorContext::new("", crate::Span::new(0, 0), ""),
-                            if label_str.is_empty() {
-                                "Unmatched @Eg (no matching @Bg)".to_string()
-                            } else {
-                                format!(
-                                    "Unmatched @Eg:{} (no matching @Bg:{})",
-                                    label_str, label_str
-                                )
-                            },
+                let err = ParseError::new(
+                    ErrorCode::UnmatchedEndGem,
+                    Severity::Error,
+                    DiagnosticLocation::from(location),
+                    ErrorContext::new("", crate::Span::new(0, 0), ""),
+                    if label_str.is_empty() {
+                        "Unmatched @Eg (no matching @Bg)".to_string()
+                    } else {
+                        format!(
+                            "Unmatched @Eg:{} (no matching @Bg:{})",
+                            label_str, label_str
                         )
-                        .with_suggestion(if label_str.is_empty() {
-                            "Add a matching @Bg before this @Eg".to_string()
-                        } else {
-                            format!(
-                                "Add a matching @Bg:{} before this @Eg:{}",
-                                label_str, label_str
-                            )
-                        });
-                        errors.report(err);
-                    }
-                }
+                    },
+                )
+                .with_suggestion(if label_str.is_empty() {
+                    "Add a matching @Bg before this @Eg".to_string()
+                } else {
+                    format!(
+                        "Add a matching @Bg:{} before this @Eg:{}",
+                        label_str, label_str
+                    )
+                });
+                errors.report(err);
             }
-            _ => {}
         }
     }
 
-    // Check for unclosed scopes, pointing at the @Bg that opened each one.
-    for (label_opt, scope) in open_scopes {
+    for scope in state.finish() {
         let count = scope.count();
-        let label_str = label_or_empty(label_opt);
+        let label_str = label_or_empty(scope.label());
         errors.report(
             ParseError::new(
                 ErrorCode::UnmatchedBeginGem,
                 Severity::Error,
-                DiagnosticLocation::from(scope.first),
+                DiagnosticLocation::from(scope.first()),
                 ErrorContext::new("", crate::Span::new(0, 0), ""),
                 if label_str.is_empty() {
                     format!("Unmatched @Bg: {} @Bg without matching @Eg", count)

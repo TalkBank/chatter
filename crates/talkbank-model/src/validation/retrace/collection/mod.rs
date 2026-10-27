@@ -45,8 +45,11 @@ fn collect(
     match structure {
         ContentStructure::Word(_) => leaf_kinds.push(LeafKind::RealContent),
         ContentStructure::Leaf(leaf) => leaf_kinds.push(match leaf.content {
-            LeafContent::Spoken => LeafKind::RealContent,
+            LeafContent::Pause | LeafContent::Spoken | LeafContent::Interposed(_) => {
+                LeafKind::RealContent
+            }
             LeafContent::Notation
+            | LeafContent::OverlapPoint(_)
             | LeafContent::UnderlineBegin(_)
             | LeafContent::UnderlineEnd(_) => LeafKind::NonRealContent,
         }),

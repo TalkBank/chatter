@@ -6,9 +6,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift, ValidationTagged};
 
-use crate::model::NonEmptyString;
 use crate::model::TimeValue;
 use crate::model::header::parse_time_value;
+use crate::model::{NonEmptyString, RecoveryText};
 
 /// A time segment in a `%tim` tier: single time or range.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
@@ -29,182 +29,169 @@ pub enum TimSegment {
 /// Time-like content (tokens with colons and digits, e.g. `7:55` or
 /// `00:01:30-00:02:00`) is parsed into structured `TimSegment`s.
 /// Free-text descriptions (e.g. `afternoon session`) are stored as
-/// `Unsupported` and flagged by validation (E603).
-/// A tier line that declares nothing is [`Self::Empty`], which is neither of
-/// those: it is not a time and it is not free text, so it gets its own state
-/// rather than an invented payload. E756 judges it.
+/// unsupported and flagged by validation (E603).
+/// A tier line that declares nothing has a separate empty state: it is neither
+/// a time nor free text. E756 judges it. Construction owns this classification;
+/// callers cannot supply or mutate derived segments independently of the text.
+///
+/// The parsed classification and its derived segments must agree with the text.
+///
+/// ```compile_fail
+/// use talkbank_model::model::{NonEmptyString, ValidationTagged};
+/// use talkbank_model::model::dependent_tier::TimTier;
+/// let tier = TimTier::Parsed {
+///     segments: Vec::new(),
+///     content: NonEmptyString::new("afternoon session").unwrap(),
+///     location: talkbank_model::Location::Unlocated,
+/// };
+/// assert!(tier.has_validation_issue());
+/// ```
+///
+/// ```compile_fail
+/// use talkbank_model::model::{NonEmptyString, RecoveryText, ValidationTagged};
+/// use talkbank_model::model::dependent_tier::TimTier;
+/// let mut tier = TimTier::from_text(
+///     talkbank_model::Location::Unlocated,
+///     RecoveryText::new("7:55").unwrap(),
+/// );
+/// if let TimTier::Parsed { content, .. } = &mut tier {
+///     *content = NonEmptyString::new("afternoon session").unwrap();
+/// }
+/// assert!(tier.has_validation_issue());
+/// ```
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Timing_Tier>
-#[derive(Clone, Debug, PartialEq, SemanticEq, SpanShift, ValidationTagged)]
-pub enum TimTier {
-    /// Structured time-like content.
+#[derive(Clone, Debug, PartialEq, SemanticEq, SpanShift)]
+pub struct TimTier {
+    /// Classification and derived timing have one constructor and no mutation route.
+    #[span_shift(skip)]
+    state: TimState,
+    /// Source location does not affect the declared timing semantics.
+    #[semantic_eq(skip)]
+    location: crate::Location,
+}
+
+/// Only `TimTier::from_text` constructs a content-bearing state.
+#[derive(Clone, Debug, PartialEq, SemanticEq, ValidationTagged)]
+enum TimState {
     Parsed {
-        /// Structured time segments extracted from the text.
-        #[span_shift(skip)]
-        segments: Vec<TimSegment>,
-        /// Raw text payload preserved for roundtrip.
-        #[span_shift(skip)]
+        segments: ParsedTimSegments,
         content: NonEmptyString,
-        /// Source span for error reporting.
-        #[semantic_eq(skip)]
-        location: crate::Location,
     },
-    /// Non-time content (free text like "afternoon session").
     Unsupported {
-        /// Raw text payload.
-        #[span_shift(skip)]
         content: NonEmptyString,
-        /// Source span for error reporting.
-        #[semantic_eq(skip)]
-        location: crate::Location,
     },
-    /// A `%tim:` line with nothing after the separator.
-    ///
-    /// A third state rather than an empty payload on the other two: an empty
-    /// `%tim` is not a time that failed to parse (`Unsupported`) and not a time
-    /// (`Parsed`), it is a declaration that was never made. Both other variants
-    /// hold a [`NonEmptyString`], so before this variant existed the re2c
-    /// backend had to lower an empty `%tim:` to an `Unsupported` DEPENDENT TIER
-    /// (E605, "unsupported dependent tier"), losing the tier's identity to
-    /// report a code about the tier NAME on a file whose tier name is fine.
-    ///
-    /// Tagged CLEAN explicitly. `ValidationTagged`'s fallback reads the
-    /// severity off the variant's NAME (a suffix of `Error` / `Warning` /
-    /// `Unsupported`), which would give the right answer here by accident and
-    /// the wrong one under a rename. E603 is about a `%tim` body that is not a
-    /// time; an absent body is not a malformed time, it is E756's business, and
-    /// letting E603 fire would print `Invalid %tim tier format: ''`.
+    /// E756 owns absent content; it is not an E603 unsupported-time payload.
     #[validation_tag(clean)]
-    Empty {
-        /// Source span for error reporting.
-        #[semantic_eq(skip)]
-        location: crate::Location,
-    },
+    Empty,
+}
+
+impl crate::model::ValidationTagged for TimTier {
+    fn validation_tag(&self) -> crate::model::ValidationTag {
+        crate::model::ValidationTagged::validation_tag(&self.state)
+    }
 }
 
 impl TimTier {
-    /// A `%tim` tier that declares nothing.
-    ///
-    /// Named rather than reached by passing an empty string to
-    /// [`Self::from_text`], which cannot express it: both content-bearing
-    /// variants hold a [`NonEmptyString`]. The only legitimate callers are the
-    /// parsers, which met a `%tim:` line with no body and must say so.
-    ///
-    /// The result is INVALID CHAT, and deliberately representable anyway:
-    /// recovery is not validity, and a parser that cannot express what the file
-    /// says is a parser that will invent something instead.
+    /// Retain a `%tim` tier that declares nothing, for E756 validation.
+    /// Empty recovery is distinct from non-time text and does not invent a time.
     #[must_use]
     pub fn empty(location: impl Into<crate::Location>) -> Self {
-        Self::Empty {
+        Self::from_text(location, RecoveryText::Empty)
+    }
+
+    /// The raw text this tier declared, or `None` when it declared nothing.
+    /// Unlike `as_str`, this preserves the distinction between absent content
+    /// and a content-bearing tier for dependent-tier validation.
+    #[must_use]
+    pub fn declared_content(&self) -> Option<&str> {
+        match &self.state {
+            TimState::Parsed { content, .. } | TimState::Unsupported { content } => {
+                Some(content.as_str())
+            }
+            TimState::Empty => None,
+        }
+    }
+
+    /// Classify the body and derive its time segments together.
+    /// Explicit empty recovery remains empty; nonempty unsupported text is
+    /// retained for E603 rather than promoted to parsed timing.
+    pub fn from_text(location: impl Into<crate::Location>, content: RecoveryText) -> Self {
+        let state = match content {
+            RecoveryText::Empty => TimState::Empty,
+            RecoveryText::NonEmpty(content) => match ParsedTimSegments::parse(&content) {
+                Some(segments) => TimState::Parsed { segments, content },
+                None => TimState::Unsupported { content },
+            },
+        };
+        Self {
+            state,
             location: location.into(),
         }
     }
 
-    /// The raw text this tier DECLARED, or `None` when it declared nothing.
-    ///
-    /// Distinct from [`Self::as_str`], which flattens the empty case to `""` so
-    /// `Display` and the serializer have something to write. This accessor is
-    /// what `DependentTier::empty_content_location` asks, so the "declared nothing"
-    /// question is answered by the type rather than re-derived from a string.
-    #[must_use]
-    pub fn declared_content(&self) -> Option<&str> {
-        match self {
-            Self::Parsed { content, .. } | Self::Unsupported { content, .. } => {
-                Some(content.as_str())
-            }
-            Self::Empty { .. } => None,
-        }
-    }
-
-    /// Parse a `%tim` tier body, classifying as `Parsed` or `Unsupported`.
-    ///
-    /// Cannot produce [`Self::Empty`]: the argument is a [`NonEmptyString`], so
-    /// a caller with nothing to hand over reaches for [`Self::empty`] instead.
-    pub fn from_text(location: impl Into<crate::Location>, content: NonEmptyString) -> Self {
-        if let Some(segments) = parse_tim_segments(content.as_str()) {
-            Self::Parsed {
-                segments,
-                content,
-                location: location.into(),
-            }
-        } else {
-            Self::Unsupported {
-                content,
-                location: location.into(),
-            }
-        }
-    }
-
-    /// Returns the raw text content, `""` for [`Self::Empty`].
-    ///
-    /// The empty case flattens here because `Display` and the CHAT serializer
-    /// need a string, and `%tim:` with nothing after it is what an empty tier
-    /// writes back. Callers asking whether anything was DECLARED want
-    /// [`Self::declared_content`], which does not flatten.
+    /// Raw content, or an empty string for a declaration with no body.
+    /// Consumers deciding absence use `declared_content` instead.
     pub fn as_str(&self) -> &str {
-        match self {
-            Self::Parsed { content, .. } => content.as_str(),
-            Self::Unsupported { content, .. } => content.as_str(),
-            Self::Empty { .. } => "",
+        match &self.state {
+            TimState::Parsed { content, .. } | TimState::Unsupported { content } => {
+                content.as_str()
+            }
+            TimState::Empty => "",
         }
     }
 
-    /// The same tier with its span re-expressed through `project` (a fragment
-    /// owner's coordinate re-projection; see `DependentTier::map_location`).
+    /// Re-express the tier's location without changing its admitted content.
     #[must_use]
     pub fn map_location(mut self, project: impl FnOnce(crate::Span) -> crate::Span) -> Self {
-        match &mut self {
-            Self::Parsed { location: own, .. }
-            | Self::Unsupported { location: own, .. }
-            | Self::Empty { location: own } => *own = own.map(project),
-        }
+        self.location = self.location.map(project);
         self
     }
 
     /// Returns the source location.
     pub fn location(&self) -> crate::Location {
-        match self {
-            Self::Parsed { location, .. } => *location,
-            Self::Unsupported { location, .. } => *location,
-            Self::Empty { location } => *location,
-        }
+        self.location
     }
 
-    /// Returns the structured time segments (none for `Unsupported` or `Empty`).
+    /// Structured times, empty for unsupported text or an absent body.
     pub fn segments(&self) -> &[TimSegment] {
-        match self {
-            Self::Parsed { segments, .. } => segments,
-            Self::Unsupported { .. } | Self::Empty { .. } => &[],
+        match &self.state {
+            TimState::Parsed { segments, .. } => segments.as_slice(),
+            TimState::Unsupported { .. } | TimState::Empty => &[],
         }
     }
 }
 
-/// Parse whitespace-separated time tokens from `%tim` content.
-///
-/// Each token is either a single time or a hyphen-separated range.
-fn parse_tim_segments(s: &str) -> Option<Vec<TimSegment>> {
-    let trimmed = s.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
+/// A nonempty sequence admitted atomically from the tier's complete text.
+/// Private storage cannot be emptied after its first segment was admitted.
+#[derive(Clone, Debug, PartialEq, SemanticEq)]
+struct ParsedTimSegments(Vec<TimSegment>);
 
-    let mut segments = Vec::new();
-    for token in trimmed.split_whitespace() {
-        // Try as a range (hyphen-separated).
-        if let Some((left, right)) = token.split_once('-') {
-            let start = parse_time_value(left)?;
-            let end = parse_time_value(right)?;
-            segments.push(TimSegment::Range { start, end });
-        } else {
-            let tv = parse_time_value(token)?;
-            segments.push(TimSegment::Single(tv));
+impl ParsedTimSegments {
+    fn parse(content: &NonEmptyString) -> Option<Self> {
+        let mut tokens = content.as_str().split_whitespace();
+        // Nonempty lexical text may still contain only whitespace.
+        let first = parse_tim_segment(tokens.next()?)?;
+        let mut segments = vec![first];
+        for token in tokens {
+            segments.push(parse_tim_segment(token)?);
         }
+        Some(Self(segments))
     }
 
-    if segments.is_empty() {
-        None
-    } else {
-        Some(segments)
+    fn as_slice(&self) -> &[TimSegment] {
+        &self.0
+    }
+}
+
+/// Admit both endpoints before constructing a range segment.
+fn parse_tim_segment(token: &str) -> Option<TimSegment> {
+    match token.split_once('-') {
+        Some((left, right)) => Some(TimSegment::Range {
+            start: parse_time_value(left)?,
+            end: parse_time_value(right)?,
+        }),
+        None => parse_time_value(token).map(TimSegment::Single),
     }
 }
 
@@ -230,7 +217,7 @@ impl<'de> Deserialize<'de> for TimTier {
         // than as an error is what makes the round trip lossless now that the
         // state exists; it used to be rejected because it was unrepresentable.
         let s = String::deserialize(deserializer)?;
-        Ok(match NonEmptyString::new(&s) {
+        Ok(match RecoveryText::new(&s) {
             Ok(content) => Self::from_text(crate::Location::Unlocated, content),
             Err(_) => Self::empty(crate::Location::Unlocated),
         })
@@ -250,12 +237,20 @@ impl JsonSchema for TimTier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::ValidationTagged;
+
+    #[test]
+    fn explicit_empty_recovery_has_no_unsupported_time_diagnostic_state() {
+        let tier = TimTier::from_text(crate::Location::Unlocated, RecoveryText::Empty);
+        assert_eq!(tier.declared_content(), None);
+        assert_eq!(serde_json::to_string(&tier).unwrap(), "\"\"");
+    }
 
     #[test]
     fn parsed_single_time() {
-        let content = NonEmptyString::new("7:55").unwrap();
+        let content = RecoveryText::new("7:55").unwrap();
         let tim = TimTier::from_text(crate::Location::Unlocated, content);
-        assert!(matches!(tim, TimTier::Parsed { .. }));
+        assert!(!tim.has_validation_issue());
         assert_eq!(tim.segments().len(), 1);
         match &tim.segments()[0] {
             TimSegment::Single(tv) => {
@@ -267,7 +262,7 @@ mod tests {
 
     #[test]
     fn parsed_range() {
-        let content = NonEmptyString::new("00:01:30-00:02:00").unwrap();
+        let content = RecoveryText::new("00:01:30-00:02:00").unwrap();
         let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert_eq!(tim.segments().len(), 1);
         assert!(matches!(tim.segments()[0], TimSegment::Range { .. }));
@@ -275,16 +270,16 @@ mod tests {
 
     #[test]
     fn parsed_multiple_tokens() {
-        let content = NonEmptyString::new("7:55 00:01:30-00:02:00").unwrap();
+        let content = RecoveryText::new("7:55 00:01:30-00:02:00").unwrap();
         let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert_eq!(tim.segments().len(), 2);
     }
 
     #[test]
     fn parsed_bare_seconds() {
-        let content = NonEmptyString::new("45").unwrap();
+        let content = RecoveryText::new("45").unwrap();
         let tim = TimTier::from_text(crate::Location::Unlocated, content);
-        assert!(matches!(tim, TimTier::Parsed { .. }));
+        assert!(!tim.has_validation_issue());
         assert_eq!(tim.segments().len(), 1);
         match &tim.segments()[0] {
             TimSegment::Single(tv) => {
@@ -296,16 +291,43 @@ mod tests {
 
     #[test]
     fn unsupported_free_text() {
-        let content = NonEmptyString::new("afternoon session").unwrap();
+        let content = RecoveryText::new("afternoon session").unwrap();
         let tim = TimTier::from_text(crate::Location::Unlocated, content);
-        assert!(matches!(tim, TimTier::Unsupported { .. }));
+        assert!(tim.has_validation_issue());
         assert_eq!(tim.segments().len(), 0);
+    }
+
+    #[test]
+    fn wire_readback_preserves_classification_and_derived_segments() {
+        use crate::model::{SemanticEq, ValidationTag};
+        for (text, tag, segments) in [
+            ("", ValidationTag::Clean, 0),
+            ("afternoon session", ValidationTag::Warning, 0),
+            ("   ", ValidationTag::Warning, 0),
+            ("7:55", ValidationTag::Clean, 1),
+            ("00:01:30-00:02:00", ValidationTag::Clean, 1),
+            ("7:55 8:00", ValidationTag::Clean, 2),
+            (" 7:55 ", ValidationTag::Clean, 1),
+        ] {
+            let content = match RecoveryText::new(text) {
+                Ok(content) => content,
+                Err(_) => RecoveryText::Empty,
+            };
+            let tier = TimTier::from_text(crate::Span::new(5, 5 + text.len()), content);
+            let encoded = serde_json::to_string(&tier).unwrap();
+            assert_eq!(encoded, serde_json::to_string(text).unwrap());
+            let restored: TimTier = serde_json::from_str(&encoded).unwrap();
+            assert_eq!(restored.validation_tag(), tag);
+            assert_eq!(restored.segments().len(), segments);
+            assert_eq!(restored.location(), crate::Location::Unlocated);
+            assert!(tier.semantic_eq(&restored));
+        }
     }
 
     #[test]
     fn roundtrip_text() {
         let input = "00:01:30-00:02:00";
-        let content = NonEmptyString::new(input).unwrap();
+        let content = RecoveryText::new(input).unwrap();
         let tim = TimTier::from_text(crate::Location::Unlocated, content);
         assert_eq!(tim.as_str(), input);
     }

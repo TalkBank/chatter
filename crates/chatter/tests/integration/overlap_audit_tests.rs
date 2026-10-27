@@ -5,7 +5,7 @@ use std::process::Output;
 
 fn audit(input: &Path, report: &Path) -> Output {
     crate::common::chatter_cmd()
-        .args(["debug", "overlap-audit"])
+        .args(["inspect", "overlaps"])
         .arg(input)
         .arg("--database")
         .arg(report)

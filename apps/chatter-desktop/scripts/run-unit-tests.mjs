@@ -30,11 +30,13 @@ try {
       "tests/unit/validationTarget.test.cjs",
       "tests/unit/validationState.test.cjs",
       "tests/unit/clan.test.cjs",
+      "tests/unit/exportResults.test.cjs",
       "tests/unit/updates.test.cjs",
       "tests/unit/updaterConfig.test.cjs",
       "tests/unit/latestJson.test.mjs",
       "tests/unit/desktopSmokeBinary.test.mjs",
       ".test-dist/tests/unit/renderedResults.test.js",
+      ".test-dist/tests/unit/preferences.test.js",
     ],
     {
       cwd: desktopDir,

@@ -11,20 +11,30 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, NoChild, SourceBound, SourceSlotView, WordWithOptionalAnnotationsNode,
+    AsRawNode, NoChild, SlotView, SourceBound, WordWithOptionalAnnotationsNode,
 };
-use crate::model::{ReplacedWord, UtteranceContent};
+use crate::model::{ReplacedWord, Replacement, UtteranceContent};
 use crate::parser::node_span::span_of;
 use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ParseOutcome;
 
 use super::super::annotations::{parse_replacement, parse_scoped_annotations};
 use super::super::word::convert_word_node;
-use super::marker_chain::fold_marker_chain;
+use super::marker_chain::{MarkerSeed, fold_marker_chain};
 use super::report_tree_shape;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::read_source_field;
+
+/// A recovered replacement may fall back to its base word; a producer fault
+/// may not. The latter travels outside this syntax enum as a Result error.
+enum ReplacementSyntax {
+    Absent,
+    Recovered,
+    Complete {
+        replacement: Replacement,
+        end: usize,
+    },
+}
 
 /// Parse a `word_with_optional_annotations` node into `UtteranceContent`,
 /// over the generated typed traversal.
@@ -47,7 +57,9 @@ pub(crate) fn parse_word_content<'tree>(
     let source = typed.source();
     let node = typed.node().raw_node();
     let Ok(associated) = crate::parser::typed_cst::report_admission(
-        typed.extract_canonical(),
+        typed
+            .extract_canonical()
+            .and_then(|children| children.admit_ranges().map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -56,16 +68,15 @@ pub(crate) fn parse_word_content<'tree>(
     };
     let children = associated.children();
 
-    let word = match associated.field_word().slot().view() {
-        SourceSlotView::Present(word) => match read_source_field(word, errors) {
-            Some(word) => convert_word_node(word, errors),
-            None => ParseOutcome::rejected(),
-        },
+    let word = match children.word.slot.view() {
+        SlotView::Present(word) => {
+            convert_word_node(*word, errors).map(|lowered| lowered.into_word())
+        }
         // The word position is required; `Absent` means a well-formed node of
         // another kind stood where the word should be, which no recovery
         // node marks and the whole-tree pass cannot see, so the shape fault
         // is reported here, as the positional check reported it.
-        SourceSlotView::Absent(NoChild) => {
+        SlotView::Absent(NoChild) => {
             report_tree_shape(
                 node,
                 "Expected 'standalone_word' at the start of word_with_optional_annotations"
@@ -73,81 +84,78 @@ pub(crate) fn parse_word_content<'tree>(
                 source,
                 errors,
             );
-            ParseOutcome::rejected()
+            Ok(ParseOutcome::rejected())
         }
-        SourceSlotView::Error(bad) => {
+        SlotView::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
                 source,
                 "word_with_optional_annotations",
             ));
-            ParseOutcome::rejected()
+            Ok(ParseOutcome::rejected())
         }
     };
 
-    let replacement = match associated.field_child_1().slot().optional() {
+    let replacement = match children.child_1.slot.as_ref() {
         Some(group) => match group.view() {
-            SourceSlotView::Present(group) => match group.field_replacement().slot().view() {
-                SourceSlotView::Present(replacement) => {
+            SlotView::Present(group) => match group.replacement.slot.view() {
+                SlotView::Present(replacement) => {
                     // The replacement's own end places the replaced word:
                     // the construct is the word through this `]`, and any
                     // marker after it belongs to the wrapper the fold builds.
                     let end = span_of(replacement.raw_node()).end();
-                    match read_source_field(replacement, errors) {
-                        Some(replacement) => {
-                            parse_replacement(replacement, errors).map(|repl| (repl, end))
+                    parse_replacement(*replacement, errors).map(|outcome| match outcome {
+                        ParseOutcome::Parsed(replacement) => {
+                            ReplacementSyntax::Complete { replacement, end }
                         }
-                        None => ParseOutcome::rejected(),
-                    }
+                        ParseOutcome::Rejected => ReplacementSyntax::Recovered,
+                    })
                 }
-                SourceSlotView::Error(bad) => {
+                SlotView::Error(bad) => {
                     errors.report(unexpected_node_error(
                         bad.raw_node(),
                         source,
                         "word_with_optional_annotations",
                     ));
-                    ParseOutcome::rejected()
+                    Ok(ReplacementSyntax::Recovered)
                 }
-                SourceSlotView::Absent(NoChild) => ParseOutcome::rejected(),
+                SlotView::Absent(NoChild) => Ok(ReplacementSyntax::Recovered),
             },
             // An ERROR where the group should be is classified in context, as
             // the old walk's catch-all classified it (a bare `[` is an
             // incomplete annotation, not generic unparsable content).
-            SourceSlotView::Missing(never) => match never {},
-            SourceSlotView::Error(bad) => {
+            SlotView::Missing(never) => match never {},
+            SlotView::Error(bad) => {
                 errors.report(unexpected_node_error(
                     bad.raw_node(),
                     source,
                     "word_with_optional_annotations",
                 ));
-                ParseOutcome::rejected()
+                Ok(ReplacementSyntax::Recovered)
             }
-            SourceSlotView::Absent(never) => match never {},
+            SlotView::Absent(never) => match never {},
         },
-        None => ParseOutcome::rejected(),
+        None => Ok(ReplacementSyntax::Absent),
     };
 
     // The markers written after the word, already resolved around the retrace
     // marker. ONE value rather than an `annotations` list beside a
     // `retrace_kind`, because those two were a partition of one ordered
     // sequence and could not say which side of the marker an annotation sat on.
-    let markers = match associated.field_annotations().slot().optional() {
+    let markers = match children.annotations.slot.as_ref() {
         Some(slot) => match slot.view() {
-            SourceSlotView::Present(annotations) => match read_source_field(annotations, errors) {
-                Some(annotations) => parse_scoped_annotations(annotations, errors),
-                None => Vec::new(),
-            },
-            SourceSlotView::Error(bad) => {
+            SlotView::Present(annotations) => parse_scoped_annotations(*annotations, errors),
+            SlotView::Error(bad) => {
                 errors.report(unexpected_node_error(
                     bad.raw_node(),
                     bad.source(),
                     "word_with_optional_annotations",
                 ));
-                Vec::new()
+                Ok(Vec::new())
             }
-            SourceSlotView::Absent(never) => match never {},
+            SlotView::Absent(never) => match never {},
         },
-        None => Vec::new(),
+        None => Ok(Vec::new()),
     };
     surface_displaced(
         &children.unexpected,
@@ -156,7 +164,10 @@ pub(crate) fn parse_word_content<'tree>(
         errors,
     );
 
-    let ParseOutcome::Parsed(w) = word else {
+    let Ok(ParseOutcome::Parsed(w)) = word else {
+        return ParseOutcome::rejected();
+    };
+    let (Ok(replacement), Ok(markers)) = (replacement, markers) else {
         return ParseOutcome::rejected();
     };
     // The node is the whole chain, word through its final `]`; the fold
@@ -166,14 +177,14 @@ pub(crate) fn parse_word_content<'tree>(
     // places it.
     let whole = span_of(node);
     let core = match replacement {
-        ParseOutcome::Parsed((repl, replacement_end)) => {
-            UtteranceContent::ReplacedWord(Box::new(ReplacedWord::new(
-                talkbank_model::Span::new(whole.start(), replacement_end),
+        ReplacementSyntax::Complete { replacement, end } => {
+            MarkerSeed::ReplacedWord(Box::new(ReplacedWord::new(
+                talkbank_model::Span::new(whole.start(), end),
                 w,
-                repl,
+                replacement,
             )))
         }
-        ParseOutcome::Rejected => UtteranceContent::Word(Box::new(w)),
+        ReplacementSyntax::Absent | ReplacementSyntax::Recovered => MarkerSeed::Word(Box::new(w)),
     };
     ParseOutcome::parsed(fold_marker_chain(core, markers, whole))
 }

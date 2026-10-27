@@ -17,7 +17,7 @@
 //! `talkbank-model`'s `alignment/gra/tests.rs` built each `MorTier` from
 //! `Mor::new(MorWord::new(PosCategory::new("pron"), "I"))` beside a
 //! `Terminator::Period { span: Span::DUMMY }`, and each `GraTier` from
-//! `GrammaticalRelation::new(1, 2, "SUBJ")`. Here each case is the two tiers
+//! `GrammaticalRelation::new(1, 2, "SUBJ".try_into().unwrap())`. Here each case is the two tiers
 //! as written under a main tier, and the tiers are whatever the parser
 //! builds.
 //!

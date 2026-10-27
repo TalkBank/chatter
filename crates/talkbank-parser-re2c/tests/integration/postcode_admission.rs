@@ -49,7 +49,8 @@ fn postcode_admission_matches_the_spec_at_file_and_fragment_boundaries() {
     let ParseOutcome::Parsed(tier) = parser.parse_main_tier(main, main_offset, &errors) else {
         panic!("recovery must preserve the main tier");
     };
-    assert!(tier.content.postcodes.is_empty());
+    assert_eq!(tier.content.postcodes.len(), 1);
+    assert_eq!(tier.content.postcodes[0].unparsed_source(), Some("[+  ]"));
     let diagnoses: Vec<_> = errors
         .into_vec()
         .into_iter()
@@ -98,5 +99,10 @@ fn postcode_admission_matches_the_spec_at_file_and_fragment_boundaries() {
         .parse_main_tier(main)
         .unwrap();
     assert!(canonical.semantic_eq(&actual));
-    assert_eq!(actual.content.postcodes[0].text.as_str(), " bch");
+    assert_eq!(
+        actual.content.postcodes[0]
+            .text()
+            .expect("admitted postcode"),
+        " bch"
+    );
 }

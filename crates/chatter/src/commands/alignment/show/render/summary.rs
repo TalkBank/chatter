@@ -22,7 +22,7 @@ pub(super) fn render_summary(
     tier_filter: Option<AlignmentTier>,
     totals: &RenderTotals,
     had_validation_errors: bool,
-) {
+) -> crate::exit_codes::CommandResult {
     outln!();
     outln!("{}", "=".repeat(80));
     if totals.total_alignments == 0 {
@@ -43,6 +43,7 @@ pub(super) fn render_summary(
     );
 
     if had_validation_errors || totals.total_errors > 0 {
-        std::process::exit(1);
+        return Err(crate::exit_codes::ReportedFailure::Input.into());
     }
+    Ok(())
 }

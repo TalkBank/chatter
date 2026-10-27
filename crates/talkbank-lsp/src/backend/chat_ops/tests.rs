@@ -3,9 +3,9 @@
 use serde_json::json;
 
 use super::format_bullet::handle_format_bullet_line;
-use super::line_index::LineIndex;
 use super::scoped_find::{test_build_matcher, test_find_matches_in_span, test_make_match};
 use crate::backend::execute_commands::FormatBulletLineRequest;
+use crate::backend::utils::LineIndex;
 
 #[test]
 /// `LineIndex` should translate byte offsets into zero-based line numbers.
@@ -22,15 +22,13 @@ fn line_index_works() {
 fn scoped_find_plain_text() {
     let matcher = test_build_matcher("hello", false).unwrap();
     let text = "*CHI:\thello world .\n%mor:\tn|hello n|world .\n";
-    let lines: Vec<&str> = text.lines().collect();
-    let line_index = LineIndex::new(text);
     let hits = test_find_matches_in_span(text, 0, text.len(), &matcher);
     assert!(!hits.is_empty());
     let (offset, len) = hits[0];
-    let m = test_make_match(offset, len, "main", "CHI", &line_index, &lines, text);
+    let m = test_make_match(offset, len, "main", "CHI", text);
     assert!(m.is_some());
-    let (line, _, _, tier, speaker) = m.unwrap();
-    assert_eq!(line, 0);
+    let (range, tier, speaker) = m.unwrap();
+    assert_eq!(range.start.line, 0);
     assert_eq!(tier, "main");
     assert_eq!(speaker, "CHI");
 }
@@ -100,22 +98,19 @@ fn line_index_single_line() {
     let idx = LineIndex::new(text);
     assert_eq!(idx.byte_to_line(0), 0);
     assert_eq!(idx.byte_to_line(10), 0);
-    assert_eq!(idx.line_start(0), Some(0));
-    assert_eq!(idx.line_start(1), None);
 }
 
 #[test]
-/// UTF-8 character offsets should be reported in characters, not bytes.
+/// BMP source characters occupy one UTF-16 unit even when UTF-8 uses more.
 fn make_match_utf8_char_offset() {
     let text = "café hello\n";
-    let lines: Vec<&str> = text.lines().collect();
-    let line_index = LineIndex::new(text);
-    let m = test_make_match(6, 5, "main", "CHI", &line_index, &lines, text);
+    let m = test_make_match(6, 5, "main", "CHI", text);
     assert!(m.is_some());
-    let (line, character, length, _, _) = m.unwrap();
-    assert_eq!(line, 0);
-    assert_eq!(character, 5);
-    assert_eq!(length, 5);
+    let (range, _, _) = m.unwrap();
+    assert_eq!(range.start.line, 0);
+    assert_eq!(range.start.character, 5);
+    assert_eq!(range.end.line, 0);
+    assert_eq!(range.end.character, 10);
 }
 
 #[test]
@@ -131,4 +126,40 @@ fn format_bullet_output() {
     let output = serde_json::to_string(&result).unwrap();
     assert!(output.contains("1000_2500"));
     assert!(output.contains("*CHI:\\t"));
+}
+
+#[test]
+fn scoped_find_unicode_source_spans() {
+    for (source, query, expected) in [
+        ("éé", "é", vec![(0, 2), (2, 2)]),
+        ("İ hello", "hello", vec![(3, 5)]),
+        ("K", "k", vec![(0, 3)]),
+        ("banana", "ana", vec![(1, 3), (3, 3)]),
+        ("a.b", ".", vec![(1, 1)]),
+        ("😀", "", vec![]),
+    ] {
+        let matcher = test_build_matcher(query, false).unwrap();
+        assert_eq!(
+            test_find_matches_in_span(source, 0, source.len(), &matcher),
+            expected,
+            "source={source:?}, query={query:?}"
+        );
+    }
+}
+
+#[test]
+fn scoped_find_utf16_selection() {
+    let text = "😀 café 😀";
+    let result = test_make_match(11, 4, "main", "CHI", text).unwrap();
+    assert_eq!(result.0.start, tower_lsp::lsp_types::Position::new(0, 8));
+    assert_eq!(result.0.end, tower_lsp::lsp_types::Position::new(0, 10));
+}
+
+#[test]
+fn scoped_find_explicit_regex_preserves_zero_width_matches() {
+    let matcher = test_build_matcher("", true).unwrap();
+    assert_eq!(
+        test_find_matches_in_span("x😀", 0, 5, &matcher),
+        vec![(0, 0), (1, 0), (5, 0)]
+    );
 }

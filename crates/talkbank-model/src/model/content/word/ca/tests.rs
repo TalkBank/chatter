@@ -52,7 +52,7 @@ fn test_ca_delimiter_with_span() {
 fn test_ca_element_write_chat() {
     let elem = CAElement::new(crate::Location::Unlocated, CAElementType::PitchUp);
     let mut output = String::new();
-    let _ = elem.write_chat(&mut output);
+    elem.write_chat(&mut output).expect("accepting destination");
     assert_eq!(output, "↑");
 }
 
@@ -61,6 +61,8 @@ fn test_ca_element_write_chat() {
 fn test_ca_delimiter_write_chat() {
     let delim = CADelimiter::new(crate::Location::Unlocated, CADelimiterType::Faster);
     let mut output = String::new();
-    let _ = delim.write_chat(&mut output);
+    delim
+        .write_chat(&mut output)
+        .expect("accepting destination");
     assert_eq!(output, "∆");
 }

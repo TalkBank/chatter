@@ -11,7 +11,7 @@ use crate::parser::tree_parsing::bullet_content::{BulletTextNode, parse_bullet_c
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use talkbank_model::model::BulletContent;
 use talkbank_model::{
-    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity,
+    DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, ParseOutcome, Severity,
 };
 
 /// Byte span of an entire tier node.
@@ -29,8 +29,9 @@ pub(super) use crate::parser::node_span::span_of;
 /// none. Nobody chose that, no test asserted it, and converging the nine ONTO
 /// reporting keeps E315 ("invalid control character") on all of them where
 /// converging the other way lost it. Measured, not assumed: on a tier body
-/// holding a bare control character, `%act` and `%cod` now report
-/// `E315 E316 E330 E756` exactly as the other seven always did.
+/// holding a bare control character, `%act` and `%cod` reported
+/// `E315 E316 E330 E756` exactly as the other seven did. Rejection now retains
+/// the parse diagnostics without manufacturing an empty tier for E756.
 ///
 /// It stays a trait rather than becoming nothing, because the bound is what
 /// makes `Self::KIND.name()` available to the shared parser and what keeps a
@@ -123,7 +124,7 @@ fn parse_text_tier_content<'tree, 'source, Tier, Body>(
     tier: SourceSlice<'tree, 'source>,
     body: &SelectedNonMissingKindSlot<'tree, SourceBound<'tree, 'source, Body>, Ranged<'source>>,
     errors: &impl ErrorSink,
-) -> Result<BulletContent, crate::CstFailure>
+) -> Result<ParseOutcome<BulletContent>, crate::CstFailure>
 where
     Tier: TextTierBody,
     Body: SourceBoundKind<'tree>,
@@ -138,7 +139,7 @@ where
                 Tier::KIND.name(),
             ));
             report_missing_text_content::<Tier>(tier, errors);
-            Ok(BulletContent::empty())
+            Ok(ParseOutcome::Rejected)
         }
         ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
@@ -167,7 +168,7 @@ where
 pub(crate) fn parse_optional_text_tier_content<'tree, 'source, C>(
     tier: &RangeAdmittedChildren<'tree, 'source, C>,
     errors: &impl ErrorSink,
-) -> Result<BulletContent, crate::CstFailure>
+) -> Result<ParseOutcome<BulletContent>, crate::CstFailure>
 where
     C: AdmittedTextTierBody<'tree, 'source>,
     SourceBound<'tree, 'source, C::Body>: Into<BulletTextNode<'tree, 'source>>,
@@ -175,7 +176,7 @@ where
     // Parent and body are projected from this one consuming admission result.
     match tier.children().body() {
         Some(slot) => parse_text_tier_content::<C::Tier, C::Body>(tier.parent(), slot, errors),
-        None => Ok(BulletContent::empty()),
+        None => Ok(ParseOutcome::Parsed(BulletContent::empty())),
     }
 }
 

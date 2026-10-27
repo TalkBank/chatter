@@ -70,6 +70,10 @@ pub enum ValidationStartError {
     #[error("No path provided")]
     EmptyPath,
 
+    /// Cancellation or replacement revoked this startup's ownership.
+    #[error("Validation was cancelled or replaced before startup completed")]
+    Superseded,
+
     #[error(transparent)]
     Target(#[from] TargetError),
 
@@ -92,50 +96,16 @@ pub enum ClanError {
         source: std::io::Error,
     },
 
+    #[error(
+        "Source changed since validation: {path}. Validate the file again before opening it in CLAN."
+    )]
+    SourceChanged { path: PathBuf },
+
     #[error("Cannot resolve the CLAN location: {0}")]
     Resolve(#[from] talkbank_model::ClanLocationError),
 
     #[error("CLAN did not accept the request: {0}")]
     Send(#[from] send2clan::Error),
-}
-
-/// Why the bundled CLI could not be installed.
-#[derive(Debug, thiserror::Error)]
-pub enum InstallCliError {
-    #[error("Cannot locate the app's resource directory: {source}")]
-    ResourceDir {
-        #[source]
-        source: tauri::Error,
-    },
-
-    #[error(
-        "Bundled CLI not found at {path}. Build with `cargo build --release -p talkbank-chatter` first."
-    )]
-    NotBundled { path: PathBuf },
-
-    #[error("Cannot remove existing {path}: {source}. Try running with sudo.")]
-    RemoveExisting {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
-    #[error("Cannot create symlink at {path}: {source}. Try running with sudo.")]
-    Symlink {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
-    #[error("Cannot determine the local application data directory")]
-    NoLocalDataDir,
-
-    #[error("Cannot install to {path}: {source}")]
-    Install {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
 }
 
 /// Why a file could not be revealed in the platform file manager.
@@ -154,6 +124,9 @@ pub enum RevealError {
 /// Why validation results could not be exported.
 #[derive(Debug, thiserror::Error)]
 pub enum ExportError {
+    #[error(transparent)]
+    Destination(talkbank_transform::report_destination::ReportDestinationError),
+
     #[error("Results are not valid JSON: {source}")]
     MalformedResults {
         #[source]
@@ -192,7 +165,6 @@ serialize_as_display!(
     TargetError,
     ValidationStartError,
     ClanError,
-    InstallCliError,
     RevealError,
     ExportError,
     OpenExternalError,

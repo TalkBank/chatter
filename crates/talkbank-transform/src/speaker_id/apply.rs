@@ -10,6 +10,7 @@ use crate::serialize::to_chat_string;
 
 use super::error::SpeakerIdError;
 use super::mapping::{MappingSpec, SpeakerAssignment};
+use super::mapping_admission::AdmittedMapping;
 
 /// Apply a [`MappingSpec`] to `content`, returning the relabeled CHAT
 /// text. Utterances for dropped speakers are removed; utterances for
@@ -27,15 +28,30 @@ pub fn apply_mapping(
     options: ParseValidateOptions,
 ) -> Result<String, SpeakerIdError> {
     let chat = parse_and_validate(content, options)?;
-    Ok(apply_mapping_chat(&chat, mapping))
+    apply_mapping_chat(&chat, mapping)
 }
 
 /// Apply a [`MappingSpec`] to an already-parsed [`ChatFile`]. Used
 /// when the caller has the parsed AST in hand (e.g. reference mode,
 /// which parses the donor once to feed `identify_mapping`), avoids
 /// the redundant second parse that the `&str` entry point would
-/// otherwise do.
-pub fn apply_mapping_chat(chat: &ChatFile, mapping: &MappingSpec) -> String {
+/// otherwise do. Absent, rejected or repeated participant declarations reject
+/// before any output is built. Recognized unparsed IDs also reject: their
+/// speaker references cannot be safely renamed or dropped.
+/// Replacement codes, roles and supplied names are admitted before rendering.
+/// Retained participants must have distinct final codes, including unmapped
+/// participants. Swaps and reuse of a dropped participant's code are allowed.
+pub fn apply_mapping_chat(
+    chat: &ChatFile,
+    mapping: &MappingSpec,
+) -> Result<String, SpeakerIdError> {
+    let input = crate::speaker_headers::SpeakerRewriteInput::admit(chat)?;
+    let mapping = AdmittedMapping::admit(input, mapping)?;
+    Ok(apply_admitted_mapping(mapping))
+}
+
+fn apply_admitted_mapping(mapping: AdmittedMapping<'_>) -> String {
+    let chat = mapping.file();
     let mut new_lines: Vec<Line> = Vec::new();
 
     for line in chat.lines.as_slice().iter() {
@@ -53,7 +69,7 @@ pub fn apply_mapping_chat(chat: &ChatFile, mapping: &MappingSpec) -> String {
                 header,
                 location: span,
                 separator,
-            } => match rewrite_header(header.as_ref(), mapping) {
+            } => match rewrite_header(header.as_ref(), &mapping) {
                 HeaderRewrite::Keep(h) => new_lines.push(Line::Header {
                     header: Box::new(h),
                     location: *span,
@@ -84,9 +100,10 @@ enum HeaderRewrite {
 }
 
 /// Rewrite a single header per the mapping. `@Participants` filters +
-/// rewrites its entry list; `@ID` rewrites code + role or drops; every
-/// other header is pass-through.
-fn rewrite_header(header: &Header, mapping: &MappingSpec) -> HeaderRewrite {
+/// rewrites its entry list; participant-specific headers follow the same
+/// rename/drop assignment. Every other header has an explicit preservation arm.
+#[deny(clippy::wildcard_enum_match_arm)]
+fn rewrite_header(header: &Header, mapping: &AdmittedMapping<'_>) -> HeaderRewrite {
     match header {
         Header::Participants { entries } => {
             let mut new_entries: Vec<ParticipantEntry> = Vec::new();
@@ -98,11 +115,11 @@ fn rewrite_header(header: &Header, mapping: &MappingSpec) -> HeaderRewrite {
                         role,
                         specific_role,
                     }) => {
-                        new_entries.push(ParticipantEntry {
-                            speaker_code: code.clone(),
-                            name: specific_role.clone().or_else(|| entry.name.clone()),
-                            role: role.clone(),
-                        });
+                        new_entries.push(ParticipantEntry::new(
+                            code.clone(),
+                            specific_role.clone().or_else(|| entry.name().cloned()),
+                            role.clone(),
+                        ));
                     }
                     None => new_entries.push(entry.clone()),
                 }
@@ -121,7 +138,79 @@ fn rewrite_header(header: &Header, mapping: &MappingSpec) -> HeaderRewrite {
             }
             None => HeaderRewrite::Keep(Header::ID(id.clone())),
         },
-        other => HeaderRewrite::Keep(other.clone()),
+        Header::Birth { participant, date } => {
+            rewrite_reference(participant, mapping, |participant| Header::Birth {
+                participant,
+                date: date.clone(),
+            })
+        }
+        Header::Birthplace { participant, place } => {
+            rewrite_reference(participant, mapping, |participant| Header::Birthplace {
+                participant,
+                place: place.clone(),
+            })
+        }
+        Header::L1Of {
+            participant,
+            language,
+        } => rewrite_reference(participant, mapping, |participant| Header::L1Of {
+            participant,
+            language: language.clone(),
+        }),
+        // Exhaustive preservation: adding a header requires reviewing whether
+        // it carries a speaker reference instead of silently keeping it.
+        Header::Utf8
+        | Header::Begin
+        | Header::End
+        | Header::Languages { .. }
+        | Header::UnparsedLanguages(_)
+        | Header::UnparsedParticipants(_)
+        | Header::UnparsedID(_)
+        | Header::Date { .. }
+        | Header::Comment { .. }
+        | Header::Pid { .. }
+        | Header::Media(_)
+        | Header::Situation { .. }
+        | Header::Types(_)
+        | Header::NewEpisode
+        | Header::TapeLocation { .. }
+        | Header::BeginGem { .. }
+        | Header::EndGem { .. }
+        | Header::LazyGem { .. }
+        | Header::Blank
+        | Header::Number { .. }
+        | Header::RecordingQuality { .. }
+        | Header::Transcription { .. }
+        | Header::Font { .. }
+        | Header::Window { .. }
+        | Header::ColorWords { .. }
+        | Header::TimeDuration { .. }
+        | Header::TimeStart { .. }
+        | Header::Location { .. }
+        | Header::RoomLayout { .. }
+        | Header::Transcriber { .. }
+        | Header::Warning { .. }
+        | Header::Unknown { .. }
+        | Header::Activities { .. }
+        | Header::Bck { .. }
+        | Header::Options { .. }
+        | Header::Page { .. }
+        | Header::Videos { .. }
+        | Header::T { .. } => HeaderRewrite::Keep(header.clone()),
+    }
+}
+
+/// Apply the existing closed assignment type once to a participant reference.
+/// The typed constructor preserves the header's payload while changing its owner.
+fn rewrite_reference(
+    participant: &talkbank_model::SpeakerCode,
+    mapping: &AdmittedMapping<'_>,
+    build: impl FnOnce(talkbank_model::SpeakerCode) -> Header,
+) -> HeaderRewrite {
+    match mapping.get(participant) {
+        Some(SpeakerAssignment::Drop) => HeaderRewrite::Drop,
+        Some(SpeakerAssignment::Rename { code, .. }) => HeaderRewrite::Keep(build(code.clone())),
+        None => HeaderRewrite::Keep(build(participant.clone())),
     }
 }
 

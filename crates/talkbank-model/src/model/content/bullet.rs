@@ -124,14 +124,146 @@ impl Bullet {
 
 impl WriteChat for Bullet {
     /// Serializes canonical CHAT bullet syntax.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('\u{0015}')?;
-        write!(w, "{}_{}", self.timing.start_ms, self.timing.end_ms)?;
+        {
+            crate::model::WriteChat::write_chat(&self.timing.start_ms, w)?;
+            w.write_str("_")?;
+            crate::model::WriteChat::write_chat(&self.timing.end_ms, w)
+        }?;
         w.write_char('\u{0015}')
     }
 }
 
 impl std::fmt::Display for Bullet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.write_chat(f)
+    }
+}
+
+/// Observed media-bullet source that could not be admitted as timing.
+///
+/// The source includes its delimiters. This is always invalid recovery data,
+/// including after JSON deserialization, and provides no numeric accessors.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+pub struct UnparsedBullet {
+    source: smol_str::SmolStr,
+    #[serde(skip, default = "crate::Location::unlocated")]
+    #[schemars(skip)]
+    pub(crate) location: crate::Location,
+}
+
+impl UnparsedBullet {
+    /// Preserve observed source without claiming it is usable timing.
+    pub fn new(location: impl Into<crate::Location>, source: impl Into<smol_str::SmolStr>) -> Self {
+        Self {
+            source: source.into(),
+            location: location.into(),
+        }
+    }
+
+    /// Exact rejected spelling, including delimiters.
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    /// Location of the observed source, when available.
+    pub fn location(&self) -> crate::Location {
+        self.location
+    }
+}
+
+impl WriteChat for UnparsedBullet {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        w.write_str(self.source())
+    }
+}
+
+/// An occupied media-bullet position: numeric timing or explicit rejected source.
+///
+/// Absence is represented by the enclosing optional slot, never by this enum.
+/// Parsed JSON retains the existing timing shape; rejected JSON uses an explicit
+/// `unparsed` payload. Neither reading nor writing recovery admits numeric timing.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[serde(untagged)]
+pub enum BulletState {
+    /// Numerically representable timing; semantic validation remains separate.
+    Parsed(Bullet),
+    /// Observed source that failed numeric or syntax admission.
+    Unparsed {
+        /// Exact rejected source, never numeric timing.
+        unparsed: UnparsedBullet,
+    },
+}
+
+impl BulletState {
+    /// Project numeric timing only from the parsed state.
+    pub fn as_parsed(&self) -> Option<&Bullet> {
+        match self {
+            Self::Parsed(bullet) => Some(bullet),
+            Self::Unparsed { .. } => None,
+        }
+    }
+
+    /// Mutably project numeric timing only from the parsed state.
+    pub fn as_parsed_mut(&mut self) -> Option<&mut Bullet> {
+        match self {
+            Self::Parsed(bullet) => Some(bullet),
+            Self::Unparsed { .. } => None,
+        }
+    }
+
+    /// Consume the state, returning the rejected source when timing is unavailable.
+    pub fn into_parsed(self) -> Result<Bullet, UnparsedBullet> {
+        match self {
+            Self::Parsed(bullet) => Ok(bullet),
+            Self::Unparsed { unparsed } => Err(unparsed),
+        }
+    }
+
+    /// Source location of either occupied state.
+    pub fn location(&self) -> crate::Location {
+        match self {
+            Self::Parsed(bullet) => bullet.location,
+            Self::Unparsed { unparsed } => unparsed.location(),
+        }
+    }
+
+    /// Report recovery invalidity by presence, independently of source locations.
+    pub(crate) fn validate_recovery(&self, errors: &impl crate::ErrorSink) {
+        if let Self::Unparsed { unparsed } = self {
+            errors.report(crate::ParseError::at_location(
+                crate::ErrorCode::InvalidMediaBullet,
+                crate::Severity::Error,
+                unparsed.location(),
+                "Unparsed media bullet cannot be used as timing",
+            ));
+        }
+    }
+}
+
+impl From<Bullet> for BulletState {
+    fn from(bullet: Bullet) -> Self {
+        Self::Parsed(bullet)
+    }
+}
+
+impl From<UnparsedBullet> for BulletState {
+    fn from(unparsed: UnparsedBullet) -> Self {
+        Self::Unparsed { unparsed }
+    }
+}
+
+impl WriteChat for BulletState {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        match self {
+            Self::Parsed(bullet) => bullet.write_chat(w),
+            Self::Unparsed { unparsed } => unparsed.write_chat(w),
+        }
+    }
+}
+
+impl std::fmt::Display for BulletState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.write_chat(f)
     }

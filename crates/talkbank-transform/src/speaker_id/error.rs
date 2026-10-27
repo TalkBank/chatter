@@ -16,6 +16,12 @@ use super::types::ConfidenceThreshold;
 /// mode.
 #[derive(Debug, thiserror::Error)]
 pub enum SpeakerIdError {
+    /// Speaker rewrites require readable participant identity headers.
+    #[error(transparent)]
+    SpeakerRewrite(#[from] crate::SpeakerRewriteError),
+    /// A replacement identity cannot be inserted into CHAT.
+    #[error(transparent)]
+    InvalidAssignment(#[from] super::MappingAssignmentError),
     /// The mapping spec couldn't be parsed. The free-form message
     /// names which assignment failed so the operator can correct it
     /// without consulting the grammar.

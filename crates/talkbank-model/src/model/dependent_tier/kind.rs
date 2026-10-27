@@ -10,6 +10,14 @@
 
 use super::DependentTier;
 
+/// Borrowed identity of a dependent-tier slot, independent of parse success.
+///
+/// Constructed only from a tier's canonical label. Parsed and recovery payloads
+/// share a key; distinct custom labels remain distinct. This is an identity for
+/// replacement and indexing, not a certificate that the payload is valid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DependentTierKey<'a>(&'a str);
+
 /// Does a tier payload declare nothing: absent, or whitespace only?
 ///
 /// ONE predicate, asked by every arm of [`DependentTier::declares_nothing`]
@@ -19,6 +27,106 @@ fn declares_nothing_text(content: Option<&str>) -> bool {
 }
 
 impl DependentTier {
+    /// Structured text payload and its enclosing diagnostic location.
+    pub(crate) fn bullet_content(&self) -> Option<(&super::BulletContent, crate::Location)> {
+        match self {
+            Self::Act(tier) => Some((&tier.content, tier.location)),
+            Self::Cod(tier) => Some((&tier.content, tier.location)),
+            Self::Add(tier) => Some((&tier.content, tier.location)),
+            Self::Com(tier) => Some((&tier.content, tier.location)),
+            Self::Exp(tier) => Some((&tier.content, tier.location)),
+            Self::Gpx(tier) => Some((&tier.content, tier.location)),
+            Self::Int(tier) => Some((&tier.content, tier.location)),
+            Self::Sit(tier) => Some((&tier.content, tier.location)),
+            Self::Spa(tier) => Some((&tier.content, tier.location)),
+            Self::UnparsedMor(_)
+            | Self::UnparsedGra(_)
+            | Self::UnparsedPho(_)
+            | Self::UnparsedMod(_)
+            | Self::UnparsedSin(_)
+            | Self::UnparsedWor(_)
+            | Self::UnparsedPhoaln(_)
+            | Self::UnparsedText(_)
+            | Self::UnparsedXphoint(_)
+            | Self::Mor(_)
+            | Self::Gra(_)
+            | Self::Pho(_)
+            | Self::Mod(_)
+            | Self::Sin(_)
+            | Self::Alt(_)
+            | Self::Coh(_)
+            | Self::Def(_)
+            | Self::Eng(_)
+            | Self::Err(_)
+            | Self::Fac(_)
+            | Self::Flo(_)
+            | Self::Modsyl(_)
+            | Self::Phosyl(_)
+            | Self::Phoaln(_)
+            | Self::Xphoint(_)
+            | Self::Gls(_)
+            | Self::Ort(_)
+            | Self::Par(_)
+            | Self::Tim(_)
+            | Self::Wor(_)
+            | Self::UserDefined(_)
+            | Self::Unsupported(_) => None,
+        }
+    }
+
+    /// One exhaustive owner for raw recovery and the alignment trust it withdraws.
+    pub(crate) fn unparsed_recovery(&self) -> Option<super::unparsed::UnparsedRecovery<'_>> {
+        use super::unparsed::UnparsedRecovery;
+        use crate::model::ParseHealthTier;
+        match self {
+            Self::UnparsedText(text) => Some(UnparsedRecovery::Text(text.raw())),
+            Self::UnparsedMor(raw) => Some(UnparsedRecovery::Aligned(ParseHealthTier::Mor, raw)),
+            Self::UnparsedGra(raw) => Some(UnparsedRecovery::Aligned(ParseHealthTier::Gra, raw)),
+            Self::UnparsedPho(raw) => Some(UnparsedRecovery::Aligned(ParseHealthTier::Pho, raw)),
+            Self::UnparsedMod(raw) => Some(UnparsedRecovery::Aligned(ParseHealthTier::Mod, raw)),
+            Self::UnparsedSin(raw) => Some(UnparsedRecovery::Aligned(ParseHealthTier::Sin, raw)),
+            Self::UnparsedWor(raw) => Some(UnparsedRecovery::Aligned(ParseHealthTier::Wor, raw)),
+            Self::UnparsedPhoaln(raw) => {
+                Some(UnparsedRecovery::Aligned(ParseHealthTier::Phoaln, raw))
+            }
+            Self::UnparsedXphoint(raw) => {
+                Some(UnparsedRecovery::Aligned(ParseHealthTier::Xphoint, raw))
+            }
+            Self::Mor(_)
+            | Self::Gra(_)
+            | Self::Pho(_)
+            | Self::Mod(_)
+            | Self::Sin(_)
+            | Self::Act(_)
+            | Self::Cod(_)
+            | Self::Add(_)
+            | Self::Com(_)
+            | Self::Exp(_)
+            | Self::Gpx(_)
+            | Self::Int(_)
+            | Self::Sit(_)
+            | Self::Spa(_)
+            | Self::Alt(_)
+            | Self::Coh(_)
+            | Self::Def(_)
+            | Self::Eng(_)
+            | Self::Err(_)
+            | Self::Fac(_)
+            | Self::Flo(_)
+            | Self::Modsyl(_)
+            | Self::Phosyl(_)
+            | Self::Phoaln(_)
+            | Self::Xphoint(_)
+            | Self::Gls(_)
+            | Self::Ort(_)
+            | Self::Par(_)
+            | Self::Tim(_)
+            | Self::Wor(_)
+            | Self::UserDefined(_)
+            | Self::Unsupported(_) => None,
+        }
+    }
+
     /// Does this tier line declare NO content?
     ///
     /// `true` means the file contains a tier line with nothing after the colon:
@@ -89,10 +197,19 @@ impl DependentTier {
             // `wor_tier_body`), so a tier with no payload fails earlier and
             // more specifically than "you declared nothing".
             Self::Mor(_) | Self::Gra(_) | Self::Pho(_) | Self::Mod(_) | Self::Sin(_) => false,
-            Self::Wor(_) => false,
+            Self::Wor(_)
+            | Self::UnparsedMor(_)
+            | Self::UnparsedGra(_)
+            | Self::UnparsedPho(_)
+            | Self::UnparsedMod(_)
+            | Self::UnparsedSin(_)
+            | Self::UnparsedWor(_)
+            | Self::UnparsedPhoaln(_)
+            | Self::UnparsedText(_)
+            | Self::UnparsedXphoint(_) => false,
 
             // NOT a structured tier: `Unsupported` holds the same
-            // `Option<NonEmptyString>` payload as `UserDefined` above, and its
+            // `Option<RecoveryText>` payload as `UserDefined` above, and its
             // body IS free text. It answers `false` for a different reason,
             // which is why it gets its own arm: E605 already rejects the tier
             // for having a name chatter does not know, and reporting E756 as
@@ -112,9 +229,42 @@ impl DependentTier {
     #[must_use]
     pub fn map_location(self, project: impl FnOnce(crate::Span) -> crate::Span) -> Self {
         match self {
+            Self::UnparsedText(t) => Self::UnparsedText(t.map_location(project)),
             Self::Mor(mut t) => {
                 t.location = t.location.map(project);
                 Self::Mor(t)
+            }
+            Self::UnparsedMor(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedMor(t)
+            }
+            Self::UnparsedGra(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedGra(t)
+            }
+            Self::UnparsedPho(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedPho(t)
+            }
+            Self::UnparsedMod(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedMod(t)
+            }
+            Self::UnparsedSin(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedSin(t)
+            }
+            Self::UnparsedWor(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedWor(t)
+            }
+            Self::UnparsedPhoaln(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedPhoaln(t)
+            }
+            Self::UnparsedXphoint(mut t) => {
+                t.location = t.location.map(project);
+                Self::UnparsedXphoint(t)
             }
             Self::Gra(mut t) => {
                 t.location = t.location.map(project);
@@ -251,6 +401,11 @@ impl DependentTier {
         self.declares_nothing().then(|| self.location())
     }
 
+    /// Identity shared by parsed and recovery payloads of the same tier slot.
+    pub fn key(&self) -> DependentTierKey<'_> {
+        DependentTierKey(self.kind())
+    }
+
     /// Returns the canonical dependent-tier identifier used in CHAT tags.
     ///
     /// For standard tiers this is the lowercase suffix (`"mor"`, `"gra"`, ...).
@@ -260,11 +415,12 @@ impl DependentTier {
     /// duplicate-detection keys.
     pub fn kind(&self) -> &str {
         match self {
-            DependentTier::Mor(_) => "mor",
-            DependentTier::Gra(_) => "gra",
-            DependentTier::Pho(_) => "pho",
-            DependentTier::Mod(_) => "mod",
-            DependentTier::Sin(_) => "sin",
+            DependentTier::UnparsedText(t) => t.label(),
+            DependentTier::Mor(_) | DependentTier::UnparsedMor(_) => "mor",
+            DependentTier::Gra(_) | DependentTier::UnparsedGra(_) => "gra",
+            DependentTier::Pho(_) | DependentTier::UnparsedPho(_) => "pho",
+            DependentTier::Mod(_) | DependentTier::UnparsedMod(_) => "mod",
+            DependentTier::Sin(_) | DependentTier::UnparsedSin(_) => "sin",
             DependentTier::Act(_) => "act",
             DependentTier::Cod(_) => "cod",
             DependentTier::Add(_) => "add",
@@ -283,13 +439,13 @@ impl DependentTier {
             DependentTier::Flo(_) => "flo",
             DependentTier::Modsyl(_) => "modsyl",
             DependentTier::Phosyl(_) => "phosyl",
-            DependentTier::Phoaln(_) => "phoaln",
-            DependentTier::Xphoint(_) => "xphoint",
+            DependentTier::Phoaln(_) | DependentTier::UnparsedPhoaln(_) => "phoaln",
+            DependentTier::Xphoint(_) | DependentTier::UnparsedXphoint(_) => "xphoint",
             DependentTier::Gls(_) => "gls",
             DependentTier::Ort(_) => "ort",
             DependentTier::Par(_) => "par",
             DependentTier::Tim(_) => "tim",
-            DependentTier::Wor(_) => "wor",
+            DependentTier::Wor(_) | DependentTier::UnparsedWor(_) => "wor",
             // User-defined tiers: label already includes 'x' prefix
             // e.g., %xmor stores label="xmor" to avoid collision with %mor
             DependentTier::UserDefined(tier) => &tier.label,
@@ -302,7 +458,16 @@ impl DependentTier {
     /// or serialization. All variants expose it through this owner.
     pub fn location(&self) -> crate::Location {
         match self {
+            DependentTier::UnparsedText(t) => t.raw().location(),
             DependentTier::Mor(t) => t.location,
+            DependentTier::UnparsedMor(t)
+            | DependentTier::UnparsedGra(t)
+            | DependentTier::UnparsedPho(t)
+            | DependentTier::UnparsedMod(t)
+            | DependentTier::UnparsedSin(t)
+            | DependentTier::UnparsedWor(t)
+            | DependentTier::UnparsedPhoaln(t)
+            | DependentTier::UnparsedXphoint(t) => t.location(),
             DependentTier::Gra(t) => t.location,
             DependentTier::Pho(t) => t.location,
             DependentTier::Mod(t) => t.location,

@@ -81,7 +81,7 @@ fn anchor_of(gra: &GraTier, index: usize) -> SpanRoot {
 fn under(n: usize) -> SpanRoot {
     SpanRoot::from_gra_head(
         GraHeadRef::Word(chunk(n)),
-        AttachmentRelation::new("DEP").expect("a dependent relation"),
+        AttachmentRelation::new("DEP".try_into().unwrap()).expect("a dependent relation"),
     )
 }
 

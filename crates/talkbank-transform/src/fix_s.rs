@@ -5,8 +5,8 @@ use talkbank_model::alignment::helpers::{
 };
 use talkbank_model::model::LanguagePrecode;
 use talkbank_model::model::{
-    ChatFile, CodeSwitchSpan, Header, LanguageCode, Line, MainTier, ReplacedWord,
-    UnspannedSwitchTarget, Word, WordLanguageMarker,
+    ChatFile, CodeSwitchSpan, Header, LanguageCode, Line, MainTier, RegisteredLanguageCode,
+    ReplacedWord, UnspannedSwitchTarget, Word, WordLanguageMarker,
 };
 
 /// Rewrite summary for one CHAT file.
@@ -32,10 +32,17 @@ impl FixSRewriteStats {
 /// set the utterance precode and clear per-word markers that resolve to that
 /// same target language. Also appends any explicit `@s:LANG` codes missing from
 /// the file's `@Languages` header.
-pub fn rewrite_whole_utterance_language_switches(chat_file: &mut ChatFile) -> FixSRewriteStats {
-    let appended_language_codes = append_missing_explicit_language_declarations(chat_file);
-    let default_language = chat_file.languages.first().cloned();
-    let declared_languages = chat_file.languages.iter().cloned().collect::<Vec<_>>();
+///
+/// # Errors
+/// Refuses an absent, empty, rejected or repeated declaration before mutation.
+pub fn rewrite_whole_utterance_language_switches(
+    chat_file: &mut ChatFile,
+) -> Result<FixSRewriteStats, talkbank_model::model::LanguageDeclarationError> {
+    let mut declared_languages = chat_file.language_declaration()?.to_owned();
+    let appended_language_codes =
+        append_missing_explicit_language_declarations(chat_file, &mut declared_languages)?;
+    let declared_languages = declared_languages.as_ref();
+    let default_language = declared_languages.primary();
     let mut stats = FixSRewriteStats {
         appended_language_codes,
         ..FixSRewriteStats::default()
@@ -48,29 +55,31 @@ pub fn rewrite_whole_utterance_language_switches(chat_file: &mut ChatFile) -> Fi
 
         if rewrite_main_tier_language_switch(
             &mut utterance.main,
-            default_language.as_ref(),
-            &declared_languages,
+            Some(default_language),
+            declared_languages,
         ) {
             stats.rewritten_utterances += 1;
         }
     }
 
-    stats
+    Ok(stats)
 }
 
-fn append_missing_explicit_language_declarations(chat_file: &mut ChatFile) -> usize {
-    let missing = collect_missing_explicit_language_codes(chat_file);
+fn append_missing_explicit_language_declarations(
+    chat_file: &mut ChatFile,
+    declared: &mut talkbank_model::DeclaredLanguages,
+) -> Result<usize, talkbank_model::model::LanguageDeclarationError> {
+    let missing = collect_missing_explicit_language_codes(chat_file, declared.as_ref());
     if missing.is_empty() {
-        return 0;
+        return Ok(0);
     }
 
     // Keep the selected header's typed mutable collection, not an index whose
-    // kind must be checked again. Reverse traversal preserves last-header policy.
+    // kind must be checked again. Admission proved there is exactly one.
     let Some(codes) = chat_file
         .lines
         .as_mut_slice()
         .iter_mut()
-        .rev()
         .find_map(|line| match line {
             Line::Header { header, .. } => match header.as_mut() {
                 Header::Languages { codes } => Some(codes),
@@ -79,17 +88,21 @@ fn append_missing_explicit_language_declarations(chat_file: &mut ChatFile) -> us
             Line::Utterance(_) => None,
         })
     else {
-        return 0;
+        return Err(talkbank_model::model::LanguageDeclarationError::Absent);
     };
 
-    chat_file.languages.extend(missing.iter().cloned());
-    codes.extend(missing.iter().cloned());
+    let count = missing.len();
+    declared.extend(missing.iter().map(|code| code.as_code().clone()));
+    codes.extend(missing.into_iter().map(RegisteredLanguageCode::into_code));
 
-    missing.len()
+    Ok(count)
 }
 
-fn collect_missing_explicit_language_codes(chat_file: &ChatFile) -> Vec<LanguageCode> {
-    let mut known = chat_file.languages.iter().cloned().collect::<Vec<_>>();
+fn collect_missing_explicit_language_codes(
+    chat_file: &ChatFile,
+    declared: talkbank_model::DeclaredLanguagesRef<'_>,
+) -> Vec<RegisteredLanguageCode> {
+    let mut known = declared.to_vec();
     let mut missing = Vec::new();
 
     for line in &chat_file.lines {
@@ -109,7 +122,7 @@ fn collect_missing_explicit_language_codes(chat_file: &ChatFile) -> Vec<Language
 fn collect_missing_explicit_languages_from_main_tier(
     main_tier: &MainTier,
     known: &mut Vec<LanguageCode>,
-    missing: &mut Vec<LanguageCode>,
+    missing: &mut Vec<RegisteredLanguageCode>,
 ) {
     // TWO QUESTIONS, TWO WALKS, and they are genuinely different questions.
     //
@@ -160,7 +173,7 @@ fn collect_missing_explicit_languages_from_main_tier(
 fn record_missing_explicit_languages_in_replaced_word(
     replaced: &ReplacedWord,
     known: &mut Vec<LanguageCode>,
-    missing: &mut Vec<LanguageCode>,
+    missing: &mut Vec<RegisteredLanguageCode>,
 ) {
     record_missing_explicit_language(&replaced.word, known, missing);
     for word in &replaced.replacement.words {
@@ -171,7 +184,7 @@ fn record_missing_explicit_languages_in_replaced_word(
 fn record_missing_explicit_language(
     word: &Word,
     known: &mut Vec<LanguageCode>,
-    missing: &mut Vec<LanguageCode>,
+    missing: &mut Vec<RegisteredLanguageCode>,
 ) {
     let Some(WordLanguageMarker::Explicit(code)) = word.lang.as_ref() else {
         return;
@@ -186,24 +199,30 @@ fn record_missing_explicit_language(
 fn record_missing_code(
     code: &LanguageCode,
     known: &mut Vec<LanguageCode>,
-    missing: &mut Vec<LanguageCode>,
+    missing: &mut Vec<RegisteredLanguageCode>,
 ) {
     if known.contains(code) {
         return;
     }
 
+    let Ok(admitted) = RegisteredLanguageCode::try_from(code.clone()) else {
+        // This transform does not repair invalid codes. Preserve the authored
+        // marker and let normal validation report it at its original location.
+        return;
+    };
     known.push(code.clone());
-    missing.push(code.clone());
+    missing.push(admitted);
 }
 
 fn rewrite_main_tier_language_switch(
     main_tier: &mut MainTier,
     default_language: Option<&LanguageCode>,
-    declared_languages: &[LanguageCode],
+    declared_languages: talkbank_model::DeclaredLanguagesRef<'_>,
 ) -> bool {
-    let Some(target) =
-        main_tier.whole_utterance_language_switch_target(default_language, declared_languages)
-    else {
+    let Some(target) = main_tier.whole_utterance_language_switch_target_with_declaration(
+        default_language,
+        Ok(declared_languages),
+    ) else {
         return false;
     };
 
@@ -275,7 +294,7 @@ fn rewrite_main_tier_language_switch(
 fn clear_matching_word_language_marker(
     word: &mut Word,
     tier_language: Option<&LanguageCode>,
-    declared_languages: &[LanguageCode],
+    declared_languages: talkbank_model::DeclaredLanguagesRef<'_>,
     target: &UnspannedSwitchTarget,
 ) -> bool {
     let Some(_) = word.lang.as_ref() else {
@@ -299,7 +318,7 @@ fn clear_matching_word_language_marker(
 fn clear_matching_replaced_word_language_markers(
     replaced: &mut ReplacedWord,
     tier_language: Option<&LanguageCode>,
-    declared_languages: &[LanguageCode],
+    declared_languages: talkbank_model::DeclaredLanguagesRef<'_>,
     target: &UnspannedSwitchTarget,
 ) -> bool {
     let mut cleared_any_word_marker = clear_matching_word_language_marker(
@@ -320,11 +339,13 @@ mod tests {
     use super::{FixSRewriteStats, rewrite_whole_utterance_language_switches};
     use talkbank_model::model::WriteChat;
     use talkbank_parser::TreeSitterParser;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
 
     fn rewrite(chat: &str) -> (String, FixSRewriteStats) {
         let parser = TreeSitterParser::new().expect("parser");
         let mut parsed = parser.parse_chat_file(chat).expect_built();
-        let stats = rewrite_whole_utterance_language_switches(&mut parsed);
+        let stats =
+            rewrite_whole_utterance_language_switches(&mut parsed).expect("admitted declaration");
         (parsed.to_chat_string(), stats)
     }
 

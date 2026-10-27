@@ -59,7 +59,7 @@ impl Action {
 
 impl WriteChat for Action {
     /// Serializes the canonical action token (`0`).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('0')
     }
 }

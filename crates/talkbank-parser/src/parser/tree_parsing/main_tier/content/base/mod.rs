@@ -5,6 +5,7 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 mod internal_bullet;
+mod labeled_marker;
 mod long_feature;
 mod nonvocal;
 mod other_spoken;
@@ -15,19 +16,19 @@ pub(crate) use overlap_point::{parse_overlap_point, parse_overlap_point_token};
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BaseContentItemChoiceBoundView, BaseContentItemNode, LongFeatureLabelNode, NoChild,
-    NodeSlot, RecoveryNode, SourceBound, SourceSlotView,
+    AsRawNode, BaseContentItemChoiceBoundView, BaseContentItemMissingSourceView,
+    BaseContentItemNode, NoChild, SourceBound, SourceSlotView,
 };
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
 
 use super::super::super::freecode::parse_freecode;
 use super::nonword::parse_nonword_content;
-use super::report_tree_shape;
 use super::word::parse_word_content;
 use crate::parser::tree_parsing::parser_helpers::{
-    check_not_missing, expect_delimiter, parse_pause_node, surface_displaced,
+    check_not_missing, parse_pause_node, surface_displaced,
 };
+use crate::parser::typed_cst::ExtractCanonical;
 
 /// Parse one `base_content_item` into `UtteranceContent`.
 ///
@@ -56,7 +57,14 @@ pub(crate) fn parse_base_content<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
-    let associated = typed.extract();
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
+        typed.extract_canonical(),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
     let children = associated.children();
     let content = match associated.field_content().slot().view() {
         SourceSlotView::Present(choice) => {
@@ -74,9 +82,7 @@ pub(crate) fn parse_base_content<'tree>(
                 BaseContentItemChoiceBoundView::NonwordWithOptionalAnnotations(node) => {
                     parse_nonword_content(node, errors)
                 }
-                BaseContentItemChoiceBoundView::Freecode(node) => {
-                    parse_freecode(node.node(), source, errors)
-                }
+                BaseContentItemChoiceBoundView::Freecode(node) => parse_freecode(node, errors),
                 BaseContentItemChoiceBoundView::Bullet(node) => {
                     internal_bullet::parse_internal_bullet(node, errors)
                 }
@@ -104,7 +110,25 @@ pub(crate) fn parse_base_content<'tree>(
             }
         }
         SourceSlotView::Missing(missing) => {
-            check_not_missing(missing.raw_node(), source, errors, "base_content");
+            // Kind admission excludes composite placeholders. The four
+            // lexical alternatives retain their existing Missing diagnostic.
+            let node = match missing {
+                BaseContentItemMissingSourceView::Bullet(never) => match never.0 {},
+                BaseContentItemMissingSourceView::LongFeature(never) => match never.0 {},
+                BaseContentItemMissingSourceView::Nonvocal(never) => match never.0 {},
+                BaseContentItemMissingSourceView::NonwordWithOptionalAnnotations(never) => {
+                    match never.0 {}
+                }
+                BaseContentItemMissingSourceView::OtherSpokenEvent(never) => match never.0 {},
+                BaseContentItemMissingSourceView::WordWithOptionalAnnotations(never) => {
+                    match never.0 {}
+                }
+                BaseContentItemMissingSourceView::Freecode(node) => node.raw_node(),
+                BaseContentItemMissingSourceView::PauseToken(node) => node.raw_node(),
+                BaseContentItemMissingSourceView::UnderlineBegin(node) => node.raw_node(),
+                BaseContentItemMissingSourceView::UnderlineEnd(node) => node.raw_node(),
+            };
+            check_not_missing(node, source, errors, "base_content");
             ParseOutcome::rejected()
         }
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => ParseOutcome::rejected(),
@@ -112,57 +136,6 @@ pub(crate) fn parse_base_content<'tree>(
     };
     surface_displaced(&children.unexpected, "base_content", source, errors);
     content
-}
-
-/// A delimiter position of a marker construct (`&`, `{n=`, `}` and their
-/// kin): `true` when it holds what the grammar put there or a MISSING
-/// placeholder, which is the whole-tree pass's to report; `false` after an
-/// ERROR (or, for a slot that can hold one, a displaced node) has been
-/// reported as the marker losing its shape at `within`. A marker is built
-/// only when every one of its delimiters answers `true`, as the positional
-/// checks these replaced rejected on any structural defect.
-pub(super) fn delimiter<'tree, T, M, E: RecoveryNode<'tree>, U: RecoveryNode<'tree>, A>(
-    slot: &NodeSlot<T, M, E, U, A>,
-    what: &str,
-    within: &str,
-    source: &str,
-    errors: &impl ErrorSink,
-) -> bool {
-    let mut intact = true;
-    expect_delimiter(slot, |bad| {
-        intact = false;
-        report_tree_shape(
-            bad,
-            format!("Expected {what} in {within}, found '{}'", bad.kind()),
-            source,
-            errors,
-        );
-    });
-    intact
-}
-
-/// The label a marker's `long_feature_label` position carries, or `None`
-/// after its Missing state or source-read failure has been reported. The field
-/// owns its source; callers supply only the construct's diagnostic context.
-pub(super) fn marker_label<'value, 'tree: 'value, 'source>(
-    slot: crate::parser::typed_cst::RequiredLexicalField<
-        'value,
-        'tree,
-        'source,
-        LongFeatureLabelNode<'tree>,
-    >,
-    within: &str,
-    errors: &impl ErrorSink,
-) -> Option<String> {
-    let source = slot.source();
-    match slot.view() {
-        SourceSlotView::Present(node) => crate::parser::typed_cst::read_source_field(node, errors)
-            .map(|node| node.text().to_owned()),
-        SourceSlotView::Missing(node) => {
-            check_not_missing(node.raw_node(), source, errors, within);
-            None
-        }
-    }
 }
 
 /// The span of a leaf or marker node, for the sibling content modules.

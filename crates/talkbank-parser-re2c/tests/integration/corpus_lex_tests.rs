@@ -26,7 +26,7 @@
 // corpus (CI included) this file has been vacuous for as long as it has
 // existed. A test that cannot run is better absent than green.
 
-use talkbank_parser_re2c::chat_lines::{ChatLineKind, ChatLines};
+use crate::chat_lines::{ChatLineKind, ChatLines};
 use talkbank_parser_re2c::lex;
 
 /// Collect sample logical lines from the wild corpus matching a prefix.
@@ -53,8 +53,8 @@ fn collect_lines(prefix: &str, max: usize) -> Vec<String> {
         for entry in walker {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
                 for chat_line in ChatLines::new(&content) {
-                    if chat_line.text.starts_with(prefix) {
-                        lines.insert(chat_line.text.to_string());
+                    if chat_line.text().starts_with(prefix) {
+                        lines.insert(chat_line.text().to_string());
                         if lines.len() >= max {
                             break 'outer;
                         }
@@ -93,8 +93,8 @@ fn collect_lines_by_kind(kind: ChatLineKind, max: usize) -> Vec<String> {
         for entry in walker {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
                 for chat_line in ChatLines::new(&content) {
-                    if chat_line.kind == kind {
-                        lines.insert(chat_line.text.to_string());
+                    if chat_line.kind() == kind {
+                        lines.insert(chat_line.text().to_string());
                         if lines.len() >= max {
                             break 'outer;
                         }
@@ -113,7 +113,7 @@ fn assert_clean_lex(line: &str) -> usize {
     let result = lex(&input);
     let errors = result.errors();
     if !errors.is_empty() {
-        let report = result.error_report(&input);
+        let report = result.error_report();
         eprintln!("ERRORS in: {}", line.chars().take(80).collect::<String>());
         eprint!("{report}");
     }
@@ -398,13 +398,13 @@ fn corpus_full_files_sample() {
                 let mut file_errors = 0;
                 for chat_line in ChatLines::new(&content) {
                     total_lines += 1;
-                    let result = lex(chat_line.text);
+                    let result = lex(chat_line.text());
                     let errs = result.errors();
                     if !errs.is_empty() {
                         file_errors += errs.len();
                         // Print first few errors for debugging
                         if file_errors <= 3 {
-                            let snippet = chat_line.text.chars().take(60).collect::<String>();
+                            let snippet = chat_line.text().chars().take(60).collect::<String>();
                             eprintln!(
                                 "  Error in {:?}: {} ({} errors)",
                                 entry.path().file_name().unwrap_or_default(),
@@ -414,8 +414,8 @@ fn corpus_full_files_sample() {
                             for e in &errs {
                                 eprintln!(
                                     "    {}: {:?}",
-                                    e.context,
-                                    e.token.text().escape_debug().to_string()
+                                    e.context(),
+                                    e.token().text().escape_debug().to_string()
                                 );
                             }
                         }
@@ -473,12 +473,12 @@ fn corpus_full_sweep() {
                 let mut file_errors = 0;
                 for chat_line in ChatLines::new(&content) {
                     total_lines += 1;
-                    let result = lex(chat_line.text);
+                    let result = lex(chat_line.text());
                     let errs = result.errors();
                     if !errs.is_empty() {
                         file_errors += errs.len();
                         if error_examples.len() < 50 {
-                            let snippet = chat_line.text.chars().take(80).collect::<String>();
+                            let snippet = chat_line.text().chars().take(80).collect::<String>();
                             for e in &errs {
                                 error_examples.push(format!(
                                     "{}: {}, {} ({:?})",
@@ -487,9 +487,9 @@ fn corpus_full_sweep() {
                                         .file_name()
                                         .unwrap_or_default()
                                         .to_string_lossy(),
-                                    e.context,
+                                    e.context(),
                                     snippet.escape_debug(),
-                                    e.token.text().escape_debug().to_string()
+                                    e.token().text().escape_debug().to_string()
                                 ));
                             }
                         }

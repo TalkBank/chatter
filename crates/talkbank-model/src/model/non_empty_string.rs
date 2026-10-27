@@ -1,15 +1,4 @@
-//! Non-empty string type for correct-by-construction validation
-//!
-//! This type enforces at construction time that the string is non-empty,
-//! eliminating the need for separate validation of "is this string empty?"
-//!
-//! **Note:** Deserialization allows empty strings - use the `Validate` trait
-//! to check invariants on deserialized data. This allows validation errors
-//! to go through our rich ErrorSink system with proper context.
-//!
-//! CHAT reference anchors (where this primitive is heavily used):
-//! - [File Headers](https://talkbank.org/0info/manuals/CHAT.html#File_Headers)
-//! - [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)
+//! Admitted non-empty text and explicit empty-text recovery.
 
 use crate::validation::{Validate, ValidationContext};
 use crate::{ErrorCode, ErrorSink, ParseError, Severity};
@@ -19,68 +8,135 @@ use std::fmt;
 use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
-/// String wrapper with a non-empty construction invariant.
-///
-/// `new()` enforces non-empty input. Deserialization intentionally allows empty
-/// payloads so invariant violations can flow through normal validation/error
-/// reporting with source context.
-///
-/// Note: Whitespace-only strings are considered valid (they are non-empty).
-///
-/// # Construction
-///
-/// Use `NonEmptyString::new()`, which returns `Result<NonEmptyString, EmptyText>`,
-/// or the equivalent `TryFrom<&str>`:
-///
-/// ```
-/// use talkbank_model::model::NonEmptyString;
-///
-/// // Successful construction
-/// if let Ok(s) = NonEmptyString::new("hello") {
-///     assert_eq!(s.as_str(), "hello");
-/// }
-///
-/// // Whitespace is valid (non-empty)
-/// assert!(NonEmptyString::new("   ").is_ok());
-///
-/// // Only empty string is rejected
-/// assert!(NonEmptyString::new("").is_err());
-/// ```
-///
-/// # Validation
-///
-/// After deserializing data, use the `Validate` trait to check invariants:
-///
-/// ```ignore
-/// use talkbank_model::validation::{Validate, ValidationContext};
-/// use talkbank_model::ErrorCollector;
-///
-/// let errors = ErrorCollector::new();
-/// let ctx = ValidationContext::default();
-/// deserialized_data.validate(&ctx, &errors);
-/// // Check errors.into_vec() for any NonEmptyString violations
-/// ```
-///
-/// # Usage
-///
-/// `NonEmptyString` derefs to `&str` for convenient access:
-///
-/// ```
-/// use talkbank_model::model::NonEmptyString;
-///
-/// if let Ok(s) = NonEmptyString::new("hello") {
-///     assert_eq!(s.as_str().get(0..2), Some("he"));  // str methods work via Deref
-/// }
-/// ```
-///
-/// References:
-/// - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
-/// - <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
-#[derive(
-    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift,
-)]
-#[serde(transparent)]
+/// Text proven non-empty at construction, including deserialization.
+/// Whitespace is non-empty; CHAT lexical rules are separate.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, SemanticEq, SpanShift)]
+#[serde(try_from = "String")]
 pub struct NonEmptyString(smol_str::SmolStr);
+
+impl JsonSchema for NonEmptyString {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "NonEmptyString".into()
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "string", "minLength": 1 })
+    }
+}
+
+/// A lexical field retained for contextual validation, including observed emptiness.
+///
+/// JSON remains a string. An empty payload becomes `Empty`; it never constructs
+/// a `NonEmptyString`. Rendering preserves the observed text and does not admit it.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[serde(from = "String")]
+pub enum RecoveryText {
+    /// Text with established non-emptiness, not necessarily valid CHAT syntax.
+    NonEmpty(NonEmptyString),
+    /// The input explicitly contained no text.
+    Empty,
+}
+
+impl Serialize for RecoveryText {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl From<String> for RecoveryText {
+    fn from(text: String) -> Self {
+        match NonEmptyString::new(text) {
+            Ok(text) => Self::NonEmpty(text),
+            Err(EmptyText) => Self::Empty,
+        }
+    }
+}
+
+impl From<NonEmptyString> for RecoveryText {
+    fn from(text: NonEmptyString) -> Self {
+        Self::NonEmpty(text)
+    }
+}
+
+impl TryFrom<RecoveryText> for NonEmptyString {
+    type Error = EmptyText;
+    fn try_from(text: RecoveryText) -> Result<Self, Self::Error> {
+        match text {
+            RecoveryText::NonEmpty(text) => Ok(text),
+            RecoveryText::Empty => Err(EmptyText),
+        }
+    }
+}
+
+impl TryFrom<String> for NonEmptyString {
+    type Error = EmptyText;
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        Self::new(text)
+    }
+}
+
+impl From<NonEmptyString> for String {
+    fn from(text: NonEmptyString) -> Self {
+        text.into_inner()
+    }
+}
+
+impl From<RecoveryText> for String {
+    fn from(text: RecoveryText) -> Self {
+        text.into_inner()
+    }
+}
+
+impl TryFrom<&str> for RecoveryText {
+    type Error = EmptyText;
+    fn try_from(text: &str) -> Result<Self, Self::Error> {
+        Self::new(text)
+    }
+}
+
+impl RecoveryText {
+    /// Admit non-empty input; use the explicit `Empty` variant for recovery.
+    pub fn new(text: impl AsRef<str>) -> Result<Self, EmptyText> {
+        NonEmptyString::new(text).map(Self::NonEmpty)
+    }
+
+    /// Compose text with an observed non-empty prefix.
+    pub fn from_head_and_tail(head: char, tail: &str) -> Self {
+        Self::NonEmpty(NonEmptyString::from_head_and_tail(head, tail))
+    }
+
+    /// Borrow the exact observed text. This does not establish non-emptiness.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::NonEmpty(text) => text.as_str(),
+            Self::Empty => "",
+        }
+    }
+
+    /// Consume the state and return its exact observed text.
+    pub fn into_inner(self) -> String {
+        match self {
+            Self::NonEmpty(text) => text.into_inner(),
+            Self::Empty => String::new(),
+        }
+    }
+}
+
+impl Deref for RecoveryText {
+    type Target = str;
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+impl AsRef<str> for RecoveryText {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+impl fmt::Display for RecoveryText {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// Why constructing a non-empty text newtype failed.
 ///
@@ -91,6 +147,57 @@ pub struct NonEmptyString(smol_str::SmolStr);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("text cannot be empty")]
 pub struct EmptyText;
+
+/// Borrowed text admitted as non-empty, without recovery or deserialization paths.
+///
+/// ```compile_fail,E0451
+/// let forged = talkbank_model::model::NonEmptyStr("");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NonEmptyStr<'a>(&'a str);
+
+impl<'a> NonEmptyStr<'a> {
+    /// Admit text without allocating. Whitespace is non-empty lexical text.
+    pub fn new(text: &'a str) -> Result<Self, EmptyText> {
+        if text.is_empty() {
+            Err(EmptyText)
+        } else {
+            Ok(Self(text))
+        }
+    }
+
+    /// Borrow the original text for its original lifetime.
+    pub fn as_str(self) -> &'a str {
+        self.0
+    }
+
+    /// Copy admitted text into owned storage without repeating admission.
+    pub fn into_owned(self) -> NonEmptyString {
+        NonEmptyString(smol_str::SmolStr::from(self.0))
+    }
+}
+
+/// Validated non-empty static text for literal construction.
+///
+/// Unlike the recovery-capable [`RecoveryText`], this evidence cannot be
+/// deserialized or constructed without checking non-emptiness.
+///
+/// ```compile_fail,E0451
+/// let forged = talkbank_model::model::NonEmptyLiteral("");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NonEmptyLiteral(&'static str);
+
+impl NonEmptyLiteral {
+    /// Admit static text, at compile time when used by `non_empty_literal!`.
+    pub const fn new(text: &'static str) -> Result<Self, EmptyText> {
+        if text.is_empty() {
+            Err(EmptyText)
+        } else {
+            Ok(Self(text))
+        }
+    }
+}
 
 impl TryFrom<&str> for NonEmptyString {
     type Error = EmptyText;
@@ -122,12 +229,7 @@ impl NonEmptyString {
     /// assert!(NonEmptyString::new("").is_err());
     /// ```
     pub fn new(s: impl AsRef<str>) -> Result<Self, EmptyText> {
-        let s = s.as_ref();
-        if s.is_empty() {
-            Err(EmptyText)
-        } else {
-            Ok(Self(smol_str::SmolStr::from(s)))
-        }
+        NonEmptyStr::new(s.as_ref()).map(NonEmptyStr::into_owned)
     }
 
     /// A string that begins with `head`: non-empty by construction, so
@@ -170,35 +272,16 @@ impl NonEmptyString {
     }
 
     /// The route the [`non_empty_literal!`](crate::non_empty_literal) macro
-    /// takes after proving its literal non-empty at compile time. Callable
-    /// directly, which is why the fabrication ratchet counts its name beside
-    /// `new_unchecked`: a call that is not the macro's is a fabrication, and
-    /// carries the same debug assertion that one does.
+    /// takes after proving its literal non-empty at compile time. Direct
+    /// callers must supply the same validated evidence; raw strings cannot
+    /// bypass the check, including in release builds.
+    ///
+    /// ```compile_fail,E0308
+    /// let _ = talkbank_model::model::NonEmptyString::from_checked_literal("");
+    /// ```
     #[doc(hidden)]
-    pub fn from_checked_literal(literal: &'static str) -> Self {
-        debug_assert!(
-            !literal.is_empty(),
-            "NonEmptyString::from_checked_literal called with an empty literal"
-        );
-        Self(smol_str::SmolStr::new_static(literal))
-    }
-
-    /// Construct without checking emptiness.
-    ///
-    /// # Safety
-    ///
-    /// Caller must guarantee non-empty input.
-    ///
-    /// # Panics
-    ///
-    /// In debug builds, panics if the string is empty.
-    pub fn new_unchecked(s: impl AsRef<str>) -> Self {
-        let s = s.as_ref();
-        debug_assert!(
-            !s.is_empty(),
-            "NonEmptyString::new_unchecked called with empty string"
-        );
-        Self(smol_str::SmolStr::from(s))
+    pub fn from_checked_literal(literal: NonEmptyLiteral) -> Self {
+        Self(smol_str::SmolStr::new_static(literal.0))
     }
 
     /// Borrow the inner string.
@@ -235,11 +318,12 @@ impl fmt::Display for NonEmptyString {
     }
 }
 
-impl Validate for NonEmptyString {
+impl Validate for RecoveryText {
     /// Reports an error when deserialized content violates the non-empty invariant.
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
-        if !self.0.is_empty() {
-            return;
+        match self {
+            Self::NonEmpty(_) => return,
+            Self::Empty => {}
         }
 
         let location = context.field_diagnostic_location();
@@ -279,8 +363,11 @@ impl Validate for NonEmptyString {
 #[macro_export]
 macro_rules! non_empty_literal {
     ($literal:literal) => {{
-        const LITERAL: &'static str = $literal;
-        const _: () = assert!(!LITERAL.is_empty(), "a non-empty literal is empty");
+        const LITERAL: $crate::model::NonEmptyLiteral =
+            match $crate::model::NonEmptyLiteral::new($literal) {
+                Ok(literal) => literal,
+                Err(_) => panic!("a non-empty literal is empty"),
+            };
         $crate::model::NonEmptyString::from_checked_literal(LITERAL)
     }};
 }
@@ -289,32 +376,76 @@ macro_rules! non_empty_literal {
 mod tests {
     use super::*;
 
+    #[test]
+    fn recovery_is_explicit_and_cannot_be_admitted_as_nonempty() {
+        let recovered: RecoveryText = serde_json::from_str("\"\"").unwrap();
+        assert_eq!(recovered, RecoveryText::Empty);
+        assert_eq!(NonEmptyString::try_from(recovered), Err(EmptyText));
+        assert!(serde_json::from_str::<NonEmptyString>("\"\"").is_err());
+        for raw in ["word", "話", " ", "😀"] {
+            let wire = serde_json::to_string(raw).unwrap();
+            let recovered: RecoveryText = serde_json::from_str(&wire).unwrap();
+            let RecoveryText::NonEmpty(admitted) = recovered else {
+                panic!("nonempty input")
+            };
+            assert_eq!(admitted.as_str(), raw);
+            assert_eq!(serde_json::to_string(&admitted).unwrap(), wire);
+            assert_eq!(
+                serde_json::from_str::<NonEmptyString>(&wire).unwrap(),
+                admitted
+            );
+        }
+    }
+
+    #[test]
+    fn borrowed_admission_preserves_text_when_owned() {
+        assert_eq!(NonEmptyStr::new(""), Err(EmptyText));
+        let recovered: RecoveryText = serde_json::from_str("\"\"").unwrap();
+        assert_eq!(NonEmptyStr::new(recovered.as_str()), Err(EmptyText));
+        for text in ["word", "話", " ", "😀"] {
+            let admitted = NonEmptyStr::new(text).unwrap();
+            assert_eq!(admitted.as_str(), text);
+            assert_eq!(admitted.into_owned().as_str(), text);
+        }
+    }
+
+    #[test]
+    fn literal_admission() {
+        assert_eq!(NonEmptyLiteral::new(""), Err(EmptyText));
+        for text in ["word", "\u{8a71}", " "] {
+            assert!(NonEmptyLiteral::new(text).is_ok());
+        }
+        assert_eq!(crate::non_empty_literal!("lemma").as_str(), "lemma");
+        assert_eq!(crate::non_empty_literal!("\u{8a71}").as_str(), "\u{8a71}");
+        assert_eq!(crate::non_empty_literal!(" ").as_str(), " ");
+    }
+
     /// Non-empty inputs construct successfully.
     #[test]
     fn test_construction() {
-        assert!(NonEmptyString::new("hello").is_ok());
-        assert!(NonEmptyString::new("a").is_ok());
-        assert!(NonEmptyString::new(" x ").is_ok());
+        assert!(RecoveryText::new("hello").is_ok());
+        assert!(RecoveryText::new("a").is_ok());
+        assert!(RecoveryText::new(" x ").is_ok());
     }
 
     /// Empty input is rejected by `new()`.
     #[test]
     fn test_empty_rejected() {
-        assert!(NonEmptyString::new("").is_err());
+        assert!(RecoveryText::new("").is_err());
     }
 
     /// Whitespace-only input is still non-empty and therefore valid.
     #[test]
     fn test_whitespace_allowed() {
         // Whitespace-only strings are valid (not empty)
-        assert!(NonEmptyString::new("   ").is_ok());
-        assert!(NonEmptyString::new("\t\n").is_ok());
+        assert!(RecoveryText::new("   ").is_ok());
+        assert!(RecoveryText::new("\t\n").is_ok());
     }
 
     /// `Deref<str>` behavior is available.
     #[test]
     fn test_deref() -> Result<(), String> {
-        let s = NonEmptyString::new("hello").map_err(|error| error.to_string())?;
+        let s = RecoveryText::new("hello").map_err(|error| error.to_string())?;
         assert_eq!(s.as_str().get(0..2), Some("he"));
         assert_eq!(s.len(), 5);
         Ok(())
@@ -323,7 +454,7 @@ mod tests {
     /// `Display` prints inner contents.
     #[test]
     fn test_display() -> Result<(), String> {
-        let s = NonEmptyString::new("hello").map_err(|error| error.to_string())?;
+        let s = RecoveryText::new("hello").map_err(|error| error.to_string())?;
         assert_eq!(format!("{}", s), "hello");
         Ok(())
     }
@@ -331,13 +462,13 @@ mod tests {
     /// Serde roundtrip preserves values.
     #[test]
     fn test_serde_roundtrip() -> Result<(), String> {
-        let s = NonEmptyString::new("hello").map_err(|error| error.to_string())?;
+        let s = RecoveryText::new("hello").map_err(|error| error.to_string())?;
         let json = serde_json::to_string(&s)
-            .map_err(|err| format!("Failed to serialize NonEmptyString: {err}"))?;
+            .map_err(|err| format!("Failed to serialize RecoveryText: {err}"))?;
         assert_eq!(json, "\"hello\"");
 
-        let deserialized: NonEmptyString = serde_json::from_str(&json)
-            .map_err(|err| format!("Failed to deserialize NonEmptyString: {err}"))?;
+        let deserialized: RecoveryText = serde_json::from_str(&json)
+            .map_err(|err| format!("Failed to deserialize RecoveryText: {err}"))?;
         assert_eq!(deserialized, s);
         Ok(())
     }
@@ -345,8 +476,8 @@ mod tests {
     /// Empty payload may deserialize and is caught by validation later.
     #[test]
     fn test_deserialize_empty_allowed_but_invalid() -> Result<(), String> {
-        let s: NonEmptyString = serde_json::from_str(r#""""#)
-            .map_err(|err| format!("Failed to deserialize empty NonEmptyString: {err}"))?;
+        let s: RecoveryText = serde_json::from_str(r#""""#)
+            .map_err(|err| format!("Failed to deserialize empty RecoveryText: {err}"))?;
         assert!(s.as_str().is_empty());
         Ok(())
     }
@@ -354,8 +485,8 @@ mod tests {
     /// Whitespace payload deserializes as valid non-empty content.
     #[test]
     fn test_deserialize_whitespace_valid() -> Result<(), String> {
-        let s: NonEmptyString = serde_json::from_str(r#""   ""#)
-            .map_err(|err| format!("Failed to deserialize whitespace NonEmptyString: {err}"))?;
+        let s: RecoveryText = serde_json::from_str(r#""   ""#)
+            .map_err(|err| format!("Failed to deserialize whitespace RecoveryText: {err}"))?;
         assert!(!s.as_str().is_empty());
         assert_eq!(s.as_str(), "   ");
         Ok(())
@@ -367,8 +498,8 @@ mod tests {
         use crate::ErrorCollector;
         use crate::validation::ValidationContext;
 
-        let s: NonEmptyString = serde_json::from_str(r#""""#)
-            .map_err(|err| format!("Failed to deserialize empty NonEmptyString: {err}"))?;
+        let s: RecoveryText = serde_json::from_str(r#""""#)
+            .map_err(|err| format!("Failed to deserialize empty RecoveryText: {err}"))?;
         let errors = ErrorCollector::new();
         let ctx = ValidationContext::default();
         s.validate(&ctx, &errors);
@@ -378,7 +509,7 @@ mod tests {
             error_vec
                 .iter()
                 .any(|e| e.code == crate::ErrorCode::EmptyString),
-            "Expected E003 for empty NonEmptyString, got: {:#?}",
+            "Expected E003 for empty RecoveryText, got: {:#?}",
             error_vec
         );
         Ok(())

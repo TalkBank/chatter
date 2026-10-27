@@ -12,9 +12,12 @@ use std::path::{Path, PathBuf};
 
 use super::renderer::{RenderedOutput, SummaryContext, ValidationRenderer};
 use super::shared::{incomplete_sentence, nothing_found_sentence, stop_sentence};
-use crate::commands::validate::audit_reporter::{AuditReporter, AuditReporterHandle, AuditStats};
+use crate::commands::validate::audit_reporter::{
+    AuditCompletion, AuditDestination, AuditReporter, AuditReporterHandle, AuditStats,
+};
+use talkbank_transform::paths::ExpandedArguments;
 use talkbank_transform::validation_runner::{
-    FileCompleteEvent, RunEnding, ValidationStatsSnapshot,
+    FileCompleteEvent, FileStatus, RunEnding, ValidationStatsSnapshot,
 };
 
 /// Renderer that writes streamed diagnostics to a JSONL audit file.
@@ -37,9 +40,21 @@ const AUDIT_PROGRESS_INTERVAL: usize = 500;
 
 impl AuditRenderer {
     /// Create an audit renderer writing JSONL records to `output_path`.
-    pub fn new(output_path: &Path) -> std::io::Result<Self> {
-        let (reporter, handle) = AuditReporter::new(output_path)?;
-        // Said once the file exists, before the run starts.
+    pub fn new(
+        output_path: &Path,
+        inputs: &ExpandedArguments,
+    ) -> crate::exit_codes::CommandResult<Self> {
+        let fail = |error: super::super::validate::audit_reporter::AuditDestinationError| {
+            eprintln!(
+                "Error: cannot create the audit file {}: {error}",
+                output_path.display()
+            );
+            crate::exit_codes::CommandStop::Reported(crate::exit_codes::ReportedFailure::Input)
+        };
+        let destination = AuditDestination::admit(output_path, inputs).map_err(fail)?;
+        let (reporter, handle) =
+            AuditReporter::new(destination).map_err(|error| fail(error.into()))?;
+        // Name the requested destination; regular output is still staged.
         outln!("Running validation in audit mode...");
         outln!("Output file: {}", output_path.display());
         outln!();
@@ -56,9 +71,11 @@ impl AuditRenderer {
     /// per-code totals, or why the audit file is incomplete, said here
     /// whatever the run's ending. A second call has no writer left to
     /// join, and says so as a failure rather than as an empty audit.
-    fn finish_writer(&mut self) -> std::io::Result<AuditStats> {
+    fn finish_writer(&mut self, end: &RunEnding) -> std::io::Result<AuditCompletion> {
         let written = match self.reporter.take() {
-            Some(reporter) => reporter.finish(),
+            Some(reporter) => reporter
+                .finish()
+                .and_then(|finished| finished.conclude(end)),
             None => Err(std::io::Error::other(
                 "the audit writer was already finished",
             )),
@@ -76,15 +93,17 @@ impl AuditRenderer {
     fn print_summary(
         &self,
         stats: &ValidationStatsSnapshot,
-        written: &std::io::Result<AuditStats>,
-    ) {
+        written: &std::io::Result<AuditCompletion>,
+    ) -> crate::exit_codes::CommandResult {
         if let Some(sentence) = super::renderer::cache_errors_sentence(stats) {
             eprintln!("{sentence}");
         }
         // A write failure was said when the writer finished; only a success
         // has a summary to print.
-        if let Ok(audit_stats) = written {
-            audit_stats.print_summary();
+        match written {
+            Ok(AuditCompletion::Published(stats)) => self.print_written_report(stats)?,
+            Ok(AuditCompletion::Withheld(stats)) => stats.print_summary()?,
+            Err(_) => {}
         }
 
         // Cache accounting comes from the RUN, not from the audit sink: the
@@ -94,16 +113,26 @@ impl AuditRenderer {
             outln!("{line}");
         }
         outln!();
+        Ok(())
+    }
+
+    /// Only the joined writer's successful statistics authorize a completion claim.
+    fn print_written_report(&self, written: &AuditStats) -> crate::exit_codes::CommandResult {
+        written.print_summary()?;
         outln!("Detailed errors written to: {}", self.output_path.display());
+        Ok(())
     }
 }
 
 impl ValidationRenderer for AuditRenderer {
-    fn handle_discovering(&mut self) {}
+    fn handle_discovering(&mut self) -> crate::exit_codes::CommandResult {
+        Ok(())
+    }
 
-    fn handle_started(&mut self, total_files: usize) {
+    fn handle_started(&mut self, total_files: usize) -> crate::exit_codes::CommandResult {
         outln!("Found {} files to validate", total_files);
         outln!();
+        Ok(())
     }
 
     /// One file, accounted for once: its diagnostics, sent to the writer
@@ -112,9 +141,30 @@ impl ValidationRenderer for AuditRenderer {
     /// count of files with errors is the run's (a valid file with warnings
     /// has records but did not fail; an unread file, a failed roundtrip and
     /// a tool failure may have none but did).
-    fn handle_file_complete(&mut self, file: FileCompleteEvent, files_completed: usize) {
+    fn handle_file_complete(
+        &mut self,
+        file: FileCompleteEvent,
+        files_completed: usize,
+    ) -> crate::exit_codes::CommandResult {
         if files_completed.is_multiple_of(AUDIT_PROGRESS_INTERVAL) {
             eprintln!("Progress: {} files...", files_completed);
+        }
+        // These failures need not carry a diagnostic about original CHAT.
+        // Keep their cause on stderr instead of losing it in an empty report.
+        match &file.status {
+            FileStatus::ReadError { message } => {
+                eprintln!("Error: {} (read error: {message})", file.path.display());
+            }
+            FileStatus::InternalFailure { failure, .. } => {
+                eprintln!("Error: {} ({failure})", file.path.display());
+            }
+            FileStatus::RoundtripFailed { reason, .. } => {
+                eprintln!(
+                    "Error: {} (roundtrip failed: {reason})",
+                    file.path.display()
+                );
+            }
+            FileStatus::Valid { .. } | FileStatus::Invalid { .. } => {}
         }
         let failed = file.status.failed();
         match file.status.shown() {
@@ -125,33 +175,42 @@ impl ValidationRenderer for AuditRenderer {
             ),
             None => self.handle.mark_file_done(failed),
         }
+        Ok(())
     }
 
-    /// Every ending flushes and joins the writer, so what was recorded is
-    /// on disk even for a run that died; the stop or loss is said on the
-    /// operator's terminal, and only a run with totals gets the summary.
-    fn finish(&mut self, end: &RunEnding, summary: SummaryContext<'_>) -> RenderedOutput {
-        let written = self.finish_writer();
+    /// Every ending joins the writer; only a complete run publishes staged output.
+    /// Partial totals remain visible without claiming that a report was published.
+    fn finish(
+        &mut self,
+        end: &RunEnding,
+        summary: SummaryContext<'_>,
+    ) -> crate::exit_codes::CommandResult<RenderedOutput> {
+        let written = self.finish_writer(end);
+        if matches!(written, Ok(AuditCompletion::Withheld(_))) {
+            eprintln!(
+                "Audit run did not complete; staged report was not published. Streaming output may be partial."
+            );
+        }
         match end {
-            RunEnding::Complete(stats) => self.print_summary(stats.snapshot(), &written),
+            RunEnding::Complete(stats) => self.print_summary(stats.snapshot(), &written)?,
             RunEnding::NothingFound => eprintln!("{}", nothing_found_sentence(summary.label)),
             RunEnding::Stopped { stats, reason } => {
                 eprintln!("{}", stop_sentence(*reason, stats.missing_files()));
-                self.print_summary(stats.snapshot(), &written);
+                self.print_summary(stats.snapshot(), &written)?;
             }
             RunEnding::Incomplete { stats, cause } => {
                 eprintln!(
                     "{}",
                     incomplete_sentence(stats.snapshot(), stats.missing_files(), cause)
                 );
-                self.print_summary(stats.snapshot(), &written);
+                self.print_summary(stats.snapshot(), &written)?;
             }
             RunEnding::Aborted(reason) => eprintln!("Error: {reason}"),
         }
-        match written {
+        Ok(match written {
             Ok(_) => RenderedOutput::Complete,
             Err(_) => RenderedOutput::AuditFileIncomplete,
-        }
+        })
     }
 
     /// An audit records findings ABOUT TRANSCRIPTS, so a cache event does not
@@ -160,14 +219,22 @@ impl ValidationRenderer for AuditRenderer {
     ///
     /// This is the question the old stderr write let everyone avoid. Putting
     /// the event on the trait made someone answer it, which is the point.
-    fn handle_cache_event(&mut self, event: &crate::commands::validate::cache::CacheEvent) {
+    fn handle_cache_event(
+        &mut self,
+        event: &crate::commands::validate::cache::CacheEvent,
+    ) -> crate::exit_codes::CommandResult {
         eprintln!("{}", event.sentence());
+        Ok(())
     }
 
     /// The operator is at a terminal; a note about the run is not a finding
     /// about a transcript, so it does not go in the file.
-    fn handle_notice(&mut self, notice: &super::shared::RunNotice) {
+    fn handle_notice(
+        &mut self,
+        notice: &super::shared::RunNotice,
+    ) -> crate::exit_codes::CommandResult {
         eprintln!("{}", notice.sentence());
+        Ok(())
     }
 
     fn interrupt_report(&self) -> super::shared::InterruptReport {

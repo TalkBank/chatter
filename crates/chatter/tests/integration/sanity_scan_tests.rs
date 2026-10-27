@@ -26,6 +26,89 @@ use tempfile::tempdir;
 
 use crate::common::CliHarness;
 
+#[test]
+fn scan_missing_inputs_never_claim_complete_or_change_pending() {
+    enum Missing {
+        Directory,
+        Decisions,
+        Transcript,
+    }
+    let harness = CliHarness::new().unwrap();
+    for missing in [Missing::Directory, Missing::Decisions, Missing::Transcript] {
+        let dir = tempdir().unwrap();
+        let merged = dir.path().join("merged");
+        let decisions = dir.path().join("overrides.toml");
+        let pending = dir.path().join("pending.toml");
+        match missing {
+            Missing::Directory => {
+                fs::write(&decisions, "schema_version = 2\n").unwrap();
+            }
+            Missing::Decisions => {
+                fs::create_dir(&merged).unwrap();
+            }
+            Missing::Transcript => {
+                fs::create_dir(&merged).unwrap();
+                fs::write(&decisions, FIX_OVERRIDE_PASS1_AUTO).unwrap();
+            }
+        }
+        fs::write(&pending, "schema_version = 2\nentries = []\n").unwrap();
+        harness
+            .chatter_cmd()
+            .args(["experimental", "speakers", "scan"])
+            .arg(&merged)
+            .arg("--override-file")
+            .arg(&decisions)
+            .args(["--anchor", "CHI", "--write-pending"])
+            .arg(&pending)
+            .assert()
+            .code(1)
+            .stdout("");
+        assert_eq!(
+            fs::read_to_string(&pending).unwrap(),
+            "schema_version = 2\nentries = []\n"
+        );
+    }
+}
+
+#[test]
+fn scan_pending_aliases_cannot_replace_decisions_or_transcripts() {
+    let harness = CliHarness::new().unwrap();
+    let dir = tempdir().unwrap();
+    let merged = dir.path().join("merged");
+    fs::create_dir(&merged).unwrap();
+    let transcript = merged.join("session-misclass.cha");
+    let decisions = dir.path().join("overrides.toml");
+    fs::write(&transcript, FIX_MERGED_INVERTED_MLU).unwrap();
+    fs::write(&decisions, FIX_OVERRIDE_PASS1_AUTO).unwrap();
+    for source in [&decisions, &transcript] {
+        let alias = dir.path().join("pending-alias.toml");
+        fs::hard_link(source, &alias).unwrap();
+        for destination in [source, &alias] {
+            harness
+                .chatter_cmd()
+                .args(["experimental", "speakers", "scan"])
+                .arg(&merged)
+                .arg("--override-file")
+                .arg(&decisions)
+                .args(["--anchor", "CHI", "--write-pending"])
+                .arg(destination)
+                .assert()
+                .code(1)
+                .stdout("")
+                .stderr(predicates::str::contains("output aliases input"));
+        }
+        fs::remove_file(alias).unwrap();
+    }
+    assert_eq!(
+        fs::read_to_string(transcript).unwrap(),
+        FIX_MERGED_INVERTED_MLU
+    );
+    assert_eq!(
+        fs::read_to_string(decisions).unwrap(),
+        FIX_OVERRIDE_PASS1_AUTO
+    );
+}
+
 /// Invalid heuristic parameters must fail before any input or output I/O.
 #[test]
 fn sanity_scan_rejects_invalid_threshold_before_io() -> Result<(), TestError> {
@@ -37,7 +120,7 @@ fn sanity_scan_rejects_invalid_threshold_before_io() -> Result<(), TestError> {
     for threshold in ["NaN", "inf", "-inf", "0", "-0", "-1"] {
         harness
             .chatter_cmd()
-            .arg("sanity-scan")
+            .args(["experimental", "speakers", "scan"])
             .arg(dir.path().join("missing-inputs"))
             .arg("--override-file")
             .arg(dir.path().join("missing-overrides.toml"))
@@ -111,7 +194,7 @@ fn sanity_scan_flags_inverted_mlu() -> Result<(), TestError> {
 
     harness
         .chatter_cmd()
-        .arg("sanity-scan")
+        .args(["experimental", "speakers", "scan"])
         .arg(&merged_dir)
         .arg("--override-file")
         .arg(&overrides_path)
@@ -125,7 +208,10 @@ fn sanity_scan_flags_inverted_mlu() -> Result<(), TestError> {
         // Exit code 4 mirrors speaker-id low-confidence: scan
         // completed but flagged at least one session that needs
         // operator adjudication.
-        .code(4);
+        .code(4)
+        .stdout(predicates::str::contains(
+            "1 auto-decided session(s) scanned; 1 flagged",
+        ));
 
     assert!(
         pending_path.exists(),

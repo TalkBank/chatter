@@ -42,11 +42,12 @@ is not a valid empty utterance model or a reason to discard its diagnostics.
 ## Observations
 
 Both nonempty controls parse and validate without diagnostics and roundtrip
-byte-exactly. Both empty variants report parse E342; the empty retrace also
-reports validation E378. Their recovered serialization diverges from the input.
+byte-exactly. Both empty variants report parse E342. A missing separator must
+not become group content and trigger secondary E378 validation. Their recovered
+serialization diverges from the input.
 CHECK (21-Sep-2026) accepts the controls, reports 52 for the empty retrace and
 73 for the empty explained scope.
 
-An empty scope in source is not proof of an empty `BracketedContent` collection
-in the recovered model. These specimens do not reach that serializer branch;
-they are recovery witnesses, not evidence that the model branch is dead.
+An empty scope in source alone does not establish the shape of its recovered
+model. These are recovery witnesses; inspect the actual model before drawing
+serializer-coverage conclusions.

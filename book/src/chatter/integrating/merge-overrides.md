@@ -88,10 +88,16 @@ missing-session refusal; it does not produce a usable default mapping.
 
 ## Writer semantics
 
-The writer serializes session entries in `BTreeMap` order, writes to
-`path.with_extension("toml.tmp")`, then renames over the destination.
+The writer serializes session entries in `BTreeMap` order, writes and flushes
+an exclusively created temporary sibling, then renames it over the destination.
+Pending-adjudication files use the same writer. An existing `*.toml.tmp` file,
+hard link or symlink is never reused or removed as staging space. Abandoning a
+prepared write or failing to publish removes only its owned temporary file.
+
 This is replacement, not append-only storage, a multi-file transaction,
-concurrent-writer protection or a crash-durability guarantee.
+concurrent-writer protection or a crash-durability guarantee. Replacement uses
+the new file's permissions rather than preserving the destination's metadata;
+on Unix, the staging file is created with owner-only permissions.
 Read/modify/write does not preserve TOML comments or original formatting.
 
 `upsert` replaces an existing session entry. Reference-mode

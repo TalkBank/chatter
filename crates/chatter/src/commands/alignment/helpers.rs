@@ -10,9 +10,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use talkbank_model::model::{
-    GraTier, MainTier, MorTier, PhoTier, SinTier, UtteranceContent, WriteChat,
-};
+#![deny(clippy::wildcard_enum_match_arm)]
+
+use talkbank_model::model::{GraTier, MorTier, PhoTier, SinTier, WriteChat};
 
 use crate::cli::AlignmentTier;
 
@@ -26,33 +26,6 @@ pub(super) fn format_tier_label(tier: AlignmentTier) -> &'static str {
         AlignmentTier::Pho => "%pho",
         AlignmentTier::Sin => "%sin",
     }
-}
-
-/// Extract display text for one main-tier content index.
-/// Index `content.len()` addresses the terminator token.
-///
-/// Words emit their `cleaned_text` while other content serializes via `write_chat` so the rendered text mirrors the
-/// Main Tier description in the manual.
-pub(super) fn get_main_content_text(main: &MainTier, index: usize) -> Option<String> {
-    // Check if this is the terminator (index == content length)
-    if index == main.content.content.len() {
-        return main.content.terminator.as_ref().map(|t| t.to_chat_string());
-    }
-
-    main.content.content.get(index).map(|content| {
-        match content {
-            // For words, use cleaned_text to show the actual word
-            UtteranceContent::Word(w) => w.cleaned_text().to_string(),
-            UtteranceContent::AnnotatedWord(aw) => aw.inner.cleaned_text().to_string(),
-            UtteranceContent::ReplacedWord(rw) => rw.word.cleaned_text().to_string(),
-            // For all other content, serialize to CHAT format
-            _ => {
-                let mut s = String::new();
-                content.write_chat(&mut s).ok();
-                s
-            }
-        }
-    })
 }
 
 /// Extract serialized text for one `%mor` item.
@@ -87,8 +60,7 @@ pub(super) fn get_sin_item_text(sin: &SinTier, index: usize) -> Option<String> {
 mod tests {
     use super::*;
     use talkbank_model::model::{
-        GraTier, GrammaticalRelation, MainTier, MorTier, PhoItem, PhoTier, SinItem, SinTier,
-        SinToken,
+        GraTier, GrammaticalRelation, MorTier, PhoItem, PhoTier, SinItem, SinTier, SinToken,
     };
 
     #[test]
@@ -101,12 +73,6 @@ mod tests {
 
     #[test]
     fn extraction_helpers_return_none_for_out_of_bounds() {
-        let main = MainTier::new(
-            talkbank_model::MainTierLocations::UNLOCATED,
-            "CHI",
-            vec![],
-            None,
-        );
         let mor = MorTier::new_mor(
             talkbank_model::Location::Unlocated,
             vec![],
@@ -118,7 +84,6 @@ mod tests {
         let pho = PhoTier::new_pho(talkbank_model::Location::Unlocated, vec![]);
         let sin = SinTier::new(talkbank_model::Location::Unlocated, vec![]);
 
-        assert_eq!(get_main_content_text(&main, 0), None);
         assert_eq!(get_mor_item_text(&mor, 0), None);
         assert_eq!(get_gra_relation_text(&gra, 0), None);
         assert_eq!(get_pho_form_text(&pho, 0), None);
@@ -129,7 +94,7 @@ mod tests {
     fn extraction_helpers_return_serialized_values() {
         let gra = GraTier::new_gra(
             talkbank_model::Location::Unlocated,
-            vec![GrammaticalRelation::new(1, 2, "SUBJ")],
+            vec![GrammaticalRelation::new(1, 2, "SUBJ".try_into().unwrap())],
         );
         let pho = PhoTier::new_pho(
             talkbank_model::Location::Unlocated,

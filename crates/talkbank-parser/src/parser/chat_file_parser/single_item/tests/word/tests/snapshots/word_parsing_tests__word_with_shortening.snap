@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
-assertion_line: 12
 expression: result
 ---
 Ok(
@@ -16,15 +15,19 @@ Ok(
             [
                 Text(
                     WordText(
-                        NonEmptyString(
-                            "hel",
+                        NonEmpty(
+                            NonEmptyString(
+                                "hel",
+                            ),
                         ),
                     ),
                 ),
                 Shortening(
                     WordShortening(
-                        NonEmptyString(
-                            "lo",
+                        NonEmpty(
+                            NonEmptyString(
+                                "lo",
+                            ),
                         ),
                     ),
                 ),

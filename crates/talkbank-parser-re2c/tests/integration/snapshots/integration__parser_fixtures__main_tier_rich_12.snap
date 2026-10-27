@@ -18,7 +18,7 @@ tier_body:
         annotations: []
         raw_text: and
     - Word:
-        category: Filler
+        category: filler
         body:
           - Text: um
         form_marker: ~
@@ -63,7 +63,7 @@ tier_body:
         annotations: []
         raw_text: outside
   terminator:
-    Period: "."
+    type: period
   postcodes: []
   media_bullet:
     raw_text: "\u0015542638_545282\u0015"

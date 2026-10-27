@@ -3,9 +3,6 @@ source: crates/talkbank-parser-tests/src/snapshot.rs
 expression: snapshot
 ---
 {
-  "languages": [
-    "fra"
-  ],
   "lines": [
     {
       "header": {
@@ -32,13 +29,19 @@ expression: snapshot
       "header": {
         "entries": [
           {
-            "name": null,
-            "role": "Teacher",
+            "details": {
+              "name": null,
+              "role": "Teacher",
+              "state": "complete"
+            },
             "speaker_code": "SOF"
           },
           {
-            "name": null,
-            "role": "Target_Child",
+            "details": {
+              "name": null,
+              "role": "Target_Child",
+              "state": "complete"
+            },
             "speaker_code": "CHI"
           }
         ],
@@ -838,42 +841,5 @@ expression: snapshot
       },
       "line_type": "header"
     }
-  ],
-  "media": {
-    "filename": "french-child-speech",
-    "media_type": "audio"
-  },
-  "options": [],
-  "participants": {
-    "CHI": {
-      "birth_date": null,
-      "code": "CHI",
-      "id": {
-        "age": "2;08.18",
-        "corpus": "corpus",
-        "language": [
-          "fra"
-        ],
-        "role": "Target_Child",
-        "sex": "male",
-        "speaker": "CHI"
-      },
-      "name": null,
-      "role": "Target_Child"
-    },
-    "SOF": {
-      "birth_date": null,
-      "code": "SOF",
-      "id": {
-        "corpus": "corpus",
-        "language": [
-          "fra"
-        ],
-        "role": "Teacher",
-        "speaker": "SOF"
-      },
-      "name": null,
-      "role": "Teacher"
-    }
-  }
+  ]
 }

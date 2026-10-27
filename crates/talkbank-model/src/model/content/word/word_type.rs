@@ -144,44 +144,29 @@ pub struct Word {
 }
 
 impl Word {
-    /// Builds a simple word where `raw_text == cleaned_text`.
-    ///
-    /// Use this for testing or when constructing words without complex markers.
-    /// This ensures invariants are maintained for simple cases.
-    pub fn simple(
-        location: impl Into<crate::Location>,
-        text: impl Into<smol_str::SmolStr>,
-    ) -> Self {
-        let text = text.into();
-        Self::new_unchecked(location, text)
-    }
-
     /// Builds a plain word from nonempty lexical text. Both surface spelling
     /// and cleaned text are derived from the resulting structure.
+    ///
+    /// Use [`WordText::new`] for dynamic text or convert
+    /// [`crate::non_empty_literal!`] output to `WordText`. This constructs a
+    /// plain lexical leaf, not parsed CHAT syntax. Deserialized recovery
+    /// payloads still require validation.
+    ///
+    /// ```compile_fail,E0308
+    /// let word = talkbank_model::Word::new(talkbank_model::Location::Unlocated, "");
+    /// ```
     pub fn new(location: impl Into<crate::Location>, text: WordText) -> Self {
         Self::from_parts(location, text)
     }
 
-    /// Builds a word without punctuation-guard checks.
-    ///
-    /// Test support and the transitional front ends: nothing here proves the
-    /// text non-empty, and [`WordText::new_unchecked`] carries the debug
-    /// assertion. [`Self::new`] accepts a nonempty proof, not a proof of CHAT
-    /// validity. External CHAT tokens should use the fragment parser and
-    /// propagate refusal rather than falling back to unchecked construction.
-    pub fn new_unchecked(
-        location: impl Into<crate::Location>,
-        cleaned_text: impl Into<smol_str::SmolStr>,
-    ) -> Self {
-        Self::from_parts(location, WordText::new_unchecked(cleaned_text.into()))
-    }
-
-    /// The one place a plain `Word` is assembled from lexical content.
-    fn from_parts(location: impl Into<crate::Location>, cleaned: WordText) -> Self {
+    /// Construct from explicit structured content. Surface spelling and cleaned
+    /// text are derived from this single owner; no temporary lexical text is
+    /// needed. This does not certify CHAT validity or require spoken material.
+    pub fn from_content(location: impl Into<crate::Location>, content: WordContents) -> Self {
         Self {
             location: location.into(),
             word_id: None,
-            content: WordContents::new(smallvec::smallvec![WordContent::Text(cleaned)]),
+            content,
             category: None,
             form_type: None,
             lang: None,
@@ -189,6 +174,14 @@ impl Word {
             inline_bullet: None,
             cached_cleaned_text: CachedStr::default(),
         }
+    }
+
+    /// Plain lexical construction enters the same structured-content owner.
+    fn from_parts(location: impl Into<crate::Location>, cleaned: WordText) -> Self {
+        Self::from_content(
+            location,
+            WordContents::new(smallvec::smallvec![WordContent::Text(cleaned)]),
+        )
     }
 
     /// Derives the current CHAT spelling from typed structure.
@@ -260,9 +253,17 @@ impl Word {
     /// Invalidates cached lexical text. Surface spelling is always derived
     /// from the current structure and needs no separate update.
     pub fn with_content(mut self, content: impl Into<WordContents>) -> Self {
-        self.content = content.into();
-        self.cached_cleaned_text = CachedStr::default();
+        self.replace_content(content.into());
         self
+    }
+
+    /// Replace complete typed content and invalidate derived lexical text.
+    ///
+    /// Build the replacement before calling this method; the word never
+    /// exposes an intermediate empty content sequence during a rewrite.
+    pub fn replace_content(&mut self, content: WordContents) {
+        self.content = content;
+        self.cached_cleaned_text = CachedStr::default();
     }
 
     /// Replaces one typed content element and invalidates derived lexical text.
@@ -365,13 +366,18 @@ impl Word {
     /// Replaces content with one plain-text segment.
     ///
     /// Used by ASR-postprocess pipelines when substituting a word with a
-    /// replacement string. Sets content to a single `Text` element and
-    /// changes the derived spelling accordingly.
-    pub fn replace_simple_text(&mut self, text: impl Into<smol_str::SmolStr>) {
-        let text = text.into();
-        self.content = WordContents::new(smallvec::smallvec![WordContent::Text(
-            WordText::new_unchecked(text),
-        )]);
+    /// replacement text. Like [`Self::new`], accepts the typed lexical payload
+    /// rather than constructing it unchecked from a raw string. Sets content
+    /// to a single `Text` element and changes the derived spelling accordingly.
+    /// JSON recovery payloads still require validation.
+    ///
+    /// ```compile_fail,E0308
+    /// fn replace(word: &mut talkbank_model::Word) {
+    ///     word.replace_simple_text("");
+    /// }
+    /// ```
+    pub fn replace_simple_text(&mut self, text: WordText) {
+        self.content = WordContents::new(smallvec::smallvec![WordContent::Text(text)]);
         self.cached_cleaned_text = CachedStr::default();
     }
 
@@ -380,9 +386,7 @@ impl Word {
     /// This is a convenience wrapper over [`WriteChat`] for callers that need
     /// an owned value instead of writing into an existing buffer.
     pub fn to_chat(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_chat(w))
     }
 }
 
@@ -390,25 +394,59 @@ impl Word {
 mod tests {
     use super::*;
 
+    #[test]
+    fn structured_content_constructor_derives_text_without_a_seed() {
+        let word = Word::from_content(
+            crate::Location::Unlocated,
+            WordContents::new(smallvec::smallvec![
+                WordContent::Text(WordText::new("som").expect("text")),
+                WordContent::Shortening(
+                    crate::model::WordShortening::new("e").expect("shortening")
+                ),
+            ]),
+        );
+        assert_eq!(word.cleaned_text(), "some");
+        assert_eq!(word.to_chat(), "som(e)");
+        let empty = Word::from_content(
+            crate::Location::Unlocated,
+            WordContents::new(smallvec::smallvec![]),
+        );
+        assert_eq!(empty.cleaned_text(), "");
+        assert_eq!(empty.to_chat(), "");
+    }
+
     /// Every public content-replacement path must invalidate the derived text
     /// cache. Keeping the paths in one test makes additions visible beside the
     /// complete mutation API rather than duplicating lexical behavior tests.
     #[test]
     fn content_replacement_paths_invalidate_cleaned_text() {
-        let mut indexed = Word::simple(crate::Location::Unlocated, "old");
+        let mut indexed = Word::new(
+            crate::Location::Unlocated,
+            crate::WordText::from(crate::non_empty_literal!("old")),
+        );
         assert_eq!(indexed.cleaned_text(), "old");
         indexed.replace_content_at(
             0,
             WordContent::Text(WordText::new("indexed").expect("a non-empty literal")),
         );
         assert_eq!(indexed.cleaned_text(), "indexed");
+        indexed.replace_content(WordContents::new(smallvec::smallvec![WordContent::Text(
+            WordText::from(crate::non_empty_literal!("whole"))
+        ),]));
+        assert_eq!(indexed.cleaned_text(), "whole");
 
-        let mut simple = Word::simple(crate::Location::Unlocated, "old");
+        let mut simple = Word::new(
+            crate::Location::Unlocated,
+            crate::WordText::from(crate::non_empty_literal!("old")),
+        );
         assert_eq!(simple.cleaned_text(), "old");
-        simple.replace_simple_text("simple");
+        simple.replace_simple_text(WordText::from(crate::non_empty_literal!("simple")));
         assert_eq!(simple.cleaned_text(), "simple");
 
-        let warmed = Word::simple(crate::Location::Unlocated, "old");
+        let warmed = Word::new(
+            crate::Location::Unlocated,
+            crate::WordText::from(crate::non_empty_literal!("old")),
+        );
         assert_eq!(warmed.cleaned_text(), "old");
         let replaced = warmed.with_content(vec![WordContent::Text(
             WordText::new("builder").expect("a non-empty literal"),

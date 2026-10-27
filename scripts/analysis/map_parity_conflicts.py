@@ -24,7 +24,7 @@ base = Path(sys.argv[1])
 rows = re.findall(r'\("([^"]+)",\s*Conflicting\)', (root / 'crates/talkbank-parser-re2c/tests/integration/error_parity/baseline.rs').read_text())
 
 def codes(path, extra):
-    out = subprocess.run([str(binary), 'validate', '--force', *extra, str(path)],
+    out = subprocess.run([str(binary), 'validate', '--refresh-cache', *extra, str(path)],
                          capture_output=True, text=True, timeout=60)
     return sorted(set(re.findall(r'error\[(E\d+)\]', out.stdout + out.stderr)))
 

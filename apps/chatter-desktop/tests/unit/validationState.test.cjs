@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   applyValidationEvent,
+  applyValidationEvents,
   createInitialValidationState,
   isAwaitingBackend,
   isRunPending,
@@ -32,6 +33,30 @@ function stats(overrides = {}) {
     ...overrides,
   };
 }
+
+test("a delivered batch copies the existing file population only once", () => {
+  const NativeMap = globalThis.Map;
+  let visited = 0;
+  class CountedMap extends NativeMap {
+    *[Symbol.iterator]() {
+      for (const entry of super[Symbol.iterator]()) { visited++; yield entry; }
+    }
+  }
+  globalThis.Map = CountedMap;
+  try {
+    let state = createInitialValidationState();
+    const event = (i) => ({ type: "fileComplete", file: `/reference/${i}.cha`, status: { type: "valid", cacheHit: false } });
+    for (let i = 0; i < 100; i++) state = applyValidationEvent(state, event(i), path => path);
+    visited = 0;
+    const result = applyValidationEvents(state, Array.from({ length: 100 }, (_, i) => event(i + 100)), path => path);
+    assert.equal(visited, 100, "one traversal of the previously retained population");
+    assert.equal(state.files.size, 100, "the earlier snapshot remains unchanged");
+    assert.equal(result.files.size, 200);
+    assert.equal(result.processedFiles, 200);
+  } finally {
+    globalThis.Map = NativeMap;
+  }
+});
 
 test("terminal failures without diagnostics remain visible problems", () => {
   for (const status of [
@@ -125,9 +150,34 @@ function diagnostic(code, message, start = 1) {
     },
     renderedHtml: `<span>${message}</span>`,
     renderedText: message,
-    sourceContext: { kind: "available", location: { start, end: start + 1, line: 1, column: 1 } },
+    sourceContext: { kind: "available", sourceRevision: { digest: Array(32).fill(7) }, location: { start, end: start + 1, line: 1, column: 1 } },
   };
 }
+
+test("one batch preserves repeated diagnostics, final status and the earlier snapshot", () => {
+  const file = "/reference/sample.cha";
+  const initial = createInitialValidationState();
+  const first = diagnostic("E001", "first");
+  const second = diagnostic("E002", "second");
+  const next = applyValidationEvents(initial, [
+    { type: "started", totalFiles: 1 },
+    { type: "errors", file, diagnostics: [first], source: "original" },
+    { type: "errors", file, diagnostics: [second], source: "latest" },
+    { type: "fileComplete", file, status: { type: "invalid", errorCount: 2, cacheHit: false } },
+    { type: "finished", stats: stats({ totalFiles: 1, validFiles: 0, invalidFiles: 1, cacheMisses: 1 }), passed: false },
+  ], path => relativeDisplayName(path, "/reference"));
+  assert.equal(initial.files.size, 0);
+  assert.equal(initial.processedFiles, 0);
+  assert.deepEqual(next.files.get(file).diagnostics, [first, second]);
+  assert.equal(next.files.get(file).name, "sample.cha");
+  assert.equal(next.files.get(file).source, "latest");
+  assert.equal(next.files.get(file).status.type, "invalid");
+  assert.equal(next.totalErrors, 2);
+  assert.equal(next.processedFiles, 1);
+  assert.equal(next.run.passed, false);
+  const stopped = applyValidationEvents(next, [{ type: "aborted", reason: "example" }], path => path);
+  assert.equal(stopped.files, next.files, "a lifecycle-only delivery does not copy the population");
+});
 
 test("validation state accumulates diagnostics and file status immutably", () => {
   const root = "/tmp/corpus";

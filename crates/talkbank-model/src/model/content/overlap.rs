@@ -215,10 +215,7 @@ pub struct OverlapPoint {
 }
 
 impl OverlapPoint {
-    /// Build an overlap-point token with no span metadata.
-    ///
-    /// This keeps direct model construction concise; parser-produced values can
-    /// attach real spans via [`Self::with_span`].
+    /// Build an overlap-point token with its source location or explicit absence.
     pub fn new(
         location: impl Into<crate::Location>,
         kind: OverlapPointKind,
@@ -255,7 +252,13 @@ impl Validate for OverlapPoint {
     /// Validates attached overlap index when present.
     fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
         if let Some(index) = self.index {
-            index.validate(context, errors);
+            index.validate(
+                &context
+                    .clone()
+                    .with_field_location(self.location)
+                    .with_field_label("overlap_index"),
+                errors,
+            );
         }
     }
 }
@@ -301,10 +304,10 @@ impl OverlapPoint {
 
 impl WriteChat for OverlapPoint {
     /// Writes overlap point in CHAT text form (delimiter + optional index).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.base_char())?;
         if let Some(idx) = self.index {
-            write!(w, "{}", idx)?;
+            crate::model::WriteChat::write_chat(&idx.get(), w)?;
         }
         Ok(())
     }

@@ -1,11 +1,11 @@
 //! Internal support helpers for `chatter speaker-id`: session-ID
 //! derivation, role-spec parsing, and the contract-defined
-//! `std::process::exit` dispatchers for each typed error.
+//! reported failure classifiers for each typed error.
 
 use std::path::Path;
 use tracing::warn;
 
-use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_LOW_CONFIDENCE, EXIT_PRECONDITION};
+use crate::exit_codes::ReportedFailure;
 use talkbank_model::{ParticipantRole, SpeakerCode};
 use talkbank_transform::adjudication::AdjudicationError;
 use talkbank_transform::speaker_id::{OverrideFileError, SpeakerIdError};
@@ -39,29 +39,34 @@ pub(super) fn parse_inserted_role(spec: &str) -> Result<(SpeakerCode, Participan
     Ok((SpeakerCode::new(code), ParticipantRole::new(role)))
 }
 
-/// Render a `SpeakerIdError` to stderr and `std::process::exit` with
+/// Render a `SpeakerIdError` to stderr and return
 /// the contract-defined exit code. `LowConfidence` (reference-mode
 /// adjudication required) is the only variant that exits 4; every
 /// other precondition violation exits 2; parse errors exit 1.
-pub(super) fn exit_with_speaker_id_error(e: SpeakerIdError) -> ! {
+pub(super) fn report_speaker_id_error(e: SpeakerIdError) -> crate::exit_codes::CommandStop {
     warn!("speaker-id failed: {}", e);
     eprintln!("Error: {}", e);
     let code = match e {
-        SpeakerIdError::InvalidMappingSpec(_)
+        SpeakerIdError::SpeakerRewrite(_)
+        | SpeakerIdError::InvalidAssignment(_)
+        | SpeakerIdError::InvalidMappingSpec(_)
         | SpeakerIdError::ReferenceMissingAnchor { .. }
         | SpeakerIdError::DonorTooFewSpeakers { .. }
         | SpeakerIdError::SessionIdNotFound { .. }
-        | SpeakerIdError::OverrideRenameMissingRole { .. } => EXIT_PRECONDITION,
-        SpeakerIdError::LowConfidence { .. } => EXIT_LOW_CONFIDENCE,
-        SpeakerIdError::Parse(_) => EXIT_INPUT_ERROR,
+        | SpeakerIdError::OverrideRenameMissingRole { .. } => ReportedFailure::Precondition,
+        SpeakerIdError::LowConfidence { .. } => ReportedFailure::NeedsReview,
+        SpeakerIdError::Parse(_) => ReportedFailure::Input,
     };
-    std::process::exit(code);
+    crate::exit_codes::CommandStop::Reported(code)
 }
 
 /// Render an `OverrideFileError` to stderr. I/O / TOML failures exit
 /// 1 (treated as input issues); unsupported schema versions exit 2
 /// (operator must upgrade or re-adjudicate).
-pub(crate) fn exit_with_override_file_error(path: &Path, e: OverrideFileError) -> ! {
+pub(crate) fn report_override_file_error(
+    path: &Path,
+    e: OverrideFileError,
+) -> crate::exit_codes::CommandStop {
     warn!(
         "override-file operation on {} failed: {}",
         path.display(),
@@ -69,17 +74,20 @@ pub(crate) fn exit_with_override_file_error(path: &Path, e: OverrideFileError) -
     );
     eprintln!("Error: override-file {}: {}", path.display(), e);
     let code = match e {
-        OverrideFileError::UnsupportedSchemaVersion { .. } => EXIT_PRECONDITION,
-        OverrideFileError::Io(_) | OverrideFileError::Toml(_) => EXIT_INPUT_ERROR,
+        OverrideFileError::UnsupportedSchemaVersion { .. } => ReportedFailure::Precondition,
+        OverrideFileError::Io(_) | OverrideFileError::Toml(_) => ReportedFailure::Input,
     };
-    std::process::exit(code);
+    crate::exit_codes::CommandStop::Reported(code)
 }
 
 /// Render an `AdjudicationError` (from pending-file I/O on the
 /// `--write-pending` path) to stderr. `Io` / `Toml` exit 1; other
 /// variants are not reachable from this seam.
-pub(super) fn exit_with_adjudication_error(path: &Path, e: AdjudicationError) -> ! {
+pub(super) fn report_adjudication_error(
+    path: &Path,
+    e: AdjudicationError,
+) -> crate::exit_codes::CommandStop {
     warn!("pending-file operation on {} failed: {}", path.display(), e);
     eprintln!("Error: pending-file {}: {}", path.display(), e);
-    std::process::exit(EXIT_INPUT_ERROR);
+    crate::exit_codes::ReportedFailure::Input.into()
 }

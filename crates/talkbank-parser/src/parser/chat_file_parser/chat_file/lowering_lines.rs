@@ -5,9 +5,10 @@
 //! plan to lower utterances with until the last header is lowered, so the
 //! walk holds them ([`HeldLines`]) and [`lower_held`] lowers them afterwards
 //! under the decided plan, in file order.
+use super::recovered_tier::RecoveredTier;
 use super::tier_plan::{HeaderSelection, TierRouting};
 use crate::error::ErrorSink;
-use crate::generated_traversal::{SourceBound, UtteranceNode};
+use crate::generated_traversal::{AsRawNode, SourceBound, UtteranceNode};
 use crate::model::Line;
 use crate::parser::chat_file_parser::utterance_parser::parse_utterance_node;
 use talkbank_model::ParseOutcome;
@@ -19,6 +20,7 @@ pub(super) enum LoweringLine<'a> {
     Pending {
         node: SourceBound<'a, 'a, UtteranceNode<'a>>,
         alignment_taint: bool,
+        trailing_recovery: Vec<RecoveredTier>,
     },
 }
 
@@ -34,6 +36,9 @@ pub(super) trait LineSink<'a> {
     /// Taint the most recent utterance's dependent alignment, because a
     /// recovery region after it may have consumed one of its tiers.
     fn taint_previous_utterance(&mut self);
+    /// Attach observed recovery only when its source directly follows the last
+    /// utterance; return unowned evidence on refusal.
+    fn append_recovered_tier(&mut self, tier: RecoveredTier) -> Result<(), RecoveredTier>;
 }
 
 /// Lines lowered under an already decided plan.
@@ -71,6 +76,13 @@ impl<'a, S: ErrorSink, P: TierRouting> LineSink<'a> for DirectLines<'_, S, P> {
         }
     }
 
+    fn append_recovered_tier(&mut self, tier: RecoveredTier) -> Result<(), RecoveredTier> {
+        match self.lines.last_mut() {
+            Some(Line::Utterance(utterance)) => append_to_utterance(utterance, tier),
+            Some(Line::Header { .. }) | None => Err(tier),
+        }
+    }
+
     fn taint_previous_utterance(&mut self) {
         if let Some(utterance) = self.lines.iter_mut().rev().find_map(|line| match line {
             Line::Utterance(utterance) => Some(utterance),
@@ -93,7 +105,25 @@ impl<'a> LineSink<'a> for HeldLines<'a> {
         self.0.push(LoweringLine::Pending {
             node,
             alignment_taint: false,
+            trailing_recovery: Vec::new(),
         });
+    }
+
+    fn append_recovered_tier(&mut self, tier: RecoveredTier) -> Result<(), RecoveredTier> {
+        match self.0.last_mut() {
+            Some(LoweringLine::Ready(Line::Utterance(utterance))) => {
+                append_to_utterance(utterance, tier)
+            }
+            Some(LoweringLine::Pending {
+                node,
+                trailing_recovery,
+                ..
+            }) if tier.starts_at(node.raw_node().end_byte()) => {
+                trailing_recovery.push(tier);
+                Ok(())
+            }
+            Some(LoweringLine::Ready(_) | LoweringLine::Pending { .. }) | None => Err(tier),
+        }
     }
 
     fn taint_previous_utterance(&mut self) {
@@ -146,11 +176,16 @@ impl<'a> HeldLines<'a> {
                 LoweringLine::Pending {
                     node,
                     alignment_taint,
+                    trailing_recovery,
                 } => match parse_utterance_node(node, errors, &mut plan) {
                     ParseOutcome::Parsed(mut utterance) => {
                         if alignment_taint {
                             utterance.utterance.mark_all_dependent_alignment_taint();
                         }
+                        utterance
+                            .utterance
+                            .dependent_tiers
+                            .extend(trailing_recovery.into_iter().map(RecoveredTier::into_entry));
                         plan.push_utterance(&mut completed, utterance);
                     }
                     ParseOutcome::Rejected => {}
@@ -158,5 +193,23 @@ impl<'a> HeldLines<'a> {
             }
         }
         (completed, plan)
+    }
+}
+
+fn append_to_utterance(
+    utterance: &mut talkbank_model::Utterance,
+    tier: RecoveredTier,
+) -> Result<(), RecoveredTier> {
+    let end = match utterance.dependent_tiers.last() {
+        Some(previous) => previous.tier.location(),
+        None => utterance.main.location,
+    }
+    .span()
+    .map(|span| span.end());
+    if end.is_some_and(|end| tier.starts_at(end)) {
+        utterance.dependent_tiers.push(tier.into_entry());
+        Ok(())
+    } else {
+        Err(tier)
     }
 }

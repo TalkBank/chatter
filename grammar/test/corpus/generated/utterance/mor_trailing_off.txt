@@ -1,0 +1,9 @@
+================================================================================
+mor_trailing_off - Authored combination of the existing with_mor example and the supported +... terminator. Both the main tier and MOR tier retain trailing_off; this is a parsing control, not a claim of attestation in external corpus data.
+================================================================================
+*CHI:	hello +...
+%mor:	co|hello +...
+
+--------------------------------------------------------------------------------
+
+(source_file (utterance (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces)) ending: (utterance_end (trailing_off) (newline)))) (mor_dependent_tier (mor_tier_prefix) (tier_sep (colon) (tab)) (mor_contents (mor_content main: (mor_word (mor_pos) (pipe) (mor_lemma))) (whitespaces) (trailing_off)) (newline))))

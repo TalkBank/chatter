@@ -16,8 +16,7 @@ use talkbank_parser::TreeSitterParser;
 
 use talkbank_model::model::TranscriptName;
 use talkbank_transform::splice::{
-    BatchSafety, CatalogIneligibility, CatalogResolution, EditTarget, FixDiagnosis, FixKind,
-    apply_edits,
+    BatchSafety, CatalogResolution, EditTarget, FixDiagnosis, FixKind, apply_edits,
 };
 
 /// Parse `source`, run the same alignment-aware validation pass
@@ -262,31 +261,23 @@ fn e258_collapses_the_comma_pair_not_a_noop_replace() -> Result<(), String> {
     Ok(())
 }
 
-/// The empty-content specimen contains a recovered missing content node.
-/// A diagnostic alone does not authorize deleting that recovered main tier.
+/// The terminator-only specimen from spec/errors/E306.md requires E342.
+/// Missing content does not authorize deleting the recovered main tier.
 #[test]
-fn e306_refuses_a_recovered_empty_main_tier() -> Result<(), String> {
+fn e342_missing_content_has_no_catalog_repair() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                   @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t.\n@End";
-    let diagnosis = single_error_with_code(source, "E306")?;
+    let diagnosis = single_error_with_code(source, "E342")?;
     let finding = diagnosis
         .findings()
-        .find(|error| error.code.as_str() == "E306")
+        .find(|error| error.code.as_str() == "E342")
         .ok_or("actual finding absent")?;
     let node = diagnosis
         .parsed_source()
         .ok_or("source unavailable")?
-        .root_node()
-        .descendant_for_byte_range(
-            finding.location.span().expect("located diagnostic").start(),
-            finding.location.span().expect("located diagnostic").end(),
-        )
-        .ok_or("missing diagnostic node")?;
+        .root_node();
     assert!(node.has_error(), "the refusal witness must retain recovery");
-    assert!(matches!(
-        finding.catalog(),
-        CatalogResolution::Ineligible(CatalogIneligibility::RecoveredCarrier)
-    ));
+    assert!(matches!(finding.catalog(), CatalogResolution::Unsupported));
     Ok(())
 }
 

@@ -30,7 +30,7 @@ test("openInClan forwards the bare error.message as the CLAN highlight (matches 
 
   const clan = createClanCapability(transport);
   const error = sampleError();
-  await clan.openInClan({ file: "/corpus/E601.cha", error, sourceContext: { kind: "available", location: { start: 168, end: 178, line: 8, column: 1 } } });
+  await clan.openInClan({ file: "/corpus/E601.cha", error, sourceContext: { kind: "available", sourceRevision: { digest: Array(32).fill(7) }, location: { start: 168, end: 178, line: 8, column: 1 } } });
 
   assert.equal(invocations.length, 1, "exactly one invoke");
   const [command, payload] = invocations[0];
@@ -54,10 +54,10 @@ test("openInClan uses admitted coordinates, not stale producer line and column",
 
   const clan = createClanCapability(transport);
   const error = sampleError();
-  await clan.openInClan({ file: "/corpus/E601.cha", error, sourceContext: { kind: "available", location: { start: 168, end: 178, line: 8, column: 1 } } });
+  await clan.openInClan({ file: "/corpus/E601.cha", error, sourceContext: { kind: "available", sourceRevision: { digest: Array(32).fill(7) }, location: { start: 168, end: 178, line: 8, column: 1 } } });
 
   const [, payload] = invocations[0];
   assert.deepEqual(payload, {
-    request: { file: "/corpus/E601.cha", line: 8, col: 1, byteOffset: 168, msg: sampleError().message },
+    request: { file: "/corpus/E601.cha", line: 8, col: 1, byteOffset: 168, sourceRevision: { digest: Array(32).fill(7) }, msg: sampleError().message },
   });
 });

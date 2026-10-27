@@ -8,8 +8,187 @@ use tower_lsp::lsp_types::{Position, Range, SelectionRange};
 const SOURCE: &str = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
 const URI: &str = "file:///diagnostic-edits.cha";
 
+#[path = "document_links.rs"]
+mod document_links;
+
+#[path = "inlay_hints.rs"]
+mod inlay_hints;
+
+#[path = "references.rs"]
+mod references;
+
+#[path = "rename.rs"]
+mod rename;
+
 #[path = "code_actions.rs"]
 mod code_actions;
+
+#[path = "recovery.rs"]
+mod recovery;
+
+#[test]
+fn reversed_clamped_edit_does_not_commit_any_part_of_a_revision() {
+    let mut editor = Editor::start();
+    editor.initialize();
+    editor.open(SOURCE);
+    assert_eq!(editor.diagnostics(), json!([]));
+    editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+        "textDocument":{"uri":URI,"version":2},"contentChanges":[
+            {"range":{"start":{"line":0,"character":0},"end":{"line":1,"character":0}},"text":""},
+            {"range":{"start":{"line":1001,"character":0},"end":{"line":1000,"character":0}},"text":"oops"}
+        ]}}));
+    editor.send(json!({"jsonrpc":"2.0","id":10,"method":"textDocument/diagnostic","params":{"textDocument":{"uri":URI}}}));
+    assert_eq!(editor.response(10)["error"]["code"], -32801);
+    let mut edit_response_failures = Vec::new();
+    for (id, method, params) in [
+        (
+            30,
+            "textDocument/formatting",
+            json!({"textDocument":{"uri":URI},"options":{"tabSize":4,"insertSpaces":false}}),
+        ),
+        (
+            32,
+            "textDocument/completion",
+            json!({"textDocument":{"uri":URI},"position":{"line":8,"character":1}}),
+        ),
+        (
+            33,
+            "textDocument/onTypeFormatting",
+            json!({"textDocument":{"uri":URI},"position":{"line":8,"character":5},"ch":":","options":{"tabSize":4,"insertSpaces":false}}),
+        ),
+        (
+            34,
+            "textDocument/linkedEditingRange",
+            json!({"textDocument":{"uri":URI},"position":{"line":8,"character":1}}),
+        ),
+    ] {
+        editor.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}));
+        let response = editor.response(id);
+        if response["error"]["code"] != -32801 || response.get("result").is_some() {
+            edit_response_failures.push(format!("{method}: {response}"));
+        }
+    }
+    let cleared = editor.message_matching(|message| {
+        message["method"] == "textDocument/publishDiagnostics" && message["params"]["version"] == 2
+    });
+    assert_eq!(cleared["params"]["diagnostics"], json!([]));
+    let warning = editor.message_matching(|message| {
+        message["method"] == "window/logMessage" && message["params"]["type"] == 2
+    });
+    assert!(
+        warning["params"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("reopen")
+    );
+
+    // Even a valid ranged edit cannot use the discarded source. A stale full
+    // replacement must not bypass the highest observed version either.
+    for (id, version, changes) in [
+        (
+            11,
+            3,
+            json!([{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"text":"@UTF8\n"}]),
+        ),
+        (12, 3, json!([{"text":SOURCE}])),
+    ] {
+        editor.send(
+            json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+            "textDocument":{"uri":URI,"version":version},"contentChanges":changes}}),
+        );
+        editor.send(json!({"jsonrpc":"2.0","id":id,"method":"textDocument/diagnostic","params":{"textDocument":{"uri":URI}}}));
+        assert_eq!(editor.response(id)["error"]["code"], -32801);
+    }
+    let cleared = editor.message_matching(|message| {
+        message["method"] == "textDocument/publishDiagnostics" && message["params"]["version"] == 3
+    });
+    assert_eq!(cleared["params"]["diagnostics"], json!([]));
+    editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didSave","params":{"textDocument":{"uri":URI}}}));
+    for (id, method, params) in [
+        (
+            13,
+            "textDocument/documentSymbol",
+            json!({"textDocument":{"uri":URI}}),
+        ),
+        (14, "workspace/symbol", json!({"query":""})),
+    ] {
+        editor.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}));
+        let response = editor.response(id);
+        assert!(response["error"].is_null(), "{response}");
+        assert_eq!(response["result"], Value::Null);
+    }
+    // A newer full replacement, followed by a ranged edit in the same batch,
+    // establishes its own base and restores normal analysis.
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+        "textDocument":{"uri":URI,"version":4},"contentChanges":[
+            {"text":SOURCE},
+            {"range":{"start":{"line":0,"character":0},"end":{"line":1,"character":0}},"text":""}
+        ]}}),
+    );
+    editor.send(json!({"jsonrpc":"2.0","id":15,"method":"textDocument/diagnostic","params":{"textDocument":{"uri":URI}}}));
+    let changed = editor.response(15);
+    assert!(changed["error"].is_null(), "{changed}");
+    assert_eq!(changed["result"]["resultId"], "4");
+    assert!(
+        changed["result"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["code"] == "E503")
+    );
+    let published = editor.message_matching(|message| {
+        message["method"] == "textDocument/publishDiagnostics" && message["params"]["version"] == 4
+    });
+    assert_eq!(
+        published["params"]["diagnostics"],
+        changed["result"]["items"]
+    );
+    // Reopen also recovers a lost session when its version starts over.
+    editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+        "textDocument":{"uri":URI,"version":5},"contentChanges":[
+            {"range":{"start":{"line":0,"character":1001},"end":{"line":0,"character":1000}},"text":"oops"}
+        ]}}));
+    let cleared = editor.message_matching(|message| {
+        message["method"] == "textDocument/publishDiagnostics" && message["params"]["version"] == 5
+    });
+    assert_eq!(cleared["params"]["diagnostics"], json!([]));
+    editor.close();
+    editor.open(SOURCE);
+    assert_eq!(editor.diagnostics(), json!([]));
+    editor.send(
+        json!({"jsonrpc":"2.0","id":31,"method":"textDocument/formatting",
+        "params":{"textDocument":{"uri":URI},"options":{"tabSize":4,"insertSpaces":false}}}),
+    );
+    let formatting = editor.response(31);
+    assert!(formatting["error"].is_null(), "{formatting}");
+    assert!(formatting["result"].is_null());
+    editor.send(
+        json!({"jsonrpc":"2.0","id":35,"method":"textDocument/linkedEditingRange",
+        "params":{"textDocument":{"uri":URI},"position":{"line":8,"character":1}}}),
+    );
+    let linked = editor.response(35);
+    assert!(linked["error"].is_null(), "{linked}");
+    let ranges: tower_lsp::lsp_types::LinkedEditingRanges =
+        serde_json::from_value(linked["result"].clone()).unwrap();
+    assert!(ranges.ranges.len() >= 2);
+    let cursor = tower_lsp::lsp_types::Position::new(8, 1);
+    assert!(
+        ranges
+            .ranges
+            .iter()
+            .any(|range| range.start <= cursor && cursor < range.end)
+    );
+    editor.send(json!({"jsonrpc":"2.0","id":2,"method":"shutdown"}));
+    assert!(editor.response(2)["error"].is_null());
+    editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
+    editor.expect_exit(0);
+    assert!(
+        edit_response_failures.is_empty(),
+        "{}",
+        edit_response_failures.join("\n")
+    );
+}
 
 impl Editor {
     fn diagnostics(&self) -> Value {
@@ -335,3 +514,6 @@ fn assert_selection_chains(editor: &mut Editor, id: u64, word_start: u32, word_e
         }
     }
 }
+
+#[path = "alignment_snippets.rs"]
+mod alignment_snippets;

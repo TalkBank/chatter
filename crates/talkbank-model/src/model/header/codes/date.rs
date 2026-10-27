@@ -257,7 +257,7 @@ impl std::fmt::Display for ChatDate {
 }
 
 impl crate::model::WriteChat for ChatDate {
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.as_str())
     }
 }

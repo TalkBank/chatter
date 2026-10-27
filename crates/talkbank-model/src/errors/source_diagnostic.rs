@@ -5,6 +5,7 @@ use super::parse_error::SourceCodeWithOffset;
 use super::{DiagnosticLocation, LineColumn, ParseError, SourceIndex, Span};
 use miette::Diagnostic;
 use std::fmt;
+use std::num::NonZeroUsize;
 use std::sync::OnceLock;
 
 /// Why source coordinates could not be admitted for presentation.
@@ -59,7 +60,7 @@ pub struct DiagnosticPresentation {
 pub struct DiagnosticContext {
     pub(super) source_text: String,
     pub(super) span: DisplaySpan,
-    pub(super) first_line: usize,
+    pub(super) first_line: NonZeroUsize,
 }
 
 impl DiagnosticContext {
@@ -73,7 +74,7 @@ impl DiagnosticContext {
     }
     /// One-based file line at the start of this window.
     pub fn first_line(&self) -> usize {
-        self.first_line
+        self.first_line.get()
     }
 }
 

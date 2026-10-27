@@ -40,8 +40,9 @@ the book's CLI reference, [error diagnostics UX](../../book/src/architecture/err
   `exit_codes`, never `unwrap`/`expect` in production paths.
 - A command that writes files is report-first or writes elsewhere: a bare
   `fix` reports and `--apply` writes (`cli/args/fix_mode.rs`, a typed
-  `Flag<FixMode>`, not a boolean); `normalize` and `to-json` write to
-  `--output`; the in-place debug rewrites take `--dry-run`. A new writing
+  `Flag<FixMode>`, not a boolean); `format` and `convert to-json` write to
+  `--output`; the in-place experimental transforms preview unless `--apply`
+  is passed. A new writing
   command follows one of those shapes and never overwrites its input on the
   strength of a returned model alone.
 - The validation cache is the user's; isolate it in tests through
@@ -52,7 +53,7 @@ the book's CLI reference, [error diagnostics UX](../../book/src/architecture/err
 
 ## Verification
 
-`cargo test -p talkbank-chatter --lib` and `tests/integration/` (subprocess
+`cargo test -p talkbank-chatter --bin chatter` and `tests/integration/` (subprocess
 tests through `CliHarness`, exit-code and JSON-shape contracts, the stack
 control). A behavior change needs a real subprocess test at the CLI
 boundary, not only a unit test of the function behind it.

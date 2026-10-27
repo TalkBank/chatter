@@ -22,9 +22,9 @@ impl Header {
             Header::Utf8 => "UTF8",
             Header::Begin => "Begin",
             Header::End => "End",
-            Header::Languages { .. } => "Languages",
-            Header::Participants { .. } => "Participants",
-            Header::ID(_) => "ID",
+            Header::Languages { .. } | Header::UnparsedLanguages(_) => "Languages",
+            Header::Participants { .. } | Header::UnparsedParticipants(_) => "Participants",
+            Header::ID(_) | Header::UnparsedID(_) => "ID",
             Header::Date { .. } => "Date",
             Header::Comment { .. } => "Comment",
             Header::Pid { .. } => "PID",
@@ -68,9 +68,7 @@ impl Header {
     /// This helper exists so callers that only need display text can skip
     /// passing a writer buffer altogether.
     pub fn to_chat(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_chat(w))
     }
 }
 

@@ -5,8 +5,11 @@
 //!
 //! # What this counts, and why those spellings
 //!
-//! **Fabrications.** `new_unchecked` and `from_checked_literal` mint a model
-//! value without the check its safe constructor performs. Until 2026-10-18 the
+//! **Fabrications.** `new_unchecked` bypasses checked model construction.
+//! The historical `from_checked_literal` spelling remains counted conservatively,
+//! though it now requires sealed `NonEmptyLiteral` evidence and cannot accept raw
+//! strings. These lexical totals are not a count of reachable invariant holes.
+//! Until 2026-10-18 the
 //! list also carried `Span::DUMMY`, the sentinel `Span { start: 0, end: 0 }`,
 //! which was ALSO the legal zero-width position at the first byte of a file.
 //! The source-location batches deleted it: a value with no source position is
@@ -280,7 +283,16 @@ const CEILING: &[(&str, usize)] = &[
     // the language. Every former sentinel is a `Location::Unlocated` argument
     // to a constructor that now demands one, and that spelling is not a
     // fabrication outside the parsers (see `UNLOCATED_MINTS`).
-    ("talkbank-model", 23),
+    // 23 -> 19: remove the unused unchecked phonetic and shortening
+    // constructors, including their unchecked primitive calls.
+    // 19 -> 18: WOR projection retains nonempty text admission and uses
+    // the checked word constructor instead of unchecked display construction.
+    // 18 -> 17: simple replacement accepts WordText; paired redaction retains
+    // the projection's admitted text instead of constructing it unchecked.
+    // 17 -> 2: remove Word::simple and all three unchecked text/word
+    // constructors; migrate tests to checked input. The remaining two are
+    // the evidence-taking literal constructor and its macro invocation.
+    ("talkbank-model", 2),
     // 8 -> 6 the same day: the user-defined and unsupported tier dispatchers
     // read their prefix through `expect_present` and one `tier_name` helper
     // (a MISSING prefix builds no tier, where its empty placeholder text
@@ -299,7 +311,11 @@ const CEILING: &[(&str, usize)] = &[
     // tightened with the source-location batch 3a.
     // 18 -> 4 the same day, batches 3c and 3d: the rest were `Span::DUMMY`,
     // and the converter's unlocated items are counted by the second ratchet.
-    ("talkbank-parser-re2c", 4),
+    // 4 -> 3: structured Word construction no longer seeds unchecked lexical text.
+    // 3 -> 2: user-defined labels retain their observed head and suffix through
+    // NonEmptyString's structurally non-empty constructor.
+    // 2 -> 0: both word producers admit shared WordText and WordShortening;
+    // conversion only retains those values. The implicit ceiling is now zero.
     // 10 -> 9 and 12 -> 11 on 2026-09-08, the first two conversions this
     // ratchet was built to make provable: `test_complex_signature` and
     // `raw_text_rebuild_preserves_nonlexical_word_markers` now PARSE their
@@ -381,7 +397,9 @@ const PARSER_UNLOCATED_CEILING: &[(&str, usize)] = &[
     // which every placement routes through, and the separator slice
     // fallback. Both answer `Unlocated` only for a slice that is not from
     // the source being converted, a programming error.
-    ("talkbank-parser-re2c", 2),
+    // Shared separator lowering removed the second fallback; only
+    // convert::located still mints an unlocated model value.
+    ("talkbank-parser-re2c", 1),
 ];
 
 /// Fabricated-AST construction may only fall.

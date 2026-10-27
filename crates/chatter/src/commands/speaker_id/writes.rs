@@ -13,18 +13,50 @@ use talkbank_transform::adjudication::{
     PendingAdjudications, PendingEntry, PendingKindData, SuggestedSpeakerIdMapping,
 };
 use talkbank_transform::recorded_time::RecordedTime;
+use talkbank_transform::report_destination::{ReportDestinationError, ReportInputs};
 use talkbank_transform::speaker_id::{
     ConfidenceThreshold, DonorMatchReport, InsertedRoleSpec, MergeOverride, OverrideFile,
     RecordedSpeakerIdentificationAttempt, SpeakerAction,
 };
 
 use super::modes::ReferenceModeOutcome;
-use super::support::{
-    derive_session_id, exit_with_adjudication_error, exit_with_override_file_error,
-};
+use super::support::{derive_session_id, report_adjudication_error, report_override_file_error};
+
+/// Admit the final CHAT destination against source inputs and retained evidence.
+/// Mode writers may already have published artifacts; their paths become
+/// protected inputs here, never replacement destinations for relabeled CHAT.
+pub(super) fn write_chat<'a>(
+    path: &Path,
+    content: &str,
+    sources: impl IntoIterator<Item = &'a Path>,
+    artifacts: impl IntoIterator<Item = &'a Path>,
+) -> Result<(), ReportDestinationError> {
+    let mut protected: Vec<_> = sources.into_iter().collect();
+    for artifact in artifacts {
+        // A configured pending path need not exist on a successful match.
+        // Only absence is optional; inability to inspect it is a refusal.
+        if artifact
+            .try_exists()
+            .map_err(|source| ReportDestinationError::SourceIdentity {
+                path: artifact.to_path_buf(),
+                source,
+            })?
+        {
+            protected.push(artifact);
+        }
+    }
+    let destination = ReportInputs::discover(protected)?.staged_destination(path)?;
+    let mut writer = destination.into_writer()?;
+    writer.write_all(content.as_bytes())?;
+    writer.finish()?.publish()?;
+    Ok(())
+}
 
 /// Write one complete match report without overwriting prior evidence.
-pub(super) fn write_match_report(path: &Path, attempt: &RecordedSpeakerIdentificationAttempt) {
+pub(super) fn write_match_report(
+    path: &Path,
+    attempt: &RecordedSpeakerIdentificationAttempt,
+) -> crate::exit_codes::CommandResult {
     let payload = match serde_json::to_vec_pretty(attempt) {
         Ok(mut bytes) => {
             bytes.push(b'\n');
@@ -32,7 +64,7 @@ pub(super) fn write_match_report(path: &Path, attempt: &RecordedSpeakerIdentific
         }
         Err(error) => {
             eprintln!("Error encoding match report {}: {error}", path.display());
-            std::process::exit(crate::exit_codes::EXIT_INTERNAL_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Internal.into());
         }
     };
     let parent = path
@@ -43,7 +75,7 @@ pub(super) fn write_match_report(path: &Path, attempt: &RecordedSpeakerIdentific
             Ok(staging) => staging,
             Err(error) => {
                 eprintln!("Error staging match report {}: {error}", path.display());
-                std::process::exit(crate::exit_codes::EXIT_INPUT_ERROR);
+                return Err(crate::exit_codes::ReportedFailure::Input.into());
             }
         };
     if let Err(error) = staging
@@ -51,7 +83,7 @@ pub(super) fn write_match_report(path: &Path, attempt: &RecordedSpeakerIdentific
         .and_then(|()| staging.as_file().sync_all())
     {
         eprintln!("Error writing match report {}: {error}", path.display());
-        std::process::exit(crate::exit_codes::EXIT_INPUT_ERROR);
+        return Err(crate::exit_codes::ReportedFailure::Input.into());
     }
     if let Err(error) = staging.persist_noclobber(path) {
         eprintln!(
@@ -59,15 +91,20 @@ pub(super) fn write_match_report(path: &Path, attempt: &RecordedSpeakerIdentific
             path.display(),
             error.error
         );
-        std::process::exit(crate::exit_codes::EXIT_INPUT_ERROR);
+        return Err(crate::exit_codes::ReportedFailure::Input.into());
     }
+    Ok(())
 }
 
 /// Append (or update) an entry for the current session in the
 /// override file. The session ID defaults to the input CHAT file's
 /// basename stem; the operator defaults to `$USER` (`"unknown"` if
 /// unset). `decided_at` is the current time, to the second.
-pub(crate) fn write_override_entry(path: &Path, input: &Path, outcome: &ReferenceModeOutcome) {
+pub(crate) fn write_override_entry(
+    path: &Path,
+    input: &Path,
+    outcome: &ReferenceModeOutcome,
+) -> crate::exit_codes::CommandResult {
     let session_id = derive_session_id(input);
     let operator = std::env::var("USER").unwrap_or_else(|_| {
         warn!(
@@ -102,13 +139,14 @@ pub(crate) fn write_override_entry(path: &Path, input: &Path, outcome: &Referenc
     );
     let mut file = match OverrideFile::read_or_default(path) {
         Ok(f) => f,
-        Err(e) => exit_with_override_file_error(path, e),
+        Err(e) => return Err(report_override_file_error(path, e)),
     };
     file.upsert(session_id, entry);
     if let Err(e) = file.write(path) {
-        exit_with_override_file_error(path, e);
+        return Err(report_override_file_error(path, e));
     }
     info!("appended override entry to: {}", path.display());
+    Ok(())
 }
 
 /// Append a pending-adjudication entry for the current session to
@@ -126,7 +164,7 @@ pub(super) fn write_pending_entry(
     donor_chat: &ChatFile,
     inserted_code: &SpeakerCode,
     inserted_role_tag: &ParticipantRole,
-) {
+) -> crate::exit_codes::CommandResult {
     let session_id = derive_session_id(input);
     let mut suggested_mapping: std::collections::BTreeMap<String, SpeakerAction> =
         std::collections::BTreeMap::new();
@@ -160,7 +198,8 @@ pub(super) fn write_pending_entry(
         engine: talkbank_transform::speaker_id::DecisionEngine::Deterministic,
         judgment: None,
     };
-    append_pending_entry(pending_path, entry);
+    append_pending_entry(pending_path, entry)?;
+    Ok(())
 }
 
 /// Append an already-built `PendingEntry` to the pending file: read (or
@@ -169,15 +208,19 @@ pub(super) fn write_pending_entry(
 /// (`modes::run_holistic_mode`) funnel through here so the
 /// read/push/write append semantics live in exactly one place. On any
 /// pending-file I/O / TOML failure this exits via
-/// [`exit_with_adjudication_error`] (exit code 1) rather than panicking.
-pub(super) fn append_pending_entry(pending_path: &Path, entry: PendingEntry) {
+/// [`report_adjudication_error`] (exit code 1) rather than panicking.
+pub(super) fn append_pending_entry(
+    pending_path: &Path,
+    entry: PendingEntry,
+) -> crate::exit_codes::CommandResult {
     let mut file = match PendingAdjudications::read_or_default(pending_path) {
         Ok(f) => f,
-        Err(e) => exit_with_adjudication_error(pending_path, e),
+        Err(e) => return Err(report_adjudication_error(pending_path, e)),
     };
     file.entries.push(entry);
     if let Err(e) = file.write(pending_path) {
-        exit_with_adjudication_error(pending_path, e);
+        return Err(report_adjudication_error(pending_path, e));
     }
     info!("appended pending entry to: {}", pending_path.display());
+    Ok(())
 }

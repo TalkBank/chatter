@@ -20,6 +20,7 @@ typedef unsigned int UINT;
 typedef unsigned char *LPBYTE;
 typedef const char *LPCSTR;
 typedef uintptr_t WPARAM;
+typedef uintptr_t DWORD_PTR;
 typedef intptr_t LPARAM;
 typedef intptr_t LRESULT;
 typedef DWORD REGSAM;
@@ -34,6 +35,10 @@ typedef struct win32_double_instance *HINSTANCE;
 #define ERROR_FILE_NOT_FOUND 2L
 #define ERROR_ACCESS_DENIED 5L
 #define ERROR_MORE_DATA 234L
+#define ERROR_TIMEOUT 1460L
+#define SMTO_BLOCK 1u
+#define SMTO_ABORTIFHUNG 2u
+#define SMTO_ERRORONEXIT 0x20u
 
 #define REG_SZ 1u
 #define REG_EXPAND_SZ 2u
@@ -58,6 +63,9 @@ void Sleep(DWORD milliseconds);
 DWORD GetTickCount(void);
 DWORD GetEnvironmentVariableA(LPCSTR name, char *buffer, DWORD size);
 LRESULT SendMessageA(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+LRESULT SendMessageTimeoutA(HWND window, UINT message, WPARAM wparam, LPARAM lparam, UINT flags, UINT timeout, DWORD_PTR *reply);
+void SetLastError(DWORD error);
+DWORD GetLastError(void);
 int fopen_s(FILE **stream, const char *path, const char *mode);
 
 /* MSVC CRT bounded-string functions. The current bridge no longer calls them;

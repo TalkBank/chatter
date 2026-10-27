@@ -32,6 +32,9 @@
 //! - Any new field added for parser recovery must have clear semantics and tests
 
 // Core trait for CHAT serialization
+mod chat_writer;
+pub use chat_writer::{ChatString, ChatWriter};
+
 mod write_chat;
 pub use write_chat::WriteChat;
 
@@ -63,10 +66,9 @@ mod non_empty_string;
 pub mod participant;
 mod provenance;
 mod time;
-mod user_defined_tier;
 
-// Re-export NonEmptyString
-pub use non_empty_string::{EmptyText, NonEmptyString};
+// Re-export RecoveryText
+pub use non_empty_string::{EmptyText, NonEmptyLiteral, NonEmptyStr, NonEmptyString, RecoveryText};
 pub use time::MediaTiming;
 
 // Re-export provenance types
@@ -82,18 +84,23 @@ pub use intern::{
 
 // Re-export file types
 pub use file::{
-    ChatFile, ChatFileLines, FileStem, FileStemError, Line, OwnedFileStem, OwnedTranscriptName,
-    ParseHealth, ParseHealthState, ParseHealthTier, RecordedTranscriptTiming, TranscriptName,
+    ChatFile, ChatFileLines, DeclaredLanguages, DeclaredLanguagesRef, FileStem, FileStemError,
+    LanguageDeclarationError, Line, OwnedFileStem, OwnedTranscriptName, ParseHealth,
+    ParseHealthState, ParseHealthTier, RecordedTranscriptTiming, TranscriptName,
     TranscriptTimingEvidence, Utterance, UtteranceLanguage, UtteranceLanguageMetadata,
 };
 
 // Re-export participant type
-pub use participant::{DeclaredSpeaker, Participant};
+pub use participant::{
+    DeclaredSpeaker, Participant, ParticipantDeclarationError, ParticipantRoster, ParticipantView,
+    SpeakerMembership,
+};
 
 // Re-export header types
 pub use header::{
     ActivitiesDescription,
     ActivityType,
+    AgeComponents,
     AgeValue,
     BackgroundDescription,
     BirthplaceDescription,
@@ -109,14 +116,21 @@ pub use header::{
     EducationDescription,
     Ethnicity,
     FontSpec,
+    GemEndFailure,
+    GemEvent,
     GemLabel,
+    GemPair,
+    GemState,
     GroupName,
     GroupType,
     Header,
     IDHeader,
+    InvalidPageNumber,
+    InvalidTypesField,
     LanguageCode,
     LanguageCodeError,
     LanguageCodes,
+    LanguageHeaderFailure,
     LanguageName,
     LocationDescription,
     MediaFilename,
@@ -126,14 +140,17 @@ pub use header::{
     MediaStatus,
     MediaType,
     Month,
+    MultipleLanguageCodes,
     Number,
     PageNumber,
+    ParticipantDetails,
     ParticipantEntries,
     ParticipantEntry,
     ParticipantName,
     ParticipantRole,
     PidValue,
     RecordingQuality,
+    RegisteredLanguageCode,
     RoomLayoutDescription,
     SesCode,
     SesValue,
@@ -146,10 +163,15 @@ pub use header::{
     TimeSegment,
     TimeStartValue,
     TimeValue,
+    TooFewLanguageCodes,
     TranscriberName,
     Transcription,
     // @Types header components
     TypesHeader,
+    UnclosedGem,
+    UnparsedIDHeader,
+    UnparsedLanguageHeader,
+    UnparsedParticipantHeader,
     VideoSpec,
     WarningText,
     WindowGeometry,
@@ -164,6 +186,7 @@ pub use content::{
     BracketedItems,
     Bullet,
     BulletSource,
+    BulletState,
     CADelimiter,
     CADelimiterType,
     CAElement,
@@ -174,6 +197,9 @@ pub use content::{
     FormType,
     Freecode,
     Group,
+    InvalidEventType,
+    InvalidScopedLabel,
+    InvalidTimedPauseSpelling,
     LanguagePrecode,
     Linker,
     LinkerKind,
@@ -188,6 +214,7 @@ pub use content::{
     NonvocalEnd,
     NonvocalLabel,
     NonvocalSimple,
+    OrphanAnnotation,
     OtherSpokenEvent,
     OverlapIndex,
     OverlapPoint,
@@ -208,7 +235,9 @@ pub use content::{
     TierContent,
     TierContentItems,
     TierSeparator,
+    TimedPause,
     UnderlineMarker,
+    UnparsedBullet,
     UnspannedSwitchTarget,
     UtteranceContent,
     // Word types
@@ -231,8 +260,8 @@ pub use content::{
     WordUnderlineEnd,
 };
 pub use content::{
-    AngleRef, ContainerMut, ContentStructure, Descend, GroupKind, GroupMut, GroupRef, LeafContent,
-    LeafRef, QuotationRef, RetraceRef, WordRef,
+    AngleAnnotations, AngleRef, ContainerMut, ContentStructure, Descend, GroupKind, GroupMut,
+    GroupRef, LeafContent, LeafRef, QuotationRef, RetraceRef, WordRef,
 };
 
 // Re-export annotation types
@@ -266,23 +295,25 @@ pub use dependent_tier::{
     DependentTier,
     // Dependent-tier line wrapper (tier + separator)
     DependentTierEntry,
+    DependentTierKey,
     ExpTier,
     GpxTier,
-    GraCompleteness,
     GraLowering,
-    GraLoweringReceipt,
     GraTier,
     GraTierType,
     // GRA
     GrammaticalRelation,
     GrammaticalRelationType,
     IntTier,
+    InvalidGrammaticalRelationType,
+    InvalidUserDefinedDependentTierLabel,
     // MOR
     Mor,
     MorAnalysis,
     MorChunk,
     MorChunkKind,
     MorFeature,
+    MorFeatureShapeError,
     MorStem,
     MorTier,
     MorTierType,
@@ -309,7 +340,11 @@ pub use dependent_tier::{
     // PhoalnParseError / XphointParseError siblings above.
     SylWordError,
     TextTier,
+    UnparsedTextTier,
+    UnparsedTier,
+    UnsupportedDependentTier,
     UserDefinedDependentTier,
+    UserDefinedDependentTierLabel,
     WorTier,
     WorTimingEvidence,
     XphointParseError,
@@ -329,9 +364,6 @@ pub use language_metadata::{
     // a parse-backed test comparing that field needs the name.
     WordLanguages,
 };
-
-// Re-export user-defined tier types
-pub use user_defined_tier::{UserDefinedTier, UserDefinedTierLabel};
 
 #[cfg(test)]
 mod tests {

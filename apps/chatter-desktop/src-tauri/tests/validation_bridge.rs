@@ -561,11 +561,19 @@ fn protocol_contracts_serialize_to_expected_json_shape() {
     );
 
     let validate = serde_json::to_value(ValidateRequest {
+        run_id: serde_json::from_value(serde_json::json!("protocol-run")).unwrap(),
         path: "/tmp/reference".into(),
-        ..ValidateRequest::default()
+        roundtrip: false,
+        parser_kind: protocol::commands::ParserKindRequest::TreeSitter,
+        strict_linkers: false,
+        jobs: None,
     })
     .unwrap();
     assert_eq!(validate["path"], "/tmp/reference");
+    assert_eq!(validate["runId"], "protocol-run");
+    let mut missing_identity = validate.clone();
+    missing_identity.as_object_mut().unwrap().remove("runId");
+    assert!(serde_json::from_value::<ValidateRequest>(missing_identity).is_err());
     assert_eq!(validate["roundtrip"], false);
     assert_eq!(validate["parserKind"], "tree-sitter");
     assert_eq!(validate["strictLinkers"], false);
@@ -576,6 +584,7 @@ fn protocol_contracts_serialize_to_expected_json_shape() {
     // same contract as the CLI's `--jobs`.
     let request_with_jobs = |jobs: serde_json::Value| {
         serde_json::from_value::<ValidateRequest>(serde_json::json!({
+            "runId": "protocol-run",
             "path": "/tmp/reference",
             "roundtrip": false,
             "parserKind": "tree-sitter",
@@ -598,6 +607,9 @@ fn protocol_contracts_serialize_to_expected_json_shape() {
         line: 12,
         col: 4,
         byte_offset: 33,
+        source_revision: chatter_desktop_lib::source_revision::SourceRevision::from_source(
+            "wire fixture",
+        ),
         msg: "E001: bad".into(),
     })
     .unwrap();
@@ -606,6 +618,26 @@ fn protocol_contracts_serialize_to_expected_json_shape() {
     assert_eq!(open_in_clan["col"], 4);
     assert_eq!(open_in_clan["byteOffset"], 33);
     assert_eq!(open_in_clan["msg"], "E001: bad");
+    assert_eq!(
+        open_in_clan["sourceRevision"]["digest"]
+            .as_array()
+            .unwrap()
+            .len(),
+        32
+    );
+    assert!(serde_json::from_value::<OpenInClanRequest>(open_in_clan.clone()).is_ok());
+    for revision in [
+        serde_json::json!({"digest": [0]}),
+        serde_json::json!({"digest": vec![256; 32]}),
+        serde_json::Value::Null,
+    ] {
+        let mut malformed = open_in_clan.clone();
+        malformed["sourceRevision"] = revision;
+        assert!(serde_json::from_value::<OpenInClanRequest>(malformed).is_err());
+    }
+    let mut missing = open_in_clan.clone();
+    missing.as_object_mut().unwrap().remove("sourceRevision");
+    assert!(serde_json::from_value::<OpenInClanRequest>(missing).is_err());
 
     let export_request = serde_json::to_value(ExportResultsRequest {
         results: "[]".into(),
@@ -1185,6 +1217,7 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
     let location = &json["location"];
     let request = OpenInClanRequest {
         file: fixture.to_string_lossy().into_owned(),
+        source_revision: serde_json::from_value(json["sourceRevision"].clone()).unwrap(),
         line: location["line"].as_i64().expect("admitted line") as i32,
         col: location["column"].as_i64().expect("admitted column") as i32,
         byte_offset: usize::try_from(location["start"].as_u64().expect("admitted offset"))
@@ -1192,17 +1225,71 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
         msg: error.error.message.clone(),
     };
 
-    let resolved = resolve_open_in_clan(&request).expect("resolve should succeed for E601");
+    let resolved = resolve_open_in_clan(request.clone()).expect("resolve should succeed for E601");
 
     assert_eq!(
-        resolved.line, 7,
+        resolved.line(),
+        7,
         "CLAN line should be source line 8 minus the hidden @UTF8 header (= 7)"
     );
-    assert_eq!(resolved.column, 1, "CLAN column should be 1");
+    assert_eq!(resolved.column(), 1, "CLAN column should be 1");
     assert_eq!(
-        resolved.message, error.error.message,
+        resolved.message(),
+        error.error.message,
         "highlight message must be the bare error.message, not '{{code}}: {{message}}'"
     );
+}
+
+/// A displayed diagnostic cannot authorize coordinates against replacement bytes.
+#[test]
+fn open_in_clan_refuses_source_changed_after_validation() {
+    let fixture = workspace_root()
+        .join("tests/error_corpus/validation_errors/E601_invalid_dependent_tier.cha");
+    let original = std::fs::read_to_string(&fixture).unwrap();
+    let temporary = tempfile::tempdir().unwrap();
+    let path = temporary.path().join(fixture.file_name().unwrap());
+    std::fs::write(&path, &original).unwrap();
+    let diagnostic = collect_events(&path)
+        .into_iter()
+        .find_map(|event| match event {
+            FrontendEvent::Errors { diagnostics, .. } => diagnostics.into_iter().next(),
+            _ => None,
+        })
+        .expect("reference diagnostic");
+    let context = serde_json::to_value(&diagnostic.source_context).unwrap();
+    assert_eq!(context["kind"], "available");
+    let location = &context["location"];
+    let request = OpenInClanRequest {
+        file: path.to_string_lossy().into_owned(),
+        source_revision: serde_json::from_value(context["sourceRevision"].clone()).unwrap(),
+        line: location["line"].as_i64().unwrap() as i32,
+        col: location["column"].as_i64().unwrap() as i32,
+        byte_offset: location["start"].as_u64().unwrap() as usize,
+        msg: diagnostic.error.message,
+    };
+    assert!(resolve_open_in_clan(request.clone()).is_ok());
+    std::fs::write(
+        &path,
+        format!("@Comment:\tchanged since validation\n{original}"),
+    )
+    .unwrap();
+    assert!(matches!(
+        resolve_open_in_clan(request.clone()),
+        Err(chatter_desktop_lib::errors::ClanError::SourceChanged { .. })
+    ));
+    // A same-length edit is still different content; restoring the bytes is valid.
+    std::fs::write(&path, original.replacen("@UTF8", "@utf8", 1)).unwrap();
+    assert!(matches!(
+        resolve_open_in_clan(request.clone()),
+        Err(chatter_desktop_lib::errors::ClanError::SourceChanged { .. })
+    ));
+    std::fs::write(&path, &original).unwrap();
+    assert!(resolve_open_in_clan(request.clone()).is_ok());
+    std::fs::remove_file(&path).unwrap();
+    assert!(matches!(
+        resolve_open_in_clan(request),
+        Err(chatter_desktop_lib::errors::ClanError::ReadSource { .. })
+    ));
 }
 
 /// REGRESSION GUARD (2026-07-30): `ValidationState`'s cache must be keyed to
@@ -1332,9 +1419,12 @@ fn a_run_starts_when_the_caller_is_driving_an_async_runtime() {
     let state = ValidationState::new_at(cache_dir.clone());
 
     let request = ValidateRequest {
+        run_id: serde_json::from_value(serde_json::json!("async-start")).unwrap(),
         path: corpus.to_string_lossy().into_owned(),
         jobs: Some(std::num::NonZeroUsize::MIN),
-        ..ValidateRequest::default()
+        roundtrip: false,
+        parser_kind: protocol::commands::ParserKindRequest::TreeSitter,
+        strict_linkers: false,
     };
     let config = talkbank_transform::ValidationConfig::from(&request);
 

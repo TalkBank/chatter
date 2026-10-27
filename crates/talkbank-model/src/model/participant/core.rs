@@ -5,9 +5,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#ID_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Birth_Header>
 
-use super::super::{
-    ChatDate, IDHeader, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
-};
+use super::super::{ChatDate, IDHeader, ParticipantEntry, ParticipantName, SpeakerCode};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -25,18 +23,14 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// - [@ID](https://talkbank.org/0info/manuals/CHAT.html#ID_Header)
 /// - [@Birth](https://talkbank.org/0info/manuals/CHAT.html#Birth_Header)
 ///
-/// This type is the source of truth used by validation and JSON export for
-/// participant metadata.
+/// A detached snapshot for callers that need owned metadata. A `ChatFile`
+/// derives its borrowed `ParticipantView` values from current header lines.
 ///
 /// # Example
 ///
 /// ```rust
 /// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ParticipantName, LanguageCode};
-/// let entry = ParticipantEntry {
-///     speaker_code: SpeakerCode::new("CHI"),
-///     name: Some(ParticipantName::new("Ruth")),
-///     role: ParticipantRole::new("Target_Child"),
-/// };
+/// let entry = ParticipantEntry::new(SpeakerCode::new("CHI"), Some(ParticipantName::new("Ruth")), ParticipantRole::new("Target_Child"));
 ///
 /// let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child");
 ///
@@ -45,6 +39,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[serde(deny_unknown_fields)]
 pub struct Participant {
     /// Speaker code used on main tiers (`*CHI: ...`).
     ///
@@ -54,11 +49,8 @@ pub struct Participant {
     /// ```
     pub code: SpeakerCode,
 
-    /// Optional human-readable name from `@Participants`.
-    pub name: Option<ParticipantName>,
-
-    /// Role token from `@Participants`.
-    pub role: ParticipantRole,
+    /// Observed declaration details; missing roles remain explicit.
+    pub details: crate::model::ParticipantDetails,
 
     /// Full `@ID` metadata payload.
     pub id: IDHeader,
@@ -68,9 +60,19 @@ pub struct Participant {
 }
 
 impl Participant {
+    /// Name established by the participant declaration's syntax.
+    pub fn name(&self) -> Option<&ParticipantName> {
+        self.details.name()
+    }
+
+    /// Observed declared role, independent of ID metadata.
+    pub fn role(&self) -> Option<&crate::model::ParticipantRole> {
+        self.details.role()
+    }
+
     /// Construct a participant from `@Participants` entry plus `@ID`.
     ///
-    /// Primary constructor used by parsers. Birth date, if present, is attached
+    /// Snapshot constructor. Birth date, if present, is attached
     /// later via [`Self::with_birth_date`].
     ///
     /// # Arguments
@@ -82,29 +84,24 @@ impl Participant {
     ///
     /// ```rust
     /// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ParticipantName, LanguageCode};
-    /// let entry = ParticipantEntry {
-    ///     speaker_code: SpeakerCode::new("CHI"),
-    ///     name: Some(ParticipantName::new("Ruth")),
-    ///     role: ParticipantRole::new("Target_Child"),
-    /// };
+    /// let entry = ParticipantEntry::new(SpeakerCode::new("CHI"), Some(ParticipantName::new("Ruth")), ParticipantRole::new("Target_Child"));
     ///
     /// let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child");
     ///
     /// let participant = Participant::new(entry, id);
     /// assert_eq!(participant.code.as_str(), "CHI");
     /// assert_eq!(
-    ///     participant.name.as_ref().map(|n| n.as_str()),
+    ///     participant.name().map(|n| n.as_str()),
     ///     Some("Ruth")
     /// );
-    /// assert_eq!(participant.role.as_str(), "Target_Child");
+    /// assert_eq!(participant.role().map(|role| role.as_str()), Some("Target_Child"));
     /// assert_eq!(participant.birth_date, None);
     /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
     pub fn new(entry: ParticipantEntry, id: IDHeader) -> Self {
         Self {
             code: entry.speaker_code,
-            name: entry.name,
-            role: entry.role,
+            details: entry.details,
             id,
             birth_date: None,
         }
@@ -120,11 +117,7 @@ impl Participant {
     ///
     /// ```rust
     /// # use talkbank_model::model::{Participant, ParticipantEntry, IDHeader, SpeakerCode, ParticipantRole, ChatDate, LanguageCode};
-    /// # let entry = ParticipantEntry {
-    /// #     speaker_code: SpeakerCode::new("CHI"),
-    /// #     name: None,
-    /// #     role: ParticipantRole::new("Target_Child"),
-    /// # };
+    /// # let entry = ParticipantEntry::new(SpeakerCode::new("CHI"), None, ParticipantRole::new("Target_Child"));
     /// # let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child");
     /// let participant = Participant::new(entry, id)
     ///     .with_birth_date(ChatDate::new("28-JUN-2001"));

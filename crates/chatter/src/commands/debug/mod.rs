@@ -1,4 +1,4 @@
-//! Debug subcommands for CHAT file inspection.
+//! Experimental transforms and read-only transcript inspection.
 
 mod fix_s;
 mod join_retrace;
@@ -16,6 +16,7 @@ pub use report::AuditError;
 pub use retag_language::*;
 pub use sanitize::*;
 
+use super::publication::{PublicationError, SourceSnapshot};
 use std::path::{Path, PathBuf};
 use talkbank_model::WriteChat;
 
@@ -27,17 +28,17 @@ pub(super) fn pct(n: usize, total: usize) -> String {
     }
 }
 
-/// Print a user-facing error and exit non-zero.
-pub(super) fn die(msg: &str) -> ! {
+/// Print a user-facing error and return its failure classification.
+pub(super) fn die(msg: &str) -> crate::exit_codes::CommandStop {
     eprintln!("ERROR: {msg}");
-    std::process::exit(1);
+    crate::exit_codes::ReportedFailure::Input.into()
 }
 
 /// The parser every debug tool uses; one that cannot be created ends the
 /// command.
-pub(super) fn parser() -> talkbank_parser::TreeSitterParser {
+pub(super) fn parser() -> crate::exit_codes::CommandResult<talkbank_parser::TreeSitterParser> {
     talkbank_parser::TreeSitterParser::new()
-        .unwrap_or_else(|e| die(&format!("parser initialization failed: {e:?}")))
+        .map_err(|e| die(&format!("parser initialization failed: {e:?}")))
 }
 
 /// What every debug tool over transcripts starts from: the transcripts the
@@ -45,11 +46,12 @@ pub(super) fn parser() -> talkbank_parser::TreeSitterParser {
 /// read or none is named, and the parser.
 pub(super) fn transcripts_and_parser(
     paths: &[std::path::PathBuf],
-) -> (Vec<std::path::PathBuf>, talkbank_parser::TreeSitterParser) {
+) -> crate::exit_codes::CommandResult<(Vec<std::path::PathBuf>, talkbank_parser::TreeSitterParser)>
+{
     let files = crate::commands::inputs::readable_transcripts(paths)
-        .unwrap_or_else(|refusal| die(&refusal.to_string()))
+        .map_err(|refusal| die(&refusal.to_string()))?
         .into_paths();
-    (files, parser())
+    Ok((files, parser()?))
 }
 
 /// A transcript open for editing IN PLACE, whose model provably reproduces it.
@@ -69,7 +71,7 @@ pub(super) fn transcripts_and_parser(
 ///
 /// # Why the check is BEFORE the edit
 ///
-/// After the edit the model no longer matches its source by design: `fix-s`
+/// After the edit the model no longer matches its source by design: `language-runs`
 /// removes `@s:` markers, `retag-language` changes a language code, and
 /// `join-retrace` merges two utterances. A did-anything-vanish test on the
 /// RESULT cannot tell an intended change from a dropped region, and a first cut
@@ -77,18 +79,17 @@ pub(super) fn transcripts_and_parser(
 /// unedited model is the only point where faithfulness is a clean question with
 /// a byte-exact answer.
 pub(super) struct InPlace {
-    path: PathBuf,
-    source: String,
+    source: SourceSnapshot,
     file: talkbank_model::model::ChatFile,
 }
 
 /// Whether [`InPlace::commit`] should actually touch the file.
 ///
-/// An enum rather than a `bool` parameter because the two callers that need it
+/// An enum rather than a `bool` parameter because the callers
 /// read as `commit(Commit::DryRun)` and `commit(Commit::Write)`, where
 /// `commit(true)` says nothing at the call site. It also puts the dry run
 /// through the SAME change detection as the real write, rather than leaving
-/// `--dry-run` to re-derive "would this change anything" and drift.
+/// preview mode to re-derive "would this change anything" and drift.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Commit {
     /// Write the file.
@@ -116,25 +117,25 @@ impl InPlace {
     /// exactly as it does for an unparsable one, leaving this one untouched.
     /// One bad file must not kill a multi-file run.
     pub(super) fn open(parser: &talkbank_parser::TreeSitterParser, path: PathBuf) -> Option<Self> {
-        let source = match std::fs::read_to_string(&path) {
+        let source = match SourceSnapshot::read(&path) {
             Ok(source) => source,
             Err(e) => {
                 eprintln!("ERROR: cannot read {}: {e}", path.display());
                 return None;
             }
         };
-        let file = parse_or_report(parser, &path, &source)?;
-        if !reproduces(&file, &source) {
+        let file = parse_or_report(parser, &path, source.text())?;
+        if !reproduces(&file, source.text()) {
             eprintln!(
                 "ERROR: refusing to rewrite {}: parsing it does not reproduce it byte for byte,\n\
                  \x20      so an in-place edit would also write whatever the parse dropped.\n\
-                 \x20      Run `chatter validate` on it, and `chatter normalize` if the \
+                 \x20      Run `chatter validate` on it, and `chatter format` if the \
                  difference is formatting.",
                 path.display()
             );
             return None;
         }
-        Some(Self { path, source, file })
+        Some(Self { source, file })
     }
 
     /// The model, for the caller's edit.
@@ -150,27 +151,29 @@ impl InPlace {
 
     /// Serialize the edited model over the source file.
     ///
-    /// The ONLY `fs::write` in this module. An edit that reproduces the source
-    /// writes nothing and says so, rather than rewriting identical bytes.
-    pub(super) fn commit(self, mode: Commit) -> Committed {
-        let rewritten = self.file.to_chat_string();
-        if rewritten == self.source {
-            return Committed::Unchanged;
+    /// An unchanged model never reaches staging. Changed models retain their
+    /// source identity through the shared staged publication boundary.
+    pub(super) fn commit(self, mode: Commit) -> Result<Committed, PublicationError> {
+        if reproduces(&self.file, self.source.text()) {
+            return Ok(Committed::Unchanged);
         }
         match mode {
-            Commit::DryRun => Committed::WouldWrite,
+            Commit::DryRun => Ok(Committed::WouldWrite),
             Commit::Write => {
-                if let Err(e) = std::fs::write(&self.path, &rewritten) {
-                    die(&format!("cannot write {}: {e}", self.path.display()));
-                }
-                Committed::Wrote
+                super::publication::publish_transform(self)?;
+                Ok(Committed::Wrote)
             }
         }
     }
 
     /// The path being edited, for a caller's own reporting.
     pub(super) fn path(&self) -> &Path {
-        &self.path
+        self.source.path()
+    }
+
+    /// Transfer the admitted model and its source to the publication owner.
+    pub(super) fn into_parts(self) -> (SourceSnapshot, talkbank_model::model::ChatFile) {
+        (self.source, self.file)
     }
 }
 

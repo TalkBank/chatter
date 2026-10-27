@@ -18,8 +18,7 @@ tier_body:
         annotations: []
         raw_text: well
     - Separator:
-        kind: Comma
-        text: ","
+        kind: comma
     - Word:
         category: ~
         body:
@@ -84,7 +83,7 @@ tier_body:
         annotations: []
         raw_text: to
     - Word:
-        category: Fragment
+        category: phonologicalfragment
         body:
           - Text: th
         form_marker: ~
@@ -129,7 +128,7 @@ tier_body:
         annotations: []
         raw_text: it
   terminator:
-    Period: "."
+    type: period
   postcodes: []
   media_bullet:
     raw_text: "\u0015149828_153099\u0015"

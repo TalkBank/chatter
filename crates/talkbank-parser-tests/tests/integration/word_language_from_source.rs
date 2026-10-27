@@ -224,7 +224,7 @@ fn parsed(row: &Row) -> Result<ChatFile, TestError> {
 fn every_main_tier_word_resolves_as_the_row_says() -> Result<(), TestError> {
     for row in ROWS {
         let file = parsed(row)?;
-        let declared: Vec<LanguageCode> = file.languages.iter().cloned().collect();
+        let declared = file.language_declaration();
         let utterance = file
             .lines
             .iter()
@@ -241,7 +241,10 @@ fn every_main_tier_word_resolves_as_the_row_says() -> Result<(), TestError> {
             .language_code
             .as_ref()
             .map(|precode| &precode.code)
-            .or_else(|| declared.first());
+            .or_else(|| match declared {
+                Ok(codes) => Some(codes.primary()),
+                Err(_) => None,
+            });
         let mut seen: Vec<(String, LanguageResolution)> = Vec::new();
         walk_words(&utterance.main.content.content, None, &mut |item| {
             let word = match item {
@@ -249,7 +252,8 @@ fn every_main_tier_word_resolves_as_the_row_says() -> Result<(), TestError> {
                 WordItem::ReplacedWord(replaced) => &replaced.word,
                 WordItem::Separator(_) => return,
             };
-            let outcome = GoverningMark::of(word, None).resolve(tier_language, &declared);
+            let outcome =
+                GoverningMark::of(word, None).resolve_with_declaration(tier_language, declared);
             seen.push((word.raw_text().to_string(), outcome.resolution));
         });
         let want: Vec<(String, LanguageResolution)> = row

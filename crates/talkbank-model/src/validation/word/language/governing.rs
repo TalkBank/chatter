@@ -75,35 +75,32 @@ impl<'a> GoverningMarker<'a> {
     /// Taking the marker from `self` rather than as a parameter is what closes
     /// that: a caller cannot supply a marker inconsistent with the scope,
     /// because it does not supply one at all.
-    pub(crate) fn resolve(
+    /// Resolve while preserving unavailable declaration evidence. Explicit
+    /// markers remain independently checkable; rejected declarations cannot
+    /// justify shortcut-language diagnostics.
+    pub(crate) fn resolve_with_declaration(
         &self,
         word: &Word,
         tier_language: Option<&LanguageCode>,
-        declared_languages: &[LanguageCode],
+        declaration: Result<
+            crate::model::DeclaredLanguagesRef<'_>,
+            crate::model::LanguageDeclarationError,
+        >,
     ) -> LanguageResolutionOutcome {
-        self.resolve_at(word.location, tier_language, declared_languages)
+        self.resolve_at_with_declaration(word.location, tier_language, declaration)
     }
 
-    /// Resolve at a SPAN rather than from a `Word`.
-    ///
-    /// The word was only ever needed to place diagnostics. A caller holding an
-    /// already-extracted word (Batchalign's `ExtractedWord`) has a span and no
-    /// `Word`, and used to fabricate one with `Word::new_unchecked` purely to
-    /// satisfy the signature. This is the honest entry point for it, and it is
-    /// what lets that fabrication be deleted.
-    pub(crate) fn resolve_at(
+    fn resolve_at_with_declaration(
         &self,
         location: crate::Location,
         tier_language: Option<&LanguageCode>,
-        declared_languages: &[LanguageCode],
+        declaration: Result<
+            crate::model::DeclaredLanguagesRef<'_>,
+            crate::model::LanguageDeclarationError,
+        >,
     ) -> LanguageResolutionOutcome {
         let marker = self.marker();
-        resolve_marker_at(
-            marker.as_deref(),
-            location,
-            tier_language,
-            declared_languages,
-        )
+        resolve_marker_at(marker.as_deref(), location, tier_language, declaration)
     }
 
     /// The marker the resolver should apply.
@@ -276,17 +273,31 @@ impl GoverningMark {
         tier_language: Option<&LanguageCode>,
         declared_languages: &[LanguageCode],
     ) -> LanguageResolutionOutcome {
+        self.resolve_with_declaration(
+            tier_language,
+            crate::model::DeclaredLanguagesRef::new(declared_languages),
+        )
+    }
+
+    /// Resolve using the admitted declaration or its explicit unavailability.
+    pub fn resolve_with_declaration(
+        &self,
+        tier_language: Option<&LanguageCode>,
+        declared_languages: Result<
+            crate::model::DeclaredLanguagesRef<'_>,
+            crate::model::LanguageDeclarationError,
+        >,
+    ) -> LanguageResolutionOutcome {
         match &self.mark {
             // A marked position anchors its diagnostics at the span it was born
             // with; the pairing is structural, not a parameter to get wrong.
-            Mark::Own(own, location) => {
-                GoverningMarker::Own(own).resolve_at(*location, tier_language, declared_languages)
-            }
-            Mark::Span(marker, location) => GoverningMarker::Span(marker).resolve_at(
+            Mark::Own(own, location) => GoverningMarker::Own(own).resolve_at_with_declaration(
                 *location,
                 tier_language,
                 declared_languages,
             ),
+            Mark::Span(marker, location) => GoverningMarker::Span(marker)
+                .resolve_at_with_declaration(*location, tier_language, declared_languages),
             // No marker, so no diagnostic and no span to place one at.
             Mark::Utterance => resolve_without_marker(tier_language),
         }

@@ -1,11 +1,13 @@
 //! Execute-command request dispatch for the LSP backend.
 
+use crate::backend::LspBackendError;
 use serde_json::Value;
-use tower_lsp::jsonrpc::Result;
+use tower_lsp::jsonrpc::{Error, ErrorCode, Result as RpcResult};
 use tower_lsp::lsp_types::ExecuteCommandParams;
 
 use crate::backend::execute_commands::{
-    DocumentCommandRequest, DocumentPositionRequest, DocumentUriRequest, ExecuteCommandRequest,
+    DocumentCommandRequest, DocumentPositionRequest, DocumentUriRequest, ExecuteCommandName,
+    ExecuteCommandRequest,
 };
 use crate::backend::state::Backend;
 use crate::backend::utils;
@@ -32,7 +34,11 @@ impl ExecuteCommandServices {
     }
 
     /// Route one typed execute-command request to its feature service.
-    fn dispatch(&self, backend: &Backend, request: ExecuteCommandRequest) -> Result<Option<Value>> {
+    fn dispatch(
+        &self,
+        backend: &Backend,
+        request: ExecuteCommandRequest,
+    ) -> Result<Value, LspBackendError> {
         match request {
             ExecuteCommandRequest::Documents(request) => self.documents.dispatch(backend, request),
             ExecuteCommandRequest::Participants(request) => {
@@ -52,7 +58,7 @@ impl DocumentCommandService {
         &self,
         backend: &Backend,
         request: DocumentCommandRequest,
-    ) -> Result<Option<Value>> {
+    ) -> Result<Value, LspBackendError> {
         match request {
             DocumentCommandRequest::ShowDependencyGraph(request) => {
                 self.handle_dependency_graph_command(backend, &request)
@@ -68,24 +74,11 @@ impl DocumentCommandService {
         &self,
         backend: &Backend,
         request: &DocumentUriRequest,
-    ) -> Result<Option<Value>> {
-        let text = match document_text(backend, &request.uri) {
-            Some(text) => text,
-            None => return Ok(Some(Value::String("Document not found".to_string()))),
-        };
-        let chat_file = match get_chat_file(backend, &request.uri, &text) {
-            Ok(file) => file,
-            Err(error) => return Ok(Some(Value::String(error.to_string()))),
-        };
-
+    ) -> Result<Value, LspBackendError> {
+        let text = document_text(backend, &request.uri).ok_or(LspBackendError::DocumentNotFound)?;
+        let chat_file = get_chat_file(backend, &request.uri, &text)?;
         let sidecar = alignment_sidecar::build_alignment_sidecar(&request.uri, &text, &chat_file);
-        match serde_json::to_value(sidecar) {
-            Ok(value) => Ok(Some(value)),
-            Err(err) => Ok(Some(Value::String(format!(
-                "Sidecar serialization error: {}",
-                err
-            )))),
-        }
+        serde_json::to_value(sidecar).map_err(Into::into)
     }
 
     /// Resolve a dependency-graph request at one cursor position.
@@ -93,48 +86,67 @@ impl DocumentCommandService {
         &self,
         backend: &Backend,
         request: &DocumentPositionRequest,
-    ) -> Result<Option<Value>> {
-        let text = match document_text(backend, &request.uri) {
-            Some(text) => text,
-            None => return Ok(Some(Value::String("Document not found".to_string()))),
-        };
-        let chat_file = match get_chat_file(backend, &request.uri, &text) {
-            Ok(file) => file,
-            Err(error) => return Ok(Some(Value::String(error.to_string()))),
-        };
-        let utterance = match utils::find_utterance_at_position(&chat_file, request.position, &text)
-        {
-            Some(u) => u,
-            None => {
-                return Ok(Some(Value::String(
-                    "No utterance at cursor position".to_string(),
-                )));
-            }
-        };
-
+    ) -> Result<Value, LspBackendError> {
+        let text = document_text(backend, &request.uri).ok_or(LspBackendError::DocumentNotFound)?;
+        let chat_file = get_chat_file(backend, &request.uri, &text)?;
+        let utterance = utils::find_utterance_at_position(&chat_file, request.position, &text)
+            .ok_or(LspBackendError::NoUtteranceAtPosition)?;
         let response = crate::graph::build_dependency_graph_response(
             utterance,
             backend.parse_state(&request.uri),
         );
-        match serde_json::to_value(response) {
-            Ok(value) => Ok(Some(value)),
-            Err(err) => Ok(Some(Value::String(format!(
-                "Failed to serialize dependency-graph response: {}",
-                err
-            )))),
+        serde_json::to_value(response).map_err(Into::into)
+    }
+}
+
+/// Admission and execution failures have distinct protocol meanings. Neither
+/// state can be serialized as a successful command payload by a feature service.
+enum CommandFailure {
+    Admission(LspBackendError),
+    Execution {
+        command: ExecuteCommandName,
+        source: LspBackendError,
+    },
+}
+
+impl CommandFailure {
+    fn into_rpc(self) -> Error {
+        match self {
+            Self::Admission(source) => Error::invalid_params(source.to_string()),
+            Self::Execution { command, source } => {
+                let context = match command {
+                    ExecuteCommandName::ShowDependencyGraph => "Dependency graph error",
+                    ExecuteCommandName::GetAlignmentSidecar => "Sidecar error",
+                    ExecuteCommandName::GetParticipants => "Participant error",
+                    ExecuteCommandName::FormatIdLine | ExecuteCommandName::FormatBulletLine => {
+                        "Format error"
+                    }
+                    ExecuteCommandName::GetSpeakers => "Speaker error",
+                    ExecuteCommandName::FilterDocument => "Filter error",
+                    ExecuteCommandName::GetUtterances => "Utterance error",
+                    ExecuteCommandName::ScopedFind => "Search error",
+                };
+                Error {
+                    code: ErrorCode::ServerError(-32001),
+                    message: format!("{context}: {source}").into(),
+                    data: None,
+                }
+            }
         }
     }
 }
 
-/// Decode and dispatch one `workspace/executeCommand` request.
+/// Decode and dispatch one `workspace/executeCommand` request. This is the only
+/// wire projection: feature services return typed domain results all the way here.
 pub(super) async fn handle_execute_command(
     backend: &Backend,
     params: ExecuteCommandParams,
-) -> Result<Option<Value>> {
-    let request = match ExecuteCommandRequest::parse(params) {
-        Ok(request) => request,
-        Err(error) => return Ok(Some(Value::String(error.to_string()))),
-    };
-
-    ExecuteCommandServices::new().dispatch(backend, request)
+) -> RpcResult<Option<Value>> {
+    let request = ExecuteCommandRequest::parse(params)
+        .map_err(|source| CommandFailure::Admission(source).into_rpc())?;
+    let command = request.name();
+    ExecuteCommandServices::new()
+        .dispatch(backend, request)
+        .map(Some)
+        .map_err(|source| CommandFailure::Execution { command, source }.into_rpc())
 }

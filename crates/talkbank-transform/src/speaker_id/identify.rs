@@ -205,6 +205,12 @@ impl RecordedSpeakerIdentificationAttempt {
         error: &PipelineError,
     ) -> Self {
         let failure_kind = match error {
+            PipelineError::SpeakerRewrite(reason) => match reason {
+                crate::SpeakerRewriteError::Declaration(_) => {
+                    RecordedInputFailureKind::ParticipantDeclaration
+                }
+                crate::SpeakerRewriteError::UnparsedID => RecordedInputFailureKind::UnparsedID,
+            },
             PipelineError::InternalFailure(_) => RecordedInputFailureKind::InternalFailure,
             PipelineError::Io(_) => RecordedInputFailureKind::Io,
             PipelineError::ParserCreation(_) => RecordedInputFailureKind::ParserCreation,
@@ -248,6 +254,11 @@ pub enum RecordedSpeakerIdentificationInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RecordedInputFailureKind {
+    /// The input has no single admitted participant declaration.
+    ParticipantDeclaration,
+    /// A recognized ID header is unreadable for speaker rewriting.
+    #[serde(rename = "unparsed_id")]
+    UnparsedID,
     /// The tool failed without establishing input validity.
     InternalFailure,
     /// An I/O operation inside the typed pipeline failed.

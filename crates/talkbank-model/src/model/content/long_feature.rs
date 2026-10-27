@@ -8,49 +8,10 @@
 //! - [Long Event](https://talkbank.org/0info/manuals/CHAT.html#LongEvent)
 
 use super::WriteChat;
-use crate::string_newtype;
+use super::scoped_label::LongFeatureLabel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
-
-string_newtype!(
-    /// Long-event label text written after `l=`.
-    ///
-    /// Modeled as an unconstrained newtype because corpora commonly use
-    /// project-specific labels.
-    ///
-    /// # CHAT Format Examples
-    ///
-    /// ```text
-    /// &{l=overlap        Begin overlapping speech
-    /// &}l=overlap        End overlapping speech
-    /// &{l=singing        Begin singing
-    /// &}l=singing        End singing
-    /// &{l=whisper        Begin whispered speech
-    /// &}l=whisper        End whispered speech
-    /// ```
-    ///
-    /// # Common Labels
-    ///
-    /// - **Overlapping speech**: overlap, simultaneous
-    /// - **Prosodic features**: singing, chanting, whisper, shout, emphasis
-    /// - **Code-switching**: code-switch, mixed-language
-    /// - **Quotation**: quote, reported-speech
-    /// - **Other discourse**: sarcasm, irony, imitation
-    ///
-    /// # Usage
-    ///
-    /// Long events mark spans where the marked feature applies continuously across
-    /// multiple words. The begin marker (`&{l=LABEL`) starts the scope, and the end
-    /// marker (`&}l=LABEL`) closes it. All words between the markers are affected
-    /// by the feature.
-    ///
-    /// # References
-    ///
-    /// - [Long Event](https://talkbank.org/0info/manuals/CHAT.html#LongEvent)
-    #[serde(transparent)]
-    pub struct LongFeatureLabel;
-);
 
 /// Begin boundary for a long-event scope.
 ///
@@ -80,7 +41,7 @@ string_newtype!(
 ///
 /// # Validation
 ///
-/// The source span enables validation that begin markers are properly paired
+/// Validation checks that begin markers are properly paired
 /// with matching end markers. Unpaired markers generate validation errors.
 ///
 /// # References
@@ -101,13 +62,15 @@ pub struct LongFeatureBegin {
 }
 
 impl LongFeatureBegin {
-    /// Build a begin marker with dummy span metadata.
+    /// Construct this marker with an admitted label and explicit source location.
     ///
-    /// Parser/test code can use this constructor before source offsets are
-    /// attached; semantic behavior depends only on the label payload.
-    pub fn new(location: impl Into<crate::Location>, label: impl Into<LongFeatureLabel>) -> Self {
+    /// ```compile_fail
+    /// use talkbank_model::{LongFeatureBegin, Location};
+    /// let marker = LongFeatureBegin::new(Location::Unlocated, "label");
+    /// ```
+    pub fn new(location: impl Into<crate::Location>, label: LongFeatureLabel) -> Self {
         Self {
-            label: label.into(),
+            label,
             location: location.into(),
         }
     }
@@ -115,8 +78,12 @@ impl LongFeatureBegin {
 
 impl WriteChat for LongFeatureBegin {
     /// Writes this begin marker in CHAT long-event syntax (`&{l=...`).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "&{{l={}", self.label)
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        {
+            w.write_str("&{")?;
+            w.write_str("l=")?;
+            crate::model::WriteChat::write_chat(&self.label, w)
+        }
     }
 }
 
@@ -180,13 +147,15 @@ pub struct LongFeatureEnd {
 }
 
 impl LongFeatureEnd {
-    /// Build an end marker with dummy span metadata.
+    /// Construct this marker with an admitted label and explicit source location.
     ///
-    /// Parser/test code can use this constructor before source offsets are
-    /// attached; semantic behavior depends only on the label payload.
-    pub fn new(location: impl Into<crate::Location>, label: impl Into<LongFeatureLabel>) -> Self {
+    /// ```compile_fail
+    /// use talkbank_model::{LongFeatureEnd, Location};
+    /// let marker = LongFeatureEnd::new(Location::Unlocated, "label");
+    /// ```
+    pub fn new(location: impl Into<crate::Location>, label: LongFeatureLabel) -> Self {
         Self {
-            label: label.into(),
+            label,
             location: location.into(),
         }
     }
@@ -194,8 +163,12 @@ impl LongFeatureEnd {
 
 impl WriteChat for LongFeatureEnd {
     /// Writes this end marker in CHAT long-event syntax (`&}l=...`).
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "&}}l={}", self.label)
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        {
+            w.write_str("&}")?;
+            w.write_str("l=")?;
+            crate::model::WriteChat::write_chat(&self.label, w)
+        }
     }
 }
 
@@ -203,5 +176,36 @@ impl std::fmt::Display for LongFeatureEnd {
     /// Formats this end marker in canonical CHAT text.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.write_chat(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn scoped_marker_wire_refuses_empty_and_delimited_labels() {
+        use crate::{LongFeatureBegin, LongFeatureEnd, NonvocalBegin, NonvocalEnd, NonvocalSimple};
+        for label in ["", "two words", "singing}", "laugh\n*CHI:\tsecret", "café"] {
+            let wire = serde_json::json!({"label": label});
+            assert!(
+                serde_json::from_value::<LongFeatureBegin>(wire.clone()).is_err(),
+                "{label:?}"
+            );
+            assert!(
+                serde_json::from_value::<LongFeatureEnd>(wire.clone()).is_err(),
+                "{label:?}"
+            );
+            assert!(
+                serde_json::from_value::<NonvocalBegin>(wire.clone()).is_err(),
+                "{label:?}"
+            );
+            assert!(
+                serde_json::from_value::<NonvocalEnd>(wire.clone()).is_err(),
+                "{label:?}"
+            );
+            assert!(
+                serde_json::from_value::<NonvocalSimple>(wire).is_err(),
+                "{label:?}"
+            );
+        }
     }
 }

@@ -6,7 +6,7 @@ speaker:
   Speaker: PAR
 tier_body:
   linkers:
-    - LinkerLazyOverlap: +<
+    - type: lazy_overlap_precedes
   langcode: ~
   contents:
     - Word:
@@ -19,7 +19,7 @@ tier_body:
         annotations: []
         raw_text: mhm
   terminator:
-    Period: "."
+    type: period
   postcodes: []
   media_bullet:
     raw_text: "\u00158180_8669\u0015"

@@ -160,7 +160,7 @@ impl JsonSchema for Word {
 
 impl WriteChat for Word {
     /// Serializes a word token with category/form/language/POS markers in CHAT order.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         if let Some(ref cat) = self.category {
             cat.write_chat(w)?;
         }

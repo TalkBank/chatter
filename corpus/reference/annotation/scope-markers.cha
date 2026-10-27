@@ -9,4 +9,9 @@
 *MOT:	you [!] did that .
 *CHI:	this is child [?] speaking .
 *MOT:	you [!!] said that .
+@Comment:	Multiple annotations retain order and extend one wrapper on each host.
+*CHI:	“hello” [?] [!] .
+*CHI:	&=laughs [?] [!] hello .
+*CHI:	0 [?] [!] hello .
+*CHI:	hello [/] [?] [!] hello .
 @End

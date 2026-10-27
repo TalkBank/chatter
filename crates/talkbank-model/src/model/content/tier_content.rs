@@ -16,7 +16,7 @@
 //! - [Dependent tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)
 //! - [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)
 
-use super::{Bullet, LanguageCode, Linker, Postcode, Terminator, UtteranceContent, WriteChat};
+use super::{BulletState, LanguageCode, Linker, Postcode, Terminator, UtteranceContent, WriteChat};
 use crate::validation::{Validate, ValidationContext};
 use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 use schemars::JsonSchema;
@@ -60,7 +60,7 @@ pub struct TierContent {
 
     /// Optional terminal media bullet (`start_end`) after postcodes.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub bullet: Option<Bullet>,
+    pub bullet: Option<BulletState>,
 
     /// Source location of the content region (after the colon). Skipped in
     /// JSON output; programmatic content is unlocated.
@@ -121,7 +121,7 @@ impl TierContent {
         content: Vec<UtteranceContent>,
         terminator: Option<Terminator>,
         postcodes: Vec<Postcode>,
-        bullet: Option<Bullet>,
+        bullet: Option<BulletState>,
     ) -> Self {
         Self {
             linkers: linkers.into(),
@@ -159,9 +159,23 @@ impl TierContent {
     }
 
     /// Sets terminal bullet marker.
-    pub fn with_bullet(mut self, bullet: Bullet) -> Self {
-        self.bullet = Some(bullet);
+    pub fn with_bullet(mut self, bullet: impl Into<BulletState>) -> Self {
+        self.bullet = Some(bullet.into());
         self
+    }
+
+    /// Whether any occupied main-tier bullet position contains rejected source.
+    pub fn has_unparsed_bullets(&self) -> bool {
+        let mut rejected = matches!(self.bullet, Some(BulletState::Unparsed { .. }));
+        crate::alignment::helpers::walk_content(&self.content, None, &mut |item| {
+            if let crate::alignment::helpers::ContentItem::InternalBullet(BulletState::Unparsed {
+                ..
+            }) = item
+            {
+                rejected = true;
+            }
+        });
+        rejected
     }
 
     /// Move at most one trailing internal bullet to an unoccupied terminal slot.
@@ -182,7 +196,10 @@ impl TierContent {
     ///
     /// This writes: linkers, language_code, content, terminator, postcodes, bullet
     /// The caller is responsible for writing the prefix (*SPEAKER:\t or %wor:\t)
-    pub(crate) fn write_tier_content<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    pub(crate) fn write_tier_content<W: crate::model::ChatWriter>(
+        &self,
+        w: &mut W,
+    ) -> Result<(), W::Error> {
         // Write linkers if present (after tab, before content)
         for (i, linker) in self.linkers.iter().enumerate() {
             if i > 0 {
@@ -258,9 +275,7 @@ impl TierContent {
     /// - Time: O(n) in the number of content items and annotations.
     /// - Space: O(n) for the output string.
     pub fn to_content_string(&self) -> String {
-        let mut output = String::new();
-        let _ = self.write_tier_content(&mut output);
-        output
+        crate::model::ChatString::render(|w| self.write_tier_content(w))
     }
 }
 
@@ -388,7 +403,7 @@ impl TierContentItems {
 
     /// Transfer one owned bullet, restoring a non-bullet tail unchanged.
     /// No independent peek can become detached from the value being removed.
-    fn take_trailing_bullet(&mut self) -> Option<Bullet> {
+    fn take_trailing_bullet(&mut self) -> Option<BulletState> {
         match self.0.pop() {
             Some(UtteranceContent::InternalBullet(bullet)) => Some(bullet),
             Some(other) => {
@@ -490,15 +505,10 @@ impl Validate for TierContentItems {
 
         if !has_meaningful_content {
             // Same exemption as the `is_empty()` branch above, for the same
-            // reason, and it was missing here. Recovery does not always leave
-            // the content list EMPTY: an utterance opening with an annotation
-            // (`*CHI:\t[: closed] .`) recovers to a single zero-width
-            // separator, so it fell into this branch instead and was told
-            // twice that it has no content, on a line that visibly has some.
-            //
-            // One fact, "recovery emptied this content list", was handled in
-            // one branch and not its sibling. Real CLAN CHECK reports exactly
-            // one thing for that input; chatter reported four.
+            // reason: recovery can leave only authored separators after other
+            // content was rejected. Their presence does not prove the source
+            // contained no meaningful content. MISSING separator tokens are
+            // not model values and must not be used to reach this branch.
             if context.main_parse_tainted {
                 return;
             }
@@ -615,11 +625,14 @@ impl IntoIterator for TierPostcodes {
 }
 
 impl crate::validation::Validate for TierPostcodes {
-    /// Postcode-level checks run in utterance/tier validators where context is available.
+    /// Retained recovery remains invalid independently of source coordinates.
     fn validate(
         &self,
         _context: &crate::validation::ValidationContext,
-        _errors: &impl crate::ErrorSink,
+        errors: &impl crate::ErrorSink,
     ) {
+        for postcode in self {
+            postcode.validate_recovery(errors);
+        }
     }
 }

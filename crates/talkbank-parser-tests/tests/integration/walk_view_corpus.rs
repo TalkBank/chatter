@@ -9,6 +9,248 @@ use talkbank_model::alignment::helpers::{
 use talkbank_model::model::{UtteranceContent, WriteChat};
 
 #[test]
+fn nested_standalone_underline_specs_preserve_mutable_walks_and_findings() {
+    use talkbank_model::model::{Line, TranscriptName};
+    use talkbank_model::{ChatParser, ErrorCode, ErrorCollector};
+
+    #[derive(Debug, PartialEq)]
+    enum Leaf {
+        Word(String),
+        UnderlineBegin,
+        UnderlineEnd,
+    }
+    #[derive(Clone, Copy)]
+    enum Markers {
+        Balanced,
+        MissingEnd,
+        MissingBegin,
+    }
+    impl Markers {
+        fn leaves(self) -> Vec<Leaf> {
+            use Leaf::{UnderlineBegin as B, UnderlineEnd as E, Word as W};
+            match self {
+                Self::Balanced => vec![
+                    W("hello".into()),
+                    B,
+                    W("world".into()),
+                    E,
+                    W("again".into()),
+                ],
+                Self::MissingEnd => {
+                    vec![W("hello".into()), B, W("world".into()), W("again".into())]
+                }
+                Self::MissingBegin => {
+                    vec![W("hello".into()), W("world".into()), E, W("again".into())]
+                }
+            }
+        }
+        fn findings(self) -> Vec<ErrorCode> {
+            match self {
+                Self::Balanced => vec![],
+                Self::MissingEnd => vec![ErrorCode::UnmatchedUnderlineBegin],
+                Self::MissingBegin => vec![ErrorCode::UnmatchedUnderlineEnd],
+            }
+        }
+    }
+    fn check(parser: &impl ChatParser, source: &str, path: &std::path::Path, markers: Markers) {
+        let errors = ErrorCollector::new();
+        let mut file = parser
+            .parse_chat_file(source, 0, &errors)
+            .into_option()
+            .unwrap();
+        assert!(errors.is_empty(), "{:?}", errors.into_vec());
+        let mut turns = 0;
+        for line in &mut file.lines {
+            let Line::Utterance(utterance) = line else {
+                continue;
+            };
+            turns += 1;
+            let content = utterance.main.content.content.as_mut_slice();
+            assert_walk_views(content, source, path);
+            for domain in [
+                None,
+                Some(TierDomain::Mor),
+                Some(TierDomain::Pho),
+                Some(TierDomain::Sin),
+                Some(TierDomain::Wor),
+            ] {
+                let mut observed = Vec::new();
+                walk_content(content, domain, &mut |item| {
+                    observed.push(match item {
+                        ContentItem::Word(word) => Leaf::Word(word.raw_text()),
+                        ContentItem::UnderlineBegin(_) => Leaf::UnderlineBegin,
+                        ContentItem::UnderlineEnd(_) => Leaf::UnderlineEnd,
+                        _ => panic!("only words and standalone underline markers are authored"),
+                    })
+                });
+                assert_eq!(observed, markers.leaves(), "{domain:?}");
+            }
+        }
+        assert_eq!(turns, 1);
+        let errors = ErrorCollector::new();
+        file.validate(&errors, TranscriptName::Anonymous);
+        assert_eq!(
+            errors
+                .into_vec()
+                .into_iter()
+                .map(|error| error.code)
+                .collect::<Vec<_>>(),
+            markers.findings()
+        );
+        assert_eq!(
+            file.to_chat_string(),
+            format!("{source}\n"),
+            "loaded specs omit the final newline; all authored markers remain observable"
+        );
+    }
+    let root = talkbank_parser_tests::repo_paths::workspace_root();
+    let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let native = talkbank_parser_re2c::Re2cParser::new();
+    for (filename, title, markers) in [
+        (
+            "E356.md",
+            "Balanced standalone markers inside an annotated group",
+            Markers::Balanced,
+        ),
+        (
+            "E356.md",
+            "Delete the standalone closing marker inside the group",
+            Markers::MissingEnd,
+        ),
+        (
+            "E357.md",
+            "Delete the standalone opening marker inside the group",
+            Markers::MissingBegin,
+        ),
+    ] {
+        let spec = specs.iter().find(|spec| spec.filename == filename).unwrap();
+        let example = spec
+            .examples()
+            .iter()
+            .find(|example| example.title.as_deref() == Some(title))
+            .unwrap();
+        let path = root.join("spec/errors").join(filename);
+        check(&tree, example.chat.as_str(), &path, markers);
+        check(&native, example.chat.as_str(), &path, markers);
+    }
+}
+
+#[test]
+fn nested_word_annotations_preserve_domain_exclusion_and_language_scope() {
+    use talkbank_model::alignment::helpers::walk_words_scoped;
+    use talkbank_model::model::{CodeSwitchSpan, Line, TranscriptName};
+    use talkbank_model::{ChatParser, ErrorCollector};
+
+    #[derive(Clone, Copy, Debug)]
+    enum Control {
+        Exclusion,
+        LanguageScope,
+    }
+
+    fn check(parser: &impl ChatParser, source: &str, path: &std::path::Path) {
+        let errors = ErrorCollector::new();
+        let mut file = parser
+            .parse_chat_file(source, 0, &errors)
+            .into_option()
+            .unwrap();
+        assert!(errors.is_empty(), "{:?}", errors.into_vec());
+        let errors = ErrorCollector::new();
+        file.validate(&errors, TranscriptName::Anonymous);
+        assert!(errors.is_empty(), "{:?}", errors.into_vec());
+        let mut utterances: Vec<_> = (&mut file.lines)
+            .into_iter()
+            .filter_map(|line| match line {
+                Line::Utterance(utterance) => Some(utterance),
+                Line::Header { .. } => None,
+            })
+            .collect();
+        let [excluded, scoped] = utterances.as_mut_slice() else {
+            panic!("two authored annotation controls");
+        };
+        for (control, utterance) in [
+            (Control::Exclusion, excluded),
+            (Control::LanguageScope, scoped),
+        ] {
+            assert_walk_views(utterance.main.content.content.as_mut_slice(), source, path);
+            for domain in [
+                None,
+                Some(TierDomain::Mor),
+                Some(TierDomain::Pho),
+                Some(TierDomain::Sin),
+                Some(TierDomain::Wor),
+            ] {
+                let expected = match (control, domain) {
+                    (Control::Exclusion, Some(TierDomain::Mor)) => {
+                        vec![("hello", None), ("after", None)]
+                    }
+                    (
+                        Control::Exclusion,
+                        None | Some(TierDomain::Pho | TierDomain::Sin | TierDomain::Wor),
+                    ) => vec![("hello", None), ("there", None), ("after", None)],
+                    (Control::LanguageScope, _) => vec![
+                        ("hello", Some("eng")),
+                        ("hola", Some("spa")),
+                        ("after", None),
+                    ],
+                };
+                let mut observed = Vec::new();
+                walk_words_scoped(
+                    &utterance.main.content.content,
+                    domain,
+                    &mut |item, scope| {
+                        let WordItem::Word(word) = item else {
+                            panic!("controls contain only spoken words");
+                        };
+                        let language = match scope.span() {
+                            None => None,
+                            Some(CodeSwitchSpan::Explicit(code)) => Some(code.as_str()),
+                            Some(CodeSwitchSpan::Shortcut) => {
+                                panic!("only explicit scopes are authored")
+                            }
+                        };
+                        observed.push((word.raw_text(), language));
+                    },
+                );
+                assert_eq!(
+                    observed
+                        .iter()
+                        .map(|(word, scope)| (word.as_str(), *scope))
+                        .collect::<Vec<_>>(),
+                    expected,
+                    "control {control:?}, domain {domain:?}"
+                );
+                let mut content_words = Vec::new();
+                walk_content(&utterance.main.content.content, domain, &mut |item| {
+                    let ContentItem::Word(word) = item else {
+                        panic!("controls contain only spoken words");
+                    };
+                    content_words.push(word.raw_text());
+                });
+                assert_eq!(
+                    content_words,
+                    expected.iter().map(|(word, _)| *word).collect::<Vec<_>>()
+                );
+            }
+        }
+        assert_eq!(
+            file.to_chat_string(),
+            source,
+            "walking never changes annotations"
+        );
+    }
+    let path = talkbank_parser_tests::repo_paths::workspace_root()
+        .join("corpus/reference/annotation/nested-word-annotations.cha");
+    let source = std::fs::read_to_string(&path).expect("authored nested annotations");
+    check(
+        &talkbank_parser::TreeSitterParser::new().unwrap(),
+        &source,
+        &path,
+    );
+    check(&talkbank_parser_re2c::Re2cParser::new(), &source, &path);
+}
+
+#[test]
 fn reference_groups_keep_bare_and_annotated_actions_distinct() {
     use talkbank_model::model::{BracketedItem, ContentStructure, Descend};
     use talkbank_parser::TreeSitterParser;
@@ -205,6 +447,7 @@ fn compare_content(expected: ContentItem<'_>, actual: ContentItemMut<'_>) {
         OverlapPoint,
         OtherSpokenEvent,
         Freecode,
+        OrphanAnnotation,
         InternalBullet,
         LongFeatureBegin,
         LongFeatureEnd,

@@ -67,8 +67,10 @@ GATED_WORKFLOWS = ("ci.yml", "book.yml", "crates-io-foundation.yml", "cross-plat
 #: matching and is reported as stale.
 BASELINE = REPO_ROOT / "scripts" / "ci-gate-baseline.txt"
 
-#: The composite action that owns the Tauri Linux system-library list, and the
-#: marker proving a workflow is naming those libraries itself instead.
+#: The composite action that installs the Tauri Linux system libraries, the
+#: file in it that owns their list, and the marker proving a file names them.
+#: The owner must contain the marker, so moving the list out of it fails here
+#: instead of leaving the check guarding an empty file.
 #:
 #: Provisioning is exempt from the raw-command ratchet above, since installing a
 #: tool is not a check. That exemption left the PROVISIONING half of CI entirely
@@ -87,6 +89,14 @@ BASELINE = REPO_ROOT / "scripts" / "ci-gate-baseline.txt"
 #: out of the default workspace build.
 TAURI_DEPS_ACTION = ".github/actions/tauri-linux-deps"
 TAURI_DEPS_MARKER = "libwebkit2gtk"
+TAURI_DEPS_OWNER = f"{TAURI_DEPS_ACTION}/packages.txt"
+
+
+def listed_packages(text: str) -> list[str]:
+    """The package names in packages.txt, read as install.sh reads them: every
+    line that is neither empty nor a `#` comment. A commented-out package is
+    not listed, so it cannot satisfy the owner check."""
+    return [line for line in text.splitlines() if line and not line.startswith("#")]
 
 #: Recipes CI runs that `gate` deliberately does not, each with its reason.
 EXEMPT_FROM_GATE: dict[str, str] = {
@@ -239,11 +249,19 @@ def main() -> int:
     # The Tauri system libraries are named in exactly one place. Every
     # workflow, not just the gated ones: the workflow that broke was
     # `release-lint.yml`, which GATED_WORKFLOWS does not list.
-    owner = REPO_ROOT / TAURI_DEPS_ACTION / "action.yml"
+    owner = REPO_ROOT / TAURI_DEPS_OWNER
     if not owner.exists():
         failures.append(
-            f"{TAURI_DEPS_ACTION}/action.yml is missing; it is the one owner "
-            f"of the Tauri Linux system-library list."
+            f"{TAURI_DEPS_OWNER} is missing; it is the one owner of the Tauri "
+            f"Linux system-library list."
+        )
+    elif not any(
+        package.startswith(TAURI_DEPS_MARKER)
+        for package in listed_packages(owner.read_text(encoding="utf-8"))
+    ):
+        failures.append(
+            f"{TAURI_DEPS_OWNER} does not list {TAURI_DEPS_MARKER}; it is the "
+            f"one owner of the Tauri Linux system-library list."
         )
     for path in sorted(WORKFLOWS.glob("*.yml")):
         if TAURI_DEPS_MARKER not in path.read_text(encoding="utf-8"):

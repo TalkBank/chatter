@@ -30,7 +30,8 @@ use talkbank_model::{
 use talkbank_model::{FragmentSemanticContext, ParseOutcome};
 
 use super::parser_impl::{
-    wrapper_parse_generic_tier, wrapper_parse_tier, wrapper_parse_tier_with_suffix,
+    TierProjectionError, wrapper_parse_generic_tier, wrapper_parse_tier,
+    wrapper_parse_tier_with_suffix,
 };
 use crate::parser::TreeSitterParser;
 
@@ -179,10 +180,7 @@ impl TreeSitterParser {
         };
         let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_word(input) {
-            Ok(mut word) => {
-                word = fragment_source.rebase(word);
-                ParseOutcome::parsed(word)
-            }
+            Ok(word) => fragment_source.rebase_reporting(word, errors),
             Err(errs) => {
                 report_parse_errors(errs, &adjusting_sink);
                 ParseOutcome::rejected()
@@ -231,7 +229,7 @@ impl TreeSitterParser {
                     report_context_dependent_main_tier_error(&adjusting_sink, input, location);
                     return ParseOutcome::rejected();
                 }
-                ParseOutcome::parsed(fragment_source.rebase(main))
+                fragment_source.rebase_reporting(main, errors)
             }
             Err(errs) => {
                 report_parse_errors(errs, &adjusting_sink);
@@ -269,15 +267,16 @@ impl TreeSitterParser {
             return ParseOutcome::rejected();
         };
         let adjusting_sink = fragment_source.error_sink(errors);
-        match self.parse_utterance(input) {
-            Ok(mut utterance) => {
-                if context.ca_mode() {
+        match self.parse_single_utterance(input) {
+            Ok(single) => {
+                let (mut utterance, document_context) = single.into_parts();
+                if context.ca_mode() || document_context.ca_mode() {
                     crate::parser::chat_file_parser::chat_file::normalize::normalize_ca_omissions_main_tier(&mut utterance.main);
                 } else if let Some(location) = utterance.main.find_context_dependent_ca_omission() {
                     report_context_dependent_main_tier_error(&adjusting_sink, input, location);
                     return ParseOutcome::rejected();
                 }
-                ParseOutcome::parsed(fragment_source.rebase(utterance))
+                fragment_source.rebase_reporting(utterance, errors)
             }
             Err(errs) => {
                 report_parse_errors(errs, &adjusting_sink);
@@ -299,11 +298,8 @@ impl TreeSitterParser {
             return ParseOutcome::rejected();
         };
         let adjusting_sink = fragment_source.error_sink(errors);
-        let mut chat = self.parse_chat_file_streaming(input, &adjusting_sink);
-        if offset > 0 {
-            chat = fragment_source.rebase(chat);
-        }
-        ParseOutcome::parsed(chat)
+        let chat = self.parse_chat_file_streaming(input, &adjusting_sink);
+        fragment_source.rebase_reporting(chat, errors)
     }
 
     // =========================================================================
@@ -324,10 +320,7 @@ impl TreeSitterParser {
         };
         let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_header(input) {
-            Ok(mut header) => {
-                header = fragment_source.rebase(header);
-                ParseOutcome::parsed(header)
-            }
+            Ok(header) => fragment_source.rebase_reporting(header, errors),
             Err(parse_errors) => {
                 for error in parse_errors.errors {
                     adjusting_sink.report(error);
@@ -398,7 +391,13 @@ impl TreeSitterParser {
             _ => Err("Expected a participant entry"),
         });
         match entry {
-            Ok(entry) => ParseOutcome::parsed(wrapper.rebase(entry)),
+            Ok(entry) => match wrapper.rebase(entry) {
+                Ok(entry) => ParseOutcome::parsed(entry),
+                Err(failure) => {
+                    errors.report_vec(failure.into_error_vec());
+                    ParseOutcome::rejected()
+                }
+            },
             Err(message) => reject_item_shape(input, &fragment_source.error_sink(errors), message),
         }
     }
@@ -429,38 +428,27 @@ impl TreeSitterParser {
     ) -> ParseOutcome<MorWord> {
         // The companion terminator is wrapper-owned text on the tier line; the
         // one wrapper excludes it from the tier's extent and from every
-        // diagnostic, and the tier arrives already in the caller's coordinates.
+        // diagnostic. Select the word before translating the returned payload.
         let ParseOutcome::Parsed(fragment_source) =
             talkbank_model::FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };
-        let Some(tier) = wrapper_parse_tier_with_suffix(
-            self,
-            "%mor:\t",
-            fragment_source,
-            " .",
-            errors,
-            |tier| match tier {
-                DependentTier::Mor(tier) => Some(tier),
-                _ => None,
-            },
-        )
-        .into_option() else {
-            return ParseOutcome::rejected();
-        };
-        match SingleMorWord::try_from(tier) {
-            Ok(SingleMorWord(word)) => ParseOutcome::parsed(word),
-            Err(reason) => {
-                let message = match reason {
-                    MorWordShapeError::ItemCount => "Expected exactly one MOR word",
-                    MorWordShapeError::PostClitics => {
-                        "A MOR word fragment cannot include post-clitics"
-                    }
-                };
-                reject_item_shape(input, &fragment_source.error_sink(errors), message)
+        wrapper_parse_tier_with_suffix(self, "%mor:\t", fragment_source, " .", errors, |tier| {
+            match tier {
+                DependentTier::Mor(tier) => SingleMorWord::try_from(tier)
+                    .map(|SingleMorWord(word)| word)
+                    .map_err(|reason| {
+                        TierProjectionError::InvalidShape(match reason {
+                            MorWordShapeError::ItemCount => "Expected exactly one MOR word",
+                            MorWordShapeError::PostClitics => {
+                                "A MOR word fragment cannot include post-clitics"
+                            }
+                        })
+                    }),
+                _ => Err(TierProjectionError::WrongKind),
             }
-        }
+        })
     }
 
     // =========================================================================

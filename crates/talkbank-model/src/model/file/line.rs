@@ -198,7 +198,7 @@ impl Line {
 
 impl WriteChat for Line {
     /// Serialize one line as CHAT text.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         match self {
             Line::Header { header, .. } => header.write_chat(w),
             Line::Utterance(u) => u.write_chat(w),

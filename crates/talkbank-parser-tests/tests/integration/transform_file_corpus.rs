@@ -59,7 +59,15 @@ fn spec_lenient_parsing_retains_recovery_and_primary_diagnostics() {
     use talkbank_model::{ErrorCode, ErrorCollector};
     use talkbank_transform::parse::{parse_lenient, parse_strict};
     let parser = TreeSitterParser::new().expect("parser");
-    for (fixture, generated_recovery) in [("E702_1", true), ("E600_1", true), ("E370_3", false)] {
+    enum Recovery {
+        DependentTier,
+        MainTier,
+    }
+    for (fixture, recovery) in [
+        ("E702_1", Recovery::DependentTier),
+        ("E600_1", Recovery::DependentTier),
+        ("E370_3", Recovery::MainTier),
+    ] {
         let source = std::fs::read_to_string(workspace_root().join(format!(
             "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/{fixture}.cha",
         )))
@@ -84,13 +92,16 @@ fn spec_lenient_parsing_retains_recovery_and_primary_diagnostics() {
                     .dependent_tiers
                     .iter()
                     .filter_map(|entry| match &entry.tier {
-                        DependentTier::Mor(_) | DependentTier::Gra(_) => Some(entry.location()),
+                        DependentTier::Mor(_)
+                        | DependentTier::Gra(_)
+                        | DependentTier::UnparsedMor(_)
+                        | DependentTier::UnparsedGra(_) => Some(entry.location()),
                         _ => None,
                     })
             })
             .collect();
-        match generated_recovery {
-            true => {
+        match recovery {
+            Recovery::DependentTier => {
                 assert!(
                     retained.len() < original_errors.len(),
                     "{fixture}: generated diagnostics suppressed"
@@ -115,11 +126,11 @@ fn spec_lenient_parsing_retains_recovery_and_primary_diagnostics() {
                     validation
                         .into_vec()
                         .iter()
-                        .any(|error| error.code == ErrorCode::TierValidationError),
-                    "ignored parse diagnostics do not restore alignment trust"
+                        .any(|error| error.code == ErrorCode::UnparsableContent),
+                    "ignored parse diagnostics do not admit unparsed tier source"
                 );
             }
-            false => {
+            Recovery::MainTier => {
                 assert_eq!(
                     retained, original_errors,
                     "primary speech errors remain visible"

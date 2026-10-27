@@ -42,7 +42,7 @@ mod tests;
 mod wor;
 
 use super::{
-    Bullet, LanguagePrecode, Linker, Postcode, SpeakerCode, Terminator, TierContent, TierSeparator,
+    LanguagePrecode, Linker, Postcode, SpeakerCode, Terminator, TierContent, TierSeparator,
     UtteranceContent, WriteChat,
 };
 use crate::alignment::helpers::{WordItem, walk_words};
@@ -196,16 +196,14 @@ impl MainTier {
     }
 
     /// Sets utterance-level terminal bullet.
-    pub fn with_bullet(mut self, bullet: Bullet) -> Self {
+    pub fn with_bullet(mut self, bullet: impl Into<super::BulletState>) -> Self {
         self.content = self.content.with_bullet(bullet);
         self
     }
 
     /// Serialize this main tier to an owned CHAT string.
     pub fn to_chat(&self) -> String {
-        let mut s = String::new();
-        let _ = self.write_chat(&mut s);
-        s
+        crate::model::ChatString::render(|w| self.write_chat(w))
     }
 
     /// The location of the first context-dependent CA omission in this main
@@ -247,7 +245,7 @@ impl MainTier {
 
 impl WriteChat for MainTier {
     /// Serialize one main tier line as CHAT text.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_char('*')?;
         self.speaker.write_chat(w)?;
         w.write_str(":\t")?;
@@ -271,14 +269,16 @@ impl crate::validation::Validate for MainTier {
         };
         use crate::validation::retrace::check_retraces;
 
+        self.content.postcodes.validate(context, errors);
+
         // Validate speaker
         let speaker_str = self.speaker.as_str();
 
         crate::validation::check_speaker_id(speaker_str, self.speaker_location, errors);
 
         // E308: Check if speaker is in participant list (unless speaker is "0" - unidentified)
-        if !context.shared.participant_ids.is_empty()
-            && !context.shared.participant_ids.contains(&self.speaker)
+        if let Some(declared_codes) = context.shared.participant_roster.declared_codes()
+            && !declared_codes.contains(&self.speaker)
             && speaker_str != "0"
         {
             errors.report(
@@ -291,9 +291,7 @@ impl crate::validation::Validate for MainTier {
                 .with_suggestion("Add this speaker to the @Participants header"),
             );
 
-            let mut expected_speakers: Vec<String> = context
-                .shared
-                .participant_ids
+            let mut expected_speakers: Vec<String> = declared_codes
                 .iter()
                 .map(|speaker| speaker.as_str().to_string())
                 .collect();
@@ -377,15 +375,30 @@ impl crate::validation::Validate for MainTier {
         // not for illegal characters, not for anything. The same token was
         // rejected outside a group and accepted inside one, and E220 carried
         // that hole for as long as the rule has existed.
-        crate::validation::main_tier::validate_words_at_every_depth(
+        crate::validation::main_tier::validate_content_at_every_depth(
             content_items,
             &word_context,
             errors,
         );
 
+        crate::alignment::helpers::walk_content(content_items, None, &mut |item| {
+            if let crate::alignment::helpers::ContentItem::InternalBullet(bullet) = item {
+                bullet.validate_recovery(errors);
+            }
+            if let crate::alignment::helpers::ContentItem::OrphanAnnotation(raw) = item {
+                raw.validate_recovery(errors);
+            }
+            if let crate::alignment::helpers::ContentItem::Freecode(code) = item {
+                code.validate_recovery(errors);
+            }
+        });
+
         // Validate bullet if present
         if let Some(bullet) = &tier_content.bullet {
-            crate::validation::check_bullet(bullet, errors);
+            bullet.validate_recovery(errors);
+            if let Some(bullet) = bullet.as_parsed() {
+                crate::validation::check_bullet(bullet, errors);
+            }
         }
 
         // E370 and E377, over one traversal of the tier.
@@ -400,9 +413,14 @@ impl crate::validation::Validate for MainTier {
         // E207: an unrecognised scoped annotation, on ANY construct.
         report_unknown_annotations(self, errors);
 
-        if let Some(target_lang) = self.whole_utterance_language_switch_target(
+        if let Some(target_lang) = self.whole_utterance_language_switch_target_with_declaration(
             word_context.shared.default_language.as_ref(),
-            &word_context.shared.declared_languages,
+            word_context
+                .shared
+                .declared_languages
+                .as_ref()
+                .map(crate::model::DeclaredLanguages::as_ref)
+                .map_err(|error| *error),
         ) {
             errors.report(
                 ParseError::new(

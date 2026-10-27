@@ -11,13 +11,13 @@
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, BaseAnnotationChoiceBoundView, BaseAnnotationsChild0Child1ChoiceBoundView,
-    BaseAnnotationsChild1Child1ChoiceBoundView, CodeSwitchAnnotationNode, SourceBound,
-    SourceBoundKind, SourceSlotView,
+    AsRawNode, BaseAnnotationChoiceBoundView, BaseAnnotationsChild0Child1Choice,
+    BaseAnnotationsChild1Child1Choice, CodeSwitchAnnotationNode, Ranged, ReadableSlot, SourceBound,
+    SourceBoundKind,
 };
 use crate::model::ContentAnnotation;
 use crate::parser::node_span::span_of;
-use crate::parser::typed_cst::read_source_field;
+use crate::parser::typed_cst::{ReportedCstFailure, report_admission};
 use crate::tokens;
 use talkbank_model::LanguageCode;
 use talkbank_model::ParseOutcome;
@@ -56,115 +56,115 @@ fn node_span<'tree, T: SourceBoundKind<'tree>>(node: SourceBound<'tree, '_, T>) 
 /// `base_annotation` supertype's own choice. These are the exhaustive
 /// lowerings into that one, so the decoder is written once and a kind the
 /// grammar gains breaks them at compile time.
-impl<'tree, 'source> From<BaseAnnotationsChild0Child1ChoiceBoundView<'tree, 'source>>
+impl<'tree, 'source> From<&BaseAnnotationsChild0Child1Choice<'tree, Ranged<'source>>>
     for BaseAnnotationChoiceBoundView<'tree, 'source>
 {
-    fn from(choice: BaseAnnotationsChild0Child1ChoiceBoundView<'tree, 'source>) -> Self {
+    fn from(choice: &BaseAnnotationsChild0Child1Choice<'tree, Ranged<'source>>) -> Self {
         match choice {
-            BaseAnnotationsChild0Child1ChoiceBoundView::AltAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::AltAnnotation(node)
+            BaseAnnotationsChild0Child1Choice::AltAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::AltAnnotation(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::CodeSwitchAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::CodeSwitchAnnotation(node)
+            BaseAnnotationsChild0Child1Choice::CodeSwitchAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::CodeSwitchAnnotation(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::ErrorMarkerAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::ErrorMarkerAnnotation(node)
+            BaseAnnotationsChild0Child1Choice::ErrorMarkerAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::ErrorMarkerAnnotation(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::ExcludeMarker(node) => {
-                BaseAnnotationChoiceBoundView::ExcludeMarker(node)
+            BaseAnnotationsChild0Child1Choice::ExcludeMarker(node) => {
+                BaseAnnotationChoiceBoundView::ExcludeMarker(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::ExplanationAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::ExplanationAnnotation(node)
+            BaseAnnotationsChild0Child1Choice::ExplanationAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::ExplanationAnnotation(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::IndexedOverlapFollows(node) => {
-                BaseAnnotationChoiceBoundView::IndexedOverlapFollows(node)
+            BaseAnnotationsChild0Child1Choice::IndexedOverlapFollows(node) => {
+                BaseAnnotationChoiceBoundView::IndexedOverlapFollows(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::IndexedOverlapPrecedes(node) => {
-                BaseAnnotationChoiceBoundView::IndexedOverlapPrecedes(node)
+            BaseAnnotationsChild0Child1Choice::IndexedOverlapPrecedes(node) => {
+                BaseAnnotationChoiceBoundView::IndexedOverlapPrecedes(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::ParaAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::ParaAnnotation(node)
+            BaseAnnotationsChild0Child1Choice::ParaAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::ParaAnnotation(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::PercentAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::PercentAnnotation(node)
+            BaseAnnotationsChild0Child1Choice::PercentAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::PercentAnnotation(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::RetraceComplete(node) => {
-                BaseAnnotationChoiceBoundView::RetraceComplete(node)
+            BaseAnnotationsChild0Child1Choice::RetraceComplete(node) => {
+                BaseAnnotationChoiceBoundView::RetraceComplete(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::RetraceMultiple(node) => {
-                BaseAnnotationChoiceBoundView::RetraceMultiple(node)
+            BaseAnnotationsChild0Child1Choice::RetraceMultiple(node) => {
+                BaseAnnotationChoiceBoundView::RetraceMultiple(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::RetracePartial(node) => {
-                BaseAnnotationChoiceBoundView::RetracePartial(node)
+            BaseAnnotationsChild0Child1Choice::RetracePartial(node) => {
+                BaseAnnotationChoiceBoundView::RetracePartial(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::RetraceReformulation(node) => {
-                BaseAnnotationChoiceBoundView::RetraceReformulation(node)
+            BaseAnnotationsChild0Child1Choice::RetraceReformulation(node) => {
+                BaseAnnotationChoiceBoundView::RetraceReformulation(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::ScopedContrastiveStressing(node) => {
-                BaseAnnotationChoiceBoundView::ScopedContrastiveStressing(node)
+            BaseAnnotationsChild0Child1Choice::ScopedContrastiveStressing(node) => {
+                BaseAnnotationChoiceBoundView::ScopedContrastiveStressing(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::ScopedStressing(node) => {
-                BaseAnnotationChoiceBoundView::ScopedStressing(node)
+            BaseAnnotationsChild0Child1Choice::ScopedStressing(node) => {
+                BaseAnnotationChoiceBoundView::ScopedStressing(*node)
             }
-            BaseAnnotationsChild0Child1ChoiceBoundView::ScopedUncertain(node) => {
-                BaseAnnotationChoiceBoundView::ScopedUncertain(node)
+            BaseAnnotationsChild0Child1Choice::ScopedUncertain(node) => {
+                BaseAnnotationChoiceBoundView::ScopedUncertain(*node)
             }
         }
     }
 }
 
-impl<'tree, 'source> From<BaseAnnotationsChild1Child1ChoiceBoundView<'tree, 'source>>
+impl<'tree, 'source> From<&BaseAnnotationsChild1Child1Choice<'tree, Ranged<'source>>>
     for BaseAnnotationChoiceBoundView<'tree, 'source>
 {
-    fn from(choice: BaseAnnotationsChild1Child1ChoiceBoundView<'tree, 'source>) -> Self {
+    fn from(choice: &BaseAnnotationsChild1Child1Choice<'tree, Ranged<'source>>) -> Self {
         match choice {
-            BaseAnnotationsChild1Child1ChoiceBoundView::AltAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::AltAnnotation(node)
+            BaseAnnotationsChild1Child1Choice::AltAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::AltAnnotation(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::CodeSwitchAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::CodeSwitchAnnotation(node)
+            BaseAnnotationsChild1Child1Choice::CodeSwitchAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::CodeSwitchAnnotation(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::ErrorMarkerAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::ErrorMarkerAnnotation(node)
+            BaseAnnotationsChild1Child1Choice::ErrorMarkerAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::ErrorMarkerAnnotation(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::ExcludeMarker(node) => {
-                BaseAnnotationChoiceBoundView::ExcludeMarker(node)
+            BaseAnnotationsChild1Child1Choice::ExcludeMarker(node) => {
+                BaseAnnotationChoiceBoundView::ExcludeMarker(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::ExplanationAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::ExplanationAnnotation(node)
+            BaseAnnotationsChild1Child1Choice::ExplanationAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::ExplanationAnnotation(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::IndexedOverlapFollows(node) => {
-                BaseAnnotationChoiceBoundView::IndexedOverlapFollows(node)
+            BaseAnnotationsChild1Child1Choice::IndexedOverlapFollows(node) => {
+                BaseAnnotationChoiceBoundView::IndexedOverlapFollows(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::IndexedOverlapPrecedes(node) => {
-                BaseAnnotationChoiceBoundView::IndexedOverlapPrecedes(node)
+            BaseAnnotationsChild1Child1Choice::IndexedOverlapPrecedes(node) => {
+                BaseAnnotationChoiceBoundView::IndexedOverlapPrecedes(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::ParaAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::ParaAnnotation(node)
+            BaseAnnotationsChild1Child1Choice::ParaAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::ParaAnnotation(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::PercentAnnotation(node) => {
-                BaseAnnotationChoiceBoundView::PercentAnnotation(node)
+            BaseAnnotationsChild1Child1Choice::PercentAnnotation(node) => {
+                BaseAnnotationChoiceBoundView::PercentAnnotation(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::RetraceComplete(node) => {
-                BaseAnnotationChoiceBoundView::RetraceComplete(node)
+            BaseAnnotationsChild1Child1Choice::RetraceComplete(node) => {
+                BaseAnnotationChoiceBoundView::RetraceComplete(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::RetraceMultiple(node) => {
-                BaseAnnotationChoiceBoundView::RetraceMultiple(node)
+            BaseAnnotationsChild1Child1Choice::RetraceMultiple(node) => {
+                BaseAnnotationChoiceBoundView::RetraceMultiple(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::RetracePartial(node) => {
-                BaseAnnotationChoiceBoundView::RetracePartial(node)
+            BaseAnnotationsChild1Child1Choice::RetracePartial(node) => {
+                BaseAnnotationChoiceBoundView::RetracePartial(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::RetraceReformulation(node) => {
-                BaseAnnotationChoiceBoundView::RetraceReformulation(node)
+            BaseAnnotationsChild1Child1Choice::RetraceReformulation(node) => {
+                BaseAnnotationChoiceBoundView::RetraceReformulation(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::ScopedContrastiveStressing(node) => {
-                BaseAnnotationChoiceBoundView::ScopedContrastiveStressing(node)
+            BaseAnnotationsChild1Child1Choice::ScopedContrastiveStressing(node) => {
+                BaseAnnotationChoiceBoundView::ScopedContrastiveStressing(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::ScopedStressing(node) => {
-                BaseAnnotationChoiceBoundView::ScopedStressing(node)
+            BaseAnnotationsChild1Child1Choice::ScopedStressing(node) => {
+                BaseAnnotationChoiceBoundView::ScopedStressing(*node)
             }
-            BaseAnnotationsChild1Child1ChoiceBoundView::ScopedUncertain(node) => {
-                BaseAnnotationChoiceBoundView::ScopedUncertain(node)
+            BaseAnnotationsChild1Child1Choice::ScopedUncertain(node) => {
+                BaseAnnotationChoiceBoundView::ScopedUncertain(*node)
             }
         }
     }
@@ -173,11 +173,11 @@ impl<'tree, 'source> From<BaseAnnotationsChild1Child1ChoiceBoundView<'tree, 'sou
 /// Decode an already source-bound generated alternative. Kind/source admission
 /// is not lexical validity: payload tokens retain their policy refusals, and
 /// recovery slots are never passed here as present marker values.
-pub(crate) fn parse_single_annotation(
+pub(super) fn parse_single_annotation(
     choice: BaseAnnotationChoiceBoundView<'_, '_>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<ParsedAnnotation> {
-    match choice {
+) -> Result<ParseOutcome<ParsedAnnotation>, ReportedCstFailure> {
+    Ok(match choice {
         BaseAnnotationChoiceBoundView::ExplanationAnnotation(node) => {
             parse_content_token(node, tokens::parse_explanation_token, errors)
         }
@@ -248,9 +248,9 @@ pub(crate) fn parse_single_annotation(
             })
         }
         BaseAnnotationChoiceBoundView::CodeSwitchAnnotation(node) => {
-            parse_code_switch(node, errors)
+            return parse_code_switch(node, errors);
         }
-    }
+    })
 }
 
 /// Token policy consumes only the readable spelling owned by this node.
@@ -267,30 +267,35 @@ fn parse_content_token<'tree, T: SourceBoundKind<'tree>>(
 fn parse_code_switch<'tree>(
     node: SourceBound<'tree, '_, CodeSwitchAnnotationNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<ParsedAnnotation> {
-    let associated = node.extract();
-    let span = match associated.field_child_1().slot().optional() {
+) -> Result<ParseOutcome<ParsedAnnotation>, ReportedCstFailure> {
+    let associated = report_admission(
+        node.extract().admit_ranges().map_err(Into::into),
+        node.raw_node(),
+        node.source(),
+        errors,
+    )?;
+    let span = match &associated.children().child_1.slot {
         None => Some(CodeSwitchSpan::Shortcut),
-        Some(slot) => match slot.view() {
-            SourceSlotView::Present(group) => match group.field_code().slot().view() {
-                SourceSlotView::Present(code) => {
-                    let Some(code) = read_source_field(code, errors) else {
-                        return ParseOutcome::Rejected;
-                    };
-                    match LanguageCode::new(code.text()) {
-                        Ok(code) => Some(CodeSwitchSpan::Explicit(code)),
-                        Err(_) => None,
-                    }
-                }
-                SourceSlotView::Missing(_)
-                | SourceSlotView::Error(_)
-                | SourceSlotView::Absent(_) => None,
+        Some(slot) => match slot {
+            ReadableSlot::Present(group) => match &group.code.slot {
+                ReadableSlot::Present(code) => match LanguageCode::new(code.text()) {
+                    Ok(code) => Some(CodeSwitchSpan::Explicit(code)),
+                    Err(_) => None,
+                },
+                ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(_) => None,
+                ReadableSlot::Unexpected(never) => match *never {},
             },
-            SourceSlotView::Error(_) => None,
-            SourceSlotView::Absent(never) => match never {},
+            ReadableSlot::Error(_) => None,
+            ReadableSlot::Missing(never)
+            | ReadableSlot::Unexpected(never)
+            | ReadableSlot::Absent(never) => match *never {},
         },
     };
-    delegate_content_or_error(span.map(ContentAnnotation::CodeSwitch), node, errors)
+    Ok(delegate_content_or_error(
+        span.map(ContentAnnotation::CodeSwitch),
+        node,
+        errors,
+    ))
 }
 
 /// Policy failure retains this token's own source and readable spelling.

@@ -12,6 +12,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tree_sitter::Tree;
 
+use crate::backend::documents::RevisionResponse;
 use crate::backend::features;
 use crate::backend::state::Backend;
 
@@ -61,6 +62,10 @@ impl SyntaxTextDocumentContext {
     /// Resolve document text plus parse tree for one URI.
     fn resolve(backend: &Backend, uri: Url) -> Option<Self> {
         let TextDocumentContext { uri, doc } = TextDocumentContext::resolve(backend, uri)?;
+        Self::from_source(backend, uri, doc)
+    }
+
+    fn from_source(backend: &Backend, uri: Url, doc: String) -> Option<Self> {
         let tree = get_parse_tree(backend, &uri, &doc)?;
         Some(Self { uri, doc, tree })
     }
@@ -100,6 +105,10 @@ impl FullTextDocumentContext {
         else {
             return Ok(None);
         };
+        Self::from_source(backend, uri, doc)
+    }
+
+    fn from_source(backend: &Backend, uri: Url, doc: String) -> Result<Option<Self>> {
         let Some(tree) = get_parse_tree(backend, &uri, &doc) else {
             return Ok(None);
         };
@@ -132,11 +141,16 @@ impl DocumentFeatureService {
             return Ok(None);
         };
 
+        let Some(scope) =
+            features::QuickFixScope::admit(&revision, params.range, params.context.only.as_deref())
+        else {
+            return Ok(None);
+        };
+
         backend
             .language_services
             .with_parser(|parser| {
-                let prepared =
-                    features::prepare_code_actions(&revision, &params.context.diagnostics, parser);
+                let prepared = features::prepare_code_actions(scope, parser);
                 revision.with_current(backend, |current| prepared.finish(current, support))
             })
             .map_err(|error| tower_lsp::jsonrpc::Error::invalid_params(error.to_string()))?
@@ -186,13 +200,19 @@ impl DocumentFeatureService {
     ) -> Result<Option<Vec<TextEdit>>> {
         let position = params.text_document_position.position;
         let ch = params.ch;
-        let Some(context) =
-            TextDocumentContext::resolve(backend, params.text_document_position.text_document.uri)
+        let uri = params.text_document_position.text_document.uri;
+        let Some(response) = RevisionResponse::prepare(backend, &uri, |revision| {
+            Ok(features::on_type_formatting(
+                revision.source(),
+                position,
+                &ch,
+            ))
+        })?
         else {
             return Ok(None);
         };
 
-        Ok(features::on_type_formatting(&context.doc, position, &ch))
+        response.finish(backend)
     }
 
     fn handle_document_link(
@@ -200,11 +220,15 @@ impl DocumentFeatureService {
         backend: &Backend,
         params: DocumentLinkParams,
     ) -> Result<Option<Vec<DocumentLink>>> {
-        let Some(context) = TextDocumentContext::resolve(backend, params.text_document.uri) else {
+        let uri = params.text_document.uri;
+        let Some(links) =
+            crate::backend::chat_file_cache::with_current_analysis(backend, &uri, |analysis| {
+                features::document_links(&uri, analysis)
+            })
+            .map_err(|error| tower_lsp::jsonrpc::Error::invalid_params(error.to_string()))?
+        else {
             return Ok(None);
         };
-
-        let links = features::document_links(&context.uri, &context.doc);
         if links.is_empty() {
             Ok(None)
         } else {
@@ -240,20 +264,27 @@ impl InteractionFeatureService {
         params: CompletionParams,
     ) -> Result<Option<CompletionResponse>> {
         let position = params.text_document_position.position;
-        let Some(context) = FullTextDocumentContext::resolve(
-            backend,
-            params.text_document_position.text_document.uri,
-        )?
+        let uri = params.text_document_position.text_document.uri;
+        let Some(response) = RevisionResponse::prepare(backend, &uri, |revision| {
+            let Some(context) = FullTextDocumentContext::from_source(
+                backend,
+                revision.uri().clone(),
+                revision.source().to_owned(),
+            )?
+            else {
+                return Ok(None);
+            };
+            Ok(features::completion(
+                &context.chat_file,
+                &context.tree,
+                &context.doc,
+                position,
+            ))
+        })?
         else {
             return Ok(None);
         };
-
-        Ok(features::completion(
-            &context.chat_file,
-            &context.tree,
-            &context.doc,
-            position,
-        ))
+        response.finish(backend)
     }
 
     fn handle_document_highlight(
@@ -284,18 +315,25 @@ impl InteractionFeatureService {
         params: LinkedEditingRangeParams,
     ) -> Result<Option<LinkedEditingRanges>> {
         let position = params.text_document_position_params.position;
-        let Some(context) = SyntaxTextDocumentContext::resolve(
-            backend,
-            params.text_document_position_params.text_document.uri,
-        ) else {
+        let uri = params.text_document_position_params.text_document.uri;
+        let Some(response) = RevisionResponse::prepare(backend, &uri, |revision| {
+            let Some(context) = SyntaxTextDocumentContext::from_source(
+                backend,
+                revision.uri().clone(),
+                revision.source().to_owned(),
+            ) else {
+                return Ok(None);
+            };
+            Ok(features::linked_editing_ranges(
+                &context.tree,
+                &context.doc,
+                position,
+            ))
+        })?
+        else {
             return Ok(None);
         };
-
-        Ok(features::linked_editing_ranges(
-            &context.tree,
-            &context.doc,
-            position,
-        ))
+        response.finish(backend)
     }
 }
 
@@ -331,17 +369,26 @@ impl NavigationRequestService {
         backend: &Backend,
         params: TextDocumentPositionParams,
     ) -> Result<Option<PrepareRenameResponse>> {
-        let position = params.position;
-        let Some(context) = SyntaxTextDocumentContext::resolve(backend, params.text_document.uri)
+        if backend
+            .versioned_edits
+            .get()
+            .and_then(Option::as_ref)
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let Some(revision) =
+            crate::backend::diagnostics::document_diagnostics(backend, &params.text_document.uri)?
         else {
             return Ok(None);
         };
-
-        Ok(features::rename::prepare_rename(
-            &context.tree,
-            &context.doc,
-            position,
-        ))
+        let Some(tree) = get_parse_tree(backend, revision.uri(), revision.source()) else {
+            return Ok(None);
+        };
+        let prepared = features::rename::prepare_rename(&tree, revision.source(), params.position);
+        revision.with_current(backend, |_| prepared).ok_or_else(|| {
+            tower_lsp::jsonrpc::Error::new(tower_lsp::jsonrpc::ErrorCode::ContentModified)
+        })
     }
 
     fn handle_rename(
@@ -349,22 +396,33 @@ impl NavigationRequestService {
         backend: &Backend,
         params: RenameParams,
     ) -> Result<Option<WorkspaceEdit>> {
-        let position = params.text_document_position.position;
-        let new_name = params.new_name;
-        let Some(context) = SyntaxTextDocumentContext::resolve(
-            backend,
-            params.text_document_position.text_document.uri,
-        ) else {
+        let Some(support) = backend.versioned_edits.get().and_then(Option::as_ref) else {
             return Ok(None);
         };
-
-        Ok(features::rename::rename(
-            &context.tree,
-            &context.uri,
-            &context.doc,
-            position,
-            &new_name,
-        ))
+        let Some(revision) = crate::backend::diagnostics::document_diagnostics(
+            backend,
+            &params.text_document_position.text_document.uri,
+        )?
+        else {
+            return Ok(None);
+        };
+        let Some(tree) = get_parse_tree(backend, revision.uri(), revision.source()) else {
+            return Ok(None);
+        };
+        let prepared = features::rename::prepare_rename_edit(
+            &tree,
+            &revision,
+            params.text_document_position.position,
+            &params.new_name,
+        )
+        .map_err(|error| tower_lsp::jsonrpc::Error::invalid_params(error.to_string()))?;
+        revision
+            .with_current(backend, |current| {
+                prepared.and_then(|prepared| prepared.finish(current, support))
+            })
+            .ok_or_else(|| {
+                tower_lsp::jsonrpc::Error::new(tower_lsp::jsonrpc::ErrorCode::ContentModified)
+            })
     }
 
     fn handle_goto_definition(

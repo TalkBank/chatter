@@ -9,6 +9,50 @@ use talkbank_parser_tests::{
 use talkbank_transform::fix_s::rewrite_whole_utterance_language_switches;
 
 #[test]
+fn invalid_explicit_language_is_not_promoted_by_rewrite() {
+    fn check(parser: &impl talkbank_model::ChatParser) {
+        for fixture in ["E519_3.cha", "E255_12.cha"] {
+            let source = std::fs::read_to_string(
+                workspace_root()
+                    .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors")
+                    .join(fixture),
+            )
+            .expect("authored invalid word-language code");
+            let sink = talkbank_model::ErrorCollector::new();
+            let talkbank_model::ParseOutcome::Parsed(mut file) =
+                parser.parse_chat_file(&source, 0, &sink)
+            else {
+                panic!("authored syntax must parse");
+            };
+            assert!(sink.into_vec().is_empty());
+            let original = file.to_chat_string();
+            let stats = rewrite_whole_utterance_language_switches(&mut file)
+                .expect("structurally admitted declaration");
+            assert!(
+                stats.is_empty(),
+                "invalid code must not become a declaration"
+            );
+            assert_eq!(file.to_chat_string(), original);
+            let errors = talkbank_model::ErrorCollector::new();
+            assert!(
+                file.validate_into(&errors, talkbank_model::model::TranscriptName::Anonymous)
+                    .is_err()
+            );
+            let errors = errors.into_vec();
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.code == talkbank_model::ErrorCode::InvalidLanguageCode)
+            );
+            assert!(!errors.iter().any(|error| error.code
+                == talkbank_model::ErrorCode::WholeUtteranceLanguageSwitchShouldUsePrecode));
+        }
+    }
+    check(&TreeSitterParser::new().expect("parser"));
+    check(&talkbank_parser_re2c::Re2cParser::new());
+}
+
+#[test]
 fn reference_validation_context_builders_preserve_clone_isolation_and_language_order() {
     use std::sync::Arc;
     use talkbank_model::validation::ValidationContext;
@@ -18,8 +62,16 @@ fn reference_validation_context_builders_preserve_clone_isolation_and_language_o
     for fixture in corpus.fixtures() {
         let file =
             strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
-        let languages: Vec<_> = file.languages.iter().cloned().collect();
-        let speakers = file.participants.keys().cloned().collect();
+        let languages: Vec<_> = file
+            .language_declaration()
+            .expect("admitted declaration")
+            .iter()
+            .cloned()
+            .collect();
+        let speakers = file
+            .declared_speakers()
+            .map(|speaker| speaker.code().clone())
+            .collect();
         let empty = ValidationContext::new();
         let mut configured = empty
             .clone()
@@ -28,19 +80,36 @@ fn reference_validation_context_builders_preserve_clone_isolation_and_language_o
         if let Some(primary) = languages.first() {
             configured = configured.with_default_language(primary.clone());
         }
-        assert!(empty.shared.participant_ids.is_empty());
-        assert!(empty.shared.declared_languages.is_empty());
+        assert!(empty.shared.participant_roster.declared_codes().is_none());
+        assert!(matches!(
+            empty.shared.declared_languages,
+            Err(talkbank_model::model::LanguageDeclarationError::Absent)
+        ));
         assert!(empty.shared.default_language.is_none());
         assert_eq!(
-            configured.shared.participant_ids.len(),
-            file.participants.len()
+            configured
+                .shared
+                .participant_roster
+                .declared_codes()
+                .expect("reference roster")
+                .len(),
+            file.declared_speakers().count()
         );
-        assert!(
-            file.participants
-                .keys()
-                .all(|speaker| configured.shared.participant_ids.contains(speaker))
+        assert!(file.declared_speakers().all(|speaker| {
+            configured
+                .shared
+                .participant_roster
+                .membership(speaker.code())
+                == talkbank_model::model::SpeakerMembership::Declared
+        }));
+        assert_eq!(
+            configured
+                .shared
+                .declared_languages
+                .as_ref()
+                .map(|codes| codes.as_ref().to_vec()),
+            Ok(languages.clone())
         );
-        assert_eq!(configured.shared.declared_languages, languages);
         assert_eq!(
             configured.shared.default_language.as_ref(),
             languages.first()
@@ -51,7 +120,14 @@ fn reference_validation_context_builders_preserve_clone_isolation_and_language_o
         let mode_override = configured.clone().with_ca_mode(true);
         assert!(!configured.shared.ca_mode && !empty.shared.ca_mode);
         assert!(mode_override.shared.ca_mode);
-        assert_eq!(mode_override.shared.declared_languages, languages);
+        assert_eq!(
+            mode_override
+                .shared
+                .declared_languages
+                .as_ref()
+                .map(|codes| codes.as_ref().to_vec()),
+            Ok(languages.clone())
+        );
         assert!(!Arc::ptr_eq(&configured.shared, &mode_override.shared));
         let tier = configured
             .clone()
@@ -69,10 +145,16 @@ fn reference_validation_context_builders_preserve_clone_isolation_and_language_o
                 1 => languages.first(),
                 _ => None,
             };
-            assert_eq!(configured.get_other_language(language).as_ref(), alternate);
-            assert_eq!(configured.is_tertiary_language(language), position >= 2);
-            assert!(empty.get_other_language(language).is_none());
-            assert!(!empty.is_tertiary_language(language));
+            assert_eq!(
+                configured
+                    .get_other_language(language)
+                    .expect("admitted declaration")
+                    .as_ref(),
+                alternate
+            );
+            assert_eq!(configured.is_tertiary_language(language), Ok(position >= 2));
+            assert!(empty.get_other_language(language).is_err());
+            assert!(empty.is_tertiary_language(language).is_err());
             declared += 1;
         }
     }
@@ -146,8 +228,13 @@ fn canonical_language_candidates_preserve_order_quantification_and_wire_identity
         let file = strict_parse(parser.parse_chat_file(&source)).expect("spec syntax parses");
         let extracted = extract_words(&file, PositionalDomain::Mor);
         assert_eq!(extracted.len(), 1, "{spec}");
+        let declaration = file.language_declaration();
+        let default = match declaration {
+            Ok(codes) => Some(codes.primary()),
+            Err(_) => None,
+        };
         let outcome =
-            extracted[0].words[index].resolve_language(file.languages.first(), &file.languages);
+            extracted[0].words[index].resolve_language_with_declaration(default, declaration);
         assert!(
             outcome.diagnostics.is_empty(),
             "{spec}: {:?}",
@@ -283,7 +370,14 @@ fn number_language_controls() {
     assert_eq!(extracted[0].words.len(), 2);
     for (word, expected) in extracted[0].words.iter().zip(["ma1", "本1"]) {
         assert_eq!(word.text.as_str(), expected);
-        let language = word.resolve_language(file.languages.first(), &file.languages);
+        let language = word.resolve_language(
+            Some(
+                file.language_declaration()
+                    .expect("admitted declaration")
+                    .primary(),
+            ),
+            file.language_declaration().expect("admitted declaration"),
+        );
         assert!(language.diagnostics.is_empty());
         let LanguageResolution::Single(language) = language.resolution else {
             panic!("control supplies one unambiguous language");
@@ -355,8 +449,17 @@ fn reference_table_cardinals_preserve_authored_lexical_controls() {
             );
             for word in &control.words {
                 let resolved = word.resolve_language(
-                    admitted.document().languages.first(),
-                    &admitted.document().languages,
+                    Some(
+                        admitted
+                            .document()
+                            .language_declaration()
+                            .expect("admitted declaration")
+                            .primary(),
+                    ),
+                    admitted
+                        .document()
+                        .language_declaration()
+                        .expect("admitted declaration"),
                 );
                 assert!(resolved.diagnostics.is_empty());
                 let LanguageResolution::Single(actual) = resolved.resolution else {
@@ -428,7 +531,15 @@ fn reference_mandarin_number_spelling_matches_authored_controls() {
     assert_eq!(controls.len(), 10);
     for (numeral, control) in extracted[0].words.iter().zip(&controls) {
         assert_eq!(control.words.len(), 1);
-        let language = numeral.resolve_language(input.languages.first(), &input.languages);
+        let language = numeral.resolve_language(
+            Some(
+                input
+                    .language_declaration()
+                    .expect("admitted declaration")
+                    .primary(),
+            ),
+            input.language_declaration().expect("admitted declaration"),
+        );
         assert!(language.diagnostics.is_empty());
         let LanguageResolution::Single(language) = language.resolution else {
             panic!("reference supplies one unambiguous numeral language");
@@ -485,7 +596,14 @@ fn reference_cantonese_number_spelling_uses_traditional_script() {
         assert_eq!(control.words.len(), 1);
         // The destination transcript supplies the generation language. The
         // invalid numeric source remains evidence, not a validated input.
-        let language = control.words[0].resolve_language(file.languages.first(), &file.languages);
+        let language = control.words[0].resolve_language(
+            Some(
+                file.language_declaration()
+                    .expect("admitted declaration")
+                    .primary(),
+            ),
+            file.language_declaration().expect("admitted declaration"),
+        );
         assert!(language.diagnostics.is_empty());
         let LanguageResolution::Single(language) = language.resolution else {
             panic!("reference must supply one generation language");
@@ -535,7 +653,14 @@ fn numeric_overflow_specs_preserve_unsupported_lexical_input() {
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0].words.len(), expected_words);
         for word in &turns[0].words {
-            let resolved = word.resolve_language(file.languages.first(), &file.languages);
+            let resolved = word.resolve_language(
+                Some(
+                    file.language_declaration()
+                        .expect("admitted declaration")
+                        .primary(),
+                ),
+                file.language_declaration().expect("admitted declaration"),
+            );
             assert!(resolved.diagnostics.is_empty());
             let LanguageResolution::Single(language) = resolved.resolution else {
                 panic!("spec supplies one generation language");
@@ -583,7 +708,14 @@ fn scoped_language_specs_preserve_extracted_governors() {
             for (word, (text, kind, code)) in extracted[0].words.iter().zip(expected) {
                 assert_eq!(word.text.as_str(), text);
                 assert_eq!(word.language_kind(), kind, "{text}");
-                let outcome = word.resolve_language(file.languages.first(), &file.languages);
+                let outcome = word.resolve_language(
+                    Some(
+                        file.language_declaration()
+                            .expect("admitted declaration")
+                            .primary(),
+                    ),
+                    file.language_declaration().expect("admitted declaration"),
+                );
                 assert!(
                     outcome.diagnostics.is_empty(),
                     "{text}: {:?}",
@@ -915,8 +1047,8 @@ fn authored_language_assignments_drive_counts_and_switching_queries() {
             .expect("canonical language evidence");
         let mut file = strict_parse(parser.parse_chat_file(&source)).expect("syntax parses");
         let original_chat = file.to_chat_string();
-        let declared_languages = file.languages.clone();
-        for language in &declared_languages {
+        let declared_languages = file.language_declaration().map(|codes| codes.to_owned());
+        for language in declared_languages.iter().flat_map(|codes| codes.iter()) {
             let errors = ErrorCollector::new();
             language.validate(&ValidationContext::default(), &errors);
             assert!(errors.is_empty(), "authored language-code control");
@@ -951,7 +1083,15 @@ fn authored_language_assignments_drive_counts_and_switching_queries() {
                     .into_computed()
                     .is_none()
             );
-            utterance.compute_language_metadata(file.languages.first(), &file.languages);
+            let declaration = declared_languages
+                .as_ref()
+                .map(talkbank_model::DeclaredLanguages::as_ref)
+                .map_err(|error| *error);
+            let default = match declaration {
+                Ok(codes) => Some(codes.primary()),
+                Err(_) => None,
+            };
+            utterance.compute_language_metadata_with_declaration(default, declaration);
             let transferred = utterance
                 .language_metadata
                 .clone()
@@ -1003,7 +1143,11 @@ fn authored_language_assignments_drive_counts_and_switching_queries() {
             .collect();
         assert_eq!(actual, expected, "{relative}");
         assert_eq!(
-            file.languages, declared_languages,
+            file.language_declaration(),
+            declared_languages
+                .as_ref()
+                .map(talkbank_model::DeclaredLanguages::as_ref)
+                .map_err(|error| *error),
             "metadata must not rewrite declarations"
         );
         assert_eq!(
@@ -1031,7 +1175,8 @@ fn whole_utterance_rewrite_matches_authored_spec_controls() {
         let target = std::fs::read_to_string(root.join(output)).expect("authored legal control");
         let mut actual = strict_parse(parser.parse_chat_file(&source)).expect("spec syntax parses");
         let expected = strict_parse(parser.parse_chat_file(&target)).expect("legal control parses");
-        let stats = rewrite_whole_utterance_language_switches(&mut actual);
+        let stats =
+            rewrite_whole_utterance_language_switches(&mut actual).expect("admitted declaration");
         assert_eq!(stats.rewritten_utterances, 1);
         assert_eq!(stats.appended_language_codes, 0);
         assert_eq!(actual.to_chat_string(), expected.to_chat_string());
@@ -1042,7 +1187,11 @@ fn whole_utterance_rewrite_matches_authored_spec_controls() {
         reparsed
             .validate_into(&errors, talkbank_model::model::TranscriptName::Anonymous)
             .expect("rewritten spec control is admitted");
-        assert!(rewrite_whole_utterance_language_switches(&mut actual).is_empty());
+        assert!(
+            rewrite_whole_utterance_language_switches(&mut actual)
+                .expect("admitted declaration")
+                .is_empty()
+        );
     }
 }
 
@@ -1064,12 +1213,23 @@ fn mixed_explicit_language_specs_preserve_word_level_attribution() {
             assert!(
                 utterance
                     .main
-                    .whole_utterance_language_switch_target(file.languages.first(), &file.languages)
+                    .whole_utterance_language_switch_target_with_declaration(
+                        Some(
+                            file.language_declaration()
+                                .expect("admitted declaration")
+                                .primary()
+                        ),
+                        file.language_declaration()
+                    )
                     .is_none(),
                 "different resolved languages cannot issue one rewrite capability: {fixture}"
             );
         }
-        assert!(rewrite_whole_utterance_language_switches(&mut file).is_empty());
+        assert!(
+            rewrite_whole_utterance_language_switches(&mut file)
+                .expect("admitted declaration")
+                .is_empty()
+        );
         assert!(original.semantic_eq(&file));
         assert_eq!(
             file.to_chat_string(),
@@ -1093,12 +1253,23 @@ fn governing_span_spec_cannot_enter_unspanned_rewrite() {
         assert!(
             utterance
                 .main
-                .whole_utterance_language_switch_target(file.languages.first(), &file.languages,)
+                .whole_utterance_language_switch_target_with_declaration(
+                    Some(
+                        file.language_declaration()
+                            .expect("admitted declaration")
+                            .primary()
+                    ),
+                    file.language_declaration(),
+                )
                 .is_none(),
             "span-governed words cannot produce an unspanned capability"
         );
     }
-    assert!(rewrite_whole_utterance_language_switches(&mut file).is_empty());
+    assert!(
+        rewrite_whole_utterance_language_switches(&mut file)
+            .expect("admitted declaration")
+            .is_empty()
+    );
     assert!(original.semantic_eq(&file));
     assert_eq!(original.to_chat_string(), file.to_chat_string());
 }
@@ -1110,11 +1281,12 @@ fn reference_language_switch_rewrite_reaches_a_stable_wire_form() {
     for fixture in corpus.fixtures() {
         let mut file =
             strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
-        rewrite_whole_utterance_language_switches(&mut file);
+        rewrite_whole_utterance_language_switches(&mut file).expect("admitted declaration");
         let wire = file.to_chat_string();
         let mut reparsed =
             strict_parse(parser.parse_chat_file(&wire)).expect("rewritten reference parses");
-        let stats = rewrite_whole_utterance_language_switches(&mut reparsed);
+        let stats =
+            rewrite_whole_utterance_language_switches(&mut reparsed).expect("admitted declaration");
         assert!(
             stats.is_empty(),
             "rewrite must reach fixed point: {} {stats:?}",
@@ -1134,7 +1306,17 @@ fn missing_language_header_spec_is_not_fabricated_by_switch_rewrite() {
             std::fs::read_to_string(root.join(fixture)).expect("canonical header control/mutation");
         let mut file = strict_parse(parser.parse_chat_file(&input)).expect("spec syntax parses");
         let original = file.clone();
-        assert!(rewrite_whole_utterance_language_switches(&mut file).is_empty());
+        match original.language_declaration() {
+            Ok(_) => assert!(
+                rewrite_whole_utterance_language_switches(&mut file)
+                    .expect("admitted declaration")
+                    .is_empty()
+            ),
+            Err(reason) => assert_eq!(
+                rewrite_whole_utterance_language_switches(&mut file),
+                Err(reason)
+            ),
+        }
         assert!(
             original.semantic_eq(&file),
             "header handling preserves input: {fixture}"

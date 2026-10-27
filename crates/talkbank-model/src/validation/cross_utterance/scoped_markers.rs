@@ -158,6 +158,7 @@ fn classify<'a>(item: &ContentItem<'a>) -> Option<ScopeMarker<'a>> {
         | ContentItem::Action(_)
         | ContentItem::OverlapPoint(_)
         | ContentItem::OtherSpokenEvent(_)
+        | ContentItem::OrphanAnnotation(_)
         | ContentItem::Freecode(_)
         | ContentItem::InternalBullet(_)
         | ContentItem::UnderlineBegin(_)

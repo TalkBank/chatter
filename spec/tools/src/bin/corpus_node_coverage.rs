@@ -107,14 +107,7 @@ fn main() -> ExitCode {
             invalid_present: report
                 .invalid_present
                 .iter()
-                .map(|found| {
-                    format!(
-                        "{} ({}) in: {}",
-                        found.kind,
-                        found.code,
-                        found.files.join(", ")
-                    )
-                })
+                .map(ToString::to_string)
                 .collect(),
             stale_exclusions: report
                 .stale_exclusions

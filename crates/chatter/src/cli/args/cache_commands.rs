@@ -1,16 +1,15 @@
 //! `chatter cache` subcommands.
 
-use clap::Subcommand;
-
+use crate::cli::catalog::{Contract, Shape, command_tree};
+command_tree! {
 /// Cache maintenance subcommands under `chatter cache`.
-#[derive(Subcommand)]
 pub enum CacheCommands {
     /// Display cache statistics
     Stats {
         /// Output style (text|json), as for `validate`.
         #[arg(short, long, value_enum, default_value_t = super::cli_types::OutputFormat::Text)]
         format: super::cli_types::OutputFormat,
-    },
+    } => Shape::Leaf(Contract::CacheStats),
 
     /// Clear cache entries
     Clear {
@@ -21,5 +20,6 @@ pub enum CacheCommands {
         /// `--dry-run`, parsed into a mode.
         #[command(flatten)]
         mode: super::flag_modes::Flag<super::cache_clear_args::ClearMode>,
-    },
+    } => Shape::Leaf(Contract::CacheClear),
+}
 }

@@ -10,7 +10,8 @@ use crate::model::{LanguageCode, WordLanguageMarker};
 use crate::{DiagnosticLocation, ErrorCode, ParseError, Severity};
 use talkbank_derive::ValidationTagged;
 
-use super::helpers::{get_other_language, is_tertiary_language};
+use crate::MultipleLanguageCodes;
+use crate::validation::context::ShortcutLanguage;
 
 /// Resolution of a word's applicable languages for validation purposes.
 ///
@@ -33,9 +34,9 @@ pub enum LanguageResolution {
     /// Single definite language
     Single(LanguageCode),
     /// Multiple languages (code-mixing): @s:eng+fra
-    Multiple(Vec<LanguageCode>),
+    Multiple(MultipleLanguageCodes),
     /// Ambiguous between languages: @s:eng&spa
-    Ambiguous(Vec<LanguageCode>),
+    Ambiguous(MultipleLanguageCodes),
     /// No language could be resolved
     #[validation_tag(error)]
     Unresolved,
@@ -65,7 +66,7 @@ impl LanguageResolution {
     pub fn languages(&self) -> &[LanguageCode] {
         match self {
             Self::Single(code) => std::slice::from_ref(code),
-            Self::Multiple(codes) | Self::Ambiguous(codes) => codes,
+            Self::Multiple(codes) | Self::Ambiguous(codes) => codes.as_slice(),
             Self::Unresolved => &[],
         }
     }
@@ -90,11 +91,13 @@ impl LanguageResolution {
         match self {
             Self::Single(code) => code.as_str().to_string(),
             Self::Multiple(codes) => codes
+                .as_slice()
                 .iter()
                 .map(|c| c.as_str())
                 .collect::<Vec<_>>()
                 .join("+"),
             Self::Ambiguous(codes) => codes
+                .as_slice()
                 .iter()
                 .map(|c| c.as_str())
                 .collect::<Vec<_>>()
@@ -148,6 +151,42 @@ fn report_word_code_issues(
     let collector = crate::ErrorCollector::new();
     code.report_code_issues(DiagnosticLocation::from(location), &collector);
     diagnostics.extend(collector.into_vec());
+}
+
+enum MultipleLanguageKind {
+    Mixed,
+    Ambiguous,
+}
+
+fn resolve_multiple_marker(
+    codes: &[LanguageCode],
+    kind: MultipleLanguageKind,
+    location: crate::Location,
+) -> LanguageResolutionOutcome {
+    match MultipleLanguageCodes::try_from(codes.to_vec()) {
+        Ok(codes) => match kind {
+            MultipleLanguageKind::Mixed => LanguageResolution::Multiple(codes),
+            MultipleLanguageKind::Ambiguous => LanguageResolution::Ambiguous(codes),
+        }
+        .into_word_outcome(location),
+        Err(error) => {
+            let mut diagnostics = vec![ParseError::at_location(
+                ErrorCode::InvalidWordFormat,
+                Severity::Error,
+                location,
+                error.to_string(),
+            )];
+            // Retain findings about any code that was actually present, even
+            // though the list cannot supply a resolved multi-language set.
+            for code in codes {
+                report_word_code_issues(code, location, &mut diagnostics);
+            }
+            LanguageResolutionOutcome {
+                resolution: LanguageResolution::Unresolved,
+                diagnostics,
+            }
+        }
+    }
 }
 
 // Resolve the effective language set for one word token.
@@ -240,7 +279,10 @@ pub(crate) fn resolve_marker_at(
     marker: Option<&WordLanguageMarker>,
     location: crate::Location,
     tier_language: Option<&LanguageCode>,
-    declared_languages: &[LanguageCode],
+    declared_languages: Result<
+        crate::model::DeclaredLanguagesRef<'_>,
+        crate::model::LanguageDeclarationError,
+    >,
 ) -> LanguageResolutionOutcome {
     let Some(marker) = marker else {
         return resolve_without_marker(tier_language);
@@ -250,37 +292,54 @@ pub(crate) fn resolve_marker_at(
 
     let resolution = match marker {
         WordLanguageMarker::Shortcut => {
+            let declared_languages = match declared_languages {
+                Ok(codes) => codes,
+                Err(crate::model::LanguageDeclarationError::Absent) => {
+                    return LanguageResolutionOutcome {
+                        resolution: LanguageResolution::Unresolved,
+                        diagnostics: vec![ParseError::at_location(
+                            ErrorCode::MissingLanguageContext,
+                            Severity::Error,
+                            location,
+                            "Cannot use @s shortcut: no language declaration available",
+                        )],
+                    };
+                }
+                Err(
+                    crate::model::LanguageDeclarationError::Rejected
+                    | crate::model::LanguageDeclarationError::Empty
+                    | crate::model::LanguageDeclarationError::Repeated,
+                ) => {
+                    return LanguageResolutionOutcome {
+                        resolution: LanguageResolution::Unresolved,
+                        diagnostics: Vec::new(),
+                    };
+                }
+            };
             if let Some(current_lang) = tier_language {
-                if is_tertiary_language(current_lang, declared_languages) {
-                    diagnostics.push(
-                        ParseError::new(
+                match ShortcutLanguage::classify(current_lang, declared_languages) {
+                    ShortcutLanguage::Alternate(other_lang) => {
+                        LanguageResolution::Single(other_lang.clone())
+                    }
+                    ShortcutLanguage::Tertiary => {
+                        diagnostics.push(ParseError::new(
                             ErrorCode::TertiaryLanguageNeedsExplicitCode,
                             Severity::Error,
                             DiagnosticLocation::from(location),
                             None,
-                            format!(
-                                "Language '{}' is tertiary, so @s shortcut needs explicit language code (e.g., @s:eng)",
-                                current_lang.as_str()
-                            ),
-                        )
-                    );
-                    LanguageResolution::Unresolved
-                } else {
-                    match get_other_language(current_lang, declared_languages) {
-                        Some(other_lang) => LanguageResolution::Single(other_lang),
-                        None => {
-                            diagnostics.push(
-                                ParseError::new(
-                                    ErrorCode::MissingLanguageContext,
-                                    Severity::Error,
-                                    DiagnosticLocation::from(location),
-                                    None,
-                                    "No secondary language available for @s shortcut",
-                                )
-                                .with_suggestion("Either add a second language to @Languages header or use explicit language code (e.g., @s:spa)")
-                            );
-                            LanguageResolution::Unresolved
-                        }
+                            format!("Language '{}' is tertiary, so @s shortcut needs explicit language code (e.g., @s:eng)", current_lang.as_str()),
+                        ));
+                        LanguageResolution::Unresolved
+                    }
+                    ShortcutLanguage::MissingAlternate | ShortcutLanguage::Undeclared => {
+                        diagnostics.push(ParseError::new(
+                            ErrorCode::MissingLanguageContext,
+                            Severity::Error,
+                            DiagnosticLocation::from(location),
+                            None,
+                            "No secondary language available for @s shortcut",
+                        ).with_suggestion("Either add a second language to @Languages header or use explicit language code (e.g., @s:spa)"));
+                        LanguageResolution::Unresolved
                     }
                 }
             } else {
@@ -311,12 +370,12 @@ pub(crate) fn resolve_marker_at(
             // Multiple languages mixed together (code-mixing)
             // Content must be valid in ALL component languages, and every
             // component must be a real ISO 639-3 code (ruling part 2).
-            return LanguageResolution::Multiple(codes.clone()).into_word_outcome(location);
+            return resolve_multiple_marker(codes, MultipleLanguageKind::Mixed, location);
         }
         WordLanguageMarker::Ambiguous(codes) => {
             // Ambiguous between languages
             // Content must be valid in ALL possibilities
-            return LanguageResolution::Ambiguous(codes.clone()).into_word_outcome(location);
+            return resolve_multiple_marker(codes, MultipleLanguageKind::Ambiguous, location);
         }
     };
 

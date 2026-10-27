@@ -34,13 +34,29 @@ pub fn completion(
 
     // Text is used only to match unfinished editor prefixes against the offered
     // literals. The native tree owns recognized token and main-tier context.
-    let line_start = document[..offset].rfind('\n').map_or(0, |p| p + 1);
+    let line_start = utils::protocol_lines(document)
+        .nth(position.line as usize)?
+        .start();
     let line_prefix = &document[line_start..offset];
 
     if line_prefix.starts_with('@')
         && let Some(site) = header_completion_site(tree, document, line_start, offset)
     {
         return Some(CompletionResponse::Array(complete_header(site)));
+    }
+
+    if let Some(site) = PrefixCompletionSite::draft(document, line_start, offset) {
+        let completions = if line_prefix.starts_with('*') {
+            complete_speaker_code(chat_file, site)
+        } else if line_prefix.starts_with('%') {
+            let items = complete_tier_type(site);
+            if items.is_empty() { None } else { Some(items) }
+        } else {
+            None
+        };
+        if let Some(items) = completions {
+            return Some(CompletionResponse::Array(items));
+        }
     }
 
     let root = tree.root_node();
@@ -74,18 +90,57 @@ pub fn completion(
     }
 
     if let Some(speaker) = find_ancestor_kind(node, SPEAKER)
-        && let Some(completions) = complete_speaker_code(chat_file, node_range(speaker, document))
+        && let Some(completions) = complete_speaker_code(
+            chat_file,
+            PrefixCompletionSite::Token(node_range(speaker, document)),
+        )
     {
         return Some(CompletionResponse::Array(completions));
     }
 
     if let Some(prefix) = tier_prefix_node(node) {
-        return Some(CompletionResponse::Array(complete_tier_type(node_range(
-            prefix, document,
-        ))));
+        return Some(CompletionResponse::Array(complete_tier_type(
+            PrefixCompletionSite::Token(node_range(prefix, document)),
+        )));
     }
 
     None
+}
+
+/// Recognized tokens retain their surrounding delimiters. A whole-line draft
+/// instead receives a complete prefix, admitted by matching the offered text.
+enum PrefixCompletionSite<'a> {
+    Token(Range),
+    Draft { range: Range, prefix: &'a str },
+}
+
+impl<'a> PrefixCompletionSite<'a> {
+    fn draft(document: &'a str, line_start: usize, offset: usize) -> Option<Self> {
+        let prefix = document.get(line_start..)?.split(['\r', '\n']).next()?;
+        if offset != line_start + prefix.len() {
+            return None;
+        }
+        let index = utils::LineIndex::new(document);
+        Some(Self::Draft {
+            range: Range::new(
+                index.offset_to_position(line_start),
+                index.offset_to_position(offset),
+            ),
+            prefix,
+        })
+    }
+
+    fn edit(&self, token: &str, draft: &str) -> Option<CompletionTextEdit> {
+        let (range, text) = match self {
+            Self::Token(range) => (*range, token),
+            Self::Draft { range, prefix } if draft.starts_with(prefix) => (*range, draft),
+            Self::Draft { .. } => return None,
+        };
+        Some(CompletionTextEdit::Edit(TextEdit {
+            range,
+            new_text: text.to_owned(),
+        }))
+    }
 }
 
 const HEADERS: &[(&str, &str)] = &[
@@ -258,54 +313,88 @@ fn complete_bracket_annotation(range: Range) -> Vec<CompletionItem> {
 /// Complete speaker codes after `*`
 fn complete_speaker_code(
     chat_file: &talkbank_model::model::ChatFile,
-    range: Range,
+    site: PrefixCompletionSite<'_>,
 ) -> Option<Vec<CompletionItem>> {
-    // Get all declared participants
-    let mut speaker_codes = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-
-    for line in &chat_file.lines {
-        if let talkbank_model::model::Line::Header { header, .. } = line {
-            use talkbank_model::model::Header;
-            match header.as_ref() {
-                Header::Participants { entries } => {
-                    for entry in entries {
-                        if seen.insert(&entry.speaker_code) {
-                            speaker_codes.push((entry.speaker_code.as_str(), entry.role.as_str()));
-                        }
+    // Declaration evidence owns roles and identities. ID-only completion is
+    // available when no declaration exists, never as recovery for a rejected
+    // or competing declaration.
+    let speaker_codes: Vec<_> = match chat_file.participant_declaration() {
+        Ok(entries) => entries
+            .iter()
+            .map(|entry| {
+                (
+                    entry.speaker_code.as_str(),
+                    entry.role().map(|role| role.as_str()),
+                )
+            })
+            .collect(),
+        Err(talkbank_model::model::ParticipantDeclarationError::Absent) => {
+            let mut seen = std::collections::HashSet::new();
+            chat_file
+                .headers()
+                .filter_map(|header| match header {
+                    talkbank_model::model::Header::ID(id) if seen.insert(&id.speaker) => {
+                        Some((id.speaker.as_str(), Some(id.role.as_str())))
                     }
-                }
-                Header::ID(id_header) if seen.insert(&id_header.speaker) => {
-                    speaker_codes.push((id_header.speaker.as_str(), id_header.role.as_str()));
-                }
-                _ => {}
-            }
+                    _ => None,
+                })
+                .collect()
         }
-    }
+        Err(
+            talkbank_model::model::ParticipantDeclarationError::Rejected
+            | talkbank_model::model::ParticipantDeclarationError::Repeated,
+        ) => return None,
+    };
 
     let items: Vec<CompletionItem> = speaker_codes
         .into_iter()
-        .map(|(code, role)| CompletionItem {
-            label: code.to_owned(),
-            kind: Some(CompletionItemKind::CLASS),
-            detail: Some(role.to_owned()),
-            documentation: Some(Documentation::String(format!(
-                "Speaker: {} ({})",
-                code, role
-            ))),
-            text_edit: Some(CompletionTextEdit::Edit(TextEdit {
-                range,
-                new_text: code.to_owned(),
-            })),
-            ..Default::default()
+        .filter_map(|(code, role)| {
+            Some(CompletionItem {
+                label: code.to_owned(),
+                kind: Some(CompletionItemKind::CLASS),
+                detail: role.map(str::to_owned),
+                documentation: Some(Documentation::String(match role {
+                    Some(role) => format!("Speaker: {} ({})", code, role),
+                    None => format!("Speaker: {} (role missing)", code),
+                })),
+                text_edit: Some(site.edit(code, &format!("*{code}:\t"))?),
+                ..Default::default()
+            })
         })
         .collect();
 
     if items.is_empty() { None } else { Some(items) }
 }
 
+#[cfg(test)]
+mod participant_role_recovery_tests {
+    use super::*;
+    use talkbank_parser_tests::test_error::ParseProductTestExt;
+
+    #[test]
+    fn completion_preserves_the_declared_speaker_with_a_missing_role() {
+        let source = include_str!(
+            "../../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E513_1.cha"
+        );
+        let file = talkbank_parser::TreeSitterParser::new()
+            .expect("parser")
+            .parse_chat_file(source)
+            .expect_built();
+        let items = complete_speaker_code(&file, PrefixCompletionSite::Token(Range::default()))
+            .expect("known speaker");
+        let chi = items.iter().find(|item| item.label == "CHI").expect("CHI");
+        assert!(
+            chi.detail.is_none(),
+            "ID metadata must not supply a missing declared role"
+        );
+        assert!(
+            matches!(&chi.documentation, Some(Documentation::String(text)) if text.contains("role missing"))
+        );
+    }
+}
+
 /// Complete dependent tier types after `%`
-fn complete_tier_type(range: Range) -> Vec<CompletionItem> {
+fn complete_tier_type(site: PrefixCompletionSite<'_>) -> Vec<CompletionItem> {
     // Common tier types with descriptions
     let tier_types = vec![
         ("mor", "Morphological analysis"),
@@ -326,15 +415,14 @@ fn complete_tier_type(range: Range) -> Vec<CompletionItem> {
 
     tier_types
         .into_iter()
-        .map(|(name, desc)| CompletionItem {
-            label: name.to_string(),
-            kind: Some(CompletionItemKind::KEYWORD),
-            detail: Some(desc.to_string()),
-            text_edit: Some(CompletionTextEdit::Edit(TextEdit {
-                range,
-                new_text: format!("%{name}"),
-            })),
-            ..Default::default()
+        .filter_map(|(name, desc)| {
+            Some(CompletionItem {
+                label: name.to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some(desc.to_string()),
+                text_edit: Some(site.edit(&format!("%{name}"), &format!("%{name}:\t"))?),
+                ..Default::default()
+            })
         })
         .collect()
 }
@@ -771,7 +859,7 @@ mod tests {
                         .content
                         .postcodes
                         .iter()
-                        .map(|code| code.text.as_str())
+                        .map(|code| code.text().expect("admitted postcode"))
                         .collect();
                     let expected_codes = if original == "[+ bch]" {
                         vec![expected, "foo"]
@@ -786,7 +874,7 @@ mod tests {
 
     #[test]
     fn complete_tier_type_returns_tier_names() {
-        let items = complete_tier_type(Range::default());
+        let items = complete_tier_type(PrefixCompletionSite::Token(Range::default()));
         assert!(
             items.iter().any(|i| i.label == "mor"),
             "Expected mor in tier completions"
@@ -808,7 +896,8 @@ mod tests {
     fn complete_speaker_code_empty_when_no_participants() {
         let content = "@UTF8\n@Begin\n@Languages:\teng\n@End\n";
         let chat_file = parse_chat(content);
-        let result = complete_speaker_code(&chat_file, Range::default());
+        let result =
+            complete_speaker_code(&chat_file, PrefixCompletionSite::Token(Range::default()));
         assert!(
             result.is_none(),
             "Expected None when no participants declared"
@@ -819,7 +908,8 @@ mod tests {
     fn complete_speaker_code_extracts_from_id_headers() {
         let content = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother, FAT Father\n@ID:\teng|corpus|CHI|||||Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n@ID:\teng|corpus|FAT|||||Father|||\n*CHI:\thello .\n@End\n";
         let chat_file = parse_chat(content);
-        let result = complete_speaker_code(&chat_file, Range::default());
+        let result =
+            complete_speaker_code(&chat_file, PrefixCompletionSite::Token(Range::default()));
         assert!(result.is_some(), "Expected speaker completions");
         let items = result.unwrap();
         // Both header forms contribute, but each identity is suggested once.

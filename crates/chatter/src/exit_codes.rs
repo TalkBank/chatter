@@ -1,37 +1,70 @@
-//! Conventional CLI exit codes shared across `chatter` subcommands.
-//!
-//! All chatter subcommands honor the same three-tier exit contract
-//! plus the adjudication-specific exit 4. Batch / pipeline drivers
-//! key off these constants when aggregating per-session outcomes;
-//! producers (speaker-id, merge, pipeline) and consumers (batch)
-//! must agree by *name*, not by literal, otherwise renumbering one
-//! site silently fails the others.
+//! Typed command completion and the process exit contract.
 
-/// Operation completed normally and the expected output was written.
-pub const EXIT_SUCCESS: i32 = 0;
+/// A command either completes or returns a classified stop to the program
+/// boundary. No command owns process termination, so owned stages and terminal
+/// guards are dropped before the exit status is returned to the operating system.
+pub type CommandResult<T = ()> = Result<T, CommandStop>;
 
-/// Invalid input: parse error, I/O failure, missing file. The
-/// command can't begin its work because the inputs are unusable.
-pub const EXIT_INPUT_ERROR: i32 = 1;
+/// Failures already explained by the command's domain-specific renderer.
+#[derive(Debug, Clone, Copy)]
+pub enum ReportedFailure {
+    /// Invalid or unreadable input, failed publication, or an incomplete run (1).
+    Input,
+    /// Usage or semantic precondition refused before the operation (2).
+    Precondition,
+    /// Startup or encoding failed inside the implementation (3).
+    Internal,
+    /// Pending evidence needs an operator decision (4).
+    NeedsReview,
+    /// The operator requested forced termination (130).
+    Interrupted,
+}
 
-/// Standard output closed or failed before the command wrote everything it
-/// promised: a consumer such as `head` stopped reading. The status a failed
-/// `validate` run gives, and the one `validate --format json` gives when its
-/// consumer closes the pipe; every text writer ends with it too
-/// (`crate::stdout`).
-pub const EXIT_OUTPUT_INCOMPLETE: i32 = 1;
+/// A reported domain failure or an error whose presentation belongs to the
+/// program boundary. Keeping these separate prevents duplicate diagnostics.
+#[derive(Debug)]
+pub enum CommandStop {
+    /// A diagnostic was already rendered in its domain-specific form.
+    Reported(ReportedFailure),
+    /// Clap owns a usage diagnostic that still needs presentation.
+    Usage(clap::Error),
+    /// Human-readable or artifact stdout failed.
+    Output(std::io::Error),
+    /// Machine output failed; its protocol promises empty stderr.
+    MachineOutput(std::io::Error),
+}
 
-/// Precondition violation. Inputs parsed cleanly but the operation
-/// itself can't proceed semantically, ambiguous speaker, language
-/// mismatch, invalid mapping spec, etc.
-pub const EXIT_PRECONDITION: i32 = 2;
+impl From<ReportedFailure> for CommandStop {
+    fn from(failure: ReportedFailure) -> Self {
+        Self::Reported(failure)
+    }
+}
 
-/// Internal failure while encoding or materializing an output whose inputs
-/// have already been admitted.
-pub const EXIT_INTERNAL_ERROR: i32 = 3;
-
-/// Reference-mode speaker-id refused on low Jaccard margin. The
-/// operator must adjudicate (typically via `chatter adjudicate`).
-/// Batch drivers treat this as "needs adjudication" rather than a
-/// hard error.
-pub const EXIT_LOW_CONFIDENCE: i32 = 4;
+impl CommandStop {
+    /// Render once, after command resources have been released.
+    pub fn finish(self) -> std::process::ExitCode {
+        let code = match self {
+            Self::Reported(failure) => match failure {
+                ReportedFailure::Input => 1,
+                ReportedFailure::Precondition => 2,
+                ReportedFailure::Internal => 3,
+                ReportedFailure::NeedsReview => 4,
+                ReportedFailure::Interrupted => 130,
+            },
+            Self::Usage(error) => {
+                if let Err(error) = error.print() {
+                    return Self::Output(error).finish();
+                }
+                2
+            }
+            Self::MachineOutput(_error) => 1,
+            Self::Output(error) => {
+                if error.kind() != std::io::ErrorKind::BrokenPipe {
+                    eprintln!("chatter: cannot write to standard output: {error}");
+                }
+                1
+            }
+        };
+        std::process::ExitCode::from(code)
+    }
+}

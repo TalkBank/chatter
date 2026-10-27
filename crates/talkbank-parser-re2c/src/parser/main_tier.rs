@@ -7,33 +7,20 @@
 //! The contents parser is recursive (groups contain contents which contain groups).
 
 use chumsky::prelude::*;
+use talkbank_model::model::{OverlapPointKind, WordCategory};
 
 use crate::ast::*;
 use crate::source_text::SourceText;
 use crate::token::{Token, TokenDiscriminants};
 
-use super::classify::{
-    Chain, is_linker, is_terminator, is_word_token, token_to_parsed_annotation,
-    word_to_content_item,
-};
+use super::classify::{linker_kind, token_to_parsed_annotation};
 use super::dependent_tiers::{opt_newline, ws};
 use super::word_body::parse_word_body;
+use super::word_language::admit_word_language;
+use crate::ast::chain::BaseAnnotation;
 
 /// Chumsky input type.
 use super::Tokens;
-
-/// The whole lexeme of a token the subtoken word builder admitted
-/// (`is_word_token`): the slice for a plain token, the lexeme behind a
-/// payload-carrying one. Only the first and last tokens of an assembled word
-/// are asked, to bound the word in its source.
-fn word_token_lexeme<'a>(tok: &Token<'a>) -> &'a str {
-    match tok {
-        Token::FormMarker(marker) | Token::PosTag(marker) => marker.lexeme(),
-        Token::WordLangSuffix(suffix) => suffix.lexeme(),
-        // Every other word token is an `emit!` rule whose text IS its lexeme.
-        other => other.text(),
-    }
-}
 
 // ═══════════════════════════════════════════════════════════
 // Annotation parsing, shared combinator replacing 4 duplicate loops
@@ -43,98 +30,43 @@ fn word_token_lexeme<'a>(tok: &Token<'a>) -> &'a str {
 fn annotation<'tokens, 'a: 'tokens>(
     source: SourceText<'a>,
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ParsedAnnotation<'a>> + Clone {
-    replacement_annotation(source).or(any().try_map(|tok: Token<'a>, _span| {
-        token_to_parsed_annotation(tok).ok_or_else(Default::default)
-    }))
+    replacement_annotation(source)
+        .map(ParsedAnnotation::Replacement)
+        .or(any().try_map(move |tok: Token<'a>, _span| {
+            token_to_parsed_annotation(tok, source).ok_or_else(Default::default)
+        }))
 }
 
 /// Parse replacement words through the same unannotated word productions used
 /// by main-tier words. A missing word or closing bracket is a parser rejection.
 fn replacement_annotation<'tokens, 'a: 'tokens>(
     source: SourceText<'a>,
-) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ParsedAnnotation<'a>> + Clone {
-    let word = rich_word_with(empty().to(Vec::new()))
-        .or(subtoken_word_with(empty().to(Vec::new()), source))
-        .try_map(|item, _span| match item {
-            ContentItem::Word(word) => Ok(word),
-            ContentItem::Pause(_)
-            | ContentItem::Freecode(_)
-            | ContentItem::OrphanAnnotation(_)
-            | ContentItem::Separator { .. }
-            | ContentItem::OverlapPoint { .. }
-            | ContentItem::Retrace(_)
-            | ContentItem::Group(_)
-            | ContentItem::Quotation(_)
-            | ContentItem::Event(_)
-            | ContentItem::AnnotatedEvent { .. }
-            | ContentItem::MediaBullet { .. }
-            | ContentItem::UnderlineBegin(_)
-            | ContentItem::UnderlineEnd(_)
-            | ContentItem::OtherSpokenEvent { .. }
-            | ContentItem::PhoGroup(_)
-            | ContentItem::SinGroup(_)
-            | ContentItem::LongFeatureBegin(_)
-            | ContentItem::LongFeatureEnd(_)
-            | ContentItem::NonvocalBegin(_)
-            | ContentItem::NonvocalEnd(_)
-            | ContentItem::NonvocalSimple(_)
-            | ContentItem::Action { .. } => Err(Default::default()),
-        });
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ReplacementParsed<'a>> + Clone {
+    let word = unannotated_word(source);
     select! { Token::ReplacementBegin(begin) => begin }
         .then_ignore(ws())
         .then(word.clone())
         .then(ws().ignore_then(word).repeated().collect::<Vec<_>>())
         .then_ignore(ws())
         .then(select! { Token::RightBracket(end) => end })
-        .map(|(((begin, first), rest), end)| {
-            ParsedAnnotation::Replacement(ReplacementParsed::new(begin, first, rest, end))
+        .try_map(move |(((begin, first), rest), end), _span| {
+            ReplacementParsed::new(source, begin, first, rest, end).map_err(|_| Default::default())
         })
 }
 
-/// Parse trailing annotations: optional whitespace then annotations.
-/// Replaces the 4 duplicate save-pos/skip-ws/check-annotation loops.
-fn trailing_annotations<'tokens, 'a: 'tokens>(
-    source: SourceText<'a>,
-) -> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<ParsedAnnotation<'a>>> + Clone {
-    ws().ignore_then(annotation(source))
+/// A separate bracket construct requires a source whitespace token.
+fn annotation_gap<'tokens, 'a: 'tokens>() -> impl Parser<'tokens, Tokens<'tokens, 'a>, ()> + Clone {
+    select! { Token::Whitespace(_) => (), Token::Continuation(_) => () }
         .repeated()
-        .collect::<Vec<_>>()
-}
-
-/// A marker admitted by `base_annotations`, not a word replacement or a
-/// tier-level code. Keep rejected tokens in the stream for normal recovery.
-enum BaseAnnotation<'a> {
-    Scoped(ScopedAnnotationParsed<'a>),
-    Retrace(RetraceKindParsed, &'a str),
-}
-
-impl<'a> BaseAnnotation<'a> {
-    fn admit(annotation: ParsedAnnotation<'a>) -> Option<Self> {
-        match annotation {
-            ParsedAnnotation::Scoped(ScopedAnnotationParsed::Unknown(_))
-            | ParsedAnnotation::Replacement(_)
-            | ParsedAnnotation::Langcode(_)
-            | ParsedAnnotation::Postcode(_) => None,
-            ParsedAnnotation::Scoped(scoped) => Some(Self::Scoped(scoped)),
-            ParsedAnnotation::Retrace(kind, marker) => Some(Self::Retrace(kind, marker)),
-        }
-    }
-
-    fn into_parsed(self) -> ParsedAnnotation<'a> {
-        match self {
-            Self::Scoped(scoped) => ParsedAnnotation::Scoped(scoped),
-            Self::Retrace(kind, marker) => ParsedAnnotation::Retrace(kind, marker),
-        }
-    }
+        .at_least(1)
+        .ignored()
 }
 
 /// The grammar requires whitespace before each base annotation.
 fn trailing_base_annotations<'tokens, 'a: 'tokens>(
     source: SourceText<'a>,
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<BaseAnnotation<'a>>> + Clone {
-    select! { Token::Whitespace(_) => (), Token::Continuation(_) => () }
-        .repeated()
-        .at_least(1)
+    annotation_gap()
         .ignore_then(annotation(source).try_map(|annotation, _span| {
             BaseAnnotation::admit(annotation).ok_or_else(Default::default)
         }))
@@ -146,35 +78,48 @@ fn trailing_base_annotations<'tokens, 'a: 'tokens>(
 // Simple content items
 // ═══════════════════════════════════════════════════════════
 
-/// Parse a pause token.
+/// Admit a shared pause with the full extent already issued by the lexer.
 fn pause<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
+    use talkbank_model::model::{Pause, PauseDuration, TimedPause};
     select! {
-        Token::PauseLong(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Long(s)),
-        Token::PauseMedium(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Medium(s)),
-        Token::PauseShort(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Short(s)),
-        Token::PauseTimed(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Timed(s)),
-    }
+        Token::PauseLong(s) => Ok(ContentItem::Pause(Pause::new(s.span(), PauseDuration::Long))),
+        Token::PauseMedium(s) => Ok(ContentItem::Pause(Pause::new(s.span(), PauseDuration::Medium))),
+        Token::PauseShort(s) => Ok(ContentItem::Pause(Pause::new(s.span(), PauseDuration::Short))),
+        Token::PauseTimed(s) => TimedPause::new(s.text())
+            .map(|duration| ContentItem::Pause(Pause::new(s.span(), PauseDuration::Timed(duration)))),
+    }.try_map(|pause, _| pause.map_err(|_| chumsky::error::EmptyErr::default()))
 }
 
-/// Parse a separator token.
-///
-/// Routed through `SeparatorKindParsed::from_token`, the one owner of which
-/// token is which separator, rather than repeating that list here.
-fn separator<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
-    any().try_map(|tok: Token<'a>, _span| {
-        // `_span` is chumsky's index into the TOKEN slice, not a byte range,
-        // so it cannot give a source position; the token's own text can, and
-        // `SourceText::span_of` turns it into one at conversion time.
-        //
-        // The parser's error type carries no payload, so a non-separator is
-        // simply "this alternative did not match", which is what `choice`
-        // wants: the next alternative gets the token.
-        let text = tok.text();
-        SeparatorKindParsed::from_token(&tok)
-            .map(|kind| ContentItem::Separator { kind, text })
-            .ok_or_else(Default::default)
+/// One separator grammar for main content and WOR, producing a located shared value.
+pub(super) fn separator<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::model::Separator> + Clone {
+    use talkbank_model::{Location, model::Separator};
+    any().try_map(move |token: Token<'a>, _| {
+        let location = Location::Located(
+            source
+                .span_of(token.text())
+                .ok_or_else(chumsky::error::EmptyErr::default)?,
+        );
+        Ok(match token {
+            Token::Comma(_) => Separator::Comma { location },
+            Token::Semicolon(_) => Separator::Semicolon { location },
+            Token::Colon(_) => Separator::Colon { location },
+            Token::CaContinuationMarker(_) => Separator::CaContinuation { location },
+            Token::TagMarker(_) => Separator::Tag { location },
+            Token::VocativeMarker(_) => Separator::Vocative { location },
+            Token::UnmarkedEnding(_) => Separator::UnmarkedEnding { location },
+            Token::UptakeSymbol(_) => Separator::Uptake { location },
+            Token::CaNoBreak(_) => Separator::CaNoBreak { location },
+            Token::CaTechnicalBreak(_) => Separator::CaTechnicalBreak { location },
+            Token::RisingToHigh(_) => Separator::RisingToHigh { location },
+            Token::RisingToMid(_) => Separator::RisingToMid { location },
+            Token::LevelPitch(_) => Separator::Level { location },
+            Token::FallingToMid(_) => Separator::FallingToMid { location },
+            Token::FallingToLow(_) => Separator::FallingToLow { location },
+            _ => return Err(chumsky::error::EmptyErr::default()),
+        })
     })
 }
 
@@ -182,25 +127,43 @@ fn separator<'tokens, 'a: 'tokens>()
 fn overlap_point<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
-        Token::OverlapTopBegin(s) => overlap_item(OverlapKind::TopBegin, s),
-        Token::OverlapTopEnd(s) => overlap_item(OverlapKind::TopEnd, s),
-        Token::OverlapBottomBegin(s) => overlap_item(OverlapKind::BottomBegin, s),
-        Token::OverlapBottomEnd(s) => overlap_item(OverlapKind::BottomEnd, s),
+        Token::OverlapTopBegin(s) => overlap_item(OverlapPointKind::TopOverlapBegin, s),
+        Token::OverlapTopEnd(s) => overlap_item(OverlapPointKind::TopOverlapEnd, s),
+        Token::OverlapBottomBegin(s) => overlap_item(OverlapPointKind::BottomOverlapBegin, s),
+        Token::OverlapBottomEnd(s) => overlap_item(OverlapPointKind::BottomOverlapEnd, s),
     }
 }
 
 /// Parse structural marker tokens (underlines, long features, nonvocals).
-fn structural_markers<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
-    select! {
-        Token::UnderlineBegin(s) => ContentItem::UnderlineBegin(s),
-        Token::UnderlineEnd(s) => ContentItem::UnderlineEnd(s),
-        Token::LongFeatureBegin(s) => ContentItem::LongFeatureBegin(s),
-        Token::LongFeatureEnd(s) => ContentItem::LongFeatureEnd(s),
-        Token::NonvocalBegin(s) => ContentItem::NonvocalBegin(s),
-        Token::NonvocalEnd(s) => ContentItem::NonvocalEnd(s),
-        Token::NonvocalSimple(s) => ContentItem::NonvocalSimple(s),
+fn structural_markers<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
+    // Each token kind fixes the marker meaning; its source lexeme supplies the
+    // location, and its extracted label crosses the model's checked boundary.
+    macro_rules! admit {
+        ($text:ident, $variant:ident, $label:ident) => {
+            source
+                .span_of($text.lexeme())
+                .ok_or_else(chumsky::error::EmptyErr::default)
+                .and_then(|span| {
+                    talkbank_model::$label::new($text.text())
+                        .map(|label| {
+                            ContentItem::$variant(talkbank_model::$variant::new(span, label))
+                        })
+                        .map_err(|_| chumsky::error::EmptyErr::default())
+                })
+        };
     }
+    select! {
+        Token::UnderlineBegin(s) => Ok(ContentItem::UnderlineBegin(s)),
+        Token::UnderlineEnd(s) => Ok(ContentItem::UnderlineEnd(s)),
+        Token::LongFeatureBegin(s) => admit!(s, LongFeatureBegin, LongFeatureLabel),
+        Token::LongFeatureEnd(s) => admit!(s, LongFeatureEnd, LongFeatureLabel),
+        Token::NonvocalBegin(s) => admit!(s, NonvocalBegin, NonvocalLabel),
+        Token::NonvocalEnd(s) => admit!(s, NonvocalEnd, NonvocalLabel),
+        Token::NonvocalSimple(s) => admit!(s, NonvocalSimple, NonvocalLabel),
+    }
+    .try_map(|result, _| result)
 }
 
 /// Parse a freecode annotation.
@@ -210,13 +173,28 @@ fn freecode<'tokens, 'a: 'tokens>()
 }
 
 /// Parse an other-spoken-event: &*SPK:word
-fn other_spoken_event<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
-    select! {
-        Token::OtherSpokenEvent { speaker, text, lexeme } => {
-            ContentItem::OtherSpokenEvent { speaker, text, lexeme }
-        }
-    }
+fn other_spoken_event<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
+    select! { Token::OtherSpokenPrefix(prefix) => prefix }
+        .then(unannotated_word(source))
+        .try_map(move |(prefix, word), _| {
+            let prefix_span = source
+                .span_of(prefix.lexeme())
+                .ok_or_else(Default::default)?;
+            let word_span = word.source().span();
+            if prefix_span.end() != word_span.start() {
+                return Err(Default::default());
+            }
+            let location = talkbank_model::Span::new(prefix_span.start(), word_span.end());
+            Ok(ContentItem::OtherSpokenEvent(
+                talkbank_model::OtherSpokenEvent::new(
+                    location,
+                    prefix.text(),
+                    crate::convert::word_from_parsed(&word),
+                ),
+            ))
+        })
 }
 
 /// Parse inline media bullet (within content, not utterance-end).
@@ -249,19 +227,41 @@ fn bare_annotation<'tokens, 'a: 'tokens>(
 pub fn rich_word<'tokens, 'a: 'tokens>(
     source: SourceText<'a>,
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
-    rich_word_with(trailing_annotations(source))
+    unannotated_word(source)
+        .then(
+            annotation_gap()
+                .ignore_then(replacement_annotation(source))
+                .or_not(),
+        )
+        .then(trailing_base_annotations(source))
+        .map(|((mut word, replacement), annotations)| {
+            word.replacement = replacement;
+            Chain::Word(word).fold(annotations).into_content_item()
+        })
 }
 
-fn rich_word_with<'tokens, 'a: 'tokens>(
-    annotations: impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<ParsedAnnotation<'a>>> + Clone,
-) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
+/// Lower standalone word syntax directly to a shared word for WOR.
+/// Unconsumed annotations reject the containing tier instead of disappearing.
+pub(super) fn standalone_word<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::Word> + Clone {
+    unannotated_word(source).map(|word| crate::convert::word_from_parsed(&word))
+}
+
+/// Parse lexical word syntax only; suffix admission belongs to `rich_word`.
+fn unannotated_word<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, WordWithAnnotations<'a>> + Clone {
     select! {
         Token::Word { raw_text, prefix, body, form_marker, lang_suffix, pos_tag } =>
             (raw_text, prefix, body, form_marker, lang_suffix, pos_tag),
     }
-    .then(annotations)
     .try_map(
-        |((raw_text, prefix, body_str, form_marker, lang_suffix_opt, pos_tag), annotations), _| {
+        move |(raw_text, prefix, body_str, form_marker, lang_suffix_opt, pos_tag), _| {
+            let span = source.span_of(raw_text).ok_or_else(Default::default)?;
+            let word_source = source
+                .slice(span.to_range())
+                .map_err(|_| Default::default())?;
             // A word has one @ suffix, not independent form and language slots.
             if form_marker.is_some() && lang_suffix_opt.is_some() {
                 return Err(Default::default());
@@ -277,252 +277,48 @@ fn rich_word_with<'tokens, 'a: 'tokens>(
             let category = match prefix {
                 Some("&-") => Some(WordCategory::Filler),
                 Some("&~") => Some(WordCategory::Nonword),
-                Some("&+") => Some(WordCategory::Fragment),
+                Some("&+") => Some(WordCategory::PhonologicalFragment),
                 Some("0") => Some(WordCategory::Omission),
-                _ => None,
-            };
-            let body = parse_word_body(body_str);
-            let lang = match lang_suffix_opt {
                 None => None,
-                Some("") => Some(ParsedLangSuffix::Shortcut),
-                Some(codes) => Some(ParsedLangSuffix::Explicit(codes)),
+                Some(_) => return Err(Default::default()),
             };
+            let body = parse_word_body(body_str).map_err(|_| Default::default())?;
+            let lang = lang_suffix_opt
+                .map(|codes| admit_word_language(if codes.is_empty() { None } else { Some(codes) }))
+                .transpose()
+                .map_err(|_| Default::default())?;
             let word = WordWithAnnotations {
                 category,
                 body,
                 form_marker,
                 lang,
                 pos_tag,
-                annotations,
-                raw_text,
+                replacement: None,
+                annotations: Vec::new(),
+                source: word_source,
             };
-            Ok(word_to_content_item(word))
+            Ok(word)
         },
     )
 }
 
-// ═══════════════════════════════════════════════════════════
-// Legacy word parser (sub-token word assembly)
-// ═══════════════════════════════════════════════════════════
-
-/// Parse a word from individual sub-tokens (WordSegment, prefixes, CA markers, etc.).
-/// Used when the lexer emits sub-tokens instead of a single rich Word token.
-/// This path fires for inputs where the rich Word regex (`w_body`) doesn't match.
-pub fn subtoken_word<'tokens, 'a: 'tokens>(
+/// Parse the standalone zero action separately from lexical words.
+/// Source admission precedes annotation folding; actions have no word fields.
+fn zero_action<'tokens, 'a: 'tokens>(
     source: SourceText<'a>,
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
-    subtoken_word_with(trailing_annotations(source), source)
-}
-
-fn subtoken_word_with<'tokens, 'a: 'tokens>(
-    annotations: impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<ParsedAnnotation<'a>>> + Clone,
-    source: SourceText<'a>,
-) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
-    // A word token: any token that is_word_token accepts
-    let word_tok = select! {
-        tok if is_word_token(TokenDiscriminants::from(&tok)) => tok,
-    };
-
-    word_tok
-        .repeated()
-        .at_least(1)
-        .collect::<Vec<Token<'a>>>()
-        .then(annotations)
-        .try_map(move |(toks, annotations), _| {
-            let mut category = None;
-            let mut body = Vec::new();
-            let mut form_marker = None;
-            let mut lang = None;
-            let mut pos_tag = None;
-            let mut zero_tok = None;
-
-            // The word's text is its slice of the source, from the first
-            // token's lexeme through the last's, so an assembled word is
-            // placed exactly as a rich one is. Taken before the loop below
-            // consumes the tokens; a token the loop rejects (`&`) still fails
-            // the word. The tokens were lexed from `source`
-            // (`LexedSource::source_text` is the parsers' only route to it),
-            // so a lexeme not from it is a wrong pairing, and that fails the
-            // parse rather than yielding a word nobody can place.
-            let (Some(first), Some(last)) = (toks.first(), toks.last()) else {
-                return Err(Default::default());
-            };
-            let (Some(first), Some(last)) = (
-                source.span_of(word_token_lexeme(first)),
-                source.span_of(word_token_lexeme(last)),
-            ) else {
-                return Err(Default::default());
-            };
-            let raw_text = source.text_at(first.merge(last));
-
-            for tok in toks {
-                match tok {
-                    Token::Zero(_) => {
-                        zero_tok = Some(tok.clone());
-                        category = Some(WordCategory::Omission);
-                    }
-                    Token::PrefixFiller(_) => category = Some(WordCategory::Filler),
-                    Token::PrefixNonword(_) => category = Some(WordCategory::Nonword),
-                    Token::PrefixFragment(_) => category = Some(WordCategory::Fragment),
-                    Token::FormMarker(s) => {
-                        if form_marker.is_some() || lang.is_some() {
-                            return Err(Default::default());
-                        }
-                        form_marker = Some(
-                            talkbank_model::model::FormType::from_payload(
-                                talkbank_model::model::FormMarkerPayload::after_at(s.text()),
-                            )
-                            .map_err(|_| Default::default())?,
-                        );
-                    }
-                    Token::WordLangSuffix(suffix) => {
-                        if form_marker.is_some() || lang.is_some() {
-                            return Err(Default::default());
-                        }
-                        lang = Some(match suffix.codes() {
-                            None => ParsedLangSuffix::Shortcut,
-                            Some(codes) => ParsedLangSuffix::Explicit(codes),
-                        });
-                    }
-                    Token::PosTag(s) => pos_tag = Some(s.text()),
-                    Token::WordSegment(s) => body.push(WordBodyItem::Text(s)),
-                    Token::Shortening(s) => body.push(WordBodyItem::Shortening(s)),
-                    // The lexer rule is `":"+`, so the run admits; a refusal
-                    // keeps the bytes as text rather than dropping them.
-                    Token::Lengthening(s) => body.push(match LengtheningRun::new(s) {
-                        Some(run) => WordBodyItem::Lengthening(run),
-                        None => WordBodyItem::Text(s),
-                    }),
-                    Token::CompoundMarker(s) => body.push(WordBodyItem::CompoundMarker(s)),
-                    Token::StressPrimary(s) => {
-                        body.push(WordBodyItem::Stress(StressKind::Primary, s))
-                    }
-                    Token::StressSecondary(s) => {
-                        body.push(WordBodyItem::Stress(StressKind::Secondary, s))
-                    }
-                    Token::OverlapTopBegin(s) => {
-                        body.push(WordBodyItem::OverlapPoint(OverlapKind::TopBegin, s))
-                    }
-                    Token::OverlapTopEnd(s) => {
-                        body.push(WordBodyItem::OverlapPoint(OverlapKind::TopEnd, s))
-                    }
-                    Token::OverlapBottomBegin(s) => {
-                        body.push(WordBodyItem::OverlapPoint(OverlapKind::BottomBegin, s))
-                    }
-                    Token::OverlapBottomEnd(s) => {
-                        body.push(WordBodyItem::OverlapPoint(OverlapKind::BottomEnd, s))
-                    }
-                    Token::SyllablePause(s) => body.push(WordBodyItem::SyllablePause(s)),
-                    Token::Tilde(s) => body.push(WordBodyItem::CliticBoundary(s)),
-                    Token::CaBlockedSegments(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::BlockedSegments, s))
-                    }
-                    Token::CaConstriction(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::Constriction, s))
-                    }
-                    Token::CaHardening(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::Hardening, s))
-                    }
-                    Token::CaHurriedStart(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::HurriedStart, s))
-                    }
-                    Token::CaInhalation(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::Inhalation, s))
-                    }
-                    Token::CaLaughInWord(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::LaughInWord, s))
-                    }
-                    Token::CaPitchDown(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::PitchDown, s))
-                    }
-                    Token::CaPitchReset(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::PitchReset, s))
-                    }
-                    Token::CaPitchUp(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::PitchUp, s))
-                    }
-                    Token::CaSuddenStop(s) => {
-                        body.push(WordBodyItem::CaElement(CaElementKind::SuddenStop, s))
-                    }
-                    Token::CaUnsure(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Unsure, s))
-                    }
-                    Token::CaPrecise(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Precise, s))
-                    }
-                    Token::CaCreaky(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Creaky, s))
-                    }
-                    Token::CaSofter(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Softer, s))
-                    }
-                    Token::CaSegmentRepetition(s) => body.push(WordBodyItem::CaDelimiter(
-                        CaDelimiterKind::SegmentRepetition,
-                        s,
-                    )),
-                    Token::CaFaster(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Faster, s))
-                    }
-                    Token::CaSlower(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Slower, s))
-                    }
-                    Token::CaWhisper(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Whisper, s))
-                    }
-                    Token::CaSinging(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Singing, s))
-                    }
-                    Token::CaLowPitch(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::LowPitch, s))
-                    }
-                    Token::CaHighPitch(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::HighPitch, s))
-                    }
-                    Token::CaLouder(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Louder, s))
-                    }
-                    Token::CaSmileVoice(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::SmileVoice, s))
-                    }
-                    Token::CaBreathyVoice(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::BreathyVoice, s))
-                    }
-                    Token::CaYawn(s) => {
-                        body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Yawn, s))
-                    }
-                    Token::Ampersand(_) => return Err(Default::default()),
-                    other => body.push(WordBodyItem::Text(other.text())),
-                }
-            }
-
-            // Standalone zero (0) with no body → Action, not Word.
-            // This distinguishes `0` (action) from `0word` (omission).
-            if category == Some(WordCategory::Omission)
-                && body.is_empty()
-                && let Some(zt) = zero_tok
-            {
-                // Through the same ordered fold as every other seed, so a
-                // retrace marker after the action wraps it instead of being
-                // read as one of its scoped annotations and dropped.
-                return Ok(Chain::Action(zt.text(), Vec::new())
-                    .fold(annotations)
-                    .into_content_item());
-            }
-
-            if body.is_empty() {
-                return Err(Default::default());
-            }
-
-            let word = WordWithAnnotations {
-                category,
-                body,
-                form_marker,
-                lang,
-                pos_tag,
-                annotations,
-                raw_text,
-            };
-            Ok(word_to_content_item(word))
+    select! { Token::Zero(zero) => zero }
+        .try_map(move |zero, _| {
+            source
+                .span_of(zero)
+                .ok_or_else(Default::default)
+                .map(|_| zero)
+        })
+        .then(trailing_base_annotations(source))
+        .map(|(zero, annotations)| {
+            Chain::Action(zero, Vec::new())
+                .fold(annotations)
+                .into_content_item()
         })
 }
 
@@ -542,13 +338,17 @@ fn event<'tokens, 'a: 'tokens>(
     source: SourceText<'a>,
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! { Token::Event(event) => event }
-        .then(trailing_annotations(source))
-        .map(|(event_tok, annotations)| {
-            // A retrace marker on an event used to be dropped here as "not
-            // semantically valid", which is a judgement made in a lowering.
-            // Folded like every other marker run so the two backends agree on
-            // the shape; validation judges it.
-            Chain::Event(event_tok, Vec::new())
+        .try_map(move |event, _| {
+            let location = source
+                .span_of(event.lexeme())
+                .ok_or_else(Default::default)?;
+            let event_type = talkbank_model::EventType::new(event.text())
+                .map_err(|_| chumsky::error::EmptyErr::default())?;
+            Ok(talkbank_model::Event::new(location, event_type))
+        })
+        .then(trailing_base_annotations(source))
+        .map(|(event, annotations)| {
+            Chain::Event(event, Vec::new())
                 .fold(annotations)
                 .into_content_item()
         })
@@ -590,11 +390,11 @@ pub fn contents_parser<'tokens, 'a: 'tokens>(
         let group = select! { Token::LessThan(open) => open }
             .then(enclosed.clone())
             .then(select! { Token::GreaterThan(close) => close })
-            .then(trailing_annotations(source))
+            .then(trailing_base_annotations(source))
             .map(
                 |(((open, contents), close), annotations): (
                     ((&'a str, EnclosedContents<'a>), &'a str),
-                    Vec<ParsedAnnotation<'a>>,
+                    Vec<BaseAnnotation<'a>>,
                 )| {
                     // Fold only annotations actually present in the token stream.
                     // With none, retain the written bare group; the sink-bearing
@@ -617,40 +417,48 @@ pub fn contents_parser<'tokens, 'a: 'tokens>(
                     contents: contents.into_items(),
                     annotations: Vec::new(),
                 })
-                .fold(annotations.into_iter().map(BaseAnnotation::into_parsed))
+                .fold(annotations)
                 .into_content_item()
             });
 
         // PhoGroup: ‹ contents ›
-        let pho_group = select! { Token::PhoGroupBegin(_) => () }
-            .ignore_then(enclosed.clone())
-            .then_ignore(select! { Token::PhoGroupEnd(_) => () })
-            .map(|contents| ContentItem::PhoGroup(contents.into_items()));
+        let pho_group = select! { Token::PhoGroupBegin(open) => open }
+            .then(enclosed.clone())
+            .then(select! { Token::PhoGroupEnd(close) => close })
+            .map(|((open, contents), close)| {
+                ContentItem::PhoGroup(EnclosedGroup {
+                    enclosure: Enclosure { open, close },
+                    contents: contents.into_items(),
+                })
+            });
 
         // SinGroup: 〔 contents 〕
-        let sin_group = select! { Token::SinGroupBegin(_) => () }
-            .ignore_then(enclosed)
-            .then_ignore(select! { Token::SinGroupEnd(_) => () })
-            .map(|contents| ContentItem::SinGroup(contents.into_items()));
+        let sin_group = select! { Token::SinGroupBegin(open) => open }
+            .then(enclosed)
+            .then(select! { Token::SinGroupEnd(close) => close })
+            .map(|((open, contents), close)| {
+                ContentItem::SinGroup(EnclosedGroup {
+                    enclosure: Enclosure { open, close },
+                    contents: contents.into_items(),
+                })
+            });
 
         // A single content item: one of many alternatives.
         // Order matters for chumsky's `choice`, more specific alternatives first.
-        // overlap_point and pause must precede subtoken_word because their tokens
-        // are also in is_word_token (overlap markers, etc.).
         let content_item = choice((
             group,
             quotation,
             pho_group,
             sin_group,
             event(source),
-            other_spoken_event(),
+            other_spoken_event(source),
             rich_word(source),
             overlap_point(),
             pause(),
-            separator(),
-            subtoken_word(source),
+            separator(source).map(ContentItem::Separator),
+            zero_action(source),
             freecode(),
-            structural_markers(),
+            structural_markers(source),
             inline_media_bullet(),
             bare_annotation(source),
         ));
@@ -664,12 +472,13 @@ pub fn contents_parser<'tokens, 'a: 'tokens>(
 // Terminator
 // ═══════════════════════════════════════════════════════════
 
-/// Parse a terminator token.
-fn terminator<'tokens, 'a: 'tokens>() -> impl Parser<'tokens, Tokens<'tokens, 'a>, Token<'a>> + Clone
-{
-    select! {
-        tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
-    }
+/// Admit a source-located shared terminator at the grammar boundary.
+pub(super) fn terminator<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::Terminator> + Clone {
+    any().try_map(move |token: Token<'a>, _| {
+        crate::convert::token_to_terminator(&token, source).ok_or_else(Default::default)
+    })
 }
 
 /// Parse postcodes: [+ code] tokens.
@@ -686,14 +495,37 @@ fn postcodes<'tokens, 'a: 'tokens>()
 // ═══════════════════════════════════════════════════════════
 
 /// Parse linkers: repeat1(linker whitespace*)
-fn linkers<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<Token<'a>>> + Clone {
-    select! {
-        tok if is_linker(Some(TokenDiscriminants::from(&tok))) => tok,
-    }
-    .then_ignore(ws())
-    .repeated()
-    .collect::<Vec<_>>()
+fn linkers<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<talkbank_model::Linker>> + Clone {
+    any()
+        .try_map(move |tok: Token<'a>, _span| {
+            linker_kind(TokenDiscriminants::from(&tok))
+                .map(|kind| {
+                    talkbank_model::Linker::new(crate::convert::locate(source, tok.text()), kind)
+                })
+                .ok_or_else(Default::default)
+        })
+        .then_ignore(ws())
+        .repeated()
+        .collect::<Vec<_>>()
+}
+
+/// Admit the shared language value and its original precode location together.
+/// Both main and WOR tiers consume this transition; lowering never retries it.
+pub(super) fn language_precode<'tokens, 'a: 'tokens>(
+    source: SourceText<'a>,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, talkbank_model::LanguagePrecode> + Clone {
+    select! { Token::Langcode(code) => code }
+        .try_map(move |token, _| {
+            let code = talkbank_model::LanguageCode::new(token.text())
+                .map_err(|_| chumsky::error::EmptyErr::default())?;
+            let location = source
+                .span_of(token.lexeme())
+                .ok_or_else(chumsky::error::EmptyErr::default)?;
+            Ok(talkbank_model::LanguagePrecode::new(location, code))
+        })
+        .then_ignore(ws())
 }
 
 /// Parse a complete tier body.
@@ -707,15 +539,15 @@ fn linkers<'tokens, 'a: 'tokens>()
 pub fn tier_body_parser<'tokens, 'a: 'tokens>(
     source: SourceText<'a>,
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, TierBody<'a>> + Clone {
-    let langcode = select! { Token::Langcode(code) => code }.then_ignore(ws());
+    let langcode = language_precode(source);
 
     // Utterance end: optional(terminator), optional(postcodes), optional(media_bullet), newline
     let media_bullet = select! { Token::MediaBullet { bullet } => bullet };
 
-    linkers()
+    linkers(source)
         .then(langcode.or_not())
         .then(contents_parser(source))
-        .then(ws().ignore_then(terminator()).or_not())
+        .then(ws().ignore_then(terminator(source)).or_not())
         .then(postcodes())
         .then(ws().ignore_then(media_bullet).or_not())
         .then_ignore(ws())
@@ -758,7 +590,7 @@ pub fn main_tier_parser<'tokens, 'a: 'tokens>(
 ///
 /// The "index is the second character" rule had been written three times in
 /// the converter; recording it at construction leaves one owner.
-fn overlap_item<'a>(kind: OverlapKind, raw: &'a str) -> ContentItem<'a> {
+fn overlap_item<'a>(kind: OverlapPointKind, raw: &'a str) -> ContentItem<'a> {
     ContentItem::OverlapPoint {
         kind,
         index: raw.chars().nth(1).and_then(|c| c.to_digit(10)),
@@ -770,32 +602,135 @@ fn overlap_item<'a>(kind: OverlapKind, raw: &'a str) -> ContentItem<'a> {
 mod base_annotation_boundary_tests {
     use super::*;
 
+    #[test]
+    fn language_precode_admission_keeps_location_and_refuses_invalid_evidence() {
+        const REFERENCE: &str = include_str!("../../../../corpus/reference/tiers/wor.cha");
+        let start = REFERENCE.find("[- zho]").unwrap();
+        let spelling = &REFERENCE[start..start + "[- zho]".len()];
+        let lexed = crate::parser::LexedSource::new(spelling, crate::lexer::COND_MAIN_CONTENT);
+        let admitted = language_precode(SourceText::new(REFERENCE))
+            .parse(lexed.tokens())
+            .into_result()
+            .unwrap();
+        assert_eq!(admitted.code.as_str(), "zho");
+        assert_eq!(
+            admitted.location.span(),
+            Some(talkbank_model::Span::new(start, start + spelling.len()))
+        );
+
+        let foreign = REFERENCE.to_owned();
+        assert!(
+            language_precode(SourceText::new(&foreign))
+                .parse(lexed.tokens())
+                .into_result()
+                .is_err()
+        );
+        let malformed = [Token::Langcode(crate::token::Extracted::from_lexed(
+            "", spelling,
+        ))];
+        assert!(
+            language_precode(SourceText::new(REFERENCE))
+                .parse(malformed.as_slice())
+                .into_result()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn rich_word_empty_shortening_is_rejected_at_admission() {
+        for (body, accepted) in [("som(e)", true), ("som()", false)] {
+            let tokens = [Token::Word {
+                raw_text: body,
+                prefix: None,
+                body,
+                form_marker: None,
+                lang_suffix: None,
+                pos_tag: None,
+            }];
+            assert_eq!(
+                unannotated_word(SourceText::new(body))
+                    .parse(tokens.as_slice())
+                    .into_result()
+                    .is_ok(),
+                accepted
+            );
+        }
+    }
+
+    #[test]
+    fn rich_word_source_admission_refuses_a_foreign_buffer() {
+        // Reuse the shortening boundary's legal spelling with real lexer tokens.
+        let original = "som(e)".to_owned();
+        let foreign = original.clone();
+        let lexed = crate::parser::LexedSource::new(&original, crate::lexer::COND_MAIN_CONTENT);
+        assert!(
+            unannotated_word(SourceText::new(&original))
+                .parse(lexed.tokens())
+                .into_result()
+                .is_ok()
+        );
+        assert!(
+            unannotated_word(SourceText::new(&foreign))
+                .parse(lexed.tokens())
+                .into_result()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn unknown_rich_word_prefix_is_rejected_instead_of_becoming_absent() {
+        for prefix in ["", "&?", "00", "unknown"] {
+            let tokens = [Token::Word {
+                raw_text: "word",
+                prefix: Some(prefix),
+                body: "word",
+                form_marker: None,
+                lang_suffix: None,
+                pos_tag: None,
+            }];
+            assert!(
+                unannotated_word(SourceText::new("word"))
+                    .parse(tokens.as_slice())
+                    .into_result()
+                    .is_err()
+            );
+        }
+    }
+
     /// Grammar admission is a boundary policy, not an invariant of all tokens.
     #[test]
     fn quotation_markers_exclude_word_and_tier_codes() {
         for annotation in [
-            crate::parser::parse_word("word [: replacement]")
-                .expect("replacement control")
-                .annotations
-                .into_iter()
-                .next()
-                .expect("replacement annotation"),
+            ParsedAnnotation::Replacement(
+                crate::parser::parse_word("word [: replacement]")
+                    .expect("replacement control")
+                    .replacement
+                    .expect("replacement annotation"),
+            ),
             ParsedAnnotation::Langcode(crate::token::Extracted::from_lexed("eng", "[- eng]")),
             ParsedAnnotation::Postcode(crate::token::PostcodeToken::from_lexed("code", "[+ code]")),
-            ParsedAnnotation::Scoped(ScopedAnnotationParsed::Unknown(
-                crate::token::Extracted::from_lexed("unknown", "[unknown]"),
+            ParsedAnnotation::Scoped(ScopedAnnotationParsed::new(
+                talkbank_model::ContentAnnotation::Unknown(talkbank_model::model::ScopedUnknown {
+                    marker: "unknown".into(),
+                    text: "".into(),
+                }),
+                SourceText::new("[unknown]").whole_slice(),
             )),
         ] {
             assert!(BaseAnnotation::admit(annotation).is_none());
         }
         for annotation in [
-            ParsedAnnotation::Scoped(ScopedAnnotationParsed::Paralinguistic(
-                crate::token::Extracted::from_lexed("softly", "[=! softly]"),
+            ParsedAnnotation::Scoped(ScopedAnnotationParsed::new(
+                talkbank_model::ContentAnnotation::Paralinguistic(
+                    talkbank_model::model::ScopedParalinguistic {
+                        text: "softly".into(),
+                    },
+                ),
+                SourceText::new("[=! softly]").whole_slice(),
             )),
             ParsedAnnotation::Retrace(RetraceKindParsed::Complete, "[//]"),
         ] {
-            let admitted = BaseAnnotation::admit(annotation.clone());
-            assert_eq!(admitted.map(BaseAnnotation::into_parsed), Some(annotation));
+            assert!(BaseAnnotation::admit(annotation).is_some());
         }
     }
 }

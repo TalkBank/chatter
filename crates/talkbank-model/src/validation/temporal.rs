@@ -248,8 +248,11 @@ mod tests {
     #[test]
     fn fillers_count_as_transcribed_content() {
         let content = vec![UtteranceContent::Word(Box::new(
-            Word::new_unchecked(crate::Location::Unlocated, "you_know")
-                .with_category(WordCategory::Filler),
+            Word::new(
+                crate::Location::Unlocated,
+                crate::WordText::from(crate::non_empty_literal!("you_know")),
+            )
+            .with_category(WordCategory::Filler),
         ))];
 
         assert!(has_transcribed_content(&content));
@@ -257,9 +260,9 @@ mod tests {
 
     #[test]
     fn untranscribed_only_content_has_no_lexical_transcription() {
-        let content = vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
+        let content = vec![UtteranceContent::Word(Box::new(Word::new(
             crate::Location::Unlocated,
-            "xxx",
+            crate::WordText::from(crate::non_empty_literal!("xxx")),
         )))];
 
         assert!(!has_transcribed_content(&content));
@@ -270,9 +273,9 @@ mod tests {
     #[test]
     fn retraced_words_are_transcribed_content() {
         let retraced = Retrace {
-            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::new(
                 crate::Location::Unlocated,
-                "dog",
+                crate::WordText::from(crate::non_empty_literal!("dog")),
             )))]),
             kind: RetraceKind::Full,
             is_group: true,
@@ -283,7 +286,10 @@ mod tests {
             UtteranceContent::Retrace(Box::new(retraced)),
             // Everything OUTSIDE the retrace is untranscribed, so the retrace
             // is the only thing that supplies lexical transcription.
-            UtteranceContent::Word(Box::new(Word::simple(crate::Location::Unlocated, "xxx"))),
+            UtteranceContent::Word(Box::new(Word::new(
+                crate::Location::Unlocated,
+                crate::WordText::from(crate::non_empty_literal!("xxx")),
+            ))),
         ];
 
         assert!(has_transcribed_content(&content));
@@ -294,9 +300,9 @@ mod tests {
     #[test]
     fn words_nested_inside_a_bracketed_group_are_transcribed_content() {
         let inner = Group {
-            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::new(
                 crate::Location::Unlocated,
-                "dog",
+                crate::WordText::from(crate::non_empty_literal!("dog")),
             )))]),
             location: crate::Location::Unlocated,
             trailing_space: None,

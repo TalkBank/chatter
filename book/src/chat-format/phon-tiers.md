@@ -64,6 +64,12 @@ the same pause token as the source-tier word at its position. Numeric pauses
 (`(1.5)`, minutes:seconds `(1:02.5)`) are accepted on the same footing as
 the three untimed forms, per Greg Hedlund's spec.
 
+Pause recognition checks the CHAT spelling independently of its optional
+numeric projection. A duration too large for that projection still occupies
+its pause slot, and reconstruction compares the original spelling. Numeric
+pause markers require a decimal point; integer-only or signed numeric inputs
+do not qualify as pause fillers.
+
 The constituent code is one character. The legal codes are `O N C L R E A D U`:
 
 | Code | Constituent | Notes |

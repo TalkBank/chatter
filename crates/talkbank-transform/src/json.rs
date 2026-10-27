@@ -30,14 +30,15 @@
 //!
 //! # Schema Location
 //!
-//! The schema is embedded at compile time from `schema/chat-file.schema.json`.
+//! The schema is embedded from this crate's `schema/chat-file.schema.json`.
+//! `just schema-gen` produces it and the workspace schema from the same model.
 
 use serde::Serialize;
 use std::sync::LazyLock;
 use thiserror::Error;
 
 /// The CHAT JSON Schema, embedded at compile time.
-pub const SCHEMA_JSON: &str = include_str!("../../../schema/chat-file.schema.json");
+pub const SCHEMA_JSON: &str = include_str!("../schema/chat-file.schema.json");
 
 /// Errors that can occur during JSON serialization or validation.
 #[derive(Debug, Error)]

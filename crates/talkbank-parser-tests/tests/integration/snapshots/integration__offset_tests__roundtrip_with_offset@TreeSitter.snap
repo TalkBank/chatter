@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
-assertion_line: 271
 expression: "(is_semantically_equal, main1, main2)"
 ---
 (
@@ -29,8 +28,10 @@ expression: "(is_semantically_equal, main1, main2)"
                                 [
                                     Text(
                                         WordText(
-                                            NonEmptyString(
-                                                "hello",
+                                            NonEmpty(
+                                                NonEmptyString(
+                                                    "hello",
+                                                ),
                                             ),
                                         ),
                                     ),
@@ -61,8 +62,10 @@ expression: "(is_semantically_equal, main1, main2)"
                                 [
                                     Text(
                                         WordText(
-                                            NonEmptyString(
-                                                "world",
+                                            NonEmpty(
+                                                NonEmptyString(
+                                                    "world",
+                                                ),
                                             ),
                                         ),
                                     ),
@@ -143,8 +146,10 @@ expression: "(is_semantically_equal, main1, main2)"
                                 [
                                     Text(
                                         WordText(
-                                            NonEmptyString(
-                                                "hello",
+                                            NonEmpty(
+                                                NonEmptyString(
+                                                    "hello",
+                                                ),
                                             ),
                                         ),
                                     ),
@@ -175,8 +180,10 @@ expression: "(is_semantically_equal, main1, main2)"
                                 [
                                     Text(
                                         WordText(
-                                            NonEmptyString(
-                                                "world",
+                                            NonEmpty(
+                                                NonEmptyString(
+                                                    "world",
+                                                ),
                                             ),
                                         ),
                                     ),

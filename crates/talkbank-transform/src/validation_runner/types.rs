@@ -455,6 +455,36 @@ pub struct InvalidDiagnostics {
 }
 
 impl InvalidDiagnostics {
+    /// Preserve rejected admission independently of diagnostic presentation.
+    /// If the producer supplied no error, report the actual missing model.
+    pub(super) fn parser_rejected(
+        completed: talkbank_model::CompletedDiagnostics,
+        source: String,
+    ) -> Self {
+        let mut errors = completed.into_diagnostics();
+        let error_count = match NonZeroUsize::new(
+            errors
+                .iter()
+                .filter(|error| matches!(error.severity, talkbank_model::Severity::Error))
+                .count(),
+        ) {
+            Some(count) => count,
+            None => {
+                errors.push(ParseError::at_span(
+                    talkbank_model::ErrorCode::ParseFailed,
+                    talkbank_model::Severity::Error,
+                    talkbank_model::Span::new(0, source.len()),
+                    "Parser rejected the input without producing a model",
+                ));
+                NonZeroUsize::MIN
+            }
+        };
+        Self {
+            shown: FileDiagnostics { errors, source },
+            error_count,
+        }
+    }
+
     /// The diagnostics, errors and warnings.
     pub fn shown(&self) -> &FileDiagnostics {
         &self.shown
@@ -477,8 +507,9 @@ pub struct ShownDiagnostics<'a> {
 }
 
 /// What a freshly validated file showed, classified once from its shown
-/// list: the one route to a [`FileDiagnostics`] or an
-/// [`InvalidDiagnostics`].
+/// list: the presentation route to a [`FileDiagnostics`] or an
+/// [`InvalidDiagnostics`]. Structural parser rejection uses its own admission
+/// constructor because presentation cannot supply a missing model.
 pub(crate) enum Shown {
     /// No diagnostic.
     Nothing,

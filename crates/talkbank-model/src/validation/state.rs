@@ -99,7 +99,7 @@ impl ValidChatFile {
 }
 
 impl WriteChat for ValidChatFile {
-    fn write_chat<W: std::fmt::Write>(&self, writer: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, writer: &mut W) -> Result<(), W::Error> {
         self.document.write_chat(writer)
     }
 }

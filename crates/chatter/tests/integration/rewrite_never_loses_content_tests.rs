@@ -46,7 +46,7 @@ fn normalize_refuses_a_file_it_would_empty() -> Result<(), TestError> {
     let source = "notes about this session\n";
     let path = write_fixture(harness.home_dir(), "prose.cha", source)?;
 
-    let output = harness.run_output(&["normalize", path.to_str().unwrap()])?;
+    let output = harness.run_output(&["format", path.to_str().unwrap()])?;
 
     assert!(
         !output.status.success(),
@@ -72,7 +72,7 @@ fn normalize_preserves_the_last_utterance_of_a_truncated_file() -> Result<(), Te
     let expected = format!("{HEADER}*CHI:\tone .\n*CHI:\ttwo .\n*CHI:\tthree .\n");
     for source in [expected.as_str(), expected.trim_end_matches('\n')] {
         let path = write_fixture(harness.home_dir(), "truncated.cha", source)?;
-        let output = harness.run_output(&["normalize", path.to_str().unwrap()])?;
+        let output = harness.run_output(&["format", path.to_str().unwrap()])?;
         assert!(
             output.status.success(),
             "complete terminal speech permits lossless normalization:\n{}",
@@ -94,7 +94,7 @@ fn normalize_refuses_to_empty_a_malformed_dependent_tier() -> Result<(), TestErr
     let source = format!("{HEADER}*CHI:\thello world .\n%gra:\t|2|SUBJ 2|0|ROOT\n");
     let path = write_fixture(harness.home_dir(), "gra.cha", &source)?;
 
-    let output = harness.run_output(&["normalize", path.to_str().unwrap()])?;
+    let output = harness.run_output(&["format", path.to_str().unwrap()])?;
 
     assert!(
         !output.status.success(),
@@ -120,8 +120,10 @@ fn retag_language_refuses_a_file_it_cannot_reproduce() -> Result<(), TestError> 
     let path = write_fixture(harness.home_dir(), "mix.cha", source)?;
 
     let output = harness.run_output(&[
-        "debug",
+        "experimental",
+        "transform",
         "retag-language",
+        "--apply",
         "--from",
         "sun",
         "--to",
@@ -152,7 +154,13 @@ fn fix_s_refuses_a_file_it_cannot_reproduce() -> Result<(), TestError> {
                   *CHI:\tankka@s:sun .\n*CHI:\thello [[[[ test ]]]] world .\n@End\n";
     let path = write_fixture(harness.home_dir(), "fixs.cha", source)?;
 
-    let output = harness.run_output(&["debug", "fix-s", path.to_str().unwrap()])?;
+    let output = harness.run_output(&[
+        "experimental",
+        "transform",
+        "language-runs",
+        "--apply",
+        path.to_str().unwrap(),
+    ])?;
 
     let on_disk = std::fs::read_to_string(&path)?;
     assert!(
@@ -182,8 +190,9 @@ fn sanitize_refuses_to_overwrite_its_own_input() -> Result<(), TestError> {
     let path = write_fixture(harness.home_dir(), "protected.cha", &source)?;
 
     let output = harness.run_output(&[
-        "debug",
-        "sanitize",
+        "experimental",
+        "transform",
+        "redact",
         path.to_str().unwrap(),
         "-o",
         path.to_str().unwrap(),
@@ -214,8 +223,9 @@ fn sanitize_refuses_hard_link_to_input() -> Result<(), TestError> {
     let output = harness.home_dir().join("alias.cha");
     std::fs::hard_link(&input, &output)?;
     let result = harness.run_output(&[
-        "debug",
-        "sanitize",
+        "experimental",
+        "transform",
+        "redact",
         input.to_str().unwrap(),
         "-o",
         output.to_str().unwrap(),
@@ -240,8 +250,9 @@ fn sanitize_refuses_symbolic_link_to_input() -> Result<(), TestError> {
     let output = harness.home_dir().join("alias.cha");
     std::os::unix::fs::symlink(&input, &output)?;
     let result = harness.run_output(&[
-        "debug",
-        "sanitize",
+        "experimental",
+        "transform",
+        "redact",
         input.to_str().unwrap(),
         "-o",
         output.to_str().unwrap(),
@@ -259,7 +270,12 @@ fn sanitize_writes_distinct_destinations_and_stdout() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let source = include_str!("../../../../corpus/reference/core/basic-conversation.cha");
     let input = write_fixture(harness.home_dir(), "source.cha", source)?;
-    let stdout = harness.run_output(&["debug", "sanitize", input.to_str().unwrap()])?;
+    let stdout = harness.run_output(&[
+        "experimental",
+        "transform",
+        "redact",
+        input.to_str().unwrap(),
+    ])?;
     assert!(stdout.status.success(), "{}", combined_output(&stdout));
     assert!(!stdout.stdout.is_empty());
     assert_ne!(stdout.stdout, source.as_bytes());
@@ -271,14 +287,94 @@ fn sanitize_writes_distinct_destinations_and_stdout() -> Result<(), TestError> {
             std::fs::write(&output, vec![b'x'; stdout.stdout.len() + 100])?;
         }
         let result = harness.run_output(&[
-            "debug",
-            "sanitize",
+            "experimental",
+            "transform",
+            "redact",
             input.to_str().unwrap(),
             "-o",
             output.to_str().unwrap(),
         ])?;
         assert!(result.status.success(), "{}", combined_output(&result));
         assert_eq!(std::fs::read(&output)?, stdout.stdout);
+        assert_eq!(std::fs::read(&input)?, source.as_bytes());
+    }
+    Ok(())
+}
+
+/// Generated lexical placeholders must not turn valid reference input into
+/// digit-in-word errors. Exercise the public writer, both validation backends,
+/// and repeat sanitization rather than accepting a successful write alone.
+#[test]
+fn sanitized_references_validate_and_remain_idempotent() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    // Preserve the basename for references with @Media. Sanitization retains
+    // that header, so changing the basename would correctly trigger E531.
+    let output_directory = harness.home_dir().join("sanitized");
+    std::fs::create_dir(&output_directory)?;
+    for (name, source) in [
+        (
+            "basic",
+            include_str!("../../../../corpus/reference/core/basic-conversation.cha"),
+        ),
+        (
+            "mor-gra",
+            include_str!("../../../../corpus/reference/tiers/mor-gra.cha"),
+        ),
+        (
+            "wor",
+            include_str!("../../../../corpus/reference/tiers/wor.cha"),
+        ),
+    ] {
+        let input = write_fixture(harness.home_dir(), &format!("{name}.cha"), source)?;
+        let output = output_directory.join(format!("{name}.cha"));
+        let first = harness.run_output(&[
+            "experimental",
+            "transform",
+            "redact",
+            input.to_str().unwrap(),
+            "--output",
+            output.to_str().unwrap(),
+        ])?;
+        assert!(
+            first.status.success(),
+            "{name}: {}",
+            combined_output(&first)
+        );
+        let sanitized = std::fs::read(&output)?;
+        for backend in ["tree-sitter", "re2c"] {
+            for path in [&input, &output] {
+                let validated = harness.run_output(&[
+                    "validate",
+                    path.to_str().unwrap(),
+                    "--parser",
+                    backend,
+                    "--quiet",
+                ])?;
+                assert!(
+                    validated.status.success(),
+                    "{name}, {backend}, {}: {}",
+                    path.display(),
+                    combined_output(&validated)
+                );
+            }
+        }
+        for path in [&input, &output] {
+            let repeated = harness.run_output(&[
+                "experimental",
+                "transform",
+                "redact",
+                path.to_str().unwrap(),
+            ])?;
+            assert!(
+                repeated.status.success(),
+                "{name}: {}",
+                combined_output(&repeated)
+            );
+            assert_eq!(
+                repeated.stdout, sanitized,
+                "{name}: deterministic and idempotent"
+            );
+        }
         assert_eq!(std::fs::read(&input)?, source.as_bytes());
     }
     Ok(())
@@ -314,7 +410,7 @@ fn normalize_still_accepts_the_whitespace_rewrites_it_exists_for() -> Result<(),
     for (label, body) in cases {
         let source = format!("{HEADER}{body}@End\n");
         let path = write_fixture(harness.home_dir(), "ws.cha", &source)?;
-        let output = harness.run_output(&["normalize", path.to_str().unwrap()])?;
+        let output = harness.run_output(&["format", path.to_str().unwrap()])?;
         assert!(
             output.status.success(),
             "normalize refused a legitimate whitespace rewrite ({label}):\n{}",
@@ -327,7 +423,7 @@ fn normalize_still_accepts_the_whitespace_rewrites_it_exists_for() -> Result<(),
     let spaced_id = "@UTF8\n@Begin\n@Languages:\tspa, eng\n@Participants:\tCHI Target_Child\n\
                      @ID:\tspa , eng|corpus|CHI|2;08.20||||Target_Child|||\n*CHI:\thola .\n@End\n";
     let path = write_fixture(harness.home_dir(), "spaced_id.cha", spaced_id)?;
-    let output = harness.run_output(&["normalize", path.to_str().unwrap()])?;
+    let output = harness.run_output(&["format", path.to_str().unwrap()])?;
     assert!(
         output.status.success(),
         "normalize refused `spa , eng` tightening to `spa, eng`:\n{}",
@@ -341,11 +437,102 @@ fn normalize_still_accepts_the_whitespace_rewrites_it_exists_for() -> Result<(),
                    @ID:\teng|corpus|CHI|2;||||Target_Child|||\n\
                    @ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thi .\n@End\n";
     let path = write_fixture(harness.home_dir(), "wrapped.cha", wrapped)?;
-    let output = harness.run_output(&["normalize", path.to_str().unwrap()])?;
+    let output = harness.run_output(&["format", path.to_str().unwrap()])?;
     assert!(
         output.status.success(),
         "normalize refused a wrapped @Participants header, which it is supposed to join:\n{}",
         combined_output(&output)
     );
+    Ok(())
+}
+
+/// Transform refusal happens before destination admission or stdout publication.
+#[test]
+fn sanitize_recovery_refusal_preserves_input_and_destination() -> Result<(), TestError> {
+    enum Destination {
+        Stdout,
+        Existing,
+        Absent,
+    }
+    let authored = include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E601_1.cha"
+    );
+    let independent = authored.replace("%mor:\t|||", "%mor:\t|||\n%mor:\t|||");
+    let orphan = authored.replace("*CHI:\thello .\n", "");
+    let separated = authored.replace("%mor:", "@Comment:\tintervening\n%mor:");
+    let cases = [
+        (independent.as_str(), "partial source model"),
+        (orphan.as_str(), "partial source model"),
+        (separated.as_str(), "partial source model"),
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E601_1.cha"
+            ),
+            "unparsed morphology",
+        ),
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E506_3.cha"
+            ),
+            "unparsed participant header",
+        ),
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E711_2.cha"
+            ),
+            "unparsed morphology",
+        ),
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E708_1.cha"
+            ),
+            "unparsed grammar",
+        ),
+    ];
+    for (source, reason) in cases {
+        let harness = CliHarness::new()?;
+        let input = write_fixture(harness.home_dir(), "input.cha", source)?;
+        for destination in [
+            Destination::Stdout,
+            Destination::Existing,
+            Destination::Absent,
+        ] {
+            let path = harness.home_dir().join("output.cha");
+            let previous = b"previous reviewed output\n";
+            let mut args = vec![
+                "experimental",
+                "transform",
+                "redact",
+                input.to_str().unwrap(),
+            ];
+            match destination {
+                Destination::Stdout => {}
+                Destination::Existing => {
+                    std::fs::write(&path, previous)?;
+                    args.extend(["--output", path.to_str().unwrap()]);
+                }
+                Destination::Absent => {
+                    std::fs::remove_file(&path)?;
+                    args.extend(["--output", path.to_str().unwrap()]);
+                }
+            }
+            let output = harness.run_output(&args)?;
+            assert_eq!(
+                output.status.code(),
+                Some(1),
+                "{}",
+                combined_output(&output)
+            );
+            assert!(output.stdout.is_empty());
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains("sanitize failed"), "{stderr}");
+            assert!(stderr.contains(reason), "{stderr}");
+            assert_eq!(std::fs::read(&input)?, source.as_bytes());
+            match destination {
+                Destination::Existing => assert_eq!(std::fs::read(&path)?, previous),
+                Destination::Absent | Destination::Stdout => assert!(!path.exists()),
+            }
+        }
+    }
     Ok(())
 }

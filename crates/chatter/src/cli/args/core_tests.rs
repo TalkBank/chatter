@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 
 use super::Commands;
-use crate::cli::args::{Cli, DebugCommands};
+use crate::cli::args::{Cli, DebugCommands, ExperimentalCommands};
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
     let join_result = std::thread::Builder::new()
@@ -44,10 +44,19 @@ fn help_offers_no_xml_command() {
 #[test]
 fn debug_fix_s_parses_path_arguments() {
     run_with_large_stack(|| {
-        let parsed = Cli::parse_from(["chatter", "debug", "fix-s", "sample.cha"]);
+        let parsed = Cli::parse_from([
+            "chatter",
+            "experimental",
+            "transform",
+            "language-runs",
+            "sample.cha",
+        ]);
 
-        let Commands::Debug {
-            command: DebugCommands::FixS { path },
+        let Commands::Experimental {
+            command:
+                ExperimentalCommands::Transform {
+                    command: DebugCommands::LanguageRuns { path, .. },
+                },
         } = parsed.command
         else {
             panic!("expected debug fix-s command");

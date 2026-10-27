@@ -6,34 +6,45 @@ use talkbank_model::{ChatParser, ErrorCollector, Span};
 
 #[test]
 fn pause_extents_survive_lowering_and_fragment_rebasing() {
-    let parser = crate::Re2cParser::new();
-    for input in [
-        "*CHI:\tcafé (.) (..) (...) (1:02.5) .\n",
-        "*CHI:\t<café (.) (..) (...) (1:02.5)> [!] .\r\n",
-    ] {
-        for offset in [0, 200] {
-            let errors = ErrorCollector::new();
-            let main = parser
-                .parse_main_tier(input, offset, &errors)
-                .into_option()
-                .unwrap();
-            let mut spans = Vec::new();
-            walk_content(main.content.content.as_slice(), None, &mut |item| {
-                if let ContentItem::Pause(pause) = item {
-                    spans.push(pause.location);
+    fn check(parser: &impl ChatParser) {
+        use talkbank_model::model::WriteChat;
+        for fixture in [
+            "*CHI:\tcafé (.) (..) (...) (1:02.5) .\n",
+            "*CHI:\t<café (.) (..) (...) (1:02.5)> [!] .\n",
+        ] {
+            for newline in ["\n", "\r\n", "\r"] {
+                let input = fixture.replace('\n', newline);
+                for offset in [0, 200] {
+                    let errors = ErrorCollector::new();
+                    let main = parser
+                        .parse_main_tier(&input, offset, &errors)
+                        .into_option()
+                        .unwrap();
+                    let mut spans = Vec::new();
+                    let mut emitted = Vec::new();
+                    walk_content(main.content.content.as_slice(), None, &mut |item| {
+                        if let ContentItem::Pause(pause) = item {
+                            spans.push(pause.location);
+                            emitted.push(pause.to_chat_string());
+                        }
+                    });
+                    let forms = ["(.)", "(..)", "(...)", "(1:02.5)"];
+                    let expected: Vec<_> = forms
+                        .into_iter()
+                        .map(|text| {
+                            let start = input.find(text).unwrap() + offset;
+                            talkbank_model::Location::Located(Span::new(start, start + text.len()))
+                        })
+                        .collect();
+                    assert_eq!(spans, expected, "{input:?} at {offset}");
+                    assert_eq!(emitted, forms);
+                    assert!(errors.is_empty());
                 }
-            });
-            let expected: Vec<_> = ["(.)", "(..)", "(...)", "(1:02.5)"]
-                .into_iter()
-                .map(|text| {
-                    let start = input.find(text).unwrap() + offset;
-                    talkbank_model::Location::Located(Span::new(start, start + text.len()))
-                })
-                .collect();
-            assert_eq!(spans, expected, "{input:?} at {offset}");
-            assert!(errors.is_empty());
+            }
         }
     }
+    check(&crate::Re2cParser::new());
+    check(&talkbank_parser::TreeSitterParser::new().unwrap());
 }
 
 /// Parse-plus-validation must report each missing separator once at both depths.

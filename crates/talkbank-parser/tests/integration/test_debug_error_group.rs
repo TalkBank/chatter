@@ -16,6 +16,7 @@
 
 use talkbank_model::model::{Line, UtteranceContent};
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_tests::test_error::ParseProductTestExt;
 
 /// Verifies `<...> [*]` error groups parse as annotated groups with inner words.
 #[test]

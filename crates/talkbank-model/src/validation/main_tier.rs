@@ -18,11 +18,11 @@ mod bullet_scope;
 mod word_recursion;
 
 pub(crate) use bullet_scope::check_leading_bullets;
-pub(crate) use word_recursion::validate_words_at_every_depth;
+pub(crate) use word_recursion::validate_content_at_every_depth;
 
 use crate::model::{
-    AnnotatedContentAnnotations, BracketedContent, ContentStructure, Descend, GroupRef, MainTier,
-    UtteranceContent,
+    AnnotatedContentAnnotations, BracketedContent, ContentStructure, Descend, GroupRef,
+    LeafContent, MainTier,
 };
 use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 
@@ -38,31 +38,55 @@ use crate::{ErrorCode, ErrorSink, ParseError, Severity};
 /// - `‹hɛloʊ›` - OK: no pauses
 /// - `‹gʊd baɪ›` - OK: no pauses
 pub(crate) fn check_no_pauses_in_pho_groups(main_tier: &MainTier, errors: &impl ErrorSink) {
-    use crate::model::BracketedItem;
-
-    // Recursively check all phonological groups in the main tier
     for content_item in main_tier.content.content.iter() {
-        if let UtteranceContent::PhoGroup(pho_group) = content_item {
-            // Check if any item in the pho group is a pause
-            for item in &pho_group.content.content {
-                if matches!(item, BracketedItem::Pause(_)) {
-                    errors.report(
-                        ParseError::at_location(
-                            ErrorCode::PauseInPhoGroup,
-                            Severity::Error,
-                            main_tier.location,
-                            "Pause cannot appear inside phonological group ‹...›",
-                        )
-                        .with_suggestion(
-                            "Move the pause outside the phonological group, or remove it",
-                        ),
-                    );
-                    // Only report once per phonological group
-                    break;
-                }
+        check_pho_subtree(content_item.structure(), errors);
+    }
+}
+
+/// Postorder evidence lets each enclosing group consume the same subtree fact.
+#[derive(Clone, Copy)]
+enum PausePresence {
+    Absent,
+    Present,
+}
+
+fn check_pho_subtree(structure: ContentStructure<'_>, errors: &impl ErrorSink) -> PausePresence {
+    let mut pauses = match structure {
+        ContentStructure::Leaf(leaf) => match leaf.content {
+            LeafContent::Pause => PausePresence::Present,
+            LeafContent::Spoken
+            | LeafContent::Interposed(_)
+            | LeafContent::OverlapPoint(_)
+            | LeafContent::Notation
+            | LeafContent::UnderlineBegin(_)
+            | LeafContent::UnderlineEnd(_) => PausePresence::Absent,
+        },
+        ContentStructure::Word(_) | ContentStructure::Retrace(_) | ContentStructure::Group(_) => {
+            PausePresence::Absent
+        }
+    };
+    if let Some(content) = structure.enclosed() {
+        for child in &content.content {
+            // Do not short-circuit: inner groups must receive their own finding.
+            if let PausePresence::Present = check_pho_subtree(child.structure(), errors) {
+                pauses = PausePresence::Present;
             }
         }
     }
+    if let (ContentStructure::Group(GroupRef::Pho(group)), PausePresence::Present) =
+        (structure, pauses)
+    {
+        errors.report(
+            ParseError::at_location(
+                ErrorCode::PauseInPhoGroup,
+                Severity::Error,
+                group.location,
+                "Pause cannot appear inside phonological group ‹...›",
+            )
+            .with_suggestion("Move the pause outside the phonological group, or remove it"),
+        );
+    }
+    pauses
 }
 
 /// Report every UNRECOGNISED scoped annotation, on any construct, at any depth.

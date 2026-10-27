@@ -127,14 +127,12 @@ fn malformed_gra_relation_does_not_fabricate_default_relation_values() {
             .collect::<Vec<_>>()
     );
 
-    let gra = utterance
-        .gra_tier()
-        .expect("Expected %gra tier to remain attached for downstream diagnostics");
-    assert!(
-        gra.relations().is_empty(),
-        "Malformed relation must not be recovered as a fabricated default entry: {:?}",
-        gra.relations()
-    );
+    assert!(utterance.gra_tier().is_none(), "no partial graph");
+    let talkbank_model::DependentTier::UnparsedGra(raw) = &utterance.dependent_tiers[0].tier else {
+        panic!("raw grammar recovery required");
+    };
+    let span = raw.location().span().expect("source range");
+    assert_eq!(raw.source(), &input[span.start()..span.end()]);
 
     let ParseHealthState::Tainted(health) = utterance.parse_health() else {
         panic!("Expected parse health taint from malformed %gra relation");
@@ -178,7 +176,9 @@ fn missing_speaker_does_not_create_empty_speaker_utterance() {
 #[test]
 fn participants_missing_role_does_not_emit_empty_role_entry() {
     let parser = TreeSitterParser::new().expect("grammar loads");
-    let input = "@UTF8\n@Begin\n@Participants:\tCHI\n*CHI:\thello .\n@End\n";
+    let input = include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E513_1.cha"
+    );
     let errors = ErrorCollector::new();
     let file = parser.parse_chat_file_streaming(input, &errors);
     let diagnostics = errors.to_vec();
@@ -197,14 +197,18 @@ fn participants_missing_role_does_not_emit_empty_role_entry() {
         if let Line::Header { header, .. } = line
             && let talkbank_model::model::Header::Participants { entries } = header.as_ref()
         {
+            assert_eq!(entries.len(), 1, "the observed declaration must survive");
             for entry in entries {
                 assert!(
                     !entry.speaker_code.as_str().is_empty(),
                     "Participant entry must not contain empty speaker code"
                 );
                 assert!(
-                    !entry.role.as_str().is_empty(),
-                    "Participant entry must not contain empty participant role"
+                    matches!(
+                        entry.details,
+                        talkbank_model::model::ParticipantDetails::MissingRole {}
+                    ),
+                    "Role omission must remain explicit"
                 );
             }
         }
@@ -226,7 +230,7 @@ fn malformed_postcode_does_not_emit_empty_postcode_placeholder() {
             .content
             .postcodes
             .iter()
-            .all(|postcode| !postcode.text.is_empty()),
+            .all(|postcode| postcode.text().is_some() || postcode.unparsed_source().is_some()),
         "Parser must not fabricate empty postcode values: {:?}",
         utterance.main.content.postcodes
     );

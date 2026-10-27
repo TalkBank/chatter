@@ -51,7 +51,30 @@ drift CI would have caught). The procedure:
    refreshes both Rust lockfiles (root + `spec/`).
    The app-version check exercises this command against temporary manifests
    and lockfiles before checking the checkout, including independent drift in
-   each lockfile version and preservation of dependency versions.
+   each lockfile version and preservation of dependency versions. The command
+   accepts normal `X.Y.Z` versions: ASCII numeric components without leading
+   zeros, as defined by [SemVer](https://semver.org/#spec-item-2). It does not
+   trim input or treat an empty bump argument as a check. Stored canonical
+   versions use the same admission. An optional `--release-tag` must agree
+   before any version file is written; identity rejection preserves all files.
+   The Python 3.11+ command parses the Cargo manifest before preparing an edit.
+   It updates the explicit workspace-package version and inline internal
+   dependency version fields, retaining quotes, comments and line endings.
+   Missing, malformed or ambiguous fields refuse before writing; unsupported
+   field layouts are reported rather than guessed. The prepared TOML is checked
+   against exactly the owned version-key changes before it can be written.
+   Check mode detects internal dependency-pin drift, and fix mode repairs it.
+   Cargo, both npm documents and changelog input are prepared before any file
+   changes. Missing fields, non-string or invalid version values, malformed
+   JSON and duplicate keys refuse the whole preparation without writes.
+   Every replacement is then written and closed in a private temporary directory
+   beside its destination before publication starts. Staging failures leave all
+   originals unchanged. Destinations must be regular files, not symlinks;
+   replacement preserves permission bits, but not inode identity or other
+   metadata. Other hardlinks keep their original content. Publication replaces
+   files sequentially: a later rename failure can leave earlier replacements
+   applied. Inspect the version files before retrying such a failure. This is
+   not a multi-file transaction or a crash-durability guarantee.
 2. Write the `## [X.Y.Z]` CHANGELOG section and its comparison link. The
    app-version check requires them; it does not write release notes for you.
 3. Format, run `just release-lint` and `just gate`, then squash the commits
@@ -119,8 +142,30 @@ by downloading their bytes; release-bound admission keeps pending inputs distinc
 from uploaded assets. The final gate and CI execute the actual preparation,
 verification and announcement commands with a stateful transport regression.
 See [Coordinated release publication](https://github.com/TalkBank/chatter/blob/main/docs/strategy/coordinated-release.md)
-for the full phase and partial-draft recovery contract. Two platform notes baked into the
-workflow:
+for the full phase and partial-draft recovery contract. Complete recovery requires
+both CLI and LSP product inventories; a plan omitting either product cannot
+certify the draft as complete. Each product must reference executable archives
+covering all five CLI/LSP targets:
+macOS Apple Silicon and Intel, Linux ARM64 and x86-64 musl, and Windows x86-64.
+Each archive must declare its targets and the product's expected executable;
+pointing the LSP record at a CLI archive or removing a target from both the plan
+and uploaded assets cannot establish completeness. This remains declared target
+inventory admission, not archive-content, native platform, provenance or
+installation acceptance.
+
+The updater producer and candidate verifier share one complete platform inventory:
+macOS Apple Silicon and Intel, Windows x86-64 and Linux x86-64. Missing, duplicate
+or unknown platforms, shared bundle filenames across platforms, blank signatures
+and unsafe asset basenames reject before a manifest can be emitted. Target
+triples must match the supported inventory exactly. This checks metadata
+consistency; it does not inspect executable architecture or verify signatures.
+Producer and verifier also share release-tag admission: a literal `v` followed
+by a SemVer core and optional prerelease, with no build metadata. Leading zeros
+in numeric identifiers, empty prerelease identifiers and trailing whitespace
+reject. The updater version must equal the admitted tag without `v`; conflicting
+metadata is refused before the generator opens its output file.
+
+Two platform notes baked into the workflow:
 
 - **macOS**: Tauri signs, notarizes, and staples the `.app`, but NOT the
   `.dmg` it wraps around it. The workflow therefore submits the `.dmg`

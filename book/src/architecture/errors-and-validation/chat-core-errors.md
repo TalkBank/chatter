@@ -182,9 +182,14 @@ pub struct ErrorContext {
     pub span: Span, // Relative to source_text, not the document location.
     pub expected: SmallVec<[String; 2]>,
     pub found: String,
-    pub line_offset: Option<usize>,
+    pub line_offset: Option<NonZeroUsize>,
 }
 ```
+
+The optional starting line is one-based. `NonZeroUsize` prevents zero in Rust
+and JSON input; omission keeps an excerpt-local origin at line one. Source-backed
+presentation carries the same proof into the renderer. The renderer still
+checks whether the full requested context fits the line-number range.
 
 ## `ErrorSink` Trait
 

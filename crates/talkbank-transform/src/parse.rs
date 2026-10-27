@@ -15,8 +15,9 @@ pub use talkbank_parser::TreeSitterParser;
 /// diagnostics are not surfaced through this helper. Main-tier and header
 /// parse failures still come back in `error_vec`.
 /// Suppression requires the diagnostic's complete span to belong to an actual
-/// parsed `%mor` or `%gra` tier. Unknown locations and similarly named tiers
-/// remain visible; the recovered model's alignment taint is never cleared.
+/// typed `%mor` or `%gra` slot, including explicit unparsed variants. Unknown
+/// locations and similarly named tiers remain visible; recovery invalidity and
+/// the model's alignment taint are never cleared.
 pub fn parse_lenient(
     parser: &TreeSitterParser,
     chat_text: &str,
@@ -47,14 +48,18 @@ pub fn parse_lenient(
 /// admitted by a string-prefix comparison; their full spans include continuations.
 enum GeneratedTier<'file> {
     Mor(&'file MorTier),
+    UnparsedMor(&'file talkbank_model::UnparsedTier),
     Gra(&'file GraTier),
+    UnparsedGra(&'file talkbank_model::UnparsedTier),
 }
 
 impl<'file> GeneratedTier<'file> {
     fn from_tier(tier: &'file DependentTier) -> Option<Self> {
         match tier {
             DependentTier::Mor(tier) => Some(Self::Mor(tier)),
+            DependentTier::UnparsedMor(tier) => Some(Self::UnparsedMor(tier)),
             DependentTier::Gra(tier) => Some(Self::Gra(tier)),
+            DependentTier::UnparsedGra(tier) => Some(Self::UnparsedGra(tier)),
             _ => None,
         }
     }
@@ -62,7 +67,9 @@ impl<'file> GeneratedTier<'file> {
     fn owns(&self, diagnostic: talkbank_model::Span) -> bool {
         let owner = match self {
             Self::Mor(tier) => tier.location,
+            Self::UnparsedMor(tier) => tier.location(),
             Self::Gra(tier) => tier.location,
+            Self::UnparsedGra(tier) => tier.location(),
         };
         // Only a located generated tier owns anything.
         owner.span().is_some_and(|owner| {
@@ -109,8 +116,7 @@ pub fn is_dummy(chat_file: &ChatFile) -> bool {
     use talkbank_model::model::ChatOptionFlag;
 
     chat_file
-        .options
-        .iter()
+        .option_flags()
         .any(|f| matches!(f, ChatOptionFlag::Unsupported(s) if s == "dummy"))
 }
 
@@ -119,7 +125,7 @@ pub fn is_dummy(chat_file: &ChatFile) -> bool {
 /// Files with `NoAlign` should skip forced alignment and be output unchanged by
 /// alignment-oriented commands.
 pub fn is_no_align(chat_file: &ChatFile) -> bool {
-    chat_file.options.iter().any(|f| f.skips_alignment())
+    chat_file.option_flags().any(|f| f.skips_alignment())
 }
 
 /// Check whether a parsed CHAT file carries the `@Options: CA` flag.
@@ -130,8 +136,7 @@ pub fn is_no_align(chat_file: &ChatFile) -> bool {
 /// CA-originated notation.
 pub fn is_ca(chat_file: &ChatFile) -> bool {
     chat_file
-        .options
-        .iter()
+        .option_flags()
         .any(|f| matches!(f, talkbank_model::model::ChatOptionFlag::Ca))
 }
 
@@ -204,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lenient_parse_ignores_malformed_gra_tier() {
+    fn test_lenient_parse_retains_rejected_gra_source() {
         let parser = TreeSitterParser::new().expect("tree-sitter parser");
         let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
 @ID:\teng|test|CHI||female|||Target_Child|||\n*CHI:\twake up .\n\
@@ -221,15 +226,15 @@ mod tests {
             .map(|entry| &entry.tier)
             .collect();
         assert!(
-            matches!(tiers.first(), Some(talkbank_model::model::DependentTier::Gra(g)) if g.relations().is_empty()),
-            "malformed %gra should remain as an empty placeholder in its original slot"
+            matches!(tiers.first(), Some(talkbank_model::model::DependentTier::UnparsedGra(raw)) if input.contains(raw.source())),
+            "malformed %gra retains its rejected source in its original slot"
         );
         assert!(
             matches!(
                 tiers.get(1),
                 Some(talkbank_model::model::DependentTier::Wor(_))
             ),
-            "placeholder %gra must remain before existing %wor to avoid tier reordering"
+            "rejected %gra must remain before existing %wor to avoid tier reordering"
         );
     }
 
@@ -246,8 +251,9 @@ mod tests {
         );
         let utterance = chat_file.utterances().next().expect("utterance");
         assert!(
-            matches!(utterance.mor_tier(), Some(m) if m.items().is_empty()),
-            "malformed %mor should remain as an empty placeholder tier"
+            matches!(&utterance.dependent_tiers[0].tier,
+                DependentTier::UnparsedMor(tier) if tier.source() == "%mor:\t|hello .\n"),
+            "malformed MOR retains its original source, not invented morphology"
         );
     }
 

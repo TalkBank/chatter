@@ -61,13 +61,15 @@ impl PartialEq for NonvocalSimple {
 impl Eq for NonvocalSimple {}
 
 impl NonvocalSimple {
-    /// Build a simple nonvocal marker with dummy span metadata.
+    /// Construct this marker with an admitted label and explicit source location.
     ///
-    /// Parser code should attach concrete spans via [`Self::with_span`] so
-    /// downstream diagnostics can localize event tokens in source text.
-    pub fn new(location: impl Into<crate::Location>, label: impl Into<NonvocalLabel>) -> Self {
+    /// ```compile_fail
+    /// use talkbank_model::{NonvocalSimple, Location};
+    /// let marker = NonvocalSimple::new(Location::Unlocated, "label");
+    /// ```
+    pub fn new(location: impl Into<crate::Location>, label: NonvocalLabel) -> Self {
         Self {
-            label: label.into(),
+            label,
             location: location.into(),
         }
     }
@@ -75,8 +77,13 @@ impl NonvocalSimple {
 
 impl WriteChat for NonvocalSimple {
     /// Writes this nonvocal simple marker in CHAT format.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        write!(w, "&{{n={}}}", self.label)
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+        {
+            w.write_str("&{")?;
+            w.write_str("n=")?;
+            crate::model::WriteChat::write_chat(&self.label, w)?;
+            w.write_str("}")
+        }
     }
 }
 

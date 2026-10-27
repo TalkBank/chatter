@@ -13,15 +13,17 @@
 //!   returns the final [`AuditStats`]
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::io::Write;
 use std::thread::JoinHandle;
 
 use crossbeam_channel::{Receiver, Sender};
 use talkbank_model::{ErrorCode, ParseError, Severity};
 
 use crate::commands::validate_parallel::json_records::WireSeverity;
+
+mod destination;
+pub(crate) use destination::AuditDestination;
+pub use destination::AuditDestinationError;
 
 /// Number of in-flight audit messages allowed before worker threads block.
 const AUDIT_CHANNEL_CAPACITY: usize = 256;
@@ -91,7 +93,7 @@ impl AuditStats {
     }
 
     /// Print the audit summary shown after CLI audit runs complete.
-    pub fn print_summary(&self) {
+    pub fn print_summary(&self) -> crate::exit_codes::CommandResult {
         outln!("\n{}", "=".repeat(80));
         outln!("VALIDATION AUDIT SUMMARY");
         outln!("{}", "=".repeat(80));
@@ -130,6 +132,7 @@ impl AuditStats {
             }
         }
         outln!();
+        Ok(())
     }
 }
 
@@ -173,52 +176,105 @@ impl AuditReporterHandle {
 /// Lifecycle owner for the dedicated audit writer thread: made together with
 /// the handle workers send through, and the one way to stop and join it.
 pub struct AuditReporter {
+    /// Owned until explicit completion or drop-time cleanup consumes it.
+    running: Option<RunningAudit>,
+}
+
+/// A live worker can be joined once; only its result supplies audit statistics.
+struct RunningAudit {
     /// The writer thread's sender for the shutdown command.
     shutdown: Sender<AuditCommand>,
-    /// The writer thread, until it is joined.
-    worker: Option<JoinHandle<std::io::Result<AuditStats>>>,
+    /// The writer thread owned by this completion operation.
+    worker: JoinHandle<std::io::Result<FinishedAudit>>,
 }
 
 impl AuditReporter {
-    /// Create the audit file at `output_path` and start its writer thread:
-    /// the reporter that finishes it, and the handle that sends to it.
-    pub fn new(output_path: &Path) -> std::io::Result<(Self, AuditReporterHandle)> {
-        let file = File::create(output_path)?;
-        let writer = BufWriter::new(file);
+    /// Start the writer from the destination admitted against this run's inputs.
+    pub(crate) fn new(
+        destination: AuditDestination,
+    ) -> std::io::Result<(Self, AuditReporterHandle)> {
+        let mut writer = destination.into_writer()?;
         let (sender, receiver) = crossbeam_channel::bounded(AUDIT_CHANNEL_CAPACITY);
-        let worker = std::thread::spawn(move || run_audit_writer(writer, receiver));
+        let worker = std::thread::spawn(move || {
+            let stats = run_audit_writer(&mut writer, receiver)?;
+            let publication = writer.finish()?;
+            Ok(FinishedAudit { stats, publication })
+        });
         let handle = AuditReporterHandle::new(sender.clone());
         Ok((
             Self {
-                shutdown: sender,
-                worker: Some(worker),
+                running: Some(RunningAudit {
+                    shutdown: sender,
+                    worker,
+                }),
             },
             handle,
         ))
     }
 
-    /// Finish the audit run, flush output, and return final summary statistics.
-    pub fn finish(mut self) -> std::io::Result<AuditStats> {
-        self.shutdown_and_join()
+    /// Join and flush the writer, returning output that still requires run admission.
+    pub fn finish(mut self) -> std::io::Result<FinishedAudit> {
+        self.running
+            .take()
+            .ok_or_else(|| std::io::Error::other("audit writer was already consumed"))?
+            .finish()
     }
+}
 
-    /// Shut down the writer thread and join it if it is still running.
-    fn shutdown_and_join(&mut self) -> std::io::Result<AuditStats> {
-        let Some(worker) = self.worker.take() else {
-            return Ok(AuditStats::new());
-        };
+impl RunningAudit {
+    /// Consume the worker and return its actual completion, including failures.
+    fn finish(self) -> std::io::Result<FinishedAudit> {
         // A closed channel means the writer is already gone; joining says why.
         let _ = self.shutdown.send(AuditCommand::Shutdown);
-        worker
+        self.worker
             .join()
             .map_err(|_| std::io::Error::other("audit writer thread panicked"))?
     }
 }
 
+/// Successfully flushed output, still unpublished until a complete run admits it.
+pub struct FinishedAudit {
+    stats: AuditStats,
+    publication: destination::PendingPublication,
+}
+
+/// Publication outcome keeps a complete writer distinct from a complete run.
+pub enum AuditCompletion {
+    /// A complete run published its regular report or finished its stream.
+    Published(AuditStats),
+    /// The writer finished, but the run did not; staged output was discarded.
+    Withheld(AuditStats),
+}
+
+impl FinishedAudit {
+    /// Run completion, not validation success, authorizes regular report publication.
+    pub fn conclude(
+        self,
+        end: &talkbank_transform::validation_runner::RunEnding,
+    ) -> std::io::Result<AuditCompletion> {
+        use talkbank_transform::validation_runner::RunEnding;
+        match end {
+            RunEnding::Complete(_) => self.publish().map(AuditCompletion::Published),
+            RunEnding::NothingFound
+            | RunEnding::Stopped { .. }
+            | RunEnding::Incomplete { .. }
+            | RunEnding::Aborted(_) => Ok(AuditCompletion::Withheld(self.stats)),
+        }
+    }
+
+    /// Publish a completed run's report. Dropping this value discards staged output.
+    fn publish(self) -> std::io::Result<AuditStats> {
+        self.publication.publish()?;
+        Ok(self.stats)
+    }
+}
+
 impl Drop for AuditReporter {
-    /// Join the writer thread on drop so buffered audit output is not lost.
+    /// Join on drop; discard staged regular output without publishing it.
     fn drop(&mut self) {
-        if let Err(error) = self.shutdown_and_join() {
+        if let Some(running) = self.running.take()
+            && let Err(error) = running.finish()
+        {
             eprintln!("Warning: Failed to finalize audit output: {}", error);
         }
     }
@@ -249,9 +305,9 @@ enum AuditCommand {
 /// Where the writer thread's output stands: writing, or failed at its first
 /// write error, after which it writes nothing more (an audit file with a hole
 /// in it would read as a complete one).
-enum AuditOutput {
+enum AuditOutput<W: Write> {
     /// Every record so far reached the buffer.
-    Writing(BufWriter<File>),
+    Writing(W),
     /// A write failed; the file is incomplete.
     Failed(std::io::Error),
 }
@@ -261,8 +317,8 @@ enum AuditOutput {
 /// Every command is consumed even after a write failure, so the workers
 /// sending to the bounded channel never block; the failure is returned at
 /// the end, so the run that wrote an incomplete audit file fails.
-fn run_audit_writer(
-    writer: BufWriter<File>,
+fn run_audit_writer<W: Write>(
+    writer: W,
     receiver: Receiver<AuditCommand>,
 ) -> std::io::Result<AuditStats> {
     let mut stats = AuditStats::new();
@@ -327,7 +383,7 @@ struct AuditRecord<'a> {
 
 /// Write one JSONL audit record for a single parse or validation error.
 fn write_error_record(
-    writer: &mut BufWriter<File>,
+    writer: &mut impl Write,
     file_path: &str,
     error: &ParseError,
 ) -> std::io::Result<()> {
@@ -353,15 +409,20 @@ mod tests {
     use serde_json::Value;
     use talkbank_model::{DiagnosticLocation, ErrorCode, ParseError, Severity};
 
-    use super::{AuditReporter, AuditStats, SeverityCounts};
+    use super::{AuditDestination, AuditReporter, AuditStats, SeverityCounts};
 
     /// Sequential reports should produce matching JSONL output and summary stats.
     #[test]
     fn finish_returns_stats_and_jsonl_output() {
         let temp_dir = tempfile::tempdir().expect("tempdir should be created");
         let output_path = temp_dir.path().join("audit.jsonl");
+        let destination = AuditDestination::admit(
+            &output_path,
+            &talkbank_transform::paths::expand_transcript_arguments(&[]),
+        )
+        .expect("separate report destination");
         let (reporter, handle) =
-            AuditReporter::new(&output_path).expect("audit reporter should be created");
+            AuditReporter::new(destination).expect("audit reporter should be created");
 
         handle.report_file_results("one.cha", vec![test_error("first error", 2, 4)], true);
         handle.report_file_results(
@@ -376,7 +437,9 @@ mod tests {
 
         let stats = reporter
             .finish()
-            .expect("audit reporter should finish cleanly");
+            .expect("audit reporter should finish cleanly")
+            .publish()
+            .expect("publish completed report");
         let output = fs::read_to_string(&output_path).expect("audit output should be readable");
         let lines: Vec<Value> = output
             .lines()
@@ -422,14 +485,21 @@ mod tests {
     fn a_warnings_only_file_did_not_fail_and_has_no_errors() {
         let temp_dir = tempfile::tempdir().expect("tempdir should be created");
         let output_path = temp_dir.path().join("audit.jsonl");
+        let destination = AuditDestination::admit(
+            &output_path,
+            &talkbank_transform::paths::expand_transcript_arguments(&[]),
+        )
+        .expect("separate report destination");
         let (reporter, handle) =
-            AuditReporter::new(&output_path).expect("audit reporter should be created");
+            AuditReporter::new(destination).expect("audit reporter should be created");
         let mut warning = test_error("a warning", 1, 1);
         warning.severity = Severity::Warning;
         handle.report_file_results("valid.cha", vec![warning], false);
         let stats = reporter
             .finish()
-            .expect("audit reporter should finish cleanly");
+            .expect("audit reporter should finish cleanly")
+            .publish()
+            .expect("publish completed report");
         assert_eq!(stats.total_files, 1);
         assert_eq!(stats.files_failed, 0);
         assert_eq!(
@@ -450,12 +520,19 @@ mod tests {
     fn finish_without_reports_returns_empty_stats() {
         let temp_dir = tempfile::tempdir().expect("tempdir should be created");
         let output_path = temp_dir.path().join("audit.jsonl");
+        let destination = AuditDestination::admit(
+            &output_path,
+            &talkbank_transform::paths::expand_transcript_arguments(&[]),
+        )
+        .expect("separate report destination");
         let (reporter, _handle) =
-            AuditReporter::new(&output_path).expect("audit reporter should be created");
+            AuditReporter::new(destination).expect("audit reporter should be created");
 
         let stats = reporter
             .finish()
-            .expect("audit reporter should finish cleanly");
+            .expect("audit reporter should finish cleanly")
+            .publish()
+            .expect("publish completed report");
         let output = fs::read_to_string(&output_path).expect("audit output should be readable");
 
         assert_eq!(stats, AuditStats::new());
@@ -491,6 +568,64 @@ mod tests {
         let outcome = super::run_audit_writer(std::io::BufWriter::new(read_only), receiver);
         assert!(outcome.is_err(), "{outcome:?}");
         assert!(fs::read_to_string(&path).expect("read").is_empty());
+    }
+
+    #[test]
+    fn drop_joins_without_publishing_pending_records() {
+        let temp_dir = tempfile::tempdir().expect("temporary report directory");
+        let output_path = temp_dir.path().join("audit.jsonl");
+        let destination = AuditDestination::admit(
+            &output_path,
+            &talkbank_transform::paths::expand_transcript_arguments(&[]),
+        )
+        .expect("separate destination");
+        let (reporter, handle) = AuditReporter::new(destination).expect("writer");
+        handle.report_file_results("one.cha", vec![test_error("pending", 1, 1)], true);
+        drop(reporter);
+        assert!(
+            !output_path.exists(),
+            "abandoned report must stay unpublished"
+        );
+    }
+
+    #[test]
+    fn aborted_run_discards_even_successfully_flushed_records() {
+        use talkbank_transform::validation_runner::{AbortReason, RunEnding};
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("audit.jsonl");
+        fs::write(&path, "retained report").unwrap();
+        let destination = AuditDestination::admit(
+            &path,
+            &talkbank_transform::paths::expand_transcript_arguments(&[]),
+        )
+        .unwrap();
+        let (reporter, handle) = AuditReporter::new(destination).unwrap();
+        handle.report_file_results("one.cha", vec![test_error("pending", 1, 1)], true);
+        let finished = reporter.finish().unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "retained report");
+        let result = finished
+            .conclude(&RunEnding::Aborted(AbortReason::NoEnding))
+            .unwrap();
+        assert!(matches!(result, super::AuditCompletion::Withheld(_)));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "retained report");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn panicked_worker_cannot_supply_success_statistics() {
+        let (shutdown, receiver) = crossbeam_channel::bounded(1);
+        let worker = std::thread::spawn(move || {
+            drop(receiver);
+            panic!("injected audit worker failure");
+        });
+        let reporter = AuditReporter {
+            running: Some(super::RunningAudit { shutdown, worker }),
+        };
+        let error = reporter
+            .finish()
+            .err()
+            .expect("worker failure is not empty success");
+        assert_eq!(error.to_string(), "audit writer thread panicked");
     }
 
     /// Build a deterministic test error with line and column information.

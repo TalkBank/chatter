@@ -9,6 +9,7 @@ use super::{FragmentRangeError, FragmentSource, Span};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use std::num::NonZeroUsize;
 
 /// Source excerpt admission failed before a diagnostic context was constructed.
 #[derive(Debug, Clone, Copy, thiserror::Error)]
@@ -48,7 +49,7 @@ pub struct ErrorContext {
     /// Starting line number of source_text in the original file (1-indexed)
     /// Used by miette to display correct line numbers in error output
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub line_offset: Option<usize>,
+    pub line_offset: Option<NonZeroUsize>,
 }
 
 impl miette::SourceCode for ErrorContext {
@@ -61,7 +62,7 @@ impl miette::SourceCode for ErrorContext {
         read_source_span(
             "input",
             &self.source_text,
-            self.line_offset.unwrap_or(1),
+            self.line_offset.unwrap_or(NonZeroUsize::MIN),
             span,
             context_lines_before,
             context_lines_after,
@@ -73,7 +74,7 @@ impl miette::SourceCode for ErrorContext {
 pub(super) fn read_source_span<'a>(
     name: &str,
     source: &'a str,
-    line_offset: usize,
+    line_offset: NonZeroUsize,
     span: &miette::SourceSpan,
     context_lines_before: usize,
     context_lines_after: usize,
@@ -84,8 +85,7 @@ pub(super) fn read_source_span<'a>(
         context_lines_before,
         context_lines_after,
     )?;
-    let line = line_offset
-        .saturating_sub(1)
+    let line = (line_offset.get() - 1)
         .checked_add(contents.line())
         .ok_or(miette::MietteError::OutOfBounds)?;
     // Handlers add one-based line numbers and walk the entire returned context.
@@ -142,8 +142,16 @@ impl ErrorContext {
         self
     }
 
-    /// Set the line offset for miette formatting
-    pub fn with_line_offset(mut self, line: usize) -> Self {
+    /// Set the one-based starting line for miette formatting.
+    ///
+    /// A raw integer cannot bypass nonzero admission:
+    ///
+    /// ```compile_fail
+    /// use talkbank_model::{ErrorContext, Span};
+    /// let context = ErrorContext::new("x", Span::new(0, 1), "x");
+    /// let invalid = context.with_line_offset(0);
+    /// ```
+    pub fn with_line_offset(mut self, line: NonZeroUsize) -> Self {
         self.line_offset = Some(line);
         self
     }
@@ -173,7 +181,7 @@ impl ErrorContext {
         let admitted = FragmentSource::new(text, 0)?;
 
         // Calculate line number for the start of the span
-        let line = LineColumn::of_offset(span_start, full_source).line.get();
+        let line = LineColumn::of_offset(span_start, full_source).line;
 
         let source_text = admitted.input().to_owned();
 

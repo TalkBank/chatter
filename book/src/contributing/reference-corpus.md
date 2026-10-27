@@ -18,7 +18,13 @@ policy-aware review. Supertypes are accounted for separately. Unsupported and
 recovery syntax must not be added to the valid corpus merely to fill a node
 count; `unsupported_*` and `thumbnail_header` currently have explicit exclusions.
 An excluded node appearing in the corpus requires adjudication, not automatic
-promotion. A passing incidence check does not prove all grammar interactions,
+promotion. In particular, separator padding reports E758 in ordinary CHAT but
+is permitted by CA policy; its grammar node alone cannot establish invalidity.
+The authored `ca/separator-padding.cha` reference promotes the legal CA example
+from E758, with header order normalized so the complete document is valid. It
+includes padded headers, main and dependent tiers. Removing its CA option must
+restore E758; serialization removes padding without changing content.
+A passing incidence check does not prove all grammar interactions,
 semantic rules or executable branches are covered.
 
 Preserve the distinction between authored controls and derived language
@@ -82,6 +88,23 @@ control; retain derived material's source relationship and permissions instead
 of calling renamed text synthetic. Language-marker shape alone does not prove
 resolved word language. Such comparisons guide curation, not validity rulings
 or claims of complete execution coverage.
+
+The authored `tiers/mor-ending-combinations.cha` and
+`tiers/wor-ending-combinations.cha` promote the corresponding utterance specs
+into complete documents with neighboring turns. They preserve eight MOR ending
+forms and seven WOR endings plus its tag marker. Both parsers validate and
+roundtrip these references. The shared independent spec expectations also check
+every full-document utterance and tier across LF, CRLF and CR, preserving the
+intended terminator and separator shapes. These are authored controls,
+not externally attested transcripts. The inventory therefore distinguishes
+nineteen named authored witnesses, while retaining all nineteen historical
+attested-reference obligations. Each authored pair must
+remain in its named fixture; another reference cannot silently replace it.
+The authored `content/colon-separator.cha` reference follows the standalone-colon
+construct spec. Both parsers retain its separator and distinguish it from
+word-internal lengthening when the colon is attached to the preceding word.
+Neither structural incidence nor these controls proves attestation, grammar
+completeness or implementation coverage.
 
 ## Tools
 

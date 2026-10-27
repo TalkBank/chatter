@@ -7,14 +7,13 @@
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    Absence, AsRawNode, BaseAnnotationChoiceBoundView, BaseAnnotationsNode, KindSlot, Never,
-    NodeSlot, SourceBound, SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
+    AsRawNode, BaseAnnotationChoiceBoundView, BaseAnnotationsNode, Never, ReadableSlot,
+    SourceBound, SourceSlice, WhitespacesNode,
 };
 use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::read_source_field;
+use crate::parser::typed_cst::{ReportedCstFailure, report_admission};
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 use super::single::{ParsedAnnotation, parse_single_annotation};
 use crate::parser::node_span::span_of;
@@ -35,8 +34,9 @@ use crate::parser::node_span::span_of;
 /// places). Both were invisible to validate, to roundtrip and to `SemanticEq`.
 /// See `docs/design/2026-08-07-retrace-model-and-the-lost-marker-position.md`.
 ///
-/// Nothing is judged here. An illegal run lowers faithfully and validation
-/// rejects it, so one rule covers both spellings and both parser backends.
+/// Marker order is preserved here. A malformed token can be rejected by its
+/// decoder; an illegal decoded run is left for model validation. Producer
+/// faults cannot become successful empty or partial runs.
 ///
 /// **Grammar Rule:**
 /// ```text
@@ -54,36 +54,44 @@ use crate::parser::node_span::span_of;
 /// and `kind()` string.
 ///
 /// Callers retain the generated `base_annotations` wrapper through dispatch.
-pub(crate) fn parse_scoped_annotations<'tree>(
+pub(in crate::parser) fn parse_scoped_annotations<'tree>(
     typed: SourceBound<'tree, '_, BaseAnnotationsNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Vec<ParsedAnnotation> {
+) -> Result<Vec<ParsedAnnotation>, ReportedCstFailure> {
     let node = typed.raw_node();
-    let associated = typed.extract();
+    let associated = report_admission(
+        typed.extract().admit_ranges().map_err(Into::into),
+        node,
+        typed.source(),
+        errors,
+    )?;
     let children = associated.children();
     let mut markers = ChildCapacity::for_pairs_of(node).into_vec();
-    if let Some(first) = pair(associated.field_child_0().slot(), 0, errors) {
-        push_annotation(
-            first.field_unexpected(),
-            first.field_child_0().slot(),
-            first.field_child_1().slot(),
+    // `and` evaluates each append even after refusal, retaining sibling
+    // diagnostics without admitting the accumulated partial run.
+    let mut result = Ok(());
+    if let Some(first) = pair(&children.child_0.slot, 0, errors) {
+        result = result.and(push_annotation(
+            &first.unexpected,
+            &first.child_0.slot,
+            &first.child_1.slot,
             0,
-            |choice| choice.view().into(),
+            |choice| choice.into(),
             errors,
             &mut markers,
-        );
+        ));
     }
-    for (index, element) in associated.field_child_1().slot().iter().enumerate() {
-        if let Some(next) = pair(element.slot(), index + 1, errors) {
-            push_annotation(
-                next.field_unexpected(),
-                next.field_child_0().slot(),
-                next.field_child_1().slot(),
+    for (index, element) in children.child_1.slot.iter().enumerate() {
+        if let Some(next) = pair(&element.slot, index + 1, errors) {
+            result = result.and(push_annotation(
+                &next.unexpected,
+                &next.child_0.slot,
+                &next.child_1.slot,
                 index + 1,
-                |choice| choice.view().into(),
+                |choice| choice.into(),
                 errors,
                 &mut markers,
-            );
+            ));
         }
     }
     surface_displaced(
@@ -92,7 +100,8 @@ pub(crate) fn parse_scoped_annotations<'tree>(
         typed.source(),
         errors,
     );
-    markers
+    result?;
+    Ok(markers)
 }
 
 /// The pair at `index` in the run: `None` for a sequence that did not match
@@ -100,28 +109,24 @@ pub(crate) fn parse_scoped_annotations<'tree>(
 /// the old walk reported it, which expected a `whitespaces` child where the
 /// pair begins. A sequence is never MISSING or displaced, and the slot's
 /// type says so.
-fn pair<'value, 'tree: 'value, 'source, T, A: Absence>(
-    slot: SourceField<
-        'value,
-        'tree,
-        'source,
-        NodeSlot<T, Never, tree_sitter::Node<'tree>, Never, A>,
-    >,
+fn pair<'value, 'tree, 'source, T, A>(
+    slot: &'value ReadableSlot<T, Never, SourceSlice<'tree, 'source>, Never, A>,
     index: usize,
     errors: &impl ErrorSink,
-) -> Option<SourceField<'value, 'tree, 'source, T>> {
-    match slot.view() {
-        SourceSlotView::Present(element) => Some(element),
-        SourceSlotView::Error(bad) => {
+) -> Option<&'value T> {
+    match slot {
+        ReadableSlot::Present(element) => Some(element),
+        ReadableSlot::Error(bad) => {
             report_mismatch(
-                bad,
+                *bad,
                 "'whitespaces'",
                 whitespace_child_position(index),
                 errors,
             );
             None
         }
-        SourceSlotView::Absent(_) => None,
+        ReadableSlot::Absent(_) => None,
+        ReadableSlot::Missing(never) | ReadableSlot::Unexpected(never) => match *never {},
     }
 }
 
@@ -140,7 +145,7 @@ fn annotation_child_position(pair_index: usize) -> usize {
 /// The one `ContentAnnotationParseError` wording, shared by the three
 /// positions that can hold an ERROR node.
 fn report_mismatch(
-    bad: SourceField<'_, '_, '_, Node<'_>>,
+    bad: SourceSlice<'_, '_>,
     expected: &str,
     position: usize,
     errors: &impl ErrorSink,
@@ -164,43 +169,48 @@ fn report_mismatch(
 /// and either child that holds an ERROR is reported as the old walk reported
 /// it, numbered by child (see [`whitespace_child_position`]). `C` is the
 /// generated choice at this position, lowered into the one annotation set.
-fn push_annotation<'value, 'tree: 'value, 'source: 'value, C: SourceBoundKind<'tree>>(
-    unexpected: SourceField<'value, 'tree, 'source, Vec<Node<'tree>>>,
-    whitespace: SourceField<'value, 'tree, 'source, KindSlot<'tree, WhitespacesNode<'tree>>>,
-    annotation: SourceField<'value, 'tree, 'source, KindSlot<'tree, C>>,
+fn push_annotation<'tree, 'source, C, WM, AM, A>(
+    unexpected: &[SourceSlice<'tree, 'source>],
+    whitespace: &ReadableSlot<
+        SourceBound<'tree, 'source, WhitespacesNode<'tree>>,
+        WM,
+        SourceSlice<'tree, 'source>,
+        Never,
+        A,
+    >,
+    annotation: &ReadableSlot<C, AM, SourceSlice<'tree, 'source>, Never, A>,
     pair_index: usize,
-    lower: impl FnOnce(SourceBound<'tree, 'source, C>) -> BaseAnnotationChoiceBoundView<'tree, 'source>,
+    lower: impl FnOnce(&C) -> BaseAnnotationChoiceBoundView<'tree, 'source>,
     errors: &impl ErrorSink,
     markers: &mut Vec<ParsedAnnotation>,
-) {
+) -> Result<(), ReportedCstFailure> {
     for bad in unexpected.iter() {
         surface_displaced(&[bad.raw_node()], "base_annotations", bad.source(), errors);
     }
-    if let SourceSlotView::Error(bad) = whitespace.view() {
+    if let ReadableSlot::Error(bad) = whitespace {
         report_mismatch(
-            bad,
+            *bad,
             "'whitespaces'",
             whitespace_child_position(pair_index),
             errors,
         );
     }
-    match annotation.view() {
-        SourceSlotView::Present(choice) => {
-            let Some(choice) = read_source_field(choice, errors) else {
-                return;
-            };
-            if let ParseOutcome::Parsed(parsed) = parse_single_annotation(lower(choice), errors) {
+    match annotation {
+        ReadableSlot::Present(choice) => {
+            if let ParseOutcome::Parsed(parsed) = parse_single_annotation(lower(choice), errors)? {
                 markers.push(parsed);
             }
         }
         // A MISSING annotation is the whole-tree pass's to report (E342), and
         // its kind names nothing to decode: see the decoder's doc.
-        SourceSlotView::Missing(_) | SourceSlotView::Absent(_) => {}
-        SourceSlotView::Error(bad) => report_mismatch(
-            bad,
+        ReadableSlot::Missing(_) | ReadableSlot::Absent(_) => {}
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Error(bad) => report_mismatch(
+            *bad,
             "annotation",
             annotation_child_position(pair_index),
             errors,
         ),
     }
+    Ok(())
 }

@@ -206,8 +206,8 @@ fn unsupported_ses_preserved_as_unsupported_variant() {
     assert!(diags.is_empty(), "no parse diag expected: {diags:?}");
 }
 
-/// An out-of-pattern age is preserved with its raw text (`AgeValue::Valid` carries
-/// `raw`); the validator later flags E517. The parse produces the model, not an
+/// An out-of-pattern age is preserved with its admitted numeric components and
+/// original text; the validator later flags E517. The parse produces the model, not an
 /// error.
 #[test]
 fn out_of_pattern_age_preserved_as_raw() {

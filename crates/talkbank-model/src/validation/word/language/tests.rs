@@ -34,11 +34,13 @@ fn test_language_resolution_validation_tags() {
         ValidationTag::Clean
     );
     assert_eq!(
-        LanguageResolution::Multiple(codes(&["eng", "spa"])).validation_tag(),
+        LanguageResolution::Multiple(codes(&["eng", "spa"]).try_into().expect("two codes"))
+            .validation_tag(),
         ValidationTag::Clean
     );
     assert_eq!(
-        LanguageResolution::Ambiguous(codes(&["eng", "spa"])).validation_tag(),
+        LanguageResolution::Ambiguous(codes(&["eng", "spa"]).try_into().expect("two codes"))
+            .validation_tag(),
         ValidationTag::Clean
     );
     assert_eq!(

@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Authored from spec/constructs/utterance/registry_word_segments.md and registry_event_segments.md.
+*CHI:	\café ca\fé .
+*CHI:	&=ˈcough &=ˌcough &=„cough &=‡cough &=ca=fé .
+@End

@@ -59,7 +59,7 @@ boundary and downstream validation have distinct contracts.
 | `talkbank-derive` | SemanticEq / SpanShift / error-code proc macros |
 | `talkbank-build` | Build-time fingerprints of selected packaged source trees |
 | `talkbank-cache` | SQLite validation/roundtrip cache |
-| `talkbank-parser` | Canonical tree-sitter parser |
+| `talkbank-parser` | Tree-sitter parser backend |
 | `talkbank-parser-re2c` | Independent re2c backend; shared compatibility contract and wasm compilation checks |
 | `talkbank-parser-tests` | Equivalence, roundtrip, golden, property tests |
 | `talkbank-transform` | Pipelines, CHAT↔JSON, normalize, merge |

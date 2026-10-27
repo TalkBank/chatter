@@ -3,18 +3,15 @@
 //! choices, and the one conversion of a piece to its `WordContent`.
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::{Absence, Never, NodeSlot, SourceRecovery};
 use crate::generated_traversal::{
     AsRawNode, CaDelimiterNode, CaElementNode, LengtheningNode, OverlapPointNode, PlusNode,
-    ShorteningNode, SourceBound, SourceBoundKind, SourceField, SourceSlotView, StressMarkerNode,
-    SyllablePauseNode, TildeNode, UnderlineBeginNode, UnderlineEndNode,
-    WordBodyOverlapPointChild0Choice, WordBodyOverlapPointChild0ChoiceBoundView,
-    WordBodyOverlapPointChild1Choice, WordBodyOverlapPointChild1ChoiceBoundView,
-    WordBodyOverlapPointChild2Choice, WordBodyOverlapPointChild2ChoiceBoundView,
-    WordBodyOverlapPointChild3Choice, WordBodyOverlapPointChild3ChoiceBoundView,
-    WordBodyWordSegmentChild0Choice, WordBodyWordSegmentChild0ChoiceBoundView,
-    WordBodyWordSegmentChild1Choice, WordBodyWordSegmentChild1ChoiceBoundView, WordSegmentNode,
+    ShorteningNode, SourceBound, StressMarkerNode, SyllablePauseNode, TildeNode,
+    UnderlineBeginNode, UnderlineEndNode, WordBodyOverlapPointChild0Choice,
+    WordBodyOverlapPointChild1Choice, WordBodyOverlapPointChild2Choice,
+    WordBodyOverlapPointChild3Choice, WordBodyWordSegmentChild0Choice,
+    WordBodyWordSegmentChild1Choice, WordSegmentNode,
 };
+use crate::generated_traversal::{Never, Ranged, ReadableSlot, SourceSlice};
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::content::{
     parse_overlap_point_token, report_tree_shape,
@@ -22,6 +19,7 @@ use crate::parser::tree_parsing::main_tier::content::{
 use crate::parser::tree_parsing::parser_helpers::{
     expect_delimiter, parse_ca_delimiter_node, parse_ca_element_node, surface_displaced,
 };
+use crate::parser::typed_cst::{ExtractCanonical, ReportedCstFailure, report_admission};
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::content::word::{
@@ -56,125 +54,119 @@ pub(super) enum Piece<'tree, 'source> {
     Plus(SourceBound<'tree, 'source, PlusNode<'tree>>),
 }
 
-impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyWordSegmentChild0Choice<'tree>>>
+impl<'tree, 'source> From<&WordBodyWordSegmentChild0Choice<'tree, Ranged<'source>>>
     for Piece<'tree, 'source>
 {
-    fn from(choice: SourceBound<'tree, 'source, WordBodyWordSegmentChild0Choice<'tree>>) -> Self {
-        use WordBodyWordSegmentChild0ChoiceBoundView as C;
-        match choice.view() {
-            C::WordSegment(node) => Piece::Segment(node),
-            C::Shortening(node) => Piece::Shortening(node),
-            C::StressMarker(node) => Piece::Stress(node),
+    fn from(choice: &WordBodyWordSegmentChild0Choice<'tree, Ranged<'source>>) -> Self {
+        use WordBodyWordSegmentChild0Choice as C;
+        match choice {
+            C::WordSegment(node) => Piece::Segment(*node),
+            C::Shortening(node) => Piece::Shortening(*node),
+            C::StressMarker(node) => Piece::Stress(*node),
         }
     }
 }
 
-impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyWordSegmentChild1Choice<'tree>>>
+impl<'tree, 'source> From<&WordBodyWordSegmentChild1Choice<'tree, Ranged<'source>>>
     for Piece<'tree, 'source>
 {
-    fn from(choice: SourceBound<'tree, 'source, WordBodyWordSegmentChild1Choice<'tree>>) -> Self {
-        use WordBodyWordSegmentChild1ChoiceBoundView as C;
-        match choice.view() {
-            C::WordSegment(node) => Piece::Segment(node),
-            C::Shortening(node) => Piece::Shortening(node),
-            C::StressMarker(node) => Piece::Stress(node),
-            C::Lengthening(node) => Piece::Lengthening(node),
-            C::OverlapPoint(node) => Piece::Overlap(node),
-            C::CaElement(node) => Piece::CaElement(node),
-            C::CaDelimiter(node) => Piece::CaDelimiter(node),
-            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
-            C::UnderlineEnd(node) => Piece::UnderlineEnd(node),
-            C::SyllablePause(node) => Piece::SyllablePause(node),
-            C::Tilde(node) => Piece::Tilde(node),
-            C::Variant11(node) => Piece::Plus(node),
+    fn from(choice: &WordBodyWordSegmentChild1Choice<'tree, Ranged<'source>>) -> Self {
+        use WordBodyWordSegmentChild1Choice as C;
+        match choice {
+            C::WordSegment(node) => Piece::Segment(*node),
+            C::Shortening(node) => Piece::Shortening(*node),
+            C::StressMarker(node) => Piece::Stress(*node),
+            C::Lengthening(node) => Piece::Lengthening(*node),
+            C::OverlapPoint(node) => Piece::Overlap(*node),
+            C::CaElement(node) => Piece::CaElement(*node),
+            C::CaDelimiter(node) => Piece::CaDelimiter(*node),
+            C::UnderlineBegin(node) => Piece::UnderlineBegin(*node),
+            C::UnderlineEnd(node) => Piece::UnderlineEnd(*node),
+            C::SyllablePause(node) => Piece::SyllablePause(*node),
+            C::Tilde(node) => Piece::Tilde(*node),
+            C::Variant11(node) => Piece::Plus(*node),
         }
     }
 }
 
-impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild0Choice<'tree>>>
+impl<'tree, 'source> From<&WordBodyOverlapPointChild0Choice<'tree, Ranged<'source>>>
     for Piece<'tree, 'source>
 {
-    fn from(choice: SourceBound<'tree, 'source, WordBodyOverlapPointChild0Choice<'tree>>) -> Self {
-        use WordBodyOverlapPointChild0ChoiceBoundView as C;
-        match choice.view() {
-            C::OverlapPoint(node) => Piece::Overlap(node),
-            C::CaElement(node) => Piece::CaElement(node),
-            C::CaDelimiter(node) => Piece::CaDelimiter(node),
-            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
-            C::SyllablePause(node) => Piece::SyllablePause(node),
+    fn from(choice: &WordBodyOverlapPointChild0Choice<'tree, Ranged<'source>>) -> Self {
+        use WordBodyOverlapPointChild0Choice as C;
+        match choice {
+            C::OverlapPoint(node) => Piece::Overlap(*node),
+            C::CaElement(node) => Piece::CaElement(*node),
+            C::CaDelimiter(node) => Piece::CaDelimiter(*node),
+            C::UnderlineBegin(node) => Piece::UnderlineBegin(*node),
+            C::SyllablePause(node) => Piece::SyllablePause(*node),
         }
     }
 }
 
-impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild1Choice<'tree>>>
+impl<'tree, 'source> From<&WordBodyOverlapPointChild1Choice<'tree, Ranged<'source>>>
     for Piece<'tree, 'source>
 {
-    fn from(choice: SourceBound<'tree, 'source, WordBodyOverlapPointChild1Choice<'tree>>) -> Self {
-        use WordBodyOverlapPointChild1ChoiceBoundView as C;
-        match choice.view() {
-            C::OverlapPoint(node) => Piece::Overlap(node),
-            C::CaElement(node) => Piece::CaElement(node),
-            C::CaDelimiter(node) => Piece::CaDelimiter(node),
-            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
-            C::SyllablePause(node) => Piece::SyllablePause(node),
+    fn from(choice: &WordBodyOverlapPointChild1Choice<'tree, Ranged<'source>>) -> Self {
+        use WordBodyOverlapPointChild1Choice as C;
+        match choice {
+            C::OverlapPoint(node) => Piece::Overlap(*node),
+            C::CaElement(node) => Piece::CaElement(*node),
+            C::CaDelimiter(node) => Piece::CaDelimiter(*node),
+            C::UnderlineBegin(node) => Piece::UnderlineBegin(*node),
+            C::SyllablePause(node) => Piece::SyllablePause(*node),
         }
     }
 }
 
-impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild2Choice<'tree>>>
+impl<'tree, 'source> From<&WordBodyOverlapPointChild2Choice<'tree, Ranged<'source>>>
     for Piece<'tree, 'source>
 {
-    fn from(choice: SourceBound<'tree, 'source, WordBodyOverlapPointChild2Choice<'tree>>) -> Self {
-        use WordBodyOverlapPointChild2ChoiceBoundView as C;
-        match choice.view() {
-            C::WordSegment(node) => Piece::Segment(node),
-            C::Shortening(node) => Piece::Shortening(node),
-            C::StressMarker(node) => Piece::Stress(node),
+    fn from(choice: &WordBodyOverlapPointChild2Choice<'tree, Ranged<'source>>) -> Self {
+        use WordBodyOverlapPointChild2Choice as C;
+        match choice {
+            C::WordSegment(node) => Piece::Segment(*node),
+            C::Shortening(node) => Piece::Shortening(*node),
+            C::StressMarker(node) => Piece::Stress(*node),
         }
     }
 }
 
-impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild3Choice<'tree>>>
+impl<'tree, 'source> From<&WordBodyOverlapPointChild3Choice<'tree, Ranged<'source>>>
     for Piece<'tree, 'source>
 {
-    fn from(choice: SourceBound<'tree, 'source, WordBodyOverlapPointChild3Choice<'tree>>) -> Self {
-        use WordBodyOverlapPointChild3ChoiceBoundView as C;
-        match choice.view() {
-            C::WordSegment(node) => Piece::Segment(node),
-            C::Shortening(node) => Piece::Shortening(node),
-            C::StressMarker(node) => Piece::Stress(node),
-            C::Lengthening(node) => Piece::Lengthening(node),
-            C::OverlapPoint(node) => Piece::Overlap(node),
-            C::CaElement(node) => Piece::CaElement(node),
-            C::CaDelimiter(node) => Piece::CaDelimiter(node),
-            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
-            C::UnderlineEnd(node) => Piece::UnderlineEnd(node),
-            C::SyllablePause(node) => Piece::SyllablePause(node),
-            C::Tilde(node) => Piece::Tilde(node),
-            C::Variant11(node) => Piece::Plus(node),
+    fn from(choice: &WordBodyOverlapPointChild3Choice<'tree, Ranged<'source>>) -> Self {
+        use WordBodyOverlapPointChild3Choice as C;
+        match choice {
+            C::WordSegment(node) => Piece::Segment(*node),
+            C::Shortening(node) => Piece::Shortening(*node),
+            C::StressMarker(node) => Piece::Stress(*node),
+            C::Lengthening(node) => Piece::Lengthening(*node),
+            C::OverlapPoint(node) => Piece::Overlap(*node),
+            C::CaElement(node) => Piece::CaElement(*node),
+            C::CaDelimiter(node) => Piece::CaDelimiter(*node),
+            C::UnderlineBegin(node) => Piece::UnderlineBegin(*node),
+            C::UnderlineEnd(node) => Piece::UnderlineEnd(*node),
+            C::SyllablePause(node) => Piece::SyllablePause(*node),
+            C::Tilde(node) => Piece::Tilde(*node),
+            C::Variant11(node) => Piece::Plus(*node),
         }
     }
 }
 
 /// One typed body position: its piece, if the position holds one.
-pub(super) fn push_slot<'a, 'tree: 'a, 'source: 'a, C, M, A>(
-    slot: SourceField<'a, 'tree, 'source, NodeSlot<C, M, tree_sitter::Node<'tree>, Never, A>>,
+pub(super) fn push_slot<'tree, 'source, C, M, A>(
+    slot: &ReadableSlot<C, M, SourceSlice<'tree, 'source>, Never, A>,
     errors: &impl ErrorSink,
     items: &mut SmallVec<[WordContent; 2]>,
-) where
-    C: SourceBoundKind<'tree> + 'a,
-    M: SourceRecovery<'a, 'tree, 'source>,
-    A: Absence,
-    SourceBound<'tree, 'source, C>: Into<Piece<'tree, 'source>>,
+) -> Result<(), ReportedCstFailure>
+where
+    for<'value> &'value C: Into<Piece<'tree, 'source>>,
 {
-    match slot.view() {
-        SourceSlotView::Present(choice) => {
-            if let Some(choice) = crate::parser::typed_cst::read_source_field(choice, errors) {
-                push_piece(choice.into(), errors, items);
-            }
-        }
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {}
-        SourceSlotView::Unexpected(never) => match never {},
+    match slot {
+        ReadableSlot::Present(choice) => push_piece(choice.into(), errors, items),
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(_) => Ok(()),
+        ReadableSlot::Unexpected(never) => match *never {},
     }
 }
 
@@ -188,7 +180,7 @@ fn push_piece(
     piece: Piece<'_, '_>,
     errors: &impl ErrorSink,
     items: &mut SmallVec<[WordContent; 2]>,
-) {
+) -> Result<(), ReportedCstFailure> {
     match piece {
         Piece::Segment(node) => {
             let raw = node.raw_node();
@@ -204,10 +196,16 @@ fn push_piece(
         Piece::Shortening(node) => {
             let source = node.source();
             // shortening = '(' word_segment ')'
-            let bound_inner = node.extract();
+            let bound_inner = report_admission(
+                node.extract_canonical()
+                    .and_then(|children| children.admit_ranges().map_err(Into::into)),
+                node.raw_node(),
+                source,
+                errors,
+            )?;
             let inner = bound_inner.children();
             surface_displaced(&inner.unexpected, "shortening", source, errors);
-            expect_delimiter(inner.child_0.slot(), |bad| {
+            expect_delimiter(&inner.child_0.slot, |bad| {
                 report_tree_shape(
                     bad,
                     format!("Expected '(' opening a shortening, found '{}'", bad.kind()),
@@ -215,7 +213,7 @@ fn push_piece(
                     errors,
                 );
             });
-            expect_delimiter(inner.child_2.slot(), |bad| {
+            expect_delimiter(&inner.child_2.slot, |bad| {
                 report_tree_shape(
                     bad,
                     format!("Expected ')' closing a shortening, found '{}'", bad.kind()),
@@ -223,14 +221,10 @@ fn push_piece(
                     errors,
                 );
             });
-            let segment = match bound_inner.field_child_1().slot().view() {
-                SourceSlotView::Present(segment) => {
-                    crate::parser::typed_cst::read_source_field(segment, errors)
-                }
-                SourceSlotView::Missing(_)
-                | SourceSlotView::Error(_)
-                | SourceSlotView::Absent(_) => None,
-                SourceSlotView::Unexpected(never) => match never {},
+            let segment = match &inner.child_1.slot {
+                ReadableSlot::Present(segment) => Some(segment),
+                ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(_) => None,
+                ReadableSlot::Unexpected(never) => match *never {},
             };
             if let Some(segment) = segment {
                 match WordShortening::new(segment.text()) {
@@ -261,7 +255,7 @@ fn push_piece(
                         source,
                         errors,
                     );
-                    return;
+                    return Ok(());
                 }
             };
             items.push(WordContent::StressMarker(WordStressMarker {
@@ -315,4 +309,5 @@ fn push_piece(
             location: span_of(node.raw_node()).into(),
         })),
     }
+    Ok(())
 }

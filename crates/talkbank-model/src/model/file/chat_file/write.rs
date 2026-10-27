@@ -20,7 +20,7 @@ impl WriteChat for ChatFile {
     /// interstitial headers between utterances. Header lines are newline-
     /// terminated here, while utterance writers own their own trailing-line
     /// behavior to match CHAT multi-line tier formatting.
-    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         for line in &self.lines {
             match line {
                 Line::Header { header, .. } => {

@@ -7,12 +7,15 @@
 //! with its own test coverage.
 
 use std::collections::BTreeMap;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::Path;
 
 use tracing::{Level, info, span, warn};
 
-use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_PRECONDITION};
+mod paths;
+use paths::AdjudicationPaths;
+
+use crate::exit_codes::ReportedFailure;
 
 use talkbank_transform::adjudication::{
     AdjudicationError, OperatorDecision, PendingAdjudications, PendingEntry, PendingKindData,
@@ -20,20 +23,25 @@ use talkbank_transform::adjudication::{
 };
 use talkbank_transform::speaker_id::{InsertedRoleSpec, OverrideFile, SpeakerAction};
 
+/// The source of operator decisions; absence and conflicting sources cannot occur.
+pub enum ReviewSource<'a> {
+    Scripted(&'a Path),
+    Interactive,
+}
+
 /// Top-level entry for `chatter adjudicate`.
 ///
 /// Exit-code contract (matches `adjudication-workflow.md`):
 /// - 0: all pending entries decided; both files rewritten on disk.
-/// - 1: I/O or TOML error on one of the three files.
+/// - 1: aliased file roles, or I/O/TOML error on one of the three files.
 /// - 2: operator-supplied decision rejected, or mode required and
 ///   neither `--scripted` nor `--interactive` supplied.
 pub fn run_adjudicate(
     pending_path: &Path,
     override_path: &Path,
-    scripted_path: Option<&Path>,
-    interactive: bool,
-    operator_override: Option<&str>,
-) {
+    source: ReviewSource<'_>,
+    operator: &str,
+) -> crate::exit_codes::CommandResult {
     let _span = span!(
         Level::INFO,
         "chatter_adjudicate",
@@ -41,35 +49,51 @@ pub fn run_adjudicate(
     )
     .entered();
 
-    let operator = operator_override.map(str::to_string).unwrap_or_else(|| {
-        std::env::var("USER").unwrap_or_else(|_| {
-            warn!(
-                "$USER environment variable is unset and --operator not supplied; override-file \
-                 entries will record operator as \"unknown\""
-            );
-            "unknown".to_string()
-        })
-    });
+    let scripted_path = match source {
+        ReviewSource::Scripted(path) => Some(path),
+        ReviewSource::Interactive => None,
+    };
+    let paths = match AdjudicationPaths::admit(pending_path, override_path, scripted_path) {
+        Ok(paths) => paths,
+        Err(error) => {
+            eprintln!("Error: {error}");
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
+        }
+    };
+    let prompter = match source {
+        ReviewSource::Scripted(path) => CommandPrompter::Scripted(
+            ScriptedPrompter::read_toml(path)
+                .map_err(|error| report_adjudication_failure(path, "scripted-decisions", error))?,
+        ),
+        ReviewSource::Interactive => {
+            if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+                eprintln!(
+                    "Error: interactive review requires a terminal; use review scripted for automation"
+                );
+                return Err(crate::exit_codes::ReportedFailure::Precondition.into());
+            }
+            CommandPrompter::Terminal(TerminalPrompter)
+        }
+    };
+    run_admitted(paths, prompter, operator)?;
+    Ok(())
+}
 
+fn run_admitted(
+    paths: AdjudicationPaths<'_>,
+    prompter: CommandPrompter,
+    operator: &str,
+) -> crate::exit_codes::CommandResult {
+    let pending_path = paths.pending();
+    let override_path = paths.overrides();
     let mut pending = match PendingAdjudications::read(pending_path) {
         Ok(p) => p,
-        Err(e) => exit_with_error(pending_path, "pending-adjudications", e),
-    };
-    let mut prompter: Box<dyn Prompter> = match (interactive, scripted_path) {
-        (true, None) => Box::new(TerminalPrompter),
-        (false, Some(path)) => match ScriptedPrompter::read_toml(path) {
-            Ok(p) => Box::new(p),
-            Err(e) => exit_with_error(path, "scripted-decisions", e),
-        },
-        (true, Some(_)) => {
-            eprintln!(
-                "Error: --interactive and --scripted are mutually exclusive (clap should have caught this)"
-            );
-            std::process::exit(EXIT_PRECONDITION);
-        }
-        (false, None) => {
-            eprintln!("Error: one of --scripted SPEC or --interactive must be supplied");
-            std::process::exit(EXIT_PRECONDITION);
+        Err(e) => {
+            return Err(report_adjudication_failure(
+                pending_path,
+                "pending-adjudications",
+                e,
+            ));
         }
     };
     let mut overrides = match OverrideFile::read_or_default(override_path) {
@@ -81,28 +105,44 @@ pub fn run_adjudicate(
                 e
             );
             eprintln!("Error: override-file {}: {}", override_path.display(), e);
-            std::process::exit(EXIT_INPUT_ERROR);
+            return Err(crate::exit_codes::ReportedFailure::Input.into());
         }
     };
 
-    let outcome = match run_adjudication(&mut pending, &mut overrides, prompter.as_mut(), operator)
-    {
-        Ok(o) => o,
-        Err(e) => exit_with_error(pending_path, "adjudication", e),
-    };
+    let outcome =
+        match run_adjudication(&mut pending, &mut overrides, prompter, operator.to_owned()) {
+            Ok(o) => o,
+            Err(e) => return Err(report_adjudication_failure(pending_path, "adjudication", e)),
+        };
     info!("resolved {} adjudication(s)", outcome.resolved_count());
 
-    if let Err(e) = overrides.write(override_path) {
-        warn!(
-            "failed to write override-file {}: {}",
-            override_path.display(),
-            e
-        );
-        eprintln!("Error: override-file {}: {}", override_path.display(), e);
-        std::process::exit(EXIT_INPUT_ERROR);
+    if let Err(error) = paths.publish(&pending, &overrides) {
+        warn!("failed to publish adjudication: {error}");
+        eprintln!("Error: {error}");
+        return Err(crate::exit_codes::ReportedFailure::Input.into());
     }
-    if let Err(e) = pending.write(pending_path) {
-        exit_with_error(pending_path, "pending-adjudications", e);
+    Ok(())
+}
+
+/// The selected input source is consumed when adjudication finishes.
+enum CommandPrompter {
+    Terminal(TerminalPrompter),
+    Scripted(ScriptedPrompter),
+}
+
+impl Prompter for CommandPrompter {
+    fn ask(&mut self, entry: &PendingEntry) -> Result<OperatorDecision, AdjudicationError> {
+        match self {
+            Self::Terminal(prompter) => prompter.ask(entry),
+            Self::Scripted(prompter) => prompter.ask(entry),
+        }
+    }
+
+    fn finish(self) -> Result<(), AdjudicationError> {
+        match self {
+            Self::Terminal(prompter) => prompter.finish(),
+            Self::Scripted(prompter) => prompter.finish(),
+        }
     }
 }
 
@@ -121,6 +161,10 @@ pub fn run_adjudicate(
 struct TerminalPrompter;
 
 impl Prompter for TerminalPrompter {
+    fn finish(self) -> Result<(), AdjudicationError> {
+        Ok(())
+    }
+
     fn ask(&mut self, entry: &PendingEntry) -> Result<OperatorDecision, AdjudicationError> {
         let stdout = std::io::stdout();
         let mut out = stdout.lock();
@@ -394,17 +438,22 @@ fn parse_speaker_assignment(token: &str) -> AssignmentParse {
 /// contract-defined code. `Io` / `Toml` exit 1 (file-level issues),
 /// Prompt, decision-kind, and mapping refusals exit 2 (operator-supplied
 /// decision rejected).
-fn exit_with_error(path: &Path, label: &str, e: AdjudicationError) -> ! {
+fn report_adjudication_failure(
+    path: &Path,
+    label: &str,
+    e: AdjudicationError,
+) -> crate::exit_codes::CommandStop {
     warn!("adjudication failed on {} {}: {}", label, path.display(), e);
     eprintln!("Error: {} {}: {}", label, path.display(), e);
     let code = match e {
         AdjudicationError::FileIo { .. }
         | AdjudicationError::TerminalIo(_)
         | AdjudicationError::Toml(_)
-        | AdjudicationError::UnsupportedSchemaVersion { .. } => EXIT_INPUT_ERROR,
-        AdjudicationError::PrompterFailed { .. }
+        | AdjudicationError::UnsupportedSchemaVersion { .. } => ReportedFailure::Input,
+        AdjudicationError::UnconsumedScriptedDecision { .. }
+        | AdjudicationError::PrompterFailed { .. }
         | AdjudicationError::DecisionKindMismatch { .. }
-        | AdjudicationError::InvalidDecisionMapping { .. } => EXIT_PRECONDITION,
+        | AdjudicationError::InvalidDecisionMapping { .. } => ReportedFailure::Precondition,
     };
-    std::process::exit(code);
+    crate::exit_codes::CommandStop::Reported(code)
 }

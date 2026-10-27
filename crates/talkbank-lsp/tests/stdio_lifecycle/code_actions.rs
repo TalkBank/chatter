@@ -79,7 +79,9 @@ fn stale_and_foreign_diagnostics_do_not_authorize_edits() {
 
     let mut foreign = stale.clone();
     foreign["message"] = json!("Not the server's diagnostic");
-    assert_eq!(actions(&mut editor, 4, &foreign), Value::Null);
+    // A forged message cannot replace current server evidence. The range
+    // still selects the real E503, so the offered action is unchanged.
+    assert_eq!(actions(&mut editor, 4, &foreign), positive);
     foreign["code"] = json!("E306");
     foreign["range"] = json!({"start":{"line":u32::MAX,"character":0},
         "end":{"line":u32::MAX,"character":0}});
@@ -139,6 +141,21 @@ fn versioned_quick_fix_preserves_utf16_crlf_and_repairs_current_text() {
     .replace('\n', "\r\n");
     editor.open(&source);
     let current = diagnostic(&editor.diagnostics(), "E305");
+    let middle = "*CHI:\thello [= ".encode_utf16().count() + 1;
+    editor.send(
+        json!({"jsonrpc":"2.0","id":20,"method":"textDocument/codeAction",
+        "params":{"textDocument":{"uri":URI},"range":{
+            "start":{"line":current["range"]["start"]["line"],"character":middle},
+            "end":{"line":current["range"]["start"]["line"],"character":middle}},
+            "context":{"diagnostics":[current]}}}),
+    );
+    let rejected = editor.response(20);
+    assert!(rejected["error"].is_null(), "{rejected}");
+    assert_eq!(
+        rejected["result"],
+        Value::Null,
+        "UTF-16 half-surrogate range"
+    );
     let suggestions = actions(&mut editor, 3, &current);
     assert_eq!(suggestions.as_array().unwrap().len(), 3);
     let selected = suggestions
@@ -205,8 +222,20 @@ fn existing_fix_policies_emit_versioned_edits_from_real_diagnostics() {
         editor.open(source);
         let current = diagnostic(&editor.diagnostics(), code);
         let suggestions = actions(&mut editor, 3, &current);
-        assert_eq!(suggestions.as_array().unwrap().len(), 1, "{code}");
-        let proposed = edit(&suggestions[0], 1);
+        let matching: Vec<_> = suggestions
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|action| {
+                action["diagnostics"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|item| item["code"] == code)
+            })
+            .collect();
+        assert_eq!(matching.len(), 1, "{code}: {suggestions}");
+        let proposed = edit(matching[0], 1);
         let start = position_to_offset(source, proposed.range.start);
         let end = position_to_offset(source, proposed.range.end);
         match code {
@@ -247,10 +276,177 @@ fn existing_fix_policies_emit_versioned_edits_from_real_diagnostics() {
 fn empty_turn_with_dependent_tier_is_not_deleted() {
     let mut editor = Editor::start();
     editor.initialize();
-    editor.open(include_str!(
+    let source = include_str!(
         "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E306_separator_only_3.cha"
-    ));
+    );
+    editor.open(source);
     let current = diagnostic(&editor.diagnostics(), "E306");
-    assert_eq!(actions(&mut editor, 3, &current), Value::Null);
+    let suggestions = actions(&mut editor, 3, &current);
+    // The overlapping comma fix is allowed; deleting the tier is not.
+    let offered = suggestions.as_array().unwrap();
+    assert_eq!(offered.len(), 1);
+    assert_eq!(offered[0]["diagnostics"][0]["code"], "E259");
+    let proposed = edit(&offered[0], 1);
+    let start = position_to_offset(source, proposed.range.start);
+    let end = position_to_offset(source, proposed.range.end);
+    assert_eq!(&source[start..end], ",");
+    assert!(proposed.new_text.is_empty());
     shutdown(&mut editor);
+}
+
+#[test]
+fn quick_fixes_use_current_range_and_requested_kind_without_echoed_diagnostics() {
+    let mut editor = Editor::start();
+    editor.initialize();
+    editor.open(SOURCE.strip_prefix("@UTF8\n").unwrap());
+    let current = diagnostic(&editor.diagnostics(), "E503");
+    enum Expected {
+        Fix,
+        None,
+    }
+    let cases = [
+        (Value::Null, Expected::Fix),
+        (json!(["quickfix"]), Expected::Fix),
+        (json!([""]), Expected::Fix),
+        (json!(["source.fixAll", "quickfix"]), Expected::Fix),
+        (json!(["source.fixAll"]), Expected::None),
+        (json!(["refactor"]), Expected::None),
+        (json!(["quickfix.custom"]), Expected::None),
+        (json!(["quickfixOther"]), Expected::None),
+        (json!([]), Expected::None),
+    ];
+    for (index, (only, offered)) in cases.into_iter().enumerate() {
+        let id = 10 + index as u64;
+        editor.send(
+            json!({"jsonrpc":"2.0","id":id,"method":"textDocument/codeAction",
+            "params":{"textDocument":{"uri":URI},"range":current["range"],
+            "context":{"diagnostics":[],"only":only}}}),
+        );
+        let response = editor.response(id);
+        assert!(response["error"].is_null(), "{response}");
+        if matches!(offered, Expected::Fix) {
+            assert_eq!(response["result"].as_array().unwrap().len(), 1);
+            assert_eq!(edit(&response["result"][0], 1).new_text, "@UTF8\n");
+        } else {
+            assert_eq!(response["result"], Value::Null);
+        }
+    }
+    // A genuine diagnostic sent outside the requested range cannot select a fix.
+    for (index, range) in [
+        json!({"start":{"line":1,"character":0},"end":{"line":1,"character":0}}),
+        json!({"start":{"line":1,"character":0},"end":{"line":0,"character":0}}),
+        json!({"start":{"line":0,"character":999},"end":{"line":0,"character":999}}),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = 30 + index as u64;
+        editor.send(
+            json!({"jsonrpc":"2.0","id":id,"method":"textDocument/codeAction",
+            "params":{"textDocument":{"uri":URI},"range":range,
+            "context":{"diagnostics":[current]}}}),
+        );
+        let response = editor.response(id);
+        assert!(response["error"].is_null(), "{response}");
+        assert_eq!(response["result"], Value::Null);
+    }
+    shutdown(&mut editor);
+}
+
+#[test]
+fn header_quick_fixes_preserve_protocol_line_endings() {
+    #[derive(Clone, Copy)]
+    enum MissingHeader {
+        Utf8,
+        End,
+    }
+    impl MissingHeader {
+        fn code(self) -> &'static str {
+            match self {
+                Self::Utf8 => "E503",
+                Self::End => "E502",
+            }
+        }
+        fn offset(self, source: &str) -> usize {
+            match self {
+                Self::Utf8 => 0,
+                Self::End => source.len(),
+            }
+        }
+    }
+    struct Case {
+        header: MissingHeader,
+        source: String,
+        insertion: String,
+    }
+    let mut failures = Vec::new();
+    for ending in ["\n", "\r\n", "\r"] {
+        let without_end = SOURCE.strip_suffix("@End\n").expect("reference end header");
+        for case in [
+            Case {
+                header: MissingHeader::Utf8,
+                source: SOURCE
+                    .strip_prefix("@UTF8\n")
+                    .unwrap()
+                    .replace('\n', ending),
+                insertion: format!("@UTF8{ending}"),
+            },
+            Case {
+                header: MissingHeader::End,
+                source: without_end.replace('\n', ending),
+                insertion: format!("@End{ending}"),
+            },
+            Case {
+                header: MissingHeader::End,
+                source: without_end
+                    .strip_suffix('\n')
+                    .unwrap()
+                    .replace('\n', ending),
+                insertion: format!("{ending}@End{ending}"),
+            },
+        ] {
+            let mut editor = Editor::start();
+            editor.initialize();
+            editor.open(&case.source);
+            let current = diagnostic(&editor.diagnostics(), case.header.code());
+            let suggestions = actions(&mut editor, 3, &current);
+            let matching: Vec<_> = suggestions
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|action| {
+                    action["diagnostics"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|item| item["code"] == case.header.code())
+                })
+                .collect();
+            assert_eq!(matching.len(), 1, "{}: {suggestions}", case.header.code());
+            let proposed = edit(matching[0], 1);
+            assert_eq!(proposed.range.start, proposed.range.end);
+            let offset = position_to_offset(&case.source, proposed.range.start);
+            let expected_offset = case.header.offset(&case.source);
+            assert_eq!(offset, expected_offset);
+            if proposed.new_text != case.insertion {
+                failures.push(format!(
+                    "{} transport {ending:?}: expected {:?}, got {:?}",
+                    case.header.code(),
+                    case.insertion,
+                    proposed.new_text
+                ));
+            }
+            let mut repaired = case.source.clone();
+            repaired.insert_str(offset, &proposed.new_text);
+            editor.send(
+                json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+                "textDocument":{"uri":URI,"version":2},"contentChanges":[{
+                    "range":proposed.range,"text":proposed.new_text}]}}),
+            );
+            assert_eq!(pull(&mut editor, 4, 2), json!([]), "{repaired:?}");
+            assert_eq!(actions(&mut editor, 5, &current), Value::Null);
+            shutdown(&mut editor);
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

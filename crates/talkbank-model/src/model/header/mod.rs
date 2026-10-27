@@ -21,15 +21,21 @@
 
 mod codes;
 mod enums;
+mod gem;
 mod header_enum;
 mod id;
 mod media;
 mod types_header;
+mod unparsed;
 mod write_chat;
+pub use unparsed::{
+    LanguageHeaderFailure, UnparsedIDHeader, UnparsedLanguageHeader, UnparsedParticipantHeader,
+};
 
 // Re-export everything from the split modules
 pub use codes::*;
 pub use enums::*;
+pub use gem::{GemEndFailure, GemEvent, GemPair, GemState, UnclosedGem};
 pub use header_enum::{
     CaOptionEffect, ChatOptionFlag, ChatOptionFlags, Header, LanguageCodes, ParticipantEntries,
 };

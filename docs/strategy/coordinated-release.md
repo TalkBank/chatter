@@ -63,9 +63,28 @@ node scripts/release/verify-desktop-candidate.mjs complete \
   release.json latest.json vX.Y.Z owner/repository plan-dist-manifest.json
 ```
 
-This admits every CLI/LSP artifact and checksum declared by the producer in
-addition to desktop/update assets and both installer-name pairs. It is inventory
-admission, not provenance or cryptographic certification. Never synthesize an
+This requires exactly one `talkbank-chatter` product and one `talkbank-lsp`
+product at the requested version, then admits every artifact and checksum
+declared by the producer in addition to desktop/update assets and both
+installer-name pairs. Removing a product and its artifacts from the plan cannot
+make an incomplete release pass. Unknown or duplicate products also refuse
+admission. Each product must reference an `executable-zip` artifact whose typed
+assets include its executable (`chatter` or `talkbank-lsp`, with optional `.exe`).
+For each product, those executable archives must cover all five required target
+triples: `aarch64-apple-darwin`, `x86_64-apple-darwin`,
+`aarch64-unknown-linux-musl`, `x86_64-unknown-linux-musl` and
+`x86_64-pc-windows-msvc`. A product name pointing only at another product's
+executable, checksums or source archives is insufficient. Removing one target's
+archives from both the plan and uploaded assets cannot make recovery pass.
+Missing, empty, duplicate or unsupported archive target declarations reject.
+A multi-target archive may cover multiple supported targets. The verifier's
+shipping policy is independent of the incoming plan; coordinate future policy
+changes with `dist-workspace.toml` and the platform acceptance requirements.
+These fields follow the
+[cargo-dist 0.33 schema](https://github.com/axodotdev/cargo-dist/blob/v0.33.0/cargo-dist-schema/src/lib.rs).
+This checks declared target inventory, not archive bytes, executable architecture,
+native installation, provenance or cryptographic certification.
+Never synthesize an
 uploaded-asset inventory to make it pass. Publish only after these independent
 checks succeed; verify public downloads, updater references and installation
 before announcing completion. Keep failed-run and recovery receipts distinct.
@@ -80,3 +99,14 @@ release remains necessary to verify
 GitHub draft/asset behavior, signing/notarization credentials, installation,
 updating, and the public download endpoints. Local tests do not certify these
 external boundaries.
+
+## Updater platform admission
+
+Manifest generation and candidate verification share
+`scripts/release/updater-platforms.mjs`. A complete set contains exactly macOS
+Apple Silicon/Intel, Windows x86-64 and Linux x86-64, each naming a distinct
+updater bundle. Unsupported target triples, missing or duplicate platforms,
+blank signatures and unsafe asset basenames reject. The generator validates
+before writing its destination, so rejected sidecars preserve an existing
+manifest. This is metadata admission, not proof of bundle architecture,
+cryptographic signature validity, hosted availability or installation behavior.
