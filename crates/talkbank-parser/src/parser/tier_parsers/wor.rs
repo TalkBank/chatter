@@ -38,6 +38,7 @@ use crate::generated_traversal::{
     WorTierBodyChild1Child0Missing, WorTierBodyNode,
 };
 use crate::parser::node_span::span_of;
+use crate::parser::tier_parsers::admission::HealthyTier;
 use crate::parser::typed_cst::ExtractCanonical;
 use talkbank_model::ErrorSink;
 use talkbank_model::model::Bullet;
@@ -62,12 +63,14 @@ use talkbank_model::ParseOutcome;
 ///
 /// Per-rule admission proves the ordinary `wor_tier_body` at child_2 present.
 /// Its nested optional language, word sequence and terminator retain their
-/// recovery states. Envelope presence does not prove syntax validity, and
+/// recovery states in their generated types, but the owning tier must first
+/// cross recovery admission. This does not certify CHAT validity, and
 /// source-range refusal propagates as a producer failure.
 pub fn parse_wor_tier<'tree>(
-    typed: SourceBound<'tree, '_, WorDependentTierNode<'tree>>,
+    tier: HealthyTier<'tree, '_, WorDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<ParseOutcome<WorTier>, crate::CstFailure> {
+    let typed = tier.node();
     let source = typed.source();
     let node = typed.node().raw_node();
     let span = span_of(node);
@@ -109,7 +112,8 @@ fn parse_wor_tier_body<'tree>(
             surface_displaced(&group.unexpected, "wor_tier_body", source, errors);
             match group.child_0.slot().view() {
                 SlotView::Present(langcode) => extract_langcode(*langcode, source, errors),
-                SlotView::Error(_) | SlotView::Absent(NoChild) => None,
+                SlotView::Error(_) => None,
+                SlotView::Absent(never) => match never {},
             }
         }
         Some(SlotView::Missing(_) | SlotView::Error(_)) | None => None,

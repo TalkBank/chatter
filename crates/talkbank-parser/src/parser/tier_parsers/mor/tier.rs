@@ -320,11 +320,12 @@ fn report_missing_terminator(mor_contents_node: Node, source: &str, errors: &imp
 /// - `Error`: contradicts the tier's admission; report the fault and reject
 ///   the whole tier.
 /// - `Absent`: no child at this position; nothing reported, nothing pushed.
-fn push_mor_content_item<'tree, 'source>(
+fn push_mor_content_item<'tree, 'source, A: crate::generated_traversal::Absence>(
     slot: &crate::generated_traversal::NonMissingKindSlot<
         'tree,
         SourceBound<'tree, 'source, MorContentNode<'tree>>,
         Ranged<'source>,
+        A,
     >,
     errors: &impl ErrorSink,
     items: &mut MorItems,
@@ -338,7 +339,7 @@ fn push_mor_content_item<'tree, 'source>(
         }
         ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
-        ReadableSlot::Absent(NoChild) => return,
+        ReadableSlot::Absent(_) => return,
     };
     match parse_mor_content(item_node, errors) {
         Ok(ParseOutcome::Parsed(mor)) => items.push(mor),

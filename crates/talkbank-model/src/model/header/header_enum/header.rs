@@ -52,7 +52,7 @@ impl LanguageCodes {
         self.0.extend(other);
     }
 
-    /// Wraps an already parsed `@Languages` sequence.
+    /// Wraps a language-code sequence, including an empty recovery payload.
     pub fn new(codes: Vec<LanguageCode>) -> Self {
         Self(codes)
     }
@@ -151,7 +151,9 @@ impl IntoIterator for LanguageCodes {
 }
 
 impl Default for LanguageCodes {
-    /// Returns an empty language-code list (no `@Languages` header).
+    /// Returns an empty language-code payload, not evidence of an absent header.
+    ///
+    /// An enclosing `Header::Languages` remains present and validates as E507.
     fn default() -> Self {
         Self(Vec::new())
     }
@@ -302,7 +304,7 @@ impl ChatOptionFlags {
         self.0.push(flag);
     }
 
-    /// Wraps parsed option flags in source order.
+    /// Wraps option flags in source order, including an empty recovery payload.
     pub fn new(options: Vec<ChatOptionFlag>) -> Self {
         Self(options)
     }
@@ -360,7 +362,9 @@ impl IntoIterator for ChatOptionFlags {
 }
 
 impl Default for ChatOptionFlags {
-    /// Returns an empty option-flag list (no `@Options` header).
+    /// Returns an empty option-flag payload, not evidence of an absent header.
+    ///
+    /// An enclosing `Header::Options` remains present and validates as E533.
     fn default() -> Self {
         Self(Vec::new())
     }

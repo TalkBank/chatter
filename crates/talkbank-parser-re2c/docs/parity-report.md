@@ -678,6 +678,17 @@ Performance must be measured for the intended operation and input set with
 are historical and are not current release guarantees. External corpus
 comparisons are investigation evidence, not a validity or release gate.
 
+The ignored `categorize_divergences::categorize_corpus_divergences` and
+`subcategorize_main_tier::subcategorize_main_tier_divergences` reports run through
+the `integration` test target with an explicit `TALKBANK_DATA` input. They refuse
+missing/empty file populations, traversal/read failures, serialization failures,
+comparison-depth exhaustion and failed output writes. A depth limit is an
+incomplete comparison, not a structural difference. Native parser rejections
+are counted separately from successfully compared models. JSON projection is
+only a diagnostic aid; it does not replace the semantic-equivalence contract.
+Their shared boundaries have local synthetic JSON and filesystem-refusal
+controls; those controls do not execute or qualify an external corpus survey.
+
 For the broader release criteria and evidence, see
 [1.0 readiness](../../../book/src/contributing/one-zero-readiness.md).
 

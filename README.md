@@ -64,6 +64,11 @@ and an LSP-backed editor experience.
 > versioning. Release history and per-release changes:
 > [CHANGELOG.md](CHANGELOG.md).
 
+Preparing an upgrade from 0.32.1? The
+[0.33 migration guide](book/src/contributing/migration-0.33.md) describes the
+Rust API, JSON and diagnostic changes. Match documentation to the tag or commit
+you install, and check the release page for available artifacts.
+
 ## What's in this repo
 
 ### Library crates (the CHAT format authority)

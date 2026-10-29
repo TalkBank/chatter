@@ -232,3 +232,71 @@ fn on_type_formatting_uses_exact_current_cursor_and_prefix() {
     editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
     editor.expect_exit(0);
 }
+
+#[test]
+fn invalid_change_coordinates_require_a_full_replacement() {
+    let source = SOURCE.replace("@End", "@Comment:\t😀\n@End");
+    let comment_line = source
+        .lines()
+        .position(|line| line == "@Comment:\t😀")
+        .unwrap() as u32;
+    let middle = "@Comment:\t".encode_utf16().count() as u32 + 1;
+    let missing_line = source.lines().count() as u32 + 3;
+    let mut editor = Editor::start();
+    editor.initialize();
+    for range in [
+        tower_lsp::lsp_types::Range::new(
+            tower_lsp::lsp_types::Position::new(comment_line, middle),
+            tower_lsp::lsp_types::Position::new(comment_line, middle + 1),
+        ),
+        tower_lsp::lsp_types::Range::new(
+            tower_lsp::lsp_types::Position::new(comment_line, middle - 1),
+            tower_lsp::lsp_types::Position::new(comment_line, middle),
+        ),
+        tower_lsp::lsp_types::Range::new(
+            tower_lsp::lsp_types::Position::new(missing_line, 0),
+            tower_lsp::lsp_types::Position::new(missing_line, 0),
+        ),
+    ] {
+        editor.open(&source);
+        assert_eq!(editor.diagnostics(), json!([]));
+        editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+            "textDocument":{"uri":URI,"version":2},"contentChanges":[
+                {"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"text":"prefix"},
+                {"range":range,"text":"replacement"}
+            ]}}));
+        editor.send(
+            json!({"jsonrpc":"2.0","id":40,"method":"textDocument/diagnostic",
+            "params":{"textDocument":{"uri":URI}}}),
+        );
+        let lost = editor.response(40);
+        assert_eq!(
+            lost["error"]["code"], -32801,
+            "invalid edit must lose synchronization: {lost}"
+        );
+        let cleared = editor.message_matching(|message| {
+            message["method"] == "textDocument/publishDiagnostics"
+                && message["params"]["version"] == 2
+        });
+        assert_eq!(cleared["params"]["diagnostics"], json!([]));
+        // A newer full replacement recovers, with no prefix or replacement
+        // text from the refused batch leaking into the server's document.
+        change(&mut editor, 3, &source);
+        assert_eq!(pull(&mut editor, 41, 3), json!([]));
+        editor.send(
+            json!({"jsonrpc":"2.0","id":42,"method":"textDocument/formatting",
+            "params":{"textDocument":{"uri":URI},"options":{"tabSize":4,"insertSpaces":false}}}),
+        );
+        let formatted = editor.response(42);
+        assert!(formatted["error"].is_null(), "{formatted}");
+        assert!(
+            formatted["result"].is_null(),
+            "the restored canonical text needs no edit: {formatted}"
+        );
+        editor.close();
+    }
+    editor.send(json!({"jsonrpc":"2.0","id":2,"method":"shutdown"}));
+    assert!(editor.response(2)["error"].is_null());
+    editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
+    editor.expect_exit(0);
+}

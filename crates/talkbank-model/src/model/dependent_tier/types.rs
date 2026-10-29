@@ -269,11 +269,12 @@ pub struct TextTier {
 }
 
 impl TextTier {
-    /// Creates a text-only dependent tier with default span metadata.
+    /// Creates a text-only dependent tier with an explicit location and recovery text.
     ///
     /// This constructor is used for `%alt/%coh/%def/...` style tiers that do
-    /// not carry structured token alignment. Parser paths typically call
-    /// [`Self::with_span`] immediately after construction.
+    /// not carry structured token alignment. Parsers supply the source location
+    /// at construction; programmatic callers can explicitly pass
+    /// [`crate::Location::Unlocated`].
     pub fn new(location: impl Into<crate::Location>, content: RecoveryText) -> Self {
         Self {
             content: Some(content),

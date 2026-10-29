@@ -1,5 +1,7 @@
 //! Malformed Phon tiers retain source and identity without parsed alignment data.
 
+use super::completed;
+
 use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
 use talkbank_model::{ChatParser, DependentTier, ErrorCode, ErrorCollector, WriteChat};
 use talkbank_parser_tests::{error_specs, repo_paths};
@@ -79,8 +81,8 @@ fn both_backends_preserve_unparsed_phon_tiers_across_wire_and_origins() {
                             .is_err()
                     );
                     assert!(
-                        errors
-                            .into_vec()
+                        completed(errors)
+                            .into_diagnostics()
                             .iter()
                             .any(|error| error.code == ErrorCode::UnparsableContent)
                     );
@@ -104,7 +106,7 @@ fn parse(parser: &impl ChatParser, source: &str, offset: usize) -> talkbank_mode
         .parse_chat_file(source, offset, &errors)
         .into_option()
         .expect("recovery model");
-    let diagnostics = errors.into_vec();
+    let diagnostics = completed(errors).into_diagnostics();
     assert!(
         diagnostics
             .iter()

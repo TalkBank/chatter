@@ -71,6 +71,24 @@ mod unknown_header_admission_tests {
             let observed =
                 unknown_header_from_node(node, source, "boundary control", None).expect("readable");
             assert_eq!(site.unknown("boundary control", None), observed);
+            let words = ContentSlot {
+                missing: "boundary control",
+                suggested_fix: None,
+            };
+            let errors = crate::error::ErrorCollector::new();
+            let refused = {
+                let selected = HeaderSite::bound(parsed.bind_typed(header).expect("owner"));
+                words.refuse(&selected, "payload", &errors)
+            };
+            // Reporting selected the source already. Recovery needs neither
+            // the temporary site nor a caller-selected replacement header.
+            assert_eq!(
+                ContentReadError::Recovery(refused)
+                    .into_header()
+                    .expect("recovery"),
+                observed
+            );
+            assert_eq!(errors.into_vec().len(), 1);
             let Header::Unknown { text, .. } = observed else {
                 panic!("unknown header")
             };
@@ -134,33 +152,36 @@ impl<'tree, 'src> HeaderSite<'tree, 'src> {
 }
 
 /// A content slot that did not deliver, its diagnostic already reported:
-/// the words of the slot that refused, for the caller to build the recovery
-/// from. The `Result` a verb returns carries this reference rather than a
-/// built `Header`, which is a quarter of a kilobyte on the error path.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Refused<'w>(&'w ContentSlot<'w>);
+/// the header's admitted text and the words of the slot that refused.
+/// Recovery consumes this evidence without selecting a header a second time.
+/// The borrowed payload avoids constructing a full Header on the error path.
+#[derive(Debug)]
+pub(crate) struct Refused<'source, 'w> {
+    text: &'source str,
+    words: &'w ContentSlot<'w>,
+}
 
-impl Refused<'_> {
-    /// The `Header::Unknown` for the refused slot, at `site`.
-    pub(crate) fn into_header(self, site: &HeaderSite<'_, '_>) -> Header {
-        site.unknown(self.0.missing, self.0.suggested_fix)
+impl Refused<'_, '_> {
+    /// The `Header::Unknown` for the same header whose slot was refused.
+    pub(crate) fn into_header(self) -> Header {
+        unknown_header_from_text(self.text, self.words.missing, self.words.suggested_fix)
     }
 }
 
 /// Structural recovery may retain an unknown header; a producer fault may not.
 #[derive(Debug)]
-pub(crate) enum ContentReadError<'w> {
+pub(crate) enum ContentReadError<'source, 'w> {
     /// The recovery diagnostic was already reported by the slot owner.
-    Recovery(Refused<'w>),
+    Recovery(Refused<'source, 'w>),
     /// Source admission failed; the dispatch boundary must report this fault.
     Producer(CstFailure),
 }
 
-impl ContentReadError<'_> {
+impl ContentReadError<'_, '_> {
     /// Preserve the distinction until a fallible header consumer handles it.
-    pub(crate) fn into_header(self, site: &HeaderSite<'_, '_>) -> Result<Header, CstFailure> {
+    pub(crate) fn into_header(self) -> Result<Header, CstFailure> {
         match self {
-            Self::Recovery(refused) => Ok(refused.into_header(site)),
+            Self::Recovery(refused) => Ok(refused.into_header()),
             Self::Producer(failure) => Err(failure),
         }
     }
@@ -171,7 +192,7 @@ impl ContentReadError<'_> {
         site: &HeaderSite<'_, '_>,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Header> {
-        match self.into_header(site) {
+        match self.into_header() {
             Ok(header) => ParseOutcome::parsed(header),
             Err(failure) => {
                 crate::parser::typed_cst::report_cst_failure(
@@ -200,12 +221,12 @@ pub(crate) struct ContentSlot<'a> {
 
 impl<'w> ContentSlot<'w> {
     /// Report a missing/recovered payload using the family's existing policy.
-    fn refuse(
+    fn refuse<'source>(
         &'w self,
-        site: &HeaderSite<'_, '_>,
+        site: &HeaderSite<'_, 'source>,
         child_kind: &str,
         errors: &impl ErrorSink,
-    ) -> Refused<'w> {
+    ) -> Refused<'source, 'w> {
         let node = site.actual();
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
@@ -214,7 +235,10 @@ impl<'w> ContentSlot<'w> {
             ErrorContext::new(site.input(), span_of(node), site.kind()),
             format!("Missing expected {child_kind} node in {}", site.kind()),
         ));
-        Refused(self)
+        Refused {
+            text: site.text,
+            words: self,
+        }
     }
 }
 
@@ -227,11 +251,11 @@ impl<'w> ContentSlot<'w> {
 /// one body serves a slot that can be MISSING and a narrowed one under either
 /// kind proof.
 pub(crate) fn read_source_content<'value, 'tree: 'value, 'source, 'w, T, M, E, A>(
-    site: &HeaderSite<'tree, '_>,
+    site: &HeaderSite<'tree, 'source>,
     content_slot: SourceField<'value, 'tree, 'source, AnyKindSlot<T, M, E, A>>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<&'source str, ContentReadError<'w>>
+) -> Result<&'source str, ContentReadError<'source, 'w>>
 where
     T: SourceBoundKind<'tree> + NamedKind,
     M: SourceRecovery<'value, 'tree, 'source>,
@@ -252,11 +276,11 @@ where
 /// Read a grammar-optional payload. Only the outer `None` means omission;
 /// ERROR/MISSING slots refuse, and source-binding faults remain producer failures.
 pub(crate) fn read_optional_source_content<'value, 'tree: 'value, 'source, 'w, T, M, E>(
-    site: &HeaderSite<'tree, '_>,
+    site: &HeaderSite<'tree, 'source>,
     content_slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<T, M, E>>>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<Option<&'source str>, ContentReadError<'w>>
+) -> Result<Option<&'source str>, ContentReadError<'source, 'w>>
 where
     T: SourceBoundKind<'tree> + NamedKind,
     M: SourceRecovery<'value, 'tree, 'source>,
@@ -291,11 +315,11 @@ pub(crate) fn read_admitted_content<
     E,
     A,
 >(
-    site: &HeaderSite<'tree, '_>,
+    site: &HeaderSite<'tree, 'source>,
     slot: &ReadableSlot<SourceBound<'tree, 'source, T>, M, E, Never, A>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<&'source str, Refused<'w>> {
+) -> Result<&'source str, Refused<'source, 'w>> {
     match slot {
         ReadableSlot::Present(content) => Ok(content.text()),
         ReadableSlot::Unexpected(never) => match *never {},

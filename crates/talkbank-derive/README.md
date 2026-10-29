@@ -64,6 +64,22 @@ placement are compile errors, not implicit inclusion. `SemanticEq` admits one
 field plan shared with its companion `SemanticDiff`; `SpanShift` admits its own
 policy. Generated enum bindings do not depend on user field spelling, including
 raw identifiers and names such as `offset` or `delta`.
+Method parameters, locals and field patterns are reserved against declared
+generic names before emission. A const generic named `offset`, `other` or
+`__tb_map` therefore cannot capture a generated argument or pattern; raw
+identifier spellings and occupied suffixes are handled by the same owner.
+The same normalized identifier identity governs span-shift bound inference
+and diagnostic-context selection: `T` and `r#T`, or `Location` and
+`r#Location`, have the same meaning. Emitted identifiers and diff paths keep
+their original spelling. Context detection remains syntactic, not resolved
+Rust type-alias analysis.
+Generated runtime types use explicit paths, and const generic applications
+retain braces, so names such as `Result`, `FnMut` or `Ok` keep their declared
+meaning without replacing the derive's dependencies.
+Variant descriptions are emitted as string literals, so a caller's
+`stringify!` macro cannot replace the reported names. Error-code registries
+also use qualified runtime paths and formatting; local macros and registry
+names such as `String` or `Option` cannot redefine their output or API types.
 Recursive field operations use qualified trait calls: an inherent method named
 `semantic_eq`, `semantic_diff_into` or `shift_spans_after` cannot override the
 corresponding trait operation inside a generated implementation.

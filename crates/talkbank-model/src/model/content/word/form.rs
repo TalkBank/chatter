@@ -110,7 +110,7 @@ impl UndeclaredFormMarker {
 
     /// Take the offending text, for a caller that has to keep it.
     ///
-    /// Exists so the tree-sitter parser's E203 path does not copy the payload
+    /// Exists so the tree-sitter parser's recovery path does not copy the payload
     /// a second time to build its recovered word: the error already owns the
     /// only copy that needs to survive.
     pub fn into_payload(self) -> String {
@@ -125,9 +125,109 @@ impl UndeclaredFormMarker {
     }
 }
 
+/// Diagnostic policy for an explicit rejected suffix, never a declared marker.
+/// Classification uses the retained suffix payload, not a rescan of word text.
+enum RejectedFormMarker<'a> {
+    Undeclared(&'a str),
+    RepeatedSuffixes(&'a str),
+}
+
+impl RejectedFormMarker<'_> {
+    fn into_diagnostic(self, location: crate::Location) -> crate::ParseError {
+        let (message, suggestion) = match self {
+            Self::Undeclared(payload) => (
+                format!("Invalid or undeclared form marker '@{payload}'"),
+                FormType::DECLARED_MARKERS_SUGGESTION,
+            ),
+            Self::RepeatedSuffixes(payload) => (
+                format!("A word may carry only one '@' suffix, found '@{payload}'"),
+                "Keep one marker on the word and remove the rest",
+            ),
+        };
+        crate::ParseError::at_location(
+            crate::ErrorCode::InvalidFormType,
+            crate::Severity::Error,
+            location,
+            message,
+        )
+        .with_suggestion(suggestion)
+    }
+}
+
+impl FormType {
+    /// Diagnose explicit invalid suffix recovery at its owning location.
+    ///
+    /// Model validation and standalone-word admission share this rule owner.
+    /// Absence of this finding does not certify whole-word or CHAT validity.
+    pub fn recovery_diagnostic(&self, location: crate::Location) -> Option<crate::ParseError> {
+        let Self::Undeclared(payload) = self else {
+            return None;
+        };
+        let rejected = if payload.contains('@') {
+            RejectedFormMarker::RepeatedSuffixes(payload)
+        } else {
+            RejectedFormMarker::Undeclared(payload)
+        };
+        Some(rejected.into_diagnostic(location))
+    }
+}
+
 impl WriteChat for FormType {
     /// Serializes marker payload without leading `@`.
     fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         w.write_str(self.to_chat_marker().as_ref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn declared_custom_forms_refuse_labels_outside_the_word_suffix_grammar() {
+        for label in [
+            "",
+            "two words",
+            "x\ty",
+            "x\n@End",
+            "x@f",
+            "x$n",
+            "x:y",
+            "x-y",
+            "名",
+        ] {
+            assert!(
+                serde_json::from_value::<FormType>(serde_json::json!({ "z": label })).is_err(),
+                "JSON admitted custom form label {label:?}"
+            );
+            assert!(
+                FormType::from_payload(FormMarkerPayload::after_at(&format!("z:{label}"))).is_err(),
+                "constructor admitted custom form label {label:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_labels_keep_their_wire_shape_and_undeclared_forms_keep_recovery() {
+        for label in ["m", "Code_9", "9", "_"] {
+            let payload = format!("z:{label}");
+            let form = FormType::from_payload(FormMarkerPayload::after_at(&payload)).unwrap();
+            let FormType::UserDefined(admitted) = &form else {
+                panic!("declared custom form");
+            };
+            assert_eq!(admitted.as_str(), label);
+            assert_eq!(form.to_chat_marker(), payload);
+            let json = serde_json::json!({"z": label});
+            assert_eq!(serde_json::to_value(&form).unwrap(), json);
+            assert_eq!(serde_json::from_value::<FormType>(json).unwrap(), form);
+        }
+        for payload in ["zz", "x:foo", "z:", "z:a:b", "c@d"] {
+            let refusal = FormType::from_payload(FormMarkerPayload::after_at(payload)).unwrap_err();
+            assert_eq!(refusal.payload(), payload);
+            let json = serde_json::json!({"undeclared": payload});
+            let recovered: FormType = serde_json::from_value(json.clone()).unwrap();
+            assert_eq!(recovered.to_chat_marker(), payload);
+            assert_eq!(serde_json::to_value(recovered).unwrap(), json);
+        }
     }
 }

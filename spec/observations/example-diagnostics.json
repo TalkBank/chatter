@@ -38,19 +38,19 @@
     {
       "spec": "E202_missing_form_type.md",
       "example": 2,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
       "spec": "E202_missing_form_type.md",
       "example": 3,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
@@ -140,19 +140,19 @@
     {
       "spec": "E203.md",
       "example": 1,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
       "spec": "E203.md",
       "example": 2,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
@@ -199,10 +199,10 @@
     {
       "spec": "E203_feature_suffixes.md",
       "example": 1,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
@@ -215,10 +215,10 @@
     {
       "spec": "E203_feature_suffixes.md",
       "example": 3,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
@@ -231,10 +231,10 @@
     {
       "spec": "E203_feature_suffixes.md",
       "example": 5,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
@@ -247,10 +247,10 @@
     {
       "spec": "E203_feature_suffixes.md",
       "example": 7,
-      "parse": [
+      "parse": [],
+      "validation": [
         "E203"
       ],
-      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
@@ -366,6 +366,29 @@
       "validation": [
         "E209"
       ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E209"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209.md",
+      "example": 3,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
       "roundtrip": "byte_exact"
     },
     {
@@ -10567,6 +10590,26 @@
       "example": 3,
       "parse": [],
       "validation": [
+        "E716"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E716.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E706",
+        "E716"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E716.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E705",
         "E716"
       ],
       "roundtrip": "byte_exact"

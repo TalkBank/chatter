@@ -1,5 +1,7 @@
 //! Rejected phonology/sign tiers retain their source slot and invalidity.
 
+use super::completed;
+
 use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
 use talkbank_model::{
     ChatParser, DependentTier, ErrorCode, ErrorCollector, ParseHealthTier, ParseOutcome, Severity,
@@ -63,8 +65,8 @@ fn check(
         panic!("control rejected");
     };
     assert!(
-        !errors
-            .into_vec()
+        !completed(errors)
+            .into_diagnostics()
             .iter()
             .any(|error| error.severity == Severity::Error)
     );
@@ -87,16 +89,17 @@ fn check(
     let ParseOutcome::Parsed(file) = parser.parse_chat_file(source, offset, &errors) else {
         panic!("recovery file rejected");
     };
-    let diagnostics = errors.into_vec();
+    let diagnostics = completed(errors).into_diagnostics();
     assert!(
         diagnostics
             .iter()
             .any(|error| error.severity == Severity::Error)
     );
-    assert!(!diagnostics.iter().any(|error| matches!(
-        error.code,
-        ErrorCode::InternalError | ErrorCode::UnsupportedDependentTier
-    )));
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|error| error.code == ErrorCode::UnsupportedDependentTier)
+    );
     let utterance = file
         .utterances()
         .find(|u| {
@@ -151,8 +154,8 @@ fn check(
             .is_err()
     );
     assert!(
-        errors
-            .into_vec()
+        completed(errors)
+            .into_diagnostics()
             .iter()
             .any(|error| error.code == ErrorCode::UnparsableContent)
     );

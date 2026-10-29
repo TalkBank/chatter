@@ -538,6 +538,9 @@ flowchart TD
 The roundtrip check serializes the parsed model, reparses that serialization
 with the selected backend, serializes again and compares those two strings.
 It tests serialization idempotence, not equality with the original input bytes.
+Both serializations use the owned-string writer with an `Infallible` error
+type. Roundtrip failures therefore represent rejected reparses or unequal
+serialized strings; there is no owned-string serialization-failure state.
 The reparse is parse-only; internal failures remain separate from mismatches.
 See [cache reuse policy](parser-and-grammar/validation-cache.md) for why a cached
 invalid verdict still requires diagnostic-producing work and why internal
@@ -862,7 +865,7 @@ the bytes actually read, not content hash alone. Invalid cached outcomes still
 need diagnostic-producing work; requested roundtrip checks require their own
 verdict.
 
-`--force` clears cache entries for the selected paths before the run; it does
+`--refresh-cache` clears cache entries for the selected paths before the run; it does
 not disable cache writes or permanently bypass caching. See the
 [cache chapter](parser-and-grammar/validation-cache.md) for locations,
 `TALKBANK_CHAT_CACHE_DIR`, maintenance and reuse policy.

@@ -150,20 +150,15 @@ Their lexical validity still depends on the applicable language and word rules.
 ### Word struct
 
 The `Word` struct (`crates/talkbank-model/src/model/content/word/word_type.rs`)
-is the canonical typed representation. This field sketch omits attributes and
-the private derived-text cache; consult the source for construction APIs:
+is the canonical typed representation. Construct it from admitted text and
+typed annotations, rather than supplying independent raw and cleaned strings:
 
-```rust,ignore
-pub struct Word {
-    pub span: Span,
-    pub word_id: Option<SmolStr>,
-    content: WordContents,
-    pub category: Option<WordCategory>,
-    pub form_type: Option<FormType>,
-    pub lang: Option<WordLanguageMarker>,
-    pub part_of_speech: Option<SmolStr>,
-    pub inline_bullet: Option<Bullet>,
-}
+```rust
+use talkbank_model::{Location, Word, WordPosTag, WordText};
+let word = Word::new(Location::Unlocated, WordText::new("name")?)
+    .with_part_of_speech(WordPosTag::new("N:PROP")?);
+assert_eq!(word.to_chat(), "name$N:PROP");
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 Key fields:
@@ -177,13 +172,21 @@ Key fields:
   `content()` and typed mutation methods, which invalidate cached cleaned text.
 - **`category`**: optional prefix (`Omission`, `CAOmission`, `Filler`,
   `Nonword`, `PhonologicalFragment`).
-- **`form_type`**: optional `@` suffix (`@c` child-invented, `@d` dialect,
-  `@z:label` user-defined, etc.). The user-defined form requires the colon and
-  a label (`@z:label`); a colon-less marker such as `@zzz` is not a valid form
-  and is rejected with E203 (matching CLAN CHECK 147).
-- **`lang`**: optional `@s` language marker (`Shortcut`, `Explicit`,
-  `Multiple`, `Ambiguous`).
-- **`part_of_speech`**: optional `$` tag.
+- **`suffix`**: `Option<WordSuffix>`, the single owner of either a form marker
+  (`WordSuffix::Form`) or a language marker (`WordSuffix::Language`). Use
+  `form_type()` and `language_marker()` to inspect it, `language_marker_mut()`
+  to edit an existing language payload, and `with_suffix` to select a suffix.
+  Both markers cannot coexist in one Rust word. Form markers include `@c`
+  (child-invented), `@d` (dialect) and `@z:label` (user-defined); the latter
+  requires a colon and checked label. Undeclared recovery such as `@zzz`
+  remains E203-invalid under shared-model validation, including after JSON
+  readback. The parser retains rejected suffixes; it does not emit a duplicate
+  of that model-owned finding. Language markers include bare `@s`, explicit, mixed
+  and ambiguous codes. JSON retains the separate `form_type` and `lang` wire
+  names, but rejects two non-null fields instead of discarding either marker.
+- **`part_of_speech`**: an optional `WordPosTag` payload after `$`. Admission
+  requires nonempty ASCII letters/colons without choosing a POS vocabulary;
+  `None` represents absence. JSON uses the same string admission.
 
 ### WordContent enum
 

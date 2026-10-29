@@ -25,8 +25,8 @@ pub(crate) fn content_item_to_model(
         ast::ContentItem::Word(w) => word_with_annotations_to_model(w),
         ast::ContentItem::Pause(pause) => UtteranceContent::Pause(pause.clone()),
         ast::ContentItem::Event(event, annotations) => {
-            let event_location = event.location;
-            let event_model = event.clone();
+            let event_location = talkbank_model::Location::Located(event.span());
+            let event_model = event.to_model();
             let scoped = annotations_to_scoped(annotations);
             // The constructor's `Option` IS the bare-versus-annotated
             // question, so it replaces the `is_empty` check that used to ask it
@@ -65,10 +65,10 @@ pub(crate) fn content_item_to_model(
                 .items()
                 .map(|i| chain::content_ref_to_bracketed(i, source))
                 .collect();
-            let retrace_location = super::located(retrace_span(r, source));
+            let retrace_location = talkbank_model::Location::Located(retrace_span(r));
             let mut retrace = Retrace::new(
                 retrace_location,
-                super::locate(source, r.marker),
+                talkbank_model::Location::Located(r.marker.span()),
                 BracketedContent::new(content),
                 kind,
             );
@@ -98,7 +98,7 @@ pub(crate) fn content_item_to_model(
                 .iter()
                 .map(|i| content_item_to_bracketed(i, source))
                 .collect();
-            let group_location = super::located(g.enclosure.span_in(source));
+            let group_location = talkbank_model::Location::Located(g.enclosure.span());
             let group = Group::new(group_location, BracketedContent::new(content));
             let scoped = annotations_to_scoped(&g.annotations);
             match AnnotatedContentAnnotations::new(scoped) {
@@ -143,7 +143,7 @@ pub(crate) fn content_item_to_model(
         }
         ast::ContentItem::Action { zero, annotations } => {
             let scoped = annotations_to_scoped(annotations);
-            let location = super::locate(source, zero);
+            let location = talkbank_model::Location::Located(zero.span());
             // This backend had the same defect as the tree-sitter one: it
             // wrapped EVERY action, so a bare `0` became an annotated node
             // carrying nothing. It now asks the same question the three sites
@@ -164,7 +164,7 @@ pub(crate) fn content_item_to_model(
                 .map(|i| content_item_to_bracketed(i, source))
                 .collect();
             UtteranceContent::PhoGroup(PhoGroup::new(
-                super::located(group.enclosure.span_in(source)),
+                talkbank_model::Location::Located(group.enclosure.span()),
                 BracketedContent::new(items),
             ))
         }
@@ -175,7 +175,7 @@ pub(crate) fn content_item_to_model(
                 .map(|i| content_item_to_bracketed(i, source))
                 .collect();
             UtteranceContent::SinGroup(SinGroup::new(
-                super::located(group.enclosure.span_in(source)),
+                talkbank_model::Location::Located(group.enclosure.span()),
                 BracketedContent::new(items),
             ))
         }
@@ -197,7 +197,7 @@ impl ModelQuotation {
             .iter()
             .map(|item| content_item_to_bracketed(item, source))
             .collect();
-        let quotation_location = super::located(quotation.enclosure.span_in(source));
+        let quotation_location = talkbank_model::Location::Located(quotation.enclosure.span());
         let model = Quotation::new(quotation_location, BracketedContent::new(content));
         match AnnotatedContentAnnotations::new(annotations_to_scoped(&quotation.annotations)) {
             None => Self::Bare(model),
@@ -225,7 +225,6 @@ pub(crate) fn annotations_to_scoped(
 /// - Has [: replacement] → ReplacedWord (with any other annotations as scoped)
 /// - Has other annotations → AnnotatedWord
 pub(crate) fn word_with_annotations_to_model(w: &ast::WordWithAnnotations<'_>) -> UtteranceContent {
-    let source = w.source().source();
     let word = word_from_parsed(w);
 
     // Check if there's a replacement annotation
@@ -237,7 +236,7 @@ pub(crate) fn word_with_annotations_to_model(w: &ast::WordWithAnnotations<'_>) -
         let scoped = annotations_to_scoped(&w.annotations);
 
         let replaced = ReplacedWord::new(
-            replaced_word_location(&word, parsed_replacement, &w.annotations, source),
+            replaced_word_location(w.source(), parsed_replacement, &w.annotations),
             word,
             replacement,
         )
@@ -259,43 +258,37 @@ pub(crate) fn word_with_annotations_to_model(w: &ast::WordWithAnnotations<'_>) -
 
 /// The extent of a retrace: its content (the group's brackets when the
 /// retrace took them, otherwise the one item it wraps) through its marker.
-/// `None` when any part cannot be placed, rather than a span that stops
-/// short of the construct.
-fn retrace_span(retrace: &ast::Retrace<'_>, source: SourceText<'_>) -> Option<Span> {
+/// Every chain leaf and marker carries admitted coordinates, so this is total.
+fn retrace_span(retrace: &ast::Retrace<'_>) -> Span {
     let content = match &retrace.body {
-        ast::RetraceBody::Enclosed(enclosure, _) => enclosure.span_in(source)?,
-        ast::RetraceBody::Single(item) => chain_span(item, source)?,
+        ast::RetraceBody::Enclosed(enclosure, _) => enclosure.span(),
+        ast::RetraceBody::Single(item) => chain_span(item),
     };
-    Some(content.merge(source.span_of(retrace.marker)?))
+    content.merge(retrace.marker.span())
 }
 
-/// The extent of an admitted chain through its annotations. Failure means
-/// source provenance could not place a part, never an unsupported item kind.
-fn chain_span(item: &ast::Chain<'_>, source: SourceText<'_>) -> Option<Span> {
-    Some(match item {
+/// The total extent of an admitted chain through its annotations.
+fn chain_span(item: &ast::Chain<'_>) -> Span {
+    match item {
         ast::Chain::Word(word) => {
             let start = match word.replacement() {
-                Some(replacement) => word.source().span().merge(replacement.span_in(source)?),
+                Some(replacement) => word.source().span().merge(replacement.span()),
                 None => word.source().span(),
             };
             annotations_hull(start, &word.annotations)
         }
-        ast::Chain::Event(event, annotations) => {
-            annotations_hull(event.location.span()?, annotations)
-        }
+        ast::Chain::Event(event, annotations) => annotations_hull(event.span(), annotations),
         ast::Chain::Group(enclosure, _, annotations) => {
-            annotations_hull(enclosure.span_in(source)?, annotations)
+            annotations_hull(enclosure.span(), annotations)
         }
         ast::Chain::Quotation(quotation) => {
-            annotations_hull(quotation.enclosure.span_in(source)?, &quotation.annotations)
+            annotations_hull(quotation.enclosure.span(), &quotation.annotations)
         }
         ast::Chain::Wrapped(retrace) => {
-            annotations_hull(retrace_span(retrace, source)?, &retrace.annotations)
+            annotations_hull(retrace_span(retrace), &retrace.annotations)
         }
-        ast::Chain::Action(zero, annotations) => {
-            annotations_hull(source.span_of(zero)?, annotations)
-        }
-    })
+        ast::Chain::Action(zero, annotations) => annotations_hull(zero.span(), annotations),
+    }
 }
 
 /// `start` widened through every annotation's admitted source span.
@@ -309,17 +302,14 @@ fn annotations_hull(start: Span, annotations: &[ast::ScopedAnnotationParsed<'_>]
 /// replacement's closing `]` and any scoped annotation written after it, as
 /// the model's wrapper and the tree-sitter node both measure it.
 fn replaced_word_location(
-    word: &Word,
+    word: crate::source_text::SourceSlice<'_>,
     replacement: &ast::ReplacementParsed<'_>,
     annotations: &[ast::ScopedAnnotationParsed<'_>],
-    source: SourceText<'_>,
 ) -> talkbank_model::Location {
-    super::located(word.location.span().and_then(|word| {
-        Some(annotations_hull(
-            word.merge(replacement.span_in(source)?),
-            annotations,
-        ))
-    }))
+    talkbank_model::Location::Located(annotations_hull(
+        word.span().merge(replacement.span()),
+        annotations,
+    ))
 }
 
 /// The location of an `Annotated` wrapper: its construct through its last
@@ -410,7 +400,7 @@ pub(crate) fn content_item_to_bracketed(
         ast::ContentItem::Word(w) => chain::word(w),
         ast::ContentItem::Pause(pause) => BracketedItem::Pause(pause.clone()),
         ast::ContentItem::Event(event, annotations) => chain::event(event, annotations),
-        ast::ContentItem::Action { zero, annotations } => chain::action(zero, annotations, source),
+        ast::ContentItem::Action { zero, annotations } => chain::action(*zero, annotations),
         ast::ContentItem::OtherSpokenEvent(event) => BracketedItem::OtherSpokenEvent(event.clone()),
         ast::ContentItem::Separator(separator) => BracketedItem::Separator(separator.clone()),
         ast::ContentItem::Group(g) => {
@@ -458,7 +448,7 @@ pub(crate) fn content_item_to_bracketed(
                 .map(|i| content_item_to_bracketed(i, source))
                 .collect();
             BracketedItem::PhoGroup(PhoGroup::new(
-                super::located(group.enclosure.span_in(source)),
+                talkbank_model::Location::Located(group.enclosure.span()),
                 BracketedContent::new(items),
             ))
         }
@@ -469,7 +459,7 @@ pub(crate) fn content_item_to_bracketed(
                 .map(|i| content_item_to_bracketed(i, source))
                 .collect();
             BracketedItem::SinGroup(SinGroup::new(
-                super::located(group.enclosure.span_in(source)),
+                talkbank_model::Location::Located(group.enclosure.span()),
                 BracketedContent::new(items),
             ))
         }

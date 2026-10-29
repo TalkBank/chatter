@@ -70,6 +70,14 @@ that failed structural marker into ordinary word text. Complete rich lexer
 words already exclude this shape; the direct scanner API preserves rejection
 as well. This boundary is distinct from full-file CHAT validation.
 
+All rich-word lexer rules extract their body from the same `w_body` production,
+including the malformed-suffix recovery rule. Its shortening atoms contain
+nonempty text and a closing parenthesis; its underline atoms contain both
+control characters. Word-text atoms exclude those structural characters, so
+they cannot introduce partial shortenings or underline markers. The scanner's
+fallible API remains necessary for independently supplied bodies. Admission
+here does not certify suffixes, annotations or whole-word validity.
+
 Native CA marker carriers retain shared `CAElementType` and `CADelimiterType`
 alongside their source lexemes. Character scanning uses the shared generated
 symbol registry; lowering only adds location to the retained kind. There is no
@@ -370,10 +378,11 @@ For developers, these are mandatory constraints:
   location. Preserve useful content where sound, but never fabricate valid
   structure, discard faults silently, or treat a recovered result as valid.
   A broader honest diagnostic is preferable to invented specificity.
-- Adjudicate differences as a genuine semantic defect, an acceptable
-  architectural difference, or an explicitly unsupported experimental feature.
+- Adjudicate differences as a semantic defect, an incomplete implementation,
+  or an acceptable architectural difference. Missing required error detection
+  remains a 1.0 blocker, including for features still under development.
   Retain valid controls and invalid-input rejection tests. Do not weaken a
-  CHAT rule or change a baseline solely to make a comparison pass.
+  CHAT rule or exempt a missed error to make a comparison pass.
 - Exact diagnostic codes, wording, counts, ordering, rejection stage and
   recovery output are **not cross-backend requirements**. Fix an inaccurate
   diagnostic for its user impact, not because the other backend differs.
@@ -597,6 +606,38 @@ Valid postcode JSON retains its `text` field; raw recovery uses `unparsed`.
 Sanitization refuses recovery with no admitted payload. Grammar-unmatched input
 such as `[+ ]` follows each backend's ordinary error recovery; this contract
 does not reconstruct a postcode from arbitrary ERROR text.
+
+A rich word's optional language suffix carries `WordLanguagePayload::Shortcut`
+for bare `@s` or `Codes(text)` for an explicit payload. Absence is the outer
+`None`; empty code text cannot become a shortcut during lowering. The parser
+admits code components through the shared `LanguageCode` constructor before
+building `WordWithAnnotations`. Registry and spelling validity remain later
+validation responsibilities. Debugging token JSON records the payload kind;
+this does not change the shared-model wire format.
+
+Retrace annotations retain a `RetraceMarker` admitted against the parser's
+source. Marker folding preserves that evidence; conversion reads its span
+instead of trying to locate the text again. A foreign-source marker token is
+refused at annotation admission. Explicit inspection against another source
+still checks ownership. Marker JSON and equality retain their spelling-based
+contract; enclosing content has its own source-admission requirements.
+
+Group and quotation delimiters enter an `Enclosure` only after source ownership,
+nonempty spelling and nonoverlapping order have been checked. Delimiter kinds
+and enclosed content still belong to the grammar. The enclosure retains the
+complete source slice; replacement admission reuses this boundary and retains
+its own slice. Conversion reads stored spans instead of repeating delimiter
+lookups. Inspection against a supplied source remains fallible, while native
+JSON and the existing spelling/content equality contracts are preserved.
+
+Marker-chain event and action leaves retain their admitted source in
+`ParsedEvent` and `ZeroAction`. The event descriptor remains the shared checked
+`EventType`; converting it produces a located model event without exposing a
+mutable location inside the native chain. Zero admission refuses a token whose
+text is not exactly `0`. With word, enclosure and marker evidence retained too,
+chain and retrace extent calculation is total and takes no replacement source.
+This establishes geometry for the admitted chain, not validity of its CHAT
+semantics or one owner for arbitrary independently assembled native values.
 
 ### Source ownership and participant recovery
 

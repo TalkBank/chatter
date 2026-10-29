@@ -21,13 +21,14 @@
 //!
 //! Run:
 //! ```bash
-//! cargo test -p talkbank-parser-re2c --test categorize_divergences --release -- --ignored --nocapture
+//! cargo test -p talkbank-parser-re2c --test integration categorize_divergences::categorize_corpus_divergences --release -- --ignored --exact --nocapture
 //! ```
 
+use crate::diagnostic_json::{JsonPair, JsonReport, collect_cha_files};
+use crate::parser_attempt::{ComparisonModels, CompletedParserPair, ParserPairFailure};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
-use talkbank_model::errors::ErrorCollector;
-use talkbank_model::{ChatParser, ParseOutcome, SemanticEq};
+use std::path::{Path, PathBuf};
+use talkbank_model::SemanticEq;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
 
@@ -70,95 +71,6 @@ impl std::fmt::Display for Category {
             }
             Category::WordDiff { detail } => write!(f, "word/{detail}"),
             Category::Other { path } => write!(f, "other/{path}"),
-        }
-    }
-}
-
-/// Strip all "span" and "content_span" keys from a JSON value (in place).
-/// These are metadata fields skipped by SemanticEq, so including them in
-/// the diff produces false positives.
-fn strip_spans(val: &mut serde_json::Value) {
-    match val {
-        serde_json::Value::Object(map) => {
-            map.remove("span");
-            map.remove("content_span");
-            for v in map.values_mut() {
-                strip_spans(v);
-            }
-        }
-        serde_json::Value::Array(arr) => {
-            for v in arr {
-                strip_spans(v);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Compare two ChatFile JSON values and return the first divergent path.
-fn find_first_json_diff(
-    ts_val: &serde_json::Value,
-    re2c_val: &serde_json::Value,
-    path: &str,
-    depth: usize,
-) -> Option<(String, String, String)> {
-    if depth > 20 {
-        return Some((path.to_string(), "...".into(), "...".into()));
-    }
-    match (ts_val, re2c_val) {
-        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
-            // Check all keys in a
-            for (key, val_a) in a {
-                if let Some(val_b) = b.get(key) {
-                    let child_path = if path.is_empty() {
-                        key.clone()
-                    } else {
-                        format!("{path}.{key}")
-                    };
-                    if let Some(diff) = find_first_json_diff(val_a, val_b, &child_path, depth + 1) {
-                        return Some(diff);
-                    }
-                } else {
-                    return Some((
-                        format!("{path}.{key}"),
-                        format!("{val_a}"),
-                        "<missing>".into(),
-                    ));
-                }
-            }
-            // Check keys in b not in a
-            for key in b.keys() {
-                if !a.contains_key(key) {
-                    return Some((
-                        format!("{path}.{key}"),
-                        "<missing>".into(),
-                        format!("{}", b[key]),
-                    ));
-                }
-            }
-            None
-        }
-        (serde_json::Value::Array(a), serde_json::Value::Array(b)) => {
-            if a.len() != b.len() {
-                return Some((
-                    format!("{path}[]"),
-                    format!("len={}", a.len()),
-                    format!("len={}", b.len()),
-                ));
-            }
-            for (i, (va, vb)) in a.iter().zip(b.iter()).enumerate() {
-                let child_path = format!("{path}[{i}]");
-                if let Some(diff) = find_first_json_diff(va, vb, &child_path, depth + 1) {
-                    return Some(diff);
-                }
-            }
-            None
-        }
-        (a, b) if a == b => None,
-        (a, b) => {
-            let left = format!("{a}").chars().take(120).collect::<String>();
-            let right = format!("{b}").chars().take(120).collect::<String>();
-            Some((path.to_string(), left, right))
         }
     }
 }
@@ -267,40 +179,38 @@ fn classify_diff_path(path: &str) -> Category {
     }
 }
 
-fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    for entry in walkdir::WalkDir::new(base)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        if entry.path().extension().is_some_and(|ext| ext == "cha") {
-            files.push(entry.path().to_path_buf());
-        }
-    }
-    files.sort();
-    files
-}
-
 #[test]
 #[ignore = "needs the wild corpus; a report generator that emits a taxonomy \
            rather than a gate that can fail. Run with --ignored --nocapture."]
-fn categorize_corpus_divergences() {
+fn categorize_corpus_divergences() -> Result<(), Box<dyn std::error::Error>> {
     let base = crate::corpus_root::CorpusRoot::resolve().require();
-    if !base.exists() {
-        eprintln!("Skipping: {} not found", base.display());
-        return;
-    }
 
     eprintln!("Collecting .cha files from {}...", base.display());
-    let files = collect_cha_files(&base);
+    let files = collect_cha_files(&base)?;
     eprintln!("Found {} .cha files", files.len());
 
     let ts = TreeSitterParser::new().expect("tree-sitter grammar loads");
     let re2c = Re2cParser::new();
 
+    write_report(
+        &base,
+        &files,
+        Path::new("/tmp/re2c_divergence_categories.json"),
+        |path, source| CompletedParserPair::parse(path, source, &ts, &re2c),
+    )
+}
+
+fn write_report(
+    base: &Path,
+    files: &[PathBuf],
+    report_path: &Path,
+    mut parse: impl FnMut(&Path, &str) -> Result<CompletedParserPair, ParserPairFailure>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut category_counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut category_examples: BTreeMap<String, Vec<(String, String, String, String)>> =
         BTreeMap::new();
+    let mut native_rejected = 0;
+    let mut unclassified = 0;
     let mut total = 0;
     let mut divergent = 0;
 
@@ -309,23 +219,20 @@ fn categorize_corpus_divergences() {
             eprintln!("  Progress: {}/{} ({divergent} divergent)", i, files.len());
         }
 
-        let content = match std::fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
+        let content = std::fs::read_to_string(path)
+            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
         total += 1;
 
-        let ts_errors = ErrorCollector::new();
-        let ts_file = ts.parse_chat_file_streaming(&content, &ts_errors);
-
-        let re2c_errors = ErrorCollector::new();
-        let re2c_result = re2c.parse_chat_file(&content, 0, &re2c_errors);
-        let re2c_file = match re2c_result {
-            ParseOutcome::Parsed(f) => f,
-            ParseOutcome::Rejected => continue,
+        let attempts = parse(path, &content)?;
+        let (ts_file, re2c_file) = match attempts.models() {
+            ComparisonModels::Built { tree_sitter, re2c } => (tree_sitter, re2c),
+            ComparisonModels::NativeRejected => {
+                native_rejected += 1;
+                continue;
+            }
         };
 
-        if ts_file.semantic_eq(&re2c_file) {
+        if ts_file.semantic_eq(re2c_file) {
             continue;
         }
 
@@ -333,14 +240,11 @@ fn categorize_corpus_divergences() {
 
         // Serialize both to JSON for structural comparison.
         // Strip span fields (skipped by SemanticEq) to avoid false positives.
-        let mut ts_json = serde_json::to_value(&ts_file).unwrap_or_default();
-        let mut re2c_json = serde_json::to_value(&re2c_file).unwrap_or_default();
-        strip_spans(&mut ts_json);
-        strip_spans(&mut re2c_json);
-
-        if let Some((diff_path, ts_val, re2c_val)) =
-            find_first_json_diff(&ts_json, &re2c_json, "", 0)
-        {
+        let comparison = JsonPair::serialize(ts_file, re2c_file)?;
+        if let Some(difference) = comparison.first_difference(20)? {
+            let diff_path = difference.path;
+            let ts_val = difference.left;
+            let re2c_val = difference.right;
             let category = classify_diff_path(&diff_path);
             let cat_str = category.to_string();
             *category_counts.entry(cat_str.clone()).or_insert(0) += 1;
@@ -348,12 +252,14 @@ fn categorize_corpus_divergences() {
             let examples = category_examples.entry(cat_str).or_default();
             if examples.len() < 3 {
                 let file_str = path
-                    .strip_prefix(&base)
+                    .strip_prefix(base)
                     .unwrap_or(path)
                     .display()
                     .to_string();
                 examples.push((file_str, diff_path, ts_val, re2c_val));
             }
+        } else {
+            unclassified += 1;
         }
     }
 
@@ -361,6 +267,8 @@ fn categorize_corpus_divergences() {
     eprintln!("\n=== DIVERGENCE CATEGORIZATION ===");
     eprintln!("Total files: {total}");
     eprintln!("Divergent: {divergent}");
+    eprintln!("Native parser rejected: {native_rejected}");
+    eprintln!("Semantic divergences without a JSON difference: {unclassified}");
     eprintln!("\nCategories (sorted by count):\n");
 
     let mut sorted: Vec<_> = category_counts.iter().collect();
@@ -411,9 +319,17 @@ fn categorize_corpus_divergences() {
         })
         .collect();
 
-    let report_path = "/tmp/re2c_divergence_categories.json";
-    if let Ok(json) = serde_json::to_string_pretty(&report) {
-        let _ = std::fs::write(report_path, &json);
-        eprintln!("\nFull categorized report written to {report_path}");
-    }
+    JsonReport::serialize(&report)?.write(report_path)?;
+    eprintln!(
+        "\nFull categorized report written to {}",
+        report_path.display()
+    );
+    Ok(())
+}
+
+#[test]
+fn internal_parser_faults_refuse_report_publication() -> Result<(), Box<dyn std::error::Error>> {
+    crate::parser_attempt::assert_report_admission(|base, files, destination, parse| {
+        crate::categorize_divergences::write_report(base, files, destination, parse)
+    })
 }

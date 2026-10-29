@@ -17,7 +17,7 @@
 //! for each grammar.js construct.
 
 use talkbank_parser_re2c::lexer::Lexer;
-use talkbank_parser_re2c::token::Token;
+use talkbank_parser_re2c::token::{Token, WordLanguagePayload};
 
 use talkbank_parser_re2c::lexer::{
     COND_COM_CONTENT, COND_GRA_CONTENT, COND_ID_CONTENT, COND_INITIAL, COND_LANGUAGES_CONTENT,
@@ -363,7 +363,7 @@ fn lex_lang_suffix() {
             t,
             Token::Word {
                 body: "hao3",
-                lang_suffix: Some("zho"),
+                lang_suffix: Some(WordLanguagePayload::Codes("zho")),
                 ..
             }
         )),
@@ -373,19 +373,71 @@ fn lex_lang_suffix() {
 
 #[test]
 fn lex_lang_suffix_bare() {
-    // bare @s → lang_suffix: Some("") (empty string, not None)
+    // Bare @s has an explicit state distinct from absent or empty code text.
     let tokens = lex("*X:\tdog@s .\n");
     assert!(
         tokens.iter().any(|t| matches!(
             t,
             Token::Word {
                 body: "dog",
-                lang_suffix: Some(""),
+                lang_suffix: Some(WordLanguagePayload::Shortcut),
                 ..
             }
         )),
         "got {tokens:?}"
     );
+}
+
+#[test]
+fn rich_word_language_states_preserve_all_prefix_and_suffix_boundaries() {
+    let cases = [
+        ("", None, serde_json::Value::Null),
+        (
+            "@s",
+            Some(WordLanguagePayload::Shortcut),
+            serde_json::json!({"kind": "shortcut"}),
+        ),
+        (
+            "@s:eng+fra",
+            Some(WordLanguagePayload::Codes("eng+fra")),
+            serde_json::json!({"kind": "codes", "codes": "eng+fra"}),
+        ),
+        (
+            "@s:eng&fra",
+            Some(WordLanguagePayload::Codes("eng&fra")),
+            serde_json::json!({"kind": "codes", "codes": "eng&fra"}),
+        ),
+    ];
+    for prefix in ["", "0", "&-", "&~", "&+"] {
+        for (suffix, expected, wire) in &cases {
+            for pos in ["", "$n"] {
+                let word = format!("{prefix}dog{suffix}{pos}");
+                let input = format!("*X:\t{word} .\n");
+                let tokens = lex(&input);
+                let words: Vec<_> = tokens
+                    .iter()
+                    .filter(|token| matches!(token, Token::Word { .. }))
+                    .collect();
+                assert_eq!(words.len(), 1, "{input}");
+                let Token::Word {
+                    raw_text,
+                    body,
+                    lang_suffix,
+                    pos_tag,
+                    ..
+                } = words[0]
+                else {
+                    unreachable!("filtered to rich words")
+                };
+                assert_eq!(*raw_text, word, "{input}");
+                assert_eq!(*body, "dog", "{input}");
+                assert_eq!(lang_suffix, expected, "{input}");
+                assert_eq!(*pos_tag, if pos.is_empty() { None } else { Some("n") });
+                let serialized = serde_json::to_value(words[0]).unwrap();
+                assert_eq!(&serialized["Word"]["lang_suffix"], wire, "{input}");
+            }
+        }
+    }
 }
 
 #[test]

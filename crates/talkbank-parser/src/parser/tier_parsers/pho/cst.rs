@@ -1,8 +1,8 @@
 //! Source-bound CST decoding for `%pho` and `%mod` tiers.
 
 use crate::generated_traversal::{
-    AsRawNode, ModDependentTierNode, NoChild, NonMissingKindSlot, PhoDependentTierNode,
-    PhoGroupNode, PhoGroupsNode, SourceBound, SourceField, SourceSlotView,
+    AsRawNode, ModDependentTierNode, NonMissingKindSlot, PhoDependentTierNode, PhoGroupNode,
+    PhoGroupsNode, SourceBound, SourceField, SourceSlotView,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::typed_cst::ExtractCanonical;
@@ -102,8 +102,13 @@ fn parse_pho_groups<'tree>(
 
 /// Decode present groups, diagnose Error, and omit absent positions.
 /// Compiled admission excludes MISSING at this composite group position.
-fn push_pho_group<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, PhoGroupNode<'tree>>>,
+fn push_pho_group<'tree, A: crate::generated_traversal::Absence>(
+    slot: SourceField<
+        '_,
+        'tree,
+        '_,
+        NonMissingKindSlot<'tree, PhoGroupNode<'tree>, crate::generated_traversal::Raw, A>,
+    >,
     errors: &impl ErrorSink,
     items: &mut Vec<PhoItem>,
 ) -> Result<(), crate::CstFailure> {
@@ -115,7 +120,7 @@ fn push_pho_group<'tree>(
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(raw.raw_node(), source, "pho_groups"));
         }
-        SourceSlotView::Absent(NoChild) => {}
+        SourceSlotView::Absent(_) => {}
         SourceSlotView::Unexpected(never) => match never {},
     }
     Ok(())

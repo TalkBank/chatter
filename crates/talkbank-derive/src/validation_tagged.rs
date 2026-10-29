@@ -4,6 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Variant};
 
+use crate::bindings::TypeArguments;
 use crate::metadata;
 
 #[derive(Clone, Copy)]
@@ -82,7 +83,8 @@ impl TaggedEnum {
 /// Emission cannot accept raw syntax or resolve an annotation a second time.
 pub(crate) fn emit_tagged_enum(input: &TaggedEnum) -> TokenStream {
     let name = &input.name;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let (impl_generics, _, where_clause) = input.generics.split_for_impl();
+    let ty_generics = TypeArguments::new(&input.generics);
     let arms = input.variants.iter().map(|variant| {
         let name = &variant.name;
         let tag = variant.tag.to_tokens();
@@ -93,6 +95,7 @@ pub(crate) fn emit_tagged_enum(input: &TaggedEnum) -> TokenStream {
         }
     });
     quote! {
+        #[allow(non_upper_case_globals, non_camel_case_types)] // Generic declarations were linted on the input type.
         impl #impl_generics crate::model::ValidationTagged for #name #ty_generics #where_clause {
             fn validation_tag(&self) -> crate::model::ValidationTag {
                 // Patterns inspect only the discriminant, never moving a

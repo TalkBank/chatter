@@ -52,7 +52,7 @@ impl<'a> GoverningMarker<'a> {
     /// the walk holds the enum, and mapping between them at each call site gave
     /// "absent means the utterance governs" two owners.
     pub(crate) fn of(word: &'a Word, enclosing: Option<&'a CodeSwitchSpan>) -> Self {
-        match (word.lang.as_ref(), enclosing) {
+        match (word.language_marker(), enclosing) {
             (Some(own), _) => Self::Own(own),
             (None, Some(span)) => Self::Span(span),
             (None, None) => Self::Utterance,

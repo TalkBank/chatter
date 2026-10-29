@@ -2,6 +2,20 @@
 
 use serde::Serialize;
 
+/// A present rich-word language suffix, before shared-model admission.
+///
+/// Absence belongs to the owning token's `Option`. Explicit code text is
+/// checked during parser admission; an empty `Codes` payload is rejected,
+/// never reinterpreted as a shortcut.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "codes", rename_all = "snake_case")]
+pub enum WordLanguagePayload<'a> {
+    /// The observed bare `@s` marker.
+    Shortcut,
+    /// Source text following `@s:`, including any language separators.
+    Codes(&'a str),
+}
+
 /// A word's `@s` suffix: bare (`@s`, the shortcut that resolves like the
 /// utterance's declared language) or explicit (`@s:eng+zho`). The codes are
 /// `None` for the bare form, which is its own resolution rule rather than a

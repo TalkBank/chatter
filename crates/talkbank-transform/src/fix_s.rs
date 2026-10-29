@@ -128,7 +128,7 @@ fn collect_missing_explicit_languages_from_main_tier(
     //
     // An explicit code can be named by a `<...> [@s:eng]` span as well as by a
     // word's own `@s:eng`, and both mean the same thing about the transcript,
-    // so both must reach the header. Reading only `word.lang` declared `eng`
+    // so both must reach the header. Reading only `word.language_marker()` declared `eng`
     // for `how@s:eng to@s:eng` and not for `<how to> [@s:eng]`, which made the
     // header depend on the transcriber's choice of notation.
     //
@@ -186,7 +186,7 @@ fn record_missing_explicit_language(
     known: &mut Vec<LanguageCode>,
     missing: &mut Vec<RegisteredLanguageCode>,
 ) {
-    let Some(WordLanguageMarker::Explicit(code)) = word.lang.as_ref() else {
+    let Some(WordLanguageMarker::Explicit(code)) = word.language_marker() else {
         return;
     };
     record_missing_code(code, known, missing);
@@ -297,7 +297,7 @@ fn clear_matching_word_language_marker(
     declared_languages: talkbank_model::DeclaredLanguagesRef<'_>,
     target: &UnspannedSwitchTarget,
 ) -> bool {
-    let Some(_) = word.lang.as_ref() else {
+    let Some(_) = word.language_marker() else {
         return false;
     };
 
@@ -308,7 +308,7 @@ fn clear_matching_word_language_marker(
     // any `&LanguageCode` could have satisfied and the dangerous call was
     // writable by anyone.
     if target.governs(word, tier_language, declared_languages) {
-        word.lang = None;
+        word.suffix = None;
         true
     } else {
         false

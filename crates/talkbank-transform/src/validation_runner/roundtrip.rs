@@ -41,27 +41,11 @@ pub enum RoundtripFailure {
         /// Findings refer to the serialized text, not the original input.
         diagnostics: Vec<talkbank_model::ParseError>,
     },
-    /// The model would not serialize on the given pass.
-    Serialization {
-        /// Which of the two passes refused.
-        pass: SerializationPass,
-        /// The writer's own error.
-        error: String,
-    },
     /// The two passes serialized differently.
     Mismatch {
         /// The first few differing lines, from [`build_text_diff`].
         diff: String,
     },
-}
-
-/// The two serializations a roundtrip makes.
-#[derive(Debug, Clone, Copy)]
-pub enum SerializationPass {
-    /// The already-parsed file, written.
-    First,
-    /// The re-parse of that text, written again.
-    Second,
 }
 
 impl RoundtripFailure {
@@ -72,23 +56,12 @@ impl RoundtripFailure {
             Self::Reparse { diagnostics } => {
                 let mut reason = "Roundtrip reparse rejected the serialized output".to_owned();
                 for diagnostic in diagnostics {
-                    use std::fmt::Write;
-                    // Writing to a String cannot fail.
-                    let _ = write!(
-                        reason,
-                        "\n{}: {}",
-                        diagnostic.code.as_str(),
-                        diagnostic.message
-                    );
+                    reason.push('\n');
+                    reason.push_str(diagnostic.code.as_str());
+                    reason.push_str(": ");
+                    reason.push_str(&diagnostic.message);
                 }
                 reason
-            }
-            Self::Serialization { pass, error } => {
-                let which = match pass {
-                    SerializationPass::First => 1,
-                    SerializationPass::Second => 2,
-                };
-                format!("Serialization failed (pass {which}): {error}")
             }
             Self::Mismatch { .. } => {
                 "Roundtrip mismatch (serialization not idempotent)".to_string()
@@ -100,7 +73,7 @@ impl RoundtripFailure {
     #[must_use]
     pub fn diff(&self) -> Option<&str> {
         match self {
-            Self::Serialization { .. } | Self::Reparse { .. } => None,
+            Self::Reparse { .. } => None,
             Self::Mismatch { diff } => Some(diff),
         }
     }
@@ -115,13 +88,7 @@ pub(super) fn run_roundtrip(
     parser: &ParserDispatch,
 ) -> Result<RoundtripResult, InternalFailure> {
     // Pass 1: serialize the already-parsed ChatFile
-    let mut serialized_a = String::new();
-    if let Err(err) = chat_file.write_chat(&mut serialized_a) {
-        return Ok(RoundtripResult::Failed(RoundtripFailure::Serialization {
-            pass: SerializationPass::First,
-            error: err.to_string(),
-        }));
-    }
+    let serialized_a = chat_file.to_chat_string();
 
     // Pass 2: re-parse the serialized output (parse-only, skip validation,
     // roundtrip checks serialization fidelity, not content validity)
@@ -138,13 +105,7 @@ pub(super) fn run_roundtrip(
     };
 
     // Serialize again (pass 2 output)
-    let mut serialized_b = String::new();
-    if let Err(err) = reparsed.write_chat(&mut serialized_b) {
-        return Ok(RoundtripResult::Failed(RoundtripFailure::Serialization {
-            pass: SerializationPass::Second,
-            error: err.to_string(),
-        }));
-    }
+    let serialized_b = reparsed.to_chat_string();
 
     // Compare: is serialization idempotent?
     if serialized_a == serialized_b {

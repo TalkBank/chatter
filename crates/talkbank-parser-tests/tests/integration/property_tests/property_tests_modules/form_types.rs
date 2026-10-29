@@ -18,7 +18,7 @@ proptest! {
         for parser in parser_suite_for_proptest().unwrap() {
             if let Ok(word) = parser.parse_word(&input) {
                 prop_assert_eq!(
-                    word.form_type,
+                    word.form_type().cloned(),
                     Some(FormType::B),
                     "[{}] failed to detect form type B in '{}'",
                     parser.name(),
@@ -35,7 +35,7 @@ proptest! {
         for parser in parser_suite_for_proptest().unwrap() {
             if let Ok(word) = parser.parse_word(&input) {
                 prop_assert_eq!(
-                    word.form_type,
+                    word.form_type().cloned(),
                     Some(FormType::C),
                     "[{}] failed to detect form type C in '{}'",
                     parser.name(),
@@ -52,7 +52,7 @@ proptest! {
         for parser in parser_suite_for_proptest().unwrap() {
             if let Ok(word) = parser.parse_word(&input) {
                 prop_assert_eq!(
-                    word.form_type,
+                    word.form_type().cloned(),
                     Some(FormType::D),
                     "[{}] failed to detect form type D in '{}'",
                     parser.name(),

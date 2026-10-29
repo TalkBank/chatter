@@ -19,9 +19,12 @@ pub mod category;
 pub mod content;
 /// Special form markers (`@a`..`@z:label`).
 pub mod form;
+mod form_label;
 /// Language override markers (`@s`, `@s:code`).
 pub mod language;
 mod lexical;
+mod pos_tag;
+mod suffix;
 /// Untranscribed word status (`xxx`, `yyy`, `www`).
 pub mod untranscribed;
 /// [`WordContents`], ordered sequence of content elements.
@@ -32,6 +35,7 @@ mod word_serialize;
 mod word_type;
 /// [`Validate`] implementations for [`Word`] and [`WordContents`].
 mod word_validate;
+mod word_wire;
 
 pub use ca::{CADelimiter, CADelimiterType, CAElement, CAElementType, NotationFamily};
 pub use category::{WordCategory, WordMaterial};
@@ -41,8 +45,11 @@ pub use content::{
     WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
 pub use form::{FormMarkerPayload, FormType, UndeclaredFormMarker};
+pub use form_label::{FormLabel, InvalidFormLabel};
 pub use language::WordLanguageMarker;
 pub use lexical::{LexicalContribution, WordLexicalPart, WordLexicalParts};
+pub use pos_tag::{InvalidWordPosTag, WordPosTag};
+pub use suffix::{ConflictingWordSuffixes, WordSuffix};
 pub use untranscribed::{MarkerSpelling, UntranscribedStatus};
 pub use word_contents::WordContents;
 pub use word_type::Word;

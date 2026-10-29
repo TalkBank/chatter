@@ -10,8 +10,8 @@
 
 use crate::generated_traversal::{
     AdmittedGraContentsChildren, AsRawNode, GraContentsNode, GraDependentTierChildren,
-    GraDependentTierNode, GraRelationNode, KindSlot, NoChild, RangeAdmittedChildren, Ranged,
-    ReadableSlot, SourceBound, SourceChildren, SourceSlice, WhitespacesNode,
+    GraDependentTierNode, GraRelationNode, KindSlot, RangeAdmittedChildren, Ranged, ReadableSlot,
+    SourceBound, SourceChildren, SourceSlice, WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::{ParsedDependentTier, dependent_tier_separator};
@@ -233,12 +233,12 @@ fn lower_gra_relations<'tree, 'source>(
 /// positions (`check_not_missing` / `unexpected_node_error`), for consistency.
 /// Source ownership does not narrow these recovery states. Keep their handling
 /// until the producer's slot types establish a stronger invariant.
-fn push_gra_separator<'tree, 'source>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, WhitespacesNode<'tree>>, Ranged<'source>>,
+fn push_gra_separator<'tree, 'source, A: crate::generated_traversal::Absence>(
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, WhitespacesNode<'tree>>, Ranged<'source>, A>,
     errors: &impl ErrorSink,
 ) {
     match slot {
-        ReadableSlot::Present(_) | ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Present(_) | ReadableSlot::Absent(_) => {}
         ReadableSlot::Missing(raw) => {
             check_not_missing(raw.raw_node(), raw.source(), errors, "gra_contents");
         }
@@ -262,11 +262,12 @@ fn push_gra_separator<'tree, 'source>(
 ///
 /// Only a Present relation is a declaration. Its parsed/rejected result is
 /// recorded atomically; Error/Absent does not invent a declaration or relation.
-fn push_gra_relation<'tree, 'source>(
+fn push_gra_relation<'tree, 'source, A: crate::generated_traversal::Absence>(
     slot: &crate::generated_traversal::NonMissingKindSlot<
         'tree,
         SourceBound<'tree, 'source, GraRelationNode<'tree>>,
         Ranged<'source>,
+        A,
     >,
     errors: &impl ErrorSink,
     lowering: &mut GraLowering,
@@ -284,7 +285,7 @@ fn push_gra_relation<'tree, 'source>(
         }
         ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
-        ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Absent(_) => {}
     }
     Ok(())
 }
@@ -298,6 +299,9 @@ fn surface_source_displaced(
         surface_displaced(&[node.raw_node()], context, node.source(), errors);
     }
 }
+
+#[cfg(test)]
+use crate::generated_traversal::NoChild;
 
 #[cfg(test)]
 mod range_tests {

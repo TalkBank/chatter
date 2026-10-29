@@ -138,7 +138,7 @@ fn main() -> std::process::ExitCode {
         }
     };
     match result {
-        Ok(()) => std::process::ExitCode::SUCCESS,
+        Ok(()) => exit_codes::ExitStatus::Success.finish(),
         Err(stop) => stop.finish(),
     }
 }

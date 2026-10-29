@@ -59,6 +59,58 @@ fn schema_prints_valid_json_schema() -> Result<(), TestError> {
     Ok(())
 }
 
+/// Enabled tracing cannot become part of the command's JSON result stream.
+#[test]
+fn enabled_logging_keeps_schema_json_on_stdout_and_logs_on_stderr() -> Result<(), TestError> {
+    #[derive(Clone, Copy)]
+    enum Activation {
+        Environment,
+        Verbosity,
+    }
+    #[derive(Clone, Copy)]
+    enum Encoding {
+        Text,
+        Json,
+    }
+    let harness = CliHarness::new()?;
+    for activation in [Activation::Environment, Activation::Verbosity] {
+        for encoding in [Encoding::Text, Encoding::Json] {
+            let mut command = harness.chatter_cmd();
+            command.env_remove("RUST_LOG");
+            match activation {
+                Activation::Environment => {
+                    command.env("RUST_LOG", "debug");
+                }
+                Activation::Verbosity => {
+                    command.arg("-vvv");
+                }
+            }
+            command.args([
+                "--log-format",
+                match encoding {
+                    Encoding::Text => "text",
+                    Encoding::Json => "json",
+                },
+                "schema",
+            ]);
+            let output = command.output()?;
+            assert_success(&output, "schema with enabled logging");
+            assert!(parse_json(&output)?.get("$defs").is_some());
+            let stderr = std::str::from_utf8(&output.stderr).expect("UTF-8 trace records");
+            assert!(stderr.contains("Logging initialized"), "{stderr:?}");
+            match encoding {
+                Encoding::Text => {}
+                Encoding::Json => {
+                    for record in stderr.lines() {
+                        assert!(serde_json::from_str::<serde_json::Value>(record)?.is_object());
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// `chatter schema --url` prints only the canonical schema URL, not the
 /// full schema body.
 #[test]
@@ -252,7 +304,13 @@ fn watch_help_documents_command() -> Result<(), TestError> {
 #[test]
 fn watch_requires_path_argument() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
-    harness.chatter_cmd().arg("watch").assert().code(2);
+    harness
+        .chatter_cmd()
+        .arg("watch")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("required arguments"))
+        .stderr(predicate::str::contains("<PATH>"));
     Ok(())
 }
 
@@ -270,6 +328,7 @@ fn max_errors_zero_is_a_usage_error() -> Result<(), TestError> {
         .args(["--max-errors", "0"])
         .assert()
         .code(2)
+        .stderr(predicate::str::contains("invalid value '0'"))
         .stderr(predicate::str::contains("--max-errors"));
     Ok(())
 }
@@ -303,7 +362,10 @@ fn jobs_zero_is_a_usage_error() -> Result<(), TestError> {
         .args(["--jobs", "0"])
         .assert();
     for refused in [validate_long, validate_short, to_json] {
-        refused.code(2).stderr(predicate::str::contains("--jobs"));
+        refused
+            .code(2)
+            .stderr(predicate::str::contains("invalid value '0'"))
+            .stderr(predicate::str::contains("--jobs"));
     }
     Ok(())
 }
@@ -380,64 +442,104 @@ fn program_name_is_pinned_regardless_of_argv0() -> Result<(), TestError> {
 /// --quiet`.
 #[test]
 fn conflicting_output_flags_are_usage_errors() -> Result<(), TestError> {
-    let dir = tempfile::tempdir()?;
-    let file = dir.path().join("a.cha");
-    std::fs::write(
-        &file,
-        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n",
-    )?;
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let file = reference_fixture(CONVERSATION_FIXTURE);
     let audit = dir.path().join("out.jsonl");
-    for args in [
-        vec![
-            "--audit",
-            audit.to_str().expect("utf-8"),
+    for (args, conflict) in [
+        (
+            vec![
+                "--audit",
+                audit.to_str().expect("utf-8"),
+                "--format",
+                "json",
+            ],
             "--format",
-            "json",
-        ],
-        vec!["--audit", audit.to_str().expect("utf-8"), "--quiet"],
-        vec!["--format", "json", "--quiet"],
-        vec!["--format", "json", "--tui-mode", "force"],
-        // An audit never writes the cache; --force would clear rows.
-        vec!["--audit", audit.to_str().expect("utf-8"), "--refresh-cache"],
+        ),
+        (
+            vec!["--audit", audit.to_str().expect("utf-8"), "--quiet"],
+            "--quiet",
+        ),
+        (vec!["--format", "json", "--quiet"], "--quiet"),
+        (
+            vec!["--format", "json", "--tui-mode", "force"],
+            "--tui-mode",
+        ),
+        // Audit mode is read-only; refreshing cached results requires writes.
+        (
+            vec!["--audit", audit.to_str().expect("utf-8"), "--refresh-cache"],
+            "--refresh-cache",
+        ),
     ] {
-        let output = crate::common::chatter_cmd()
+        harness
+            .chatter_cmd()
             .arg("validate")
             .arg(&file)
             .args(&args)
-            .output()?;
-        assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("cannot be used with"))
+            .stderr(predicate::str::contains(conflict));
         assert!(!audit.exists(), "{args:?} wrote the audit file");
     }
     Ok(())
 }
 
-/// A flag that a command would ignore is a usage error instead:
-/// `normalize --skip-alignment` without `--validate`, and `to-json
-/// --skip-validation --skip-alignment` (skipping validation already skips
-/// alignment).
+/// Ineffective check combinations fail at flag admission, while each supported
+/// check selection reaches conversion or formatting with a real reference input.
 #[test]
 fn flags_a_command_would_ignore_are_usage_errors() -> Result<(), TestError> {
-    let dir = tempfile::tempdir()?;
-    let file = dir.path().join("a.cha");
-    std::fs::write(
-        &file,
-        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n",
-    )?;
-    for args in [
-        vec!["format", "--skip-alignment"],
-        vec![
+    let harness = CliHarness::new()?;
+    let file = reference_fixture(CONVERSATION_FIXTURE);
+
+    harness
+        .chatter_cmd()
+        .args(["format", "--skip-alignment"])
+        .arg(&file)
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("required arguments"))
+        .stderr(predicate::str::contains("--validate"));
+    harness
+        .chatter_cmd()
+        .args([
             "convert",
             "to-json",
             "--skip-validation",
             "--skip-alignment",
-        ],
-    ] {
-        let output = crate::common::chatter_cmd()
-            .args(&args[..1])
+        ])
+        .arg(&file)
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used with"))
+        .stderr(predicate::str::contains("--skip-validation"))
+        .stderr(predicate::str::contains("--skip-alignment"));
+
+    harness
+        .chatter_cmd()
+        .args(["format", "--validate", "--skip-alignment"])
+        .arg(&file)
+        .assert()
+        .success();
+    for check in ["--skip-validation", "--skip-alignment"] {
+        let output = harness
+            .chatter_cmd()
+            .args(["convert", "to-json", check])
             .arg(&file)
-            .args(&args[1..])
             .output()?;
-        assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
+        assert_success(&output, check);
+        let value = parse_json(&output)?;
+        let fields = value.as_object().expect("transcript JSON object");
+        assert_eq!(
+            fields.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["lines"]
+        );
+        assert!(
+            !fields["lines"]
+                .as_array()
+                .expect("transcript lines")
+                .is_empty()
+        );
     }
     Ok(())
 }

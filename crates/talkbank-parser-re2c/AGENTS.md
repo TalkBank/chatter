@@ -82,7 +82,7 @@ honestly which it has:
 - **Located:** tiers, headers and main-tier words (`SourceText::span_of` on a
   borrowed `raw_text`). Also located: every item whose token keeps
   its WHOLE lexeme (`emit!` rules: terminators, linkers, overlap and
-  underline markers, the action marker, `%wor` separators), through
+  underline markers, `%wor` separators), through
   `convert::locate(source, slice)`, and every tier value, whose extent the
   line machine owns (`NonEmptyRegion::extent`, `NonEmptyRegion::main_tier_locations`;
   `LocatedMainTier`, `DependentTierEntryParsed::extent`). A line includes its
@@ -91,14 +91,17 @@ honestly which it has:
   `MainTierLocations` and nowhere else. Word-body markers (`WordBodyItem`)
   carry their lexeme from the character scanner, and the lengthening run is a `LengtheningRun` that
   owns the nonempty proof once. To locate a new item kind, make its token
-  carry the whole lexeme, then `locate` it in the converter; never recompute
-  an offset from payload lengths or from a neighbouring token.
+  retain its whole lexeme and admit source ownership before lowering; never
+  recompute an offset from payload lengths or from a neighbouring token.
+  Actions and events retain that admission in `ZeroAction` and `ParsedEvent`;
+  conversion consumes their spans without another source lookup.
 - **Located through `Extracted`:** a tag-extracting rule (`emit_t1!`,
   `emit_t1t2!`) emits `token::Extracted { payload, lexeme }`. `text()` is
   the payload (`eng` of `[- eng]`, `laughs` of `&=laughs`) and is what
   consumers read; `lexeme()` is the item as written and is the ONLY slice to
-  pass to `locate`. A payload slice locates the payload, not the item. Events,
-  freecodes, long features, nonvocals, the precode, the interposed-speaker prefix,
+  admit for placement. A payload slice locates the payload, not the item.
+  Events retain this admission in `ParsedEvent`; freecodes, long features,
+  nonvocals, the precode, the interposed-speaker prefix,
   bullets (`MediaBulletToken::text()`) and the
   whitespace token directly before the `@Media` comma are placed this way.
 - **Located as hulls:** groups and quotations from their `Enclosure`
@@ -106,9 +109,10 @@ honestly which it has:
   enclosure it took, or the one item it wraps) through its `marker`, a
   replaced word from the word through its last annotation, and every
   `Annotated` wrapper from its construct through its last annotation
-  (`ParsedAnnotation::span_in`). The helpers live in `convert/items.rs`
-  (`retrace_span`, `chain_span`, `annotations_hull`); a hull with any
-  part it cannot place is `Unlocated`, never a span that stops short. The
+  (`ScopedAnnotationParsed::span`). The helpers live in `convert/items.rs`
+  (`retrace_span`, `chain_span`, `annotations_hull`); admitted chain leaves,
+  enclosures, replacements and retrace markers retain their source spans, so
+  these hulls are total and do not repeat source admission. The
   model's E757 rule depends on these wrappers being placed; do not reintroduce
   a parser-side mirror of it.
 - **Unlocated:** nothing this backend builds from source, by design. Every
@@ -154,7 +158,7 @@ Token::Word {
     prefix: Option<&str>,      // "&-", "&~", "&+", or "0"
     body: &str,                // word body (parser handles internals)
     form_marker: Option<&str>, // "f", "z:grm" (content only, no @)
-    lang_suffix: Option<&str>, // "eng+zho" (no @s:), "" for bare @s
+    lang_suffix: Option<WordLanguagePayload>, // Codes("eng+zho") or Shortcut
     pos_tag: Option<&str>,     // "n", "adj" (no $)
 }
 ```

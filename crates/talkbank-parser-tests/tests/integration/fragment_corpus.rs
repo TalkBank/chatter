@@ -785,6 +785,7 @@ fn reference_dependent_tiers_preserve_semantics_through_standalone_api() {
 #[test]
 fn file_fragments_preserve_models_and_snippet_relative_diagnostics() {
     let parser = TreeSitterParser::new().expect("parser");
+    let mut mapped_diagnostics = 0;
     for root in [
         "corpus/reference",
         "crates/talkbank-parser-tests/tests/error_corpus/validation_errors",
@@ -812,14 +813,28 @@ fn file_fragments_preserve_models_and_snippet_relative_diagnostics() {
                     fixture.path().display()
                 );
                 let mut expected_errors = baseline_errors.to_vec();
-                for error in &mut expected_errors {
-                    error.location.shift_spans_after(0, offset as isize);
-                    for label in &mut error.labels {
-                        label.span.shift_spans_after(0, offset as isize);
-                    }
-                    // Context points into its retained snippet, not the caller's
-                    // enclosing document; do not shift those coordinates.
-                }
+                // Exercise the public diagnostic owner, not a parallel field
+                // walk. Context still belongs to its independently owned snippet.
+                expected_errors.shift_spans_after(0, offset as isize);
+                // Checked mapping is a separate API from both edit shifting
+                // and the parser's diagnostic-translation adapter. Original
+                // parser diagnostics provide the input, including their snippets.
+                let mapped_errors = baseline_errors
+                    .to_vec()
+                    .try_map_spans(&mut |span| {
+                        Ok::<_, std::convert::Infallible>(talkbank_model::Span::new(
+                            span.start() + offset,
+                            span.end() + offset,
+                        ))
+                    })
+                    .expect("bounded fixture displacement is infallible");
+                mapped_diagnostics += mapped_errors.len();
+                assert_eq!(
+                    mapped_errors,
+                    expected_errors,
+                    "checked diagnostic map: {} at {offset}",
+                    fixture.path().display()
+                );
                 assert_eq!(
                     errors.to_vec(),
                     expected_errors,
@@ -829,6 +844,11 @@ fn file_fragments_preserve_models_and_snippet_relative_diagnostics() {
             }
         }
     }
+    assert!(
+        mapped_diagnostics > 0,
+        "diagnostic mapping needs source witnesses"
+    );
+    eprintln!("source diagnostic mapping comparisons: {mapped_diagnostics}");
 }
 
 #[test]

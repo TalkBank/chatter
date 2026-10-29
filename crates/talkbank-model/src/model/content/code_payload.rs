@@ -15,9 +15,38 @@ pub(super) struct CodePayload {
 
 #[derive(Clone, Debug, PartialEq, SemanticEq, SpanShift)]
 enum State {
+    Text(TextPayload),
+    UnparsedSource(SmolStr),
+}
+
+/// Text classification cannot produce retained source for an unparsed code.
+#[derive(Clone, Debug, PartialEq, SemanticEq, SpanShift)]
+enum TextPayload {
     Code(SmolStr),
     MissingContent(SmolStr),
-    UnparsedSource(SmolStr),
+}
+
+impl TextPayload {
+    fn new(text: impl Into<SmolStr>) -> Self {
+        let text = text.into();
+        if text.trim_end().is_empty() {
+            Self::MissingContent(text)
+        } else {
+            Self::Code(text)
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Code(text) | Self::MissingContent(text) => text,
+        }
+    }
+
+    fn into_text(self) -> SmolStr {
+        match self {
+            Self::Code(text) | Self::MissingContent(text) => text,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -39,7 +68,9 @@ impl From<CodePayloadWire> for CodePayload {
 impl From<CodePayload> for CodePayloadWire {
     fn from(value: CodePayload) -> Self {
         match value.state {
-            State::Code(text) | State::MissingContent(text) => Self::Text { text },
+            State::Text(text) => Self::Text {
+                text: text.into_text(),
+            },
             State::UnparsedSource(unparsed) => Self::Unparsed { unparsed },
         }
     }
@@ -47,13 +78,9 @@ impl From<CodePayload> for CodePayloadWire {
 
 impl CodePayload {
     pub(super) fn new(text: impl Into<SmolStr>) -> Self {
-        let text = text.into();
-        let state = if text.trim_end().is_empty() {
-            State::MissingContent(text)
-        } else {
-            State::Code(text)
-        };
-        Self { state }
+        Self {
+            state: State::Text(TextPayload::new(text)),
+        }
     }
 
     pub(super) fn unparsed(source: impl Into<SmolStr>) -> Self {
@@ -63,25 +90,25 @@ impl CodePayload {
     }
 
     pub(super) fn from_lexed(payload: &str, lexeme: &str) -> Self {
-        let value = Self::new(payload.trim_end());
-        match value.state {
-            State::Code(_) => value,
-            State::MissingContent(_) => Self::unparsed(lexeme),
-            State::UnparsedSource(_) => value,
+        match TextPayload::new(payload.trim_end()) {
+            text @ TextPayload::Code(_) => Self {
+                state: State::Text(text),
+            },
+            TextPayload::MissingContent(_) => Self::unparsed(lexeme),
         }
     }
 
     pub(super) fn text(&self) -> Option<&str> {
         match &self.state {
-            State::Code(text) => Some(text),
-            State::MissingContent(_) | State::UnparsedSource(_) => None,
+            State::Text(TextPayload::Code(text)) => Some(text),
+            State::Text(TextPayload::MissingContent(_)) | State::UnparsedSource(_) => None,
         }
     }
 
     pub(super) fn unparsed_source(&self) -> Option<&str> {
         match &self.state {
             State::UnparsedSource(source) => Some(source),
-            State::Code(_) | State::MissingContent(_) => None,
+            State::Text(_) => None,
         }
     }
 
@@ -91,9 +118,9 @@ impl CodePayload {
         w: &mut W,
     ) -> Result<(), W::Error> {
         match &self.state {
-            State::Code(text) | State::MissingContent(text) => {
+            State::Text(text) => {
                 w.write_str(opening)?;
-                w.write_str(text)?;
+                w.write_str(text.as_str())?;
                 w.write_char(']')
             }
             State::UnparsedSource(source) => w.write_str(source),

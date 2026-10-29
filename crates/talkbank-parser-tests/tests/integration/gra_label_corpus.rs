@@ -1,4 +1,4 @@
-//! A GRA label is one lexical token; vocabulary and graph validity remain separate.
+//! GRA source lowering and lexical admission; graph validity remains separate.
 
 use talkbank_model::model::{
     ChatFile, GrammaticalRelation, GrammaticalRelationType, TranscriptName, WriteChat,
@@ -136,4 +136,70 @@ fn check_gra_label_contracts(parser: &impl ChatParser) {
 fn authored_gra_labels_preserve_source_wire_and_vocabulary_in_both_backends() {
     check_gra_label_contracts(&talkbank_parser::TreeSitterParser::new().unwrap());
     check_gra_label_contracts(&talkbank_parser_re2c::Re2cParser::new());
+}
+
+#[test]
+fn source_lowered_gra_tiers_retain_at_least_one_relation() {
+    fn check(parser: &impl ChatParser) -> std::collections::BTreeMap<std::path::PathBuf, usize> {
+        let mut retained = 0;
+        let mut empty = Vec::new();
+        let mut sources = std::collections::BTreeMap::new();
+        for root in [
+            "corpus/reference",
+            "crates/talkbank-parser-tests/tests/error_corpus/validation_errors",
+        ] {
+            let corpus =
+                talkbank_parser_tests::chat_corpus::ChatCorpus::read(&workspace_root().join(root))
+                    .unwrap();
+            for fixture in corpus.fixtures() {
+                let errors = ErrorCollector::new();
+                let talkbank_model::ParseOutcome::Parsed(file) =
+                    parser.parse_chat_file(fixture.source(), 0, &errors)
+                else {
+                    continue;
+                };
+                for tier in file
+                    .utterances()
+                    .flat_map(|utterance| &utterance.dependent_tiers)
+                {
+                    if let talkbank_model::model::DependentTier::Gra(gra) = &tier.tier {
+                        retained += 1;
+                        *sources.entry(fixture.path().to_path_buf()).or_insert(0) += 1;
+                        if gra.is_empty() {
+                            empty.push(fixture.path().display().to_string());
+                        }
+                    }
+                }
+            }
+        }
+        assert!(retained > 0, "{} needs GRA witnesses", parser.parser_name());
+        assert!(
+            empty.is_empty(),
+            "{} lowered empty GRA tiers: {empty:?}",
+            parser.parser_name()
+        );
+        eprintln!(
+            "{} nonempty source-lowered GRA tiers: {retained}",
+            parser.parser_name()
+        );
+        sources
+    }
+    let tree = check(&talkbank_parser::TreeSitterParser::new().unwrap());
+    let native = check(&talkbank_parser_re2c::Re2cParser::new());
+    // Recovery products need not be identical. Keep any population difference
+    // visible for adjudication without mistaking it for an empty parsed tier.
+    for path in tree
+        .keys()
+        .chain(native.keys())
+        .collect::<std::collections::BTreeSet<_>>()
+    {
+        if tree.get(path) != native.get(path) {
+            eprintln!(
+                "GRA retention difference {}: Tree-sitter {:?}, re2c {:?}",
+                path.display(),
+                tree.get(path),
+                native.get(path)
+            );
+        }
+    }
 }

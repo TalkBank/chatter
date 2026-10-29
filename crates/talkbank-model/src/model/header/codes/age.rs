@@ -195,6 +195,10 @@ impl AgeValue {
     }
 
     /// Read admitted components; unsupported input has no numeric projection.
+    ///
+    /// Years fit in `u16`, months and days in `u8`. Unrepresentable spellings
+    /// retain their complete text through [`Self::as_str`]. Numeric admission
+    /// alone does not establish contextual validity or legal CHAT spelling.
     pub fn components(&self) -> Option<&AgeComponents> {
         match &self.state {
             AgeState::Valid { components, .. } => Some(components),
@@ -332,20 +336,38 @@ mod tests {
     /// still reports it.
     #[test]
     fn a_component_too_large_for_its_type_is_unsupported_not_zero() {
-        for text in ["2;300.", "2;300", "3;06.999", "1;256.", "1;06.256"] {
+        for text in [
+            "2;300.",
+            "2;300",
+            "3;06.999",
+            "1;256.",
+            "1;06.256",
+            "65536;",
+            "65536;06.05",
+            "999999999999999999999999;00.00",
+        ] {
             let age = AgeValue::from_text(text);
             assert!(age.components().is_none(), "{text}");
             assert_eq!(age.as_str(), text);
+            assert!(
+                !age.violates_depfile_pattern(),
+                "unsupported values use their own validation tag"
+            );
+            let wire = serde_json::to_string(&age).unwrap();
+            assert_eq!(wire, serde_json::to_string(text).unwrap());
+            let restored: AgeValue = serde_json::from_str(&wire).unwrap();
+            assert!(restored.components().is_none());
+            assert_eq!(restored.as_str(), text);
         }
     }
 
     #[test]
     fn the_largest_representable_component_still_parses() {
-        let age = AgeValue::from_text("1;255.255");
+        let age = AgeValue::from_text("65535;255.255");
         let components = age.components().unwrap();
         assert_eq!(
             (components.years(), components.months(), components.days()),
-            (1, Some(255), Some(255))
+            (65535, Some(255), Some(255))
         );
     }
 

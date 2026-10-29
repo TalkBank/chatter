@@ -47,23 +47,20 @@ pub struct WordWithAnnotations<'a> {
     pub(crate) category: Option<talkbank_model::model::WordCategory>,
     /// Word body content, mirrors model WordContent.
     pub(crate) body: Vec<WordBodyItem<'a>>,
-    /// Declared form marker, admitted by the shared registry before lowering.
-    pub(crate) form_marker: Option<talkbank_model::model::FormType>,
-    /// Language suffix. None if absent.
-    pub(crate) lang: Option<talkbank_model::model::WordLanguageMarker>,
+    /// One form or language suffix, admitted by the shared model before lowering.
+    #[serde(flatten, serialize_with = "serialize_word_suffix")]
+    pub(crate) suffix: Option<talkbank_model::WordSuffix>,
     /// POS tag: tag-extracted content (e.g., "n", "adj"). None if absent.
-    pub(crate) pos_tag: Option<&'a str>,
+    pub(crate) pos_tag: Option<talkbank_model::WordPosTag>,
     /// At most one replacement, admitted before the base-annotation run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) replacement: Option<ReplacementParsed<'a>>,
     /// Scoped annotations remaining on this word after marker-chain folding.
     pub(crate) annotations: Vec<ScopedAnnotationParsed<'a>>,
-    /// The word as written: its slice of the source, whether the lexer read
-    /// it as one rich token or the parser assembled it from subtokens (then
-    /// the slice runs from the first token's lexeme through the last's, and
-    /// includes a curly quote the file parser stripped and reported between
-    /// them, which `body` does not). Always borrowed, so every word can be
-    /// placed.
+    /// The complete rich token's original bytes, admitted against the parser
+    /// source before body and suffix parsing. Lexical words are never assembled
+    /// from standalone marker tokens. The borrowed slice retains the word's
+    /// position independently of its structured body.
     #[serde(rename = "raw_text", serialize_with = "serialize_word_source")]
     pub(crate) source: crate::source_text::SourceSlice<'a>,
 }
@@ -73,6 +70,29 @@ fn serialize_word_source<S: serde::Serializer>(
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(source.text())
+}
+
+// Preserve the low-level debugging JSON's field names without retaining two
+// independently writable semantic fields. This is output-only projection.
+fn serialize_word_suffix<S: serde::Serializer>(
+    suffix: &Option<talkbank_model::WordSuffix>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeStruct;
+    let mut state = serializer.serialize_struct("WordSuffix", 2)?;
+    state.serialize_field(
+        "form_marker",
+        &suffix
+            .as_ref()
+            .and_then(talkbank_model::WordSuffix::form_type),
+    )?;
+    state.serialize_field(
+        "lang",
+        &suffix
+            .as_ref()
+            .and_then(talkbank_model::WordSuffix::language_marker),
+    )?;
+    state.end()
 }
 
 impl<'a> WordWithAnnotations<'a> {
@@ -98,17 +118,21 @@ impl<'a> WordWithAnnotations<'a> {
 
     /// Form admitted by the shared registry.
     pub fn form_marker(&self) -> Option<&talkbank_model::model::FormType> {
-        self.form_marker.as_ref()
+        self.suffix
+            .as_ref()
+            .and_then(talkbank_model::WordSuffix::form_type)
     }
 
     /// Admitted language suffix.
     pub fn lang(&self) -> Option<&talkbank_model::model::WordLanguageMarker> {
-        self.lang.as_ref()
+        self.suffix
+            .as_ref()
+            .and_then(talkbank_model::WordSuffix::language_marker)
     }
 
     /// Lexed part-of-speech suffix payload.
-    pub fn pos_tag(&self) -> Option<&'a str> {
-        self.pos_tag
+    pub fn pos_tag(&self) -> Option<&talkbank_model::WordPosTag> {
+        self.pos_tag.as_ref()
     }
 
     /// The word's optional replacement, admitted before scoped annotations.
@@ -122,6 +146,38 @@ impl<'a> WordWithAnnotations<'a> {
     }
 }
 
+/// A retrace marker retaining its admitted source and coordinates.
+///
+/// Equality and serialization preserve the original marker-text contract;
+/// location evidence is available separately through [`Self::span`].
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(transparent)]
+pub struct RetraceMarker<'a>(
+    #[serde(serialize_with = "serialize_word_source")] crate::source_text::SourceSlice<'a>,
+);
+
+impl<'a> RetraceMarker<'a> {
+    pub(crate) fn new(source: crate::source_text::SourceSlice<'a>) -> Self {
+        Self(source)
+    }
+
+    /// The complete marker exactly as written.
+    pub fn lexeme(self) -> &'a str {
+        self.0.text()
+    }
+
+    /// Coordinates in the source retained at admission.
+    pub fn span(self) -> talkbank_model::Span {
+        self.0.span()
+    }
+}
+
+impl PartialEq for RetraceMarker<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.lexeme() == other.lexeme()
+    }
+}
+
 /// A bracketed construct, classified once by the token-to-AST producer.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum ParsedAnnotation<'a> {
@@ -129,7 +185,7 @@ pub enum ParsedAnnotation<'a> {
     Scoped(ScopedAnnotationParsed<'a>),
     /// Retrace markers change the preceding content structure. The marker is
     /// kept as written (`[/]`, `[//]`, ...), for placement.
-    Retrace(RetraceKindParsed, &'a str),
+    Retrace(RetraceKindParsed, RetraceMarker<'a>),
     /// A replacement changes the word's structure.
     Replacement(ReplacementParsed<'a>),
     /// An utterance language code: payload `eng`, lexeme `[- eng]`.
@@ -141,11 +197,12 @@ pub enum ParsedAnnotation<'a> {
 /// A replacement admitted by the word grammar, nonempty by construction. Its
 /// complete source lexeme is retained at admission, including delimiters and
 /// whitespace; later consumers never reconstruct its spelling.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ReplacementParsed<'a> {
     first: Box<WordWithAnnotations<'a>>,
     rest: Vec<WordWithAnnotations<'a>>,
-    lexeme: &'a str,
+    #[serde(serialize_with = "serialize_word_source")]
+    lexeme: crate::source_text::SourceSlice<'a>,
 }
 
 /// Delimiters must belong to the parser source in authored order.
@@ -160,19 +217,18 @@ impl<'a> ReplacementParsed<'a> {
         rest: Vec<WordWithAnnotations<'a>>,
         end: &'a str,
     ) -> Result<Self, RefusedReplacementSource> {
-        let begin = source.span_of(begin).ok_or(RefusedReplacementSource)?;
-        let end = source.span_of(end).ok_or(RefusedReplacementSource)?;
-        if begin.end() > end.start() {
-            return Err(RefusedReplacementSource);
-        }
+        let enclosure =
+            super::Enclosure::new(source, begin, end).map_err(|_| RefusedReplacementSource)?;
         Ok(Self {
             first: Box::new(first),
             rest,
-            lexeme: source
-                .slice(begin.start()..end.end())
-                .map_err(|_| RefusedReplacementSource)?
-                .text(),
+            lexeme: enclosure.source(),
         })
+    }
+
+    /// The complete extent retained at admission.
+    pub fn span(&self) -> talkbank_model::Span {
+        self.lexeme.span()
     }
 
     /// The construct's extent in `source`, from `[:` through `]`; `None` when
@@ -181,7 +237,7 @@ impl<'a> ReplacementParsed<'a> {
         &self,
         source: crate::source_text::SourceText<'_>,
     ) -> Option<talkbank_model::Span> {
-        source.span_of(self.lexeme)
+        source.span_of(self.lexeme.text())
     }
 
     /// The required first word, admitted by the replacement grammar.
@@ -196,7 +252,13 @@ impl<'a> ReplacementParsed<'a> {
 
     /// Exact source bytes retained when the replacement was admitted.
     pub fn lexeme(&self) -> &'a str {
-        self.lexeme
+        self.lexeme.text()
+    }
+}
+
+impl PartialEq for ReplacementParsed<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.first == other.first && self.rest == other.rest && self.lexeme() == other.lexeme()
     }
 }
 
@@ -222,7 +284,7 @@ impl<'a> ParsedAnnotation<'a> {
     pub fn chat_text(&self) -> String {
         match self {
             Self::Scoped(scoped) => scoped.lexeme().to_owned(),
-            Self::Retrace(_, marker) => (*marker).to_owned(),
+            Self::Retrace(_, marker) => marker.lexeme().to_owned(),
             Self::Replacement(replacement) => replacement.lexeme().to_owned(),
             Self::Langcode(code) => code.lexeme().to_owned(),
             Self::Postcode(postcode) => postcode.lexeme().to_owned(),
@@ -248,7 +310,7 @@ impl<'a> ParsedAnnotation<'a> {
     ) -> Option<talkbank_model::Span> {
         match self {
             Self::Scoped(scoped) => source.span_of(scoped.lexeme()),
-            Self::Retrace(_, marker) => source.span_of(marker),
+            Self::Retrace(_, marker) => source.span_of(marker.lexeme()),
             Self::Replacement(replacement) => replacement.span_in(source),
             Self::Langcode(code) => source.span_of(code.lexeme()),
             Self::Postcode(postcode) => source.span_of(postcode.lexeme()),
@@ -320,7 +382,7 @@ impl<'a> ParsedAnnotation<'a> {
     /// The retrace kind and the marker as written, for a retrace annotation.
     pub fn retrace(&self) -> Option<(RetraceKindParsed, &'a str)> {
         match self {
-            ParsedAnnotation::Retrace(kind, marker) => Some((*kind, marker)),
+            ParsedAnnotation::Retrace(kind, marker) => Some((*kind, marker.lexeme())),
             _ => None,
         }
     }
@@ -498,6 +560,13 @@ mod replacement_source_tests {
         assert_eq!(annotation.chat_text(), expected);
         assert_eq!(annotation.source_text(parsed.source()), Some(expected));
         assert_eq!(replacement.lexeme(), expected);
+        assert_eq!(
+            replacement.span_in(parsed.source()),
+            Some(replacement.span())
+        );
+        let encoded = serde_json::to_value(replacement).unwrap();
+        assert_eq!(encoded["lexeme"], expected);
+        assert_eq!(encoded.as_object().unwrap().len(), 3);
 
         let foreign = line.to_owned();
         assert_eq!(annotation.source_text(SourceText::new(&foreign)), None);

@@ -27,7 +27,8 @@ impl TemplateLoader {
     /// Create a new template loader from a template directory
     pub fn new(template_dir: &Path) -> Result<Self, String> {
         let pattern = format!("{}/**/*.tera", template_dir.display());
-        let tera = Tera::new(&pattern).map_err(|e| {
+        let mut tera = Tera::new();
+        tera.load_from_glob(&pattern).map_err(|e| {
             format!(
                 "Failed to load templates from {}: {}",
                 template_dir.display(),

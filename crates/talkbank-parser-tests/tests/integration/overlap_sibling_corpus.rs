@@ -4,18 +4,23 @@
 
 use talkbank_model::alignment::helpers::analyze_file_overlaps;
 use talkbank_model::model::TranscriptName;
-use talkbank_model::{ErrorCollector, WriteChat};
+use talkbank_model::{ChatParser, ErrorCollector, WriteChat};
 use talkbank_parser::TreeSitterParser;
+use talkbank_parser_re2c::Re2cParser;
 use talkbank_transform::parse_source_with_parser;
 
 const SOURCE: &str = include_str!("../../../../corpus/reference/ca/overlap-siblings.cha");
 
 #[test]
 fn authored_overlap_siblings_distribute_and_reuse_indices_by_turn() {
+    check(&TreeSitterParser::new().expect("grammar"));
+    check(&Re2cParser::new());
+}
+
+fn check(parser: &impl ChatParser) {
     let source = SOURCE.to_owned();
-    let parser = TreeSitterParser::new().expect("grammar");
     let errors = ErrorCollector::new();
-    let admitted = parse_source_with_parser(&parser, &source)
+    let admitted = parse_source_with_parser(parser, &source)
         .admit(
             TranscriptName::for_path(std::path::Path::new("overlap-siblings.cha")),
             &errors,
@@ -32,8 +37,8 @@ fn authored_overlap_siblings_distribute_and_reuse_indices_by_turn() {
     let analysis = analyze_file_overlaps(&document.lines);
     assert!(analysis.orphaned_tops.is_empty());
     assert!(analysis.orphaned_bottoms.is_empty());
-    assert_eq!(analysis.group_count(), 3);
-    assert_eq!(analysis.total_bottoms(), 5);
+    assert_eq!(analysis.group_count(), 5);
+    assert_eq!(analysis.total_bottoms(), 8);
     assert_eq!(analysis.timed_groups().count(), 3);
     // Independent source-order expectations protect the grouping policy from
     // accidental acceptance of a snapshot made from collapsed siblings.
@@ -42,10 +47,25 @@ fn authored_overlap_siblings_distribute_and_reuse_indices_by_turn() {
         .iter()
         .map(|group| group.bottoms.iter().map(|b| b.utterance_index).collect())
         .collect();
-    assert_eq!(bottom_origins, [vec![1], vec![1, 2, 3], vec![5]]);
+    assert_eq!(
+        bottom_origins,
+        [vec![1], vec![1, 2, 3], vec![5], vec![7, 7], vec![7]]
+    );
     assert_eq!(analysis.groups[0].top.utterance_index, 0);
     assert_eq!(analysis.groups[1].top.utterance_index, 0);
     assert_eq!(analysis.groups[2].top.utterance_index, 4);
+    // The repeated index-3 response remains on its own top. The index-2 top
+    // on that turn, and earlier tops from a different speaker, are not siblings.
+    assert_eq!(analysis.groups[3].top.utterance_index, 6);
+    assert_eq!(analysis.groups[4].top.utterance_index, 6);
+    assert_eq!(
+        analysis.groups[3].top.region.index.map(|index| index.get()),
+        Some(3)
+    );
+    assert_eq!(
+        analysis.groups[4].top.region.index.map(|index| index.get()),
+        Some(2)
+    );
     assert!(analysis.groups[1].bottoms[1].bullet.is_none());
     for group in &analysis.groups {
         for anchor in std::iter::once(&group.top).chain(group.bottoms.iter()) {

@@ -87,13 +87,13 @@ impl WriteChat for LinkerKind {
     }
 }
 
-/// A cross-utterance linker token with its source position.
+/// A cross-utterance linker token with explicit source-location metadata.
 ///
-/// Pairs the linker [`LinkerKind`] with the byte [`Span`] it occupied in the
-/// source. The span is provenance only (`#[serde(skip)]`, `#[schemars(skip)]`,
+/// Pairs the linker [`LinkerKind`] with its [`crate::Location`]. Parsed linkers
+/// carry a source span; programmatic values and JSON readback may be unlocated.
+/// Location is provenance only (`#[serde(skip)]`, `#[schemars(skip)]`,
 /// `#[semantic_eq(skip)]`): the serialized form is transparently that of
-/// [`LinkerKind`], so the JSON and schema are unchanged by carrying a span, and
-/// semantic equality ignores position.
+/// [`LinkerKind`], and semantic equality ignores location.
 #[derive(
     Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift,
 )]
@@ -102,7 +102,7 @@ impl WriteChat for LinkerKind {
 pub struct Linker {
     /// Which linker this token is.
     pub kind: LinkerKind,
-    /// Source byte span of the linker token. Provenance only: skipped in
+    /// Source location of the linker token. Provenance only: skipped in
     /// serialization, schema, and semantic equality. Used by source-spacing
     /// validation (E758) to detect a leading space before the linker.
     #[serde(skip, default = "crate::Location::unlocated")]

@@ -1,7 +1,9 @@
 //! Token types emitted by the re2c lexer.
 //!
 //! Each variant corresponds to a grammar.js rule or token.
-//! Names are taken directly from grammar.js where possible.
+//! Names are taken directly from grammar.js where possible. The grammar excerpts
+//! below describe corresponding rules; the native lexer conditions and token
+//! boundaries are defined in `lexer.re`.
 
 mod bullet;
 mod extracted;
@@ -13,7 +15,7 @@ mod prefix;
 pub use bullet::{BulletTimes, MediaBulletToken};
 pub use extracted::Extracted;
 pub use inspection::{LexError, LexResult};
-pub use lang_suffix::LangSuffix;
+pub use lang_suffix::{LangSuffix, WordLanguagePayload};
 pub use pause::PauseLexeme;
 pub use postcode::PostcodeToken;
 pub use prefix::{
@@ -26,7 +28,9 @@ use strum::EnumDiscriminants;
 /// Token returned by the lexer. Each variant carries a borrowed slice of the
 /// source input (zero-copy): the whole lexeme for a plain token, and an
 /// [`Extracted`] payload-plus-lexeme pair for a tag-extracting rule, so every
-/// token can be placed at itself.
+/// token retains the text needed for placement. A token alone does not prove
+/// that its slice belongs to a particular source; placement still requires
+/// source-ownership admission.
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants, Serialize)]
 pub enum Token<'a> {
     // ── Structure ───────────────────────────────────────────
@@ -179,12 +183,12 @@ pub enum Token<'a> {
     /// Rich token: the payload is the language code alone, the lexeme the
     /// whole annotation; so for every `Extracted` variant below.
     CodeSwitchExplicit(Extracted<'a>),
-    /// grammar.js: freecode = token(/\[\^ [^\]\r\n]+\]/)
-    /// Rich token: [^ content] with tag marking content boundaries.
+    /// grammar.js: `freecode = token(/\[\^ [^\]\r\n]+\]/)`
+    /// Rich token: `[^ content]` with tags marking content boundaries.
     Freecode(Extracted<'a>),
-    /// grammar.js: ca_continuation_marker = token('[^c]')
+    /// grammar.js: `ca_continuation_marker = token('[^c]')`
     CaContinuationMarker(&'a str),
-    /// grammar.js: error_marker_annotation = token(prec(8, /\[\*[^\]]*\]/))
+    /// grammar.js: `error_marker_annotation = token(prec(8, /\[\*[^\]]*\]/))`
     ErrorMarkerAnnotation(Extracted<'a>),
 
     // ── Annotations with content ────────────────────────────
@@ -234,9 +238,8 @@ pub enum Token<'a> {
         body: &'a str,
         /// Form marker content: `f`, `z:grm`, etc. (without `@` prefix).
         form_marker: Option<&'a str>,
-        /// Language suffix codes: `eng`, `eng+zho`, etc. (without `@s:` prefix).
-        /// `None` means absent; bare `@s` shortcut carries `Some("")`.
-        lang_suffix: Option<&'a str>,
+        /// Present shortcut or explicit code payload; `None` means no suffix.
+        lang_suffix: Option<WordLanguagePayload<'a>>,
         /// POS tag content: `n`, `adj`, etc. (without `$` prefix).
         pos_tag: Option<&'a str>,
     },
@@ -465,7 +468,7 @@ pub enum Token<'a> {
     MediaWord(&'a str),
 
     // ── Generic tier content ────────────────────────────────
-    /// grammar.js: text_segment = /[^\u0015\r\n]+/
+    /// grammar.js: `text_segment = /[^ \u0015\r\n][^\u0015\r\n]*/`
     TextSegment(&'a str),
     /// grammar.js: inline_pic = /\u0015%pic:"filename"\u0015/
     InlinePic(Extracted<'a>),

@@ -206,7 +206,6 @@ A fact about the run, said before it starts:
 
 ```json
 {"type":"notice","notice":"suppressing","codes":["E736","E737"]}
-{"type":"notice","notice":"deprecated_flag","flag":"--check-xphon"}
 {"type":"notice","notice":"interrupt_unavailable","error":"..."}
 ```
 
@@ -222,7 +221,7 @@ ends with a `"cancelled"` stop record.
 ### Cache record
 
 Emitted only when cache maintenance actually did something: a prune
-reclaimed rows, `--force` cleared entries, or maintenance failed and
+reclaimed rows, `--refresh-cache` cleared entries, or maintenance failed and
 the run continued without it.
 
 ```json
@@ -302,8 +301,11 @@ Practical notes:
 
 - The JSON itself is the contract, not any validation status lines printed by the CLI.
 - Use `-o/--output` if you want only the JSON in a file.
-- Use `--skip-validation`, `--skip-alignment`, or `--skip-schema-validation`
-  only when you explicitly want to bypass those checks.
+- `--skip-validation` skips CHAT validation and alignment; `--skip-alignment`
+  retains structural CHAT validation. The two flags conflict.
+- `--skip-schema-validation` independently omits the JSON Schema check.
+  Parsing must still succeed, and successful conversion under reduced checks
+  does not establish full transcript validity.
 
 ## `chatter cache stats --format json`
 

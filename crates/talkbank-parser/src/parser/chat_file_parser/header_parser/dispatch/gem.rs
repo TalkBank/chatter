@@ -6,7 +6,7 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BgHeaderNode, EgHeaderNode, GHeaderNode, NoChild, SourceBound, SourceSlotView,
+    AsRawNode, BgHeaderNode, EgHeaderNode, GHeaderNode, SourceBound, SourceSlotView,
 };
 use crate::model::Header;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
@@ -36,9 +36,10 @@ macro_rules! gem_header {
                                     None => ParseOutcome::Rejected,
                                 }
                             }
-                            SourceSlotView::Missing(_)
-                            | SourceSlotView::Error(_)
-                            | SourceSlotView::Absent(NoChild) => ParseOutcome::Parsed(None),
+                            SourceSlotView::Missing(_) | SourceSlotView::Error(_) => {
+                                ParseOutcome::Parsed(None)
+                            }
+                            SourceSlotView::Absent(never) => match never {},
                             SourceSlotView::Unexpected(never) => match never {},
                         };
                         for displaced in group.field_unexpected().iter() {

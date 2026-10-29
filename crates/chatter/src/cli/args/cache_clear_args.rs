@@ -24,9 +24,9 @@ pub struct ClearScope(pub CacheScope);
 /// Whether `chatter cache clear` removes entries or only counts them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClearMode {
-    /// Remove them.
+    /// Remove them (`--apply`).
     Apply,
-    /// Count them and remove nothing (`--dry-run`).
+    /// Count them and remove nothing (the default without `--apply`).
     DryRun,
 }
 

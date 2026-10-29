@@ -114,10 +114,11 @@ fn lower_sin_group_items<'tree, 'source>(
                         vec![]
                     }
                 }
-                ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
+                ReadableSlot::Error(_) => {
                     // Fallback: preserve the entire group as a single token.
                     fallback_group_as_token(children)
                 }
+                ReadableSlot::Absent(never) => match *never {},
                 ReadableSlot::Missing(missing) => match missing.0 {},
                 ReadableSlot::Unexpected(never) => match *never {},
             }
@@ -219,13 +220,13 @@ fn lower_sin_grouped_content_tokens<'tree, 'source>(
 /// do not. An error-free containing tier alone proves neither property.
 /// `context` is the enclosing rule name, so the
 /// diagnostic matches the sibling content-slot diagnostics.
-pub(super) fn push_sin_separator<'tree, 'source>(
-    slot: &KindSlot<'tree, SourceBound<'tree, 'source, WhitespacesNode<'tree>>, Ranged<'source>>,
+pub(super) fn push_sin_separator<'tree, 'source, A: crate::generated_traversal::Absence>(
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, WhitespacesNode<'tree>>, Ranged<'source>, A>,
     errors: &impl ErrorSink,
     context: &str,
 ) {
     match slot {
-        ReadableSlot::Present(_) | ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Present(_) | ReadableSlot::Absent(_) => {}
         ReadableSlot::Missing(raw) => {
             check_not_missing(raw.raw_node(), raw.source(), errors, context);
         }
@@ -240,11 +241,12 @@ pub(super) fn push_sin_separator<'tree, 'source>(
 ///
 /// Present text retains empty-token admission; Error is diagnosed and Absent
 /// emits nothing. Compiled admission excludes MISSING for this kind, not its children.
-fn push_sin_token<'tree, 'source>(
+fn push_sin_token<'tree, 'source, A: crate::generated_traversal::Absence>(
     slot: &crate::generated_traversal::NonMissingKindSlot<
         'tree,
         SourceBound<'tree, 'source, SinWordNode<'tree>>,
         Ranged<'source>,
+        A,
     >,
     errors: &impl ErrorSink,
     tokens: &mut Vec<SinToken>,
@@ -262,7 +264,7 @@ fn push_sin_token<'tree, 'source>(
                 "sin_grouped_content",
             ));
         }
-        ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Absent(_) => {}
         ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
     }

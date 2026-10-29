@@ -9,7 +9,7 @@ use crate::generated_traversal::{
     SourceBoundKind, WordPrefixNode,
 };
 use crate::parser::node_span::span_of;
-use talkbank_model::content::word::{FormMarkerPayload, FormType, WordCategory};
+use talkbank_model::content::word::{FormMarkerPayload, FormType, WordCategory, WordPosTag};
 
 /// A closed association between a generated token kind and its leading marker.
 /// Neither the source, marker nor diagnostic label is supplied independently.
@@ -66,25 +66,9 @@ pub(super) fn word_category<'tree>(
     }
 }
 
-fn at_suffix_error<'tree, T: SourceBoundKind<'tree>>(
-    token: SourceBound<'tree, '_, T>,
-    message: String,
-    suggestion: &'static str,
-) -> ParseError {
-    let node = token.raw_node();
-    ParseError::new(
-        ErrorCode::InvalidFormType,
-        Severity::Error,
-        DiagnosticLocation::new(span_of(node)),
-        ErrorContext::new(token.source(), span_of(node), ""),
-        message,
-    )
-    .with_suggestion(suggestion)
-}
-
 /// The grammar keeps `@` and any label in one token. Registry policy owns
 /// declared codes and label requirements. Undeclared payloads stay verbatim;
-/// they must not become a valid `@z:label` or duplicate the model's E203.
+/// model validation owns E203 for this explicit recovery state.
 pub(super) fn form_marker<'tree>(
     token: SourceBound<'tree, '_, FormMarkerNode<'tree>>,
     errors: &impl ErrorSink,
@@ -93,20 +77,12 @@ pub(super) fn form_marker<'tree>(
     Some(
         match FormType::from_payload(FormMarkerPayload::after_at(payload)) {
             Ok(declared) => declared,
-            Err(undeclared) => {
-                errors.report(at_suffix_error(
-                    token,
-                    format!("Undeclared form marker '@{}'", undeclared.payload()),
-                    undeclared.suggestion(),
-                ));
-                FormType::Undeclared(undeclared.into_payload())
-            }
+            Err(undeclared) => FormType::Undeclared(undeclared.into_payload()),
         },
     )
 }
 
-/// E203 names the whole repeated run, not a nonexistent individual marker.
-/// Retain the authored payload so serialization cannot silently repair it.
+/// Retain the authored repeated run for model-owned E203 and lossless rendering.
 pub(super) fn repeated_form_marker<'tree>(
     token: SourceBound<'tree, '_, RepeatedFormMarkerNode<'tree>>,
     errors: &impl ErrorSink,
@@ -127,11 +103,6 @@ pub(super) fn repeated_form_marker<'tree>(
         ));
         return None;
     };
-    errors.report(at_suffix_error(
-        token,
-        format!("A word may carry only one '@' suffix, found '{text}'"),
-        "Keep one marker on the word and remove the rest",
-    ));
     Some(FormType::Undeclared(payload.to_owned()))
 }
 
@@ -139,6 +110,13 @@ pub(super) fn repeated_form_marker<'tree>(
 pub(super) fn part_of_speech<'tree>(
     token: SourceBound<'tree, '_, PosTagNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Option<smol_str::SmolStr> {
-    after_marker(token, errors).map(smol_str::SmolStr::from)
+) -> Option<WordPosTag> {
+    let payload = after_marker(token, errors)?;
+    match WordPosTag::new(payload) {
+        Ok(tag) => Some(tag),
+        Err(error) => {
+            report_tree_shape(token.raw_node(), error.to_string(), token.source(), errors);
+            None
+        }
+    }
 }

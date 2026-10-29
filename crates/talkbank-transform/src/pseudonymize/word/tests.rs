@@ -127,8 +127,8 @@ fn selective_components_preserve_structure_and_refuse_pronunciation_leaks() {
                             if original == matched && replacement.as_ref() == "PersonA")));
                     assert_eq!(rewritten.location, word.location);
                     assert_eq!(rewritten.inline_bullet, word.inline_bullet);
-                    assert_eq!(rewritten.form_type, word.form_type);
-                    assert_eq!(rewritten.lang, word.lang);
+                    assert_eq!(rewritten.form_type(), word.form_type());
+                    assert_eq!(rewritten.language_marker(), word.language_marker());
                     assert_eq!(rewritten.category, word.category);
                     let again = WordPlan::assess(&rewritten, names).unwrap();
                     assert!(

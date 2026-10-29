@@ -16,6 +16,11 @@ use super::types::{GraAlignment, GraAlignmentPair};
 /// Performs 1-1 alignment validation between `%mor` chunks and `%gra` relations.
 /// Continues alignment even on mismatch, creating error placeholders.
 ///
+/// This API also accepts independently constructed tiers. Their zero word
+/// indices report E712 when counts match; source parsing rejects that spelling
+/// earlier with E709. Count mismatches report E720 instead of cascading range
+/// findings. Alignment does not certify dependency-tree validity.
+///
 /// # Important: Chunks vs Items
 ///
 /// %gra aligns with %mor **chunks**, not items!
@@ -178,4 +183,79 @@ fn extract_gra_relation_items(gra: &GraTier) -> Vec<TierPosition> {
             description: None,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::align_mor_to_gra;
+    use crate::model::{GraTier, GrammaticalRelation, MorTier, Terminator};
+    use crate::{ErrorCode, Location};
+
+    #[derive(Clone, Copy, Debug)]
+    enum WordIndex {
+        Zero,
+        InRange,
+        PastEnd,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Cardinality {
+        Matched,
+        ExtraRelation,
+    }
+
+    #[test]
+    fn independent_gra_indices_respect_range_and_count_diagnostic_boundaries() {
+        // One terminator is one MOR chunk. These constructor inputs exercise
+        // the model API, not a source parser's admission of malformed indices.
+        let mor = MorTier::new_mor(
+            Location::Unlocated,
+            vec![],
+            Terminator::Period {
+                location: Location::Unlocated,
+            },
+        );
+        assert_eq!(mor.count_chunks(), 1);
+        for index in [WordIndex::Zero, WordIndex::InRange, WordIndex::PastEnd] {
+            let raw_index = match index {
+                WordIndex::Zero => 0,
+                WordIndex::InRange => 1,
+                WordIndex::PastEnd => 2,
+            };
+            for cardinality in [Cardinality::Matched, Cardinality::ExtraRelation] {
+                let mut relations = vec![GrammaticalRelation::new(
+                    raw_index,
+                    0,
+                    "PUNCT".try_into().expect("checked label"),
+                )];
+                match cardinality {
+                    Cardinality::Matched => {}
+                    Cardinality::ExtraRelation => relations.push(GrammaticalRelation::new(
+                        2,
+                        0,
+                        "PUNCT".try_into().expect("checked label"),
+                    )),
+                }
+                let gra = GraTier::new_gra(Location::Unlocated, relations);
+                let alignment = align_mor_to_gra(&mor, &gra);
+                let actual: Vec<_> = alignment.errors.iter().map(|error| error.code).collect();
+                let expected = match (cardinality, index) {
+                    (Cardinality::Matched, WordIndex::InRange) => vec![],
+                    (Cardinality::Matched, WordIndex::Zero | WordIndex::PastEnd) => {
+                        vec![ErrorCode::GraInvalidWordIndex]
+                    }
+                    (
+                        Cardinality::ExtraRelation,
+                        WordIndex::Zero | WordIndex::InRange | WordIndex::PastEnd,
+                    ) => vec![ErrorCode::MorGraCountMismatch],
+                };
+                assert_eq!(actual, expected, "{cardinality:?}, {index:?}");
+                assert_eq!(
+                    gra.relations()[0].index,
+                    raw_index,
+                    "diagnosis preserves observed indices"
+                );
+            }
+        }
+    }
 }

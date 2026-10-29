@@ -193,7 +193,8 @@ fn document(header: &str) -> String {
 #[test]
 fn a_repeated_header_is_reported_at_the_repeated_line() -> Result<(), TestError> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n";
-    let reported = diagnostics_of(source, Rules::Default)?;
+    let completed = diagnostics_of(source, Rules::Default)?;
+    let reported = completed.diagnostics();
     let duplicate = reported
         .iter()
         .find(|e| e.code.as_str() == "E501")

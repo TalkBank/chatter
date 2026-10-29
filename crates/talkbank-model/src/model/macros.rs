@@ -2,11 +2,18 @@
 //!
 //! These macros generate reusable wrapper types used across header codes,
 //! main-tier content tokens, and dependent-tier tokens.
+//! Runtime and dependency paths are explicit; caller names cannot replace
+//! generated API types, and display writes directly to its formatter.
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
+
+#[cfg(test)]
+#[path = "macro_hygiene_tests.rs"]
+mod tests;
+
 /// The READ and RENDER surface shared by every `SmolStr`-backed string
 /// newtype: `as_str`, `WriteChat`, `Display`, `Deref<Target = str>`, `AsRef<str>`.
 ///
@@ -25,26 +32,29 @@ macro_rules! string_newtype_read_impls {
             /// Borrows the wrapped value as `&str`.
             ///
             /// This is the preferred accessor for formatting and validation code.
-            pub fn as_str(&self) -> &str {
+            pub fn as_str(&self) -> &::core::primitive::str {
                 &self.0
             }
         }
 
         impl $crate::model::WriteChat for $name {
             /// Writes the wrapped string content directly as CHAT text.
-            fn write_chat<W: $crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+            fn write_chat<W: $crate::model::ChatWriter>(
+                &self,
+                w: &mut W,
+            ) -> ::core::result::Result<(), W::Error> {
                 w.write_str(&self.0)
             }
         }
-        impl std::fmt::Display for $name {
+        impl ::std::fmt::Display for $name {
             /// Displays the wrapped string without additional formatting.
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.0)
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                f.write_str(&self.0)
             }
         }
 
-        impl std::ops::Deref for $name {
-            type Target = str;
+        impl ::std::ops::Deref for $name {
+            type Target = ::core::primitive::str;
 
             /// Borrows the wrapped value as `str`.
             fn deref(&self) -> &Self::Target {
@@ -52,9 +62,9 @@ macro_rules! string_newtype_read_impls {
             }
         }
 
-        impl AsRef<str> for $name {
+        impl ::core::convert::AsRef<::core::primitive::str> for $name {
             /// Returns a borrowed `str` view of the wrapped value.
-            fn as_ref(&self) -> &str {
+            fn as_ref(&self) -> &::core::primitive::str {
                 &self.0
             }
         }
@@ -79,9 +89,9 @@ macro_rules! string_newtype_read_impls {
 #[macro_export]
 macro_rules! string_newtype {
     ($(#[$meta:meta])* $vis:vis struct $name:ident;) => {
-        #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema, Debug, Clone, PartialEq, Eq, Hash, talkbank_derive::SemanticEq, talkbank_derive::SpanShift)]
+        #[derive(::serde::Serialize, ::serde::Deserialize, ::schemars::JsonSchema, ::core::fmt::Debug, ::core::clone::Clone, ::core::cmp::PartialEq, ::core::cmp::Eq, ::core::hash::Hash, ::talkbank_derive::SemanticEq, ::talkbank_derive::SpanShift)]
         $(#[$meta])*
-        $vis struct $name(smol_str::SmolStr);
+        $vis struct $name(::smol_str::SmolStr);
 
         $crate::string_newtype_read_impls!($name);
 
@@ -90,22 +100,22 @@ macro_rules! string_newtype {
             ///
             /// This constructor performs no normalization so lexical content is
             /// preserved exactly as provided by callers.
-            pub fn new(value: impl Into<smol_str::SmolStr>) -> Self {
+            pub fn new(value: impl ::core::convert::Into<::smol_str::SmolStr>) -> Self {
                 Self(value.into())
             }
         }
 
-        impl From<String> for $name {
+        impl ::core::convert::From<::std::string::String> for $name {
             /// Converts an owned string into the newtype.
-            fn from(value: String) -> Self {
-                Self(smol_str::SmolStr::from(value))
+            fn from(value: ::std::string::String) -> Self {
+                Self(::smol_str::SmolStr::from(value))
             }
         }
 
-        impl From<&str> for $name {
+        impl ::core::convert::From<&::core::primitive::str> for $name {
             /// Converts a borrowed string slice into the newtype.
-            fn from(value: &str) -> Self {
-                Self(smol_str::SmolStr::from(value))
+            fn from(value: &::core::primitive::str) -> Self {
+                Self(::smol_str::SmolStr::from(value))
             }
         }
     };
@@ -137,20 +147,20 @@ macro_rules! interned_newtype {
         interner: $interner_fn:expr
     ) => {
         #[derive(
-            serde::Serialize,
-            serde::Deserialize,
-            schemars::JsonSchema,
-            Debug,
-            Clone,
-            PartialEq,
-            Eq,
-            Hash,
-            talkbank_derive::SemanticEq,
-            talkbank_derive::SpanShift
+            ::serde::Serialize,
+            ::serde::Deserialize,
+            ::schemars::JsonSchema,
+            ::core::fmt::Debug,
+            ::core::clone::Clone,
+            ::core::cmp::PartialEq,
+            ::core::cmp::Eq,
+            ::core::hash::Hash,
+            ::talkbank_derive::SemanticEq,
+            ::talkbank_derive::SpanShift
         )]
         #[serde(transparent)]
         $(#[$meta])*
-        $vis struct $name(pub std::sync::Arc<str>);
+        $vis struct $name(pub ::std::sync::Arc<::core::primitive::str>);
 
         impl $name {
             /// Create a new interned value.
@@ -158,7 +168,7 @@ macro_rules! interned_newtype {
             /// Uses the selected global interner to reuse stored strings.
             /// Concurrent first misses may return equal strings in different
             /// allocations, so pointer identity is not an equality contract.
-            pub fn new(value: impl AsRef<str>) -> Self {
+            pub fn new(value: impl ::core::convert::AsRef<::core::primitive::str>) -> Self {
                 let s = value.as_ref();
                 Self($interner_fn.intern(s))
             }
@@ -167,27 +177,27 @@ macro_rules! interned_newtype {
             ///
             /// Callers should prefer this over touching the inner `Arc<str>`
             /// directly so representation details stay encapsulated.
-            pub fn as_str(&self) -> &str {
+            pub fn as_str(&self) -> &::core::primitive::str {
                 &self.0
             }
         }
 
         impl $crate::model::WriteChat for $name {
             /// Writes the interned string content directly as CHAT text.
-            fn write_chat<W: $crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
+            fn write_chat<W: $crate::model::ChatWriter>(&self, w: &mut W) -> ::core::result::Result<(), W::Error> {
                 w.write_str(&self.0)
             }
         }
 
-        impl std::fmt::Display for $name {
+        impl ::std::fmt::Display for $name {
             /// Displays the interned string without additional formatting.
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.0)
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                f.write_str(&self.0)
             }
         }
 
-        impl std::ops::Deref for $name {
-            type Target = str;
+        impl ::std::ops::Deref for $name {
+            type Target = ::core::primitive::str;
 
             /// Borrows the interned value as `str`.
             fn deref(&self) -> &Self::Target {
@@ -195,30 +205,30 @@ macro_rules! interned_newtype {
             }
         }
 
-        impl AsRef<str> for $name {
+        impl ::core::convert::AsRef<::core::primitive::str> for $name {
             /// Returns a borrowed `str` view of the interned value.
-            fn as_ref(&self) -> &str {
+            fn as_ref(&self) -> &::core::primitive::str {
                 &self.0
             }
         }
 
-        impl std::borrow::Borrow<str> for $name {
+        impl ::std::borrow::Borrow<::core::primitive::str> for $name {
             /// Returns a borrowed `str` view for map/set lookup APIs.
-            fn borrow(&self) -> &str {
+            fn borrow(&self) -> &::core::primitive::str {
                 &self.0
             }
         }
 
-        impl From<String> for $name {
+        impl ::core::convert::From<::std::string::String> for $name {
             /// Converts an owned string into the interned newtype.
-            fn from(value: String) -> Self {
+            fn from(value: ::std::string::String) -> Self {
                 Self::new(value)
             }
         }
 
-        impl From<&str> for $name {
+        impl ::core::convert::From<&::core::primitive::str> for $name {
             /// Converts a borrowed string slice into the interned newtype.
-            fn from(value: &str) -> Self {
+            fn from(value: &::core::primitive::str) -> Self {
                 Self::new(value)
             }
         }
@@ -282,7 +292,7 @@ macro_rules! collection_newtype_ops {
             ///
             /// A consuming accessor cannot violate an invariant, because the
             /// value it came from no longer exists.
-            pub fn into_vec(self) -> Vec<$item> {
+            pub fn into_vec(self) -> ::std::vec::Vec<$item> {
                 self.0
             }
 
@@ -293,8 +303,8 @@ macro_rules! collection_newtype_ops {
             /// caller writes `std::mem::replace(x, T::new(Vec::new())).into_vec()`
             /// by hand; that incantation appeared sixteen times in one
             /// downstream migration before this existed.
-            pub fn take(&mut self) -> Vec<$item> {
-                std::mem::take(&mut self.0)
+            pub fn take(&mut self) -> ::std::vec::Vec<$item> {
+                ::std::mem::take(&mut self.0)
             }
 
             /// Keeps only the items matching `f`.
@@ -309,7 +319,10 @@ macro_rules! collection_newtype_ops {
             ///
             /// It is also the operation an invariant would most need to
             /// re-check, and here it CAN: it owns `&mut self`.
-            pub fn retain(&mut self, f: impl FnMut(&$item) -> bool) {
+            pub fn retain(
+                &mut self,
+                f: impl ::core::ops::FnMut(&$item) -> ::core::primitive::bool,
+            ) {
                 self.0.retain(f);
             }
         }

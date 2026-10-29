@@ -46,6 +46,15 @@ impl crate::validation::Validate for Word {
         // This must run FIRST to catch parser bugs
         structure::check_word_characters(self, errors);
 
+        // Recovery remains invalid after AST JSON readback, which has no
+        // parser diagnostic stream. Presence decides; location only points.
+        if let Some(diagnostic) = self
+            .form_type()
+            .and_then(|form| form.recovery_diagnostic(self.location))
+        {
+            errors.report(diagnostic);
+        }
+
         // E232-E233: Check compound marker validity
         structure::check_compound_markers(self, errors);
 
@@ -70,7 +79,9 @@ impl crate::validation::Validate for Word {
 
         // E209: Check if word has no spoken content
         let cleaned = self.cleaned_text();
-        if !structure::has_spoken_material(self) && self.untranscribed().is_none() {
+        // Cleaned text includes shortenings, so marker spelling alone cannot
+        // establish spoken content. Bare untranscribed markers are Text leaves.
+        if !structure::has_spoken_material(self) {
             errors.report(
                 ParseError::at_location(
                     ErrorCode::EmptySpokenContent,

@@ -97,11 +97,25 @@ pub struct ResolvedPath(PathBuf);
 impl ResolvedPath {
     /// Resolve the file at `path`: its parent directory (the current
     /// directory for a bare name), then its own name, unresolved. A path
-    /// with no file name (`/`, `..`) is refused.
+    /// with no file name (`/`, `..`) or a trailing directory separator or
+    /// `.` component is refused, even when component iteration normalizes it.
     pub fn of_file(path: &Path) -> io::Result<Self> {
         let name = path
             .file_name()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "the path names no file"))?;
+        // `file_name` ignores trailing separators and `.` components. A file
+        // location must end with that actual name, not a normalized directory
+        // spelling. Compare the native encoding without requiring Unicode.
+        if !path
+            .as_os_str()
+            .as_encoded_bytes()
+            .ends_with(name.as_encoded_bytes())
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "a file path must end with its file name",
+            ));
+        }
         let parent = match path.parent() {
             Some(parent) if !parent.as_os_str().is_empty() => parent,
             Some(_) | None => Path::new("."),
@@ -123,14 +137,18 @@ pub struct ResolvedPrefix(PathBuf);
 
 impl ResolvedPrefix {
     /// Resolve a path that may name a directory or a file: an existing
-    /// directory is resolved whole, anything else as a file
-    /// ([`ResolvedPath::of_file`]).
+    /// directory is resolved whole, another existing entry as a file
+    /// ([`ResolvedPath::of_file`]). A missing path retains its name beneath
+    /// its deepest existing ancestor, including a deleted directory spelling.
     pub fn of(path: &Path) -> io::Result<Self> {
         match std::fs::metadata(path) {
             Ok(metadata) if metadata.is_dir() => ResolvedDirectory::resolve(path).map(Self::from),
             Ok(_) => ResolvedPath::of_file(path).map(Self::from),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                ResolvedPath::of_file(path).map(Self::from)
+                // A missing prefix may be a deleted directory, including an
+                // explicit trailing separator. Resolve its existing ancestry
+                // without admitting the spelling as a file location.
+                ResolvedDirectory::resolve(path).map(Self::from)
             }
             Err(error) => Err(error),
         }

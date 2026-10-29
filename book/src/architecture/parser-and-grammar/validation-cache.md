@@ -115,14 +115,14 @@ behavior still requires native-platform tests.
 A `StoredTranscript` makes its `ResolvedPath` when it is admitted (by the
 walk that found it, from one resolution per directory, or by the argument
 resolver, from one per parent), so the validation worker keys by it,
-`validate --force` clears by it, `watch` keys by it, and the argument
+`validate --refresh-cache` clears by it, `watch` keys by it, and the argument
 expansion counts a transcript once by it:
 
 ```mermaid
 flowchart LR
     arg["argument or walk\n(a.cha, ./a.cha, /tmp/c/a.cha, sub/../a.cha)"] --> stored["StoredTranscript\n(stored name, ResolvedPath)"]
     stored --> key["CacheKey (lookups, stores)"]
-    stored --> clear["clear_paths: every namespace's key (--force)"]
+    stored --> clear["clear_paths: every namespace's key (--refresh-cache)"]
     stored --> dedup["one transcript per ResolvedPath"]
 ```
 
@@ -130,17 +130,19 @@ A directory that cannot be resolved makes its transcripts unreadable inputs
 when they are found, the one policy for every consumer. `cache clear
 --prefix` resolves its prefix into a `ResolvedPrefix` (`ResolvedPrefix::of`,
 its own type, so a `ResolvedPath` always names a file): an existing
-directory resolved whole, anything else as a file; a missing directory is
-resolved through its deepest existing ancestor. `--force` clears by key, in
-every namespace a row can be written under, so two non-UTF-8 names that
+directory resolved whole, another existing entry as a file; a missing path is
+resolved through its deepest existing ancestor, including explicit
+deleted-directory spellings. `--refresh-cache` clears by key, in every namespace
+a row can be written under, so two non-UTF-8 names that
 share a lossy display spelling cannot clear each other's rows.
 
 Directory admission refuses an existing file (including a link to a file),
 rather than treating it as a directory. `ResolvedDirectory::file` accepts only
 one literal native file-name component: trailing separators or `/.` are not
-file names merely because component iteration normalizes them. A missing
-directory remains a resolvable location, not a promise that it exists or can
-be created. Filesystem changes after admission are still fallible external facts.
+file names merely because component iteration normalizes them. A directory
+spelling also cannot pass through `ResolvedPath::of_file` as a file location.
+A missing directory remains a resolvable prefix, not a promise that it exists
+or can be created. Filesystem changes after admission are still fallible external facts.
 
 #### Clearing a retired input location
 
@@ -149,13 +151,15 @@ The missing prefix can still name those rows through its existing ancestor:
 
 ```bash
 chatter cache stats
-chatter cache clear --prefix /path/to/retired-corpus --dry-run
-# Only after confirming that this is the intended scope:
 chatter cache clear --prefix /path/to/retired-corpus
+# Only after confirming that this is the intended scope:
+chatter cache clear --prefix /path/to/retired-corpus --apply
 chatter cache stats
 ```
 
-The preview counts without deleting rows or recreating input directories.
+Without `--apply`, the command previews without deleting rows or recreating
+input directories. When the existing cache schema needs migration, the preview
+reports that prerequisite rather than a count; applying migrates before clearing.
 Clearing `corpus` leaves the adjacent `corpus-other` scope alone; a repeated
 clear reports zero after the selected rows are gone. A link to a transcript
 has its own stored-name/cache location: clearing the removed link leaves its
@@ -165,7 +169,7 @@ existing regular file is refused, not interpreted as another scope. Use native
 path spellings; traversal through missing `..` remains platform-dependent.
 
 These are cache-administration semantics, not data recovery: clearing cannot
-restore deleted CHAT or certify a backup. Use `--force` for fresh validation of
+restore deleted CHAT or certify a backup. Use `--refresh-cache` for fresh validation of
 existing selected files, not a broad cache deletion. Local library and CLI
 contracts exercise canonical sources in isolated caches; supported-platform
 and independent operator drills remain separate acceptance.
@@ -236,10 +240,10 @@ The CLI decides the mode once, as a `CachePolicy`:
 ```mermaid
 flowchart LR
     pres["presentation"] --> pol["CachePolicy::for_run"]
-    force["--force"] --> pol
-    pol -->|"Audit, no --force"| ro["ReadOnly\nReadOnlyCache::open: an existing,\ncurrent cache only; creates, migrates,\nprunes, clears and writes nothing"]
-    pol -->|"Audit + --force"| err["usage error (exit 2)"]
-    pol -->|"anything else"| rw["ReadWrite { refresh }\nCachePool::new: prune reported;\n--force clears the run's files"]
+    force["--refresh-cache"] --> pol
+    pol -->|"Audit, no --refresh-cache"| ro["ReadOnly\nReadOnlyCache::open: an existing,\ncurrent cache only; creates, migrates,\nprunes, clears and writes nothing"]
+    pol -->|"Audit + --refresh-cache"| err["usage error (exit 2)"]
+    pol -->|"anything else"| rw["ReadWrite { refresh }\nCachePool::new: prune reported;\n--refresh-cache clears the run's files"]
     ro --> run["RunCache"]
     rw --> run
 ```
@@ -336,7 +340,7 @@ cannot displace one of the real retained generations.
 
 `chatter cache stats` and `chatter cache clear` match on the found value:
 
-| Found | `stats` | `clear --dry-run` | `clear` |
+| Found | `stats` | `clear` (preview) | `clear --apply` |
 | --- | --- | --- | --- |
 | `Absent` | "No cache database at PATH", exit 0 | would clear 0, exit 0 | cleared 0, creates nothing, exit 0 |
 | `OlderSchema` | says so, migrates nothing, exit 0 | says it would migrate first; no count, since migrating can remove rows | migrates, then clears |
@@ -561,13 +565,13 @@ flowchart LR
 - **Reachability**: rows under versions outside the two-generation window are
   deleted on writable validation open (see above). This bounds retained
   generations; an older binary can still request an evicted generation.
-- **Manual**: `--force` requests clearing the selected files' cache keys in
+- **Manual**: `--refresh-cache` requests clearing the selected files' cache keys in
   every written namespace before validation. Clearing failures are reported;
   this option is not a separate cache-free execution mode. Audit presentation
-  refuses `--force` because it is read-only.
+  refuses `--refresh-cache` because it is read-only.
 
 Per repository policy, do not delete the cache directory without explicit
-request. Use `--force` when you want fresh validation for specific paths
+request. Use `--refresh-cache` when you want fresh validation for specific paths
 without destroying the whole cache.
 
 ## See also

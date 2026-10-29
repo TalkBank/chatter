@@ -17,99 +17,16 @@
 //!
 //! Run:
 //! ```bash
-//! cargo test -p talkbank-parser-re2c --test subcategorize_main_tier --release -- --ignored --nocapture
+//! cargo test -p talkbank-parser-re2c --test integration subcategorize_main_tier::subcategorize_main_tier_divergences --release -- --ignored --exact --nocapture
 //! ```
 
+use crate::diagnostic_json::{JsonPair, JsonReport, collect_cha_files};
+use crate::parser_attempt::{ComparisonModels, CompletedParserPair, ParserPairFailure};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
-use talkbank_model::errors::ErrorCollector;
-use talkbank_model::{ChatParser, ParseOutcome, SemanticEq};
+use std::path::{Path, PathBuf};
+use talkbank_model::SemanticEq;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
-
-/// Strip all span/content_span keys from JSON.
-fn strip_spans(val: &mut serde_json::Value) {
-    match val {
-        serde_json::Value::Object(map) => {
-            map.remove("span");
-            map.remove("content_span");
-            for v in map.values_mut() {
-                strip_spans(v);
-            }
-        }
-        serde_json::Value::Array(arr) => {
-            for v in arr {
-                strip_spans(v);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Find the first JSON diff path, returning (path, ts_value, re2c_value).
-fn find_first_diff(
-    a: &serde_json::Value,
-    b: &serde_json::Value,
-    path: &str,
-    depth: usize,
-) -> Option<(String, String, String)> {
-    if depth > 25 {
-        return Some((path.to_string(), "...".into(), "...".into()));
-    }
-    match (a, b) {
-        (serde_json::Value::Object(ma), serde_json::Value::Object(mb)) => {
-            for (key, va) in ma {
-                if let Some(vb) = mb.get(key) {
-                    let cp = if path.is_empty() {
-                        key.clone()
-                    } else {
-                        format!("{path}.{key}")
-                    };
-                    if let Some(d) = find_first_diff(va, vb, &cp, depth + 1) {
-                        return Some(d);
-                    }
-                } else {
-                    return Some((
-                        format!("{path}.{key}"),
-                        format!("{va}").chars().take(200).collect(),
-                        "<missing>".into(),
-                    ));
-                }
-            }
-            for key in mb.keys() {
-                if !ma.contains_key(key) {
-                    return Some((
-                        format!("{path}.{key}"),
-                        "<missing>".into(),
-                        format!("{}", mb[key]).chars().take(200).collect(),
-                    ));
-                }
-            }
-            None
-        }
-        (serde_json::Value::Array(va), serde_json::Value::Array(vb)) => {
-            if va.len() != vb.len() {
-                return Some((
-                    format!("{path}[]"),
-                    format!("len={}", va.len()),
-                    format!("len={}", vb.len()),
-                ));
-            }
-            for (i, (ea, eb)) in va.iter().zip(vb.iter()).enumerate() {
-                if let Some(d) = find_first_diff(ea, eb, &format!("{path}[{i}]"), depth + 1) {
-                    return Some(d);
-                }
-            }
-            None
-        }
-        (a, b) if a == b => None,
-        (a, b) => Some((
-            path.to_string(),
-            format!("{a}").chars().take(200).collect(),
-            format!("{b}").chars().take(200).collect(),
-        )),
-    }
-}
 
 /// Extract a sub-category from a main_tier diff path.
 fn sub_classify(path: &str, ts_val: &str, re2c_val: &str) -> String {
@@ -172,34 +89,36 @@ fn sub_classify(path: &str, ts_val: &str, re2c_val: &str) -> String {
     )
 }
 
-fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
-    walkdir::WalkDir::new(base)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "cha"))
-        .map(|e| e.path().to_path_buf())
-        .collect()
-}
-
 #[test]
 #[ignore = "needs the wild corpus, which no contributor has; a report \
            generator rather than a gate. Run with --ignored --nocapture."]
-fn subcategorize_main_tier_divergences() {
+fn subcategorize_main_tier_divergences() -> Result<(), Box<dyn std::error::Error>> {
     let base = crate::corpus_root::CorpusRoot::resolve().require();
-    if !base.exists() {
-        eprintln!("Skipping: {} not found", base.display());
-        return;
-    }
 
-    let mut files = collect_cha_files(&base);
-    files.sort();
+    let files = collect_cha_files(&base)?;
     eprintln!("Found {} .cha files", files.len());
 
     let ts = TreeSitterParser::new().expect("tree-sitter grammar loads");
     let re2c = Re2cParser::new();
 
+    write_report(
+        &base,
+        &files,
+        Path::new("/tmp/re2c_main_tier_subcategories.json"),
+        |path, source| CompletedParserPair::parse(path, source, &ts, &re2c),
+    )
+}
+
+fn write_report(
+    base: &Path,
+    files: &[PathBuf],
+    report_path: &Path,
+    mut parse: impl FnMut(&Path, &str) -> Result<CompletedParserPair, ParserPairFailure>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut subcats: BTreeMap<String, usize> = BTreeMap::new();
     let mut subcat_examples: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+    let mut native_rejected = 0;
+    let mut unclassified = 0;
     let mut total_divergent = 0;
     let mut main_tier_divergent = 0;
 
@@ -212,31 +131,28 @@ fn subcategorize_main_tier_divergences() {
             );
         }
 
-        let content = match std::fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => continue,
+        let content = std::fs::read_to_string(path)
+            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+
+        let attempts = parse(path, &content)?;
+        let (ts_file, re2c_file) = match attempts.models() {
+            ComparisonModels::Built { tree_sitter, re2c } => (tree_sitter, re2c),
+            ComparisonModels::NativeRejected => {
+                native_rejected += 1;
+                continue;
+            }
         };
 
-        let ts_errors = ErrorCollector::new();
-        let ts_file = ts.parse_chat_file_streaming(&content, &ts_errors);
-
-        let re2c_errors = ErrorCollector::new();
-        let re2c_file = match re2c.parse_chat_file(&content, 0, &re2c_errors) {
-            ParseOutcome::Parsed(f) => f,
-            ParseOutcome::Rejected => continue,
-        };
-
-        if ts_file.semantic_eq(&re2c_file) {
+        if ts_file.semantic_eq(re2c_file) {
             continue;
         }
         total_divergent += 1;
 
-        let mut ts_json = serde_json::to_value(&ts_file).unwrap_or_default();
-        let mut re2c_json = serde_json::to_value(&re2c_file).unwrap_or_default();
-        strip_spans(&mut ts_json);
-        strip_spans(&mut re2c_json);
-
-        if let Some((diff_path, ts_val, re2c_val)) = find_first_diff(&ts_json, &re2c_json, "", 0) {
+        let comparison = JsonPair::serialize(ts_file, re2c_file)?;
+        if let Some(difference) = comparison.first_difference(25)? {
+            let diff_path = difference.path;
+            let ts_val: String = difference.left.chars().take(200).collect();
+            let re2c_val: String = difference.right.chars().take(200).collect();
             // Only sub-categorize main tier divergences
             if diff_path.contains(".main.") || diff_path.contains(".main_") {
                 main_tier_divergent += 1;
@@ -246,18 +162,22 @@ fn subcategorize_main_tier_divergences() {
                 let examples = subcat_examples.entry(subcat).or_default();
                 if examples.len() < 5 {
                     let file_str = path
-                        .strip_prefix(&base)
+                        .strip_prefix(base)
                         .unwrap_or(path)
                         .display()
                         .to_string();
                     examples.push((file_str, diff_path));
                 }
             }
+        } else {
+            unclassified += 1;
         }
     }
 
     eprintln!("\n=== MAIN TIER SUB-CATEGORIZATION ===");
     eprintln!("Total divergent: {total_divergent}");
+    eprintln!("Native parser rejected: {native_rejected}");
+    eprintln!("Semantic divergences without a JSON difference: {unclassified}");
     eprintln!("Main tier divergent: {main_tier_divergent}");
     eprintln!();
 
@@ -292,9 +212,14 @@ fn subcategorize_main_tier_divergences() {
             serde_json::json!({ "subcategory": subcat, "count": count, "examples": examples })
         })
         .collect();
-    let _ = std::fs::write(
-        "/tmp/re2c_main_tier_subcategories.json",
-        serde_json::to_string_pretty(&report).unwrap_or_default(),
-    );
-    eprintln!("Report: /tmp/re2c_main_tier_subcategories.json");
+    JsonReport::serialize(&report)?.write(report_path)?;
+    eprintln!("Report: {}", report_path.display());
+    Ok(())
+}
+
+#[test]
+fn internal_parser_faults_refuse_report_publication() -> Result<(), Box<dyn std::error::Error>> {
+    crate::parser_attempt::assert_report_admission(|base, files, destination, parse| {
+        crate::subcategorize_main_tier::write_report(base, files, destination, parse)
+    })
 }

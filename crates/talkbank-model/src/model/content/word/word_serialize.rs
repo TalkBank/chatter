@@ -12,6 +12,7 @@ use crate::model::{WordContent, WriteChat};
 use super::category::WordCategory;
 use super::form::FormType;
 use super::language::WordLanguageMarker;
+use super::suffix::WordSuffix;
 use super::untranscribed::UntranscribedStatus;
 use super::word_contents::WordContents;
 use super::word_type::Word;
@@ -45,10 +46,7 @@ impl Serialize for Word {
         if self.category.is_some() {
             field_count += 1;
         }
-        if self.form_type.is_some() {
-            field_count += 1;
-        }
-        if self.lang.is_some() {
+        if self.suffix.is_some() {
             field_count += 1;
         }
         if self.part_of_speech.is_some() {
@@ -73,11 +71,10 @@ impl Serialize for Word {
         if let Some(ref cat) = self.category {
             state.serialize_field("category", cat)?;
         }
-        if let Some(ref ft) = self.form_type {
-            state.serialize_field("form_type", ft)?;
-        }
-        if let Some(ref lang) = self.lang {
-            state.serialize_field("lang", lang)?;
+        match &self.suffix {
+            Some(WordSuffix::Form(form)) => state.serialize_field("form_type", form)?,
+            Some(WordSuffix::Language(language)) => state.serialize_field("lang", language)?,
+            None => {}
         }
         if let Some(ref pos) = self.part_of_speech {
             state.serialize_field("part_of_speech", pos)?;
@@ -125,7 +122,7 @@ struct WordJsonSchema {
     #[schemars(skip_serializing_if = "Option::is_none")]
     category: Option<WordCategory>,
 
-    /// Form type marker (@a, @b, @c, @z:custom, etc.).
+    /// Form type marker (@b, @c, @z:custom, etc.).
     #[schemars(skip_serializing_if = "Option::is_none")]
     form_type: Option<FormType>,
 
@@ -135,7 +132,7 @@ struct WordJsonSchema {
 
     /// Part-of-speech tag ($adj, $n, $v, etc.).
     #[schemars(skip_serializing_if = "Option::is_none")]
-    part_of_speech: Option<smol_str::SmolStr>,
+    part_of_speech: Option<super::pos_tag::WordPosTag>,
 
     /// Inline timing bullet parsed directly from %wor tier.
     #[schemars(skip_serializing_if = "Option::is_none")]
@@ -154,7 +151,20 @@ impl JsonSchema for Word {
     }
 
     fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        WordJsonSchema::json_schema(generator)
+        let mut schema = WordJsonSchema::json_schema(generator);
+        // The wire keeps its historical separate property names, while the
+        // model owns a single suffix. Explicit null is equivalent to absence.
+        schema.insert(
+            "not".into(),
+            serde_json::json!({
+                "required": ["form_type", "lang"],
+                "properties": {
+                    "form_type": { "not": { "type": "null" } },
+                    "lang": { "not": { "type": "null" } }
+                }
+            }),
+        );
+        schema
     }
 }
 
@@ -182,37 +192,8 @@ impl WriteChat for Word {
             }
         }
 
-        if let Some(ref ft) = self.form_type {
-            w.write_char('@')?;
-            ft.write_chat(w)?;
-        }
-
-        if let Some(ref marker) = self.lang {
-            match marker {
-                WordLanguageMarker::Shortcut => w.write_str("@s")?,
-                WordLanguageMarker::Explicit(code) => {
-                    w.write_str("@s:")?;
-                    code.write_chat(w)?;
-                }
-                WordLanguageMarker::Multiple(codes) => {
-                    w.write_str("@s:")?;
-                    for (i, code) in codes.iter().enumerate() {
-                        if i > 0 {
-                            w.write_char('+')?;
-                        }
-                        code.write_chat(w)?;
-                    }
-                }
-                WordLanguageMarker::Ambiguous(codes) => {
-                    w.write_str("@s:")?;
-                    for (i, code) in codes.iter().enumerate() {
-                        if i > 0 {
-                            w.write_char('&')?;
-                        }
-                        code.write_chat(w)?;
-                    }
-                }
-            }
+        if let Some(suffix) = &self.suffix {
+            suffix.write_chat(w)?;
         }
 
         if let Some(ref pos) = self.part_of_speech {

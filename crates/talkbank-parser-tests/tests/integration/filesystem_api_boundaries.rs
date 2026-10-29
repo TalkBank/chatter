@@ -229,6 +229,37 @@ mod resolved_identity {
             resolved.file(name).unwrap().as_path(),
             resolved.as_path().join(name)
         );
+        for suffix in ["/", "//", "/."] {
+            let mut spelling = directory.path().join(name).into_os_string();
+            spelling.push(suffix);
+            let path = std::path::Path::new(&spelling);
+            assert_eq!(
+                ResolvedPath::of_file(path).unwrap_err().kind(),
+                std::io::ErrorKind::InvalidInput,
+                "directory spelling must not become a file location: {path:?}"
+            );
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            let name = OsStr::from_bytes(b"transcript-\xff.cha");
+            assert_eq!(
+                ResolvedPath::of_file(&directory.path().join(name)).unwrap(),
+                resolved.file(name).unwrap(),
+                "native file names do not require Unicode"
+            );
+        }
+        #[cfg(windows)]
+        for suffix in ["\\", "\\\\", "\\."] {
+            let mut spelling = directory.path().join(name).into_os_string();
+            spelling.push(suffix);
+            assert_eq!(
+                ResolvedPath::of_file(std::path::Path::new(&spelling))
+                    .unwrap_err()
+                    .kind(),
+                std::io::ErrorKind::InvalidInput
+            );
+        }
     }
 
     /// A real transcript is a file, never evidence for a directory owner.
@@ -314,6 +345,13 @@ mod resolved_identity {
                 .as_path(),
             resolved_root.as_path().join("gone/deeper")
         );
+        for spelling in ["gone/deeper/", "gone/deeper//", "gone/deeper/."] {
+            assert_eq!(
+                ResolvedPrefix::of(&root.join(spelling)).unwrap().as_path(),
+                resolved_root.as_path().join("gone/deeper"),
+                "missing directory prefixes retain their intended cache scope"
+            );
+        }
         assert!(resolved_root.file(OsStr::new("a/b")).is_err());
         assert!(resolved_root.file(OsStr::new("..")).is_err());
     }

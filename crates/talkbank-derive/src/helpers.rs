@@ -9,13 +9,14 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use crate::bindings::IdentifierName;
 use syn::Fields;
 
 /// What a span-carrying field's type is, which decides how its diff context
 /// span is read.
 #[derive(Clone, Copy)]
 pub enum SpanFieldKind {
-    /// `Span` (may still be the `0..0` sentinel until the migration ends).
+    /// A located `Span`, including genuine zero-width geometry.
     Span,
     /// `Option<Span>`.
     OptionSpan,
@@ -45,15 +46,15 @@ pub fn find_span_field(fields: &Fields) -> Option<SpanFieldInfo> {
             Some(ident) => ident.clone(),
             None => continue,
         };
-        let name = ident.to_string();
+        let name = IdentifierName::of(&ident);
         let Some(kind) = span_field_kind(&field.ty) else {
             continue;
         };
         let info = SpanFieldInfo { ident, kind };
-        if name == "span" || name == "location" {
+        if name.is("span") || name.is("location") {
             return Some(info);
         }
-        if name == "speaker_span" {
+        if name.is("speaker_span") {
             speaker_candidate = Some(info.clone());
         }
         candidate = Some(info);
@@ -104,7 +105,7 @@ fn is_named(ty: &syn::Type, name: &str) -> bool {
     if let syn::Type::Path(type_path) = ty
         && let Some(segment) = type_path.path.segments.last()
     {
-        return segment.ident == name;
+        return IdentifierName::of(&segment.ident).is(name);
     }
     false
 }
@@ -115,7 +116,7 @@ fn option_inner(ty: &syn::Type) -> Option<&syn::Type> {
         return None;
     };
     let segment = type_path.path.segments.last()?;
-    if segment.ident != "Option" {
+    if !IdentifierName::of(&segment.ident).is("Option") {
         return None;
     }
     let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {

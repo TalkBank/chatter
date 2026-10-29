@@ -60,7 +60,8 @@ const ROWS: &[(&str, &str, &[&str])] = &[
 fn e370_points_at_the_marker_in_the_source() -> Result<(), TestError> {
     for (utterance, marker, expected_codes) in ROWS {
         let source = file(utterance);
-        let reported = diagnostics_of(&source, Rules::Default)?;
+        let completed = diagnostics_of(&source, Rules::Default)?;
+        let reported = completed.diagnostics();
         let codes: Vec<String> = reported.iter().map(|e| e.code.to_string()).collect();
         let mut expected: Vec<&str> = expected_codes.to_vec();
         expected.sort_unstable();

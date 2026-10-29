@@ -49,14 +49,17 @@ pub(crate) fn emit_registry(registry: &CompleteRegistry) -> TokenStream {
         let ident = variant.name();
         let code = variant.code();
         let configuration = variant.configuration();
-        quote! { #configuration #code => Some(#name::#ident) }
+        quote! { #configuration #code => ::core::option::Option::Some(#name::#ident) }
     });
     let (all, count) = variant_array(variants.iter());
     let (planned, planned_count) = variant_array(registry.variants_in(Enforcement::Planned));
     let (opt_in, opt_in_count) = variant_array(registry.variants_in(Enforcement::OptIn));
     quote! {
         #(#attrs)*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+        #[derive(::core::clone::Clone, ::core::marker::Copy, ::core::fmt::Debug,
+            ::core::cmp::PartialEq, ::core::cmp::Eq, ::core::cmp::PartialOrd,
+            ::core::cmp::Ord, ::core::hash::Hash, ::serde::Serialize,
+            ::serde::Deserialize, ::schemars::JsonSchema)]
         #vis enum #name { #(#enum_variants,)* }
 
         // Syntax admission proves the sentinel is declared; target compilation
@@ -67,18 +70,18 @@ pub(crate) fn emit_registry(registry: &CompleteRegistry) -> TokenStream {
         #configuration
         impl #name {
             /// Return this variant's canonical short code.
-            pub fn as_str(&self) -> &'static str {
+            pub fn as_str(&self) -> &'static ::core::primitive::str {
                 match self { #(#as_str_arms,)* }
             }
 
             /// Parse an exact short code; unknown strings are refused.
-            pub fn parse_exact(code: &str) -> Option<Self> {
-                match code { #(#parse_arms,)* _ => None }
+            pub fn parse_exact(code: &::core::primitive::str) -> ::core::option::Option<Self> {
+                match code { #(#parse_arms,)* _ => ::core::option::Option::None }
             }
 
             /// Return the documentation URL for this canonical code.
-            pub fn documentation_url(&self) -> String {
-                format!("https://talkbank.org/errors/{}", self.as_str())
+            pub fn documentation_url(&self) -> ::std::string::String {
+                ::std::format!("https://talkbank.org/errors/{}", self.as_str())
             }
 
             /// Every known variant in admitted declaration/code order.
@@ -87,7 +90,7 @@ pub(crate) fn emit_registry(registry: &CompleteRegistry) -> TokenStream {
             }
 
             /// Iterate over every known variant in admitted code order.
-            pub fn iter() -> std::slice::Iter<'static, Self> {
+            pub fn iter() -> ::core::slice::Iter<'static, Self> {
                 Self::all().iter()
             }
 
@@ -103,9 +106,9 @@ pub(crate) fn emit_registry(registry: &CompleteRegistry) -> TokenStream {
         }
 
         #configuration
-        impl std::fmt::Display for #name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.as_str())
+        impl ::core::fmt::Display for #name {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                f.write_str(self.as_str())
             }
         }
     }

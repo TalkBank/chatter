@@ -13,6 +13,243 @@ enum Expected {
     Rejected,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum ShortcutDeclaration {
+    Bilingual,
+    Absent,
+    Rejected,
+    Repeated,
+}
+
+#[test]
+fn shortcut_resolution_requires_tier_context_even_with_a_valid_declaration() {
+    use talkbank_model::alignment::helpers::{WordItem, walk_words};
+    use talkbank_model::validation::{GoverningMark, LanguageResolution};
+
+    enum TierContext<'a> {
+        Known(&'a talkbank_model::model::LanguageCode, &'static str),
+        Absent,
+    }
+
+    let specs = error_specs::load(workspace_root()).expect("authored specs");
+    let source = specs
+        .iter()
+        .find(|spec| spec.filename == "E249.md")
+        .expect("shortcut spec")
+        .examples()
+        .iter()
+        .find(|example| {
+            example.title.as_deref()
+                == Some("Bare shortcuts toggle in both declared language contexts")
+        })
+        .expect("bilingual control")
+        .chat
+        .as_str();
+    let tree = TreeSitterParser::new().expect("parser");
+    let native = Re2cParser::new();
+    fn check_context(parser: &impl ChatParser, source: &str) {
+        let parsing = ErrorCollector::new();
+        let file = parser
+            .parse_chat_file(source, 0, &parsing)
+            .into_option()
+            .expect("authored bilingual file");
+        assert!(parsing.into_vec().is_empty());
+        let decoded: ChatFile = serde_json::from_str(&serde_json::to_string(&file).expect("wire"))
+            .expect("decoded model");
+        for document in [&file, &decoded] {
+            let codes: Vec<_> = document
+                .language_declaration()
+                .expect("admitted declaration")
+                .iter()
+                .cloned()
+                .collect();
+            assert_eq!(codes.len(), 2);
+            let mut observed = 0;
+            for utterance in document.utterances() {
+                walk_words(&utterance.main.content.content, None, &mut |item| {
+                    let word = match item {
+                        WordItem::Word(word) => word,
+                        WordItem::ReplacedWord(replaced) => &replaced.word,
+                        WordItem::Separator(_) => return,
+                    };
+                    if !matches!(
+                        word.language_marker().cloned(),
+                        Some(talkbank_model::WordLanguageMarker::Shortcut)
+                    ) {
+                        return;
+                    }
+                    observed += 1;
+                    let mark = GoverningMark::of(word, None);
+                    for context in [
+                        TierContext::Known(&codes[0], "spa"),
+                        TierContext::Known(&codes[1], "eng"),
+                        TierContext::Absent,
+                    ] {
+                        let tier = match context {
+                            TierContext::Known(language, _) => Some(language),
+                            TierContext::Absent => None,
+                        };
+                        let outcome = mark.resolve(tier, &codes);
+                        match context {
+                            TierContext::Known(_, expected) => {
+                                let LanguageResolution::Single(language) = outcome.resolution
+                                else {
+                                    panic!("bilingual shortcut must resolve");
+                                };
+                                assert_eq!(language.as_str(), expected);
+                                assert!(outcome.diagnostics.is_empty());
+                            }
+                            TierContext::Absent => {
+                                assert_eq!(outcome.resolution, LanguageResolution::Unresolved);
+                                assert_eq!(outcome.diagnostics.len(), 1);
+                                assert_eq!(
+                                    outcome.diagnostics[0].code,
+                                    ErrorCode::MissingLanguageContext
+                                );
+                            }
+                        }
+                    }
+                });
+            }
+            assert_eq!(observed, 2, "both authored shortcuts must be exercised");
+        }
+    }
+    check_context(&tree, source);
+    check_context(&native, source);
+}
+
+#[test]
+fn shortcuts_preserve_unavailable_declaration_without_diagnostic_cascades() {
+    let specs = error_specs::load(workspace_root()).expect("authored specs");
+    let example = |file: &str, title: &str| {
+        specs
+            .iter()
+            .find(|spec| spec.filename == file)
+            .expect("spec")
+            .examples()
+            .iter()
+            .find(|example| example.title.as_deref() == Some(title))
+            .expect("authored example")
+            .chat
+            .as_str()
+    };
+    let bilingual = example(
+        "E249.md",
+        "Bare shortcuts toggle in both declared language contexts",
+    );
+    let absent = example(
+        "E249.md",
+        "Delete the language declaration from the bilingual control",
+    );
+    let rejected = example("E507.md", "A tab and nothing")
+        .lines()
+        .find(|line| line.starts_with("@Languages:"))
+        .expect("authored rejected header");
+    let header = bilingual
+        .lines()
+        .find(|line| line.starts_with("@Languages:"))
+        .expect("authored declaration");
+    let tree = TreeSitterParser::new().expect("parser");
+    let native = Re2cParser::new();
+    for scenario in [
+        ShortcutDeclaration::Bilingual,
+        ShortcutDeclaration::Absent,
+        ShortcutDeclaration::Rejected,
+        ShortcutDeclaration::Repeated,
+    ] {
+        let source = match scenario {
+            ShortcutDeclaration::Bilingual => bilingual.to_owned(),
+            ShortcutDeclaration::Absent => absent.to_owned(),
+            ShortcutDeclaration::Rejected => bilingual.replacen(header, rejected, 1),
+            ShortcutDeclaration::Repeated => {
+                bilingual.replacen(header, &format!("{header}\n{header}"), 1)
+            }
+        };
+        fn check_shortcuts(parser: &impl ChatParser, source: &str, scenario: ShortcutDeclaration) {
+            let parsing = ErrorCollector::new();
+            let file = parser
+                .parse_chat_file(source, 0, &parsing)
+                .into_option()
+                .expect("file");
+            let decoded: ChatFile =
+                serde_json::from_str(&serde_json::to_string(&file).expect("wire"))
+                    .expect("decoded model");
+            for document in [&file, &decoded] {
+                let declaration = document.language_declaration();
+                match scenario {
+                    ShortcutDeclaration::Bilingual => {
+                        assert_eq!(declaration.expect("admitted").iter().count(), 2);
+                    }
+                    ShortcutDeclaration::Absent => {
+                        assert_eq!(declaration, Err(LanguageDeclarationError::Absent))
+                    }
+                    ShortcutDeclaration::Rejected => {
+                        assert_eq!(declaration, Err(LanguageDeclarationError::Rejected))
+                    }
+                    ShortcutDeclaration::Repeated => {
+                        assert_eq!(declaration, Err(LanguageDeclarationError::Repeated))
+                    }
+                }
+                let mut shortcuts = 0;
+                for line in &document.lines {
+                    if let talkbank_model::model::Line::Utterance(utterance) = line {
+                        use talkbank_model::alignment::helpers::{WordItem, walk_words};
+                        walk_words(&utterance.main.content.content, None, &mut |item| {
+                            let word = match item {
+                                WordItem::Word(word) => word,
+                                WordItem::ReplacedWord(replaced) => &replaced.word,
+                                WordItem::Separator(_) => return,
+                            };
+                            if matches!(
+                                word.language_marker().cloned(),
+                                Some(talkbank_model::WordLanguageMarker::Shortcut)
+                            ) {
+                                shortcuts += 1;
+                            }
+                        });
+                    }
+                }
+                assert_eq!(
+                    shortcuts, 2,
+                    "both authored shortcuts must survive recovery"
+                );
+                let findings = ErrorCollector::new();
+                document.validate(&findings, TranscriptName::Anonymous);
+                let findings = findings.into_vec();
+                let shortcut_errors = findings
+                    .iter()
+                    .filter(|error| error.code == ErrorCode::MissingLanguageContext)
+                    .count();
+                let expected = match scenario {
+                    ShortcutDeclaration::Absent => 2,
+                    ShortcutDeclaration::Bilingual
+                    | ShortcutDeclaration::Rejected
+                    | ShortcutDeclaration::Repeated => 0,
+                };
+                assert_eq!(
+                    shortcut_errors,
+                    expected,
+                    "{} {scenario:?}: {findings:?}",
+                    parser.parser_name()
+                );
+                match scenario {
+                    ShortcutDeclaration::Bilingual => assert!(findings.is_empty(), "{findings:?}"),
+                    ShortcutDeclaration::Absent
+                    | ShortcutDeclaration::Rejected
+                    | ShortcutDeclaration::Repeated => {
+                        assert!(
+                            !findings.is_empty(),
+                            "unavailable declaration must remain invalid"
+                        );
+                    }
+                }
+            }
+        }
+        check_shortcuts(&tree, &source, scenario);
+        check_shortcuts(&native, &source, scenario);
+    }
+}
+
 fn check(parser: &impl ChatParser, source: &str, expected: &Expected) {
     let diagnostics = ErrorCollector::new();
     let file = parser

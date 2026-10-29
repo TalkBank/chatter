@@ -390,6 +390,24 @@
     },
     "Annotated": {
       "description": "Generic wrapper that adds scoped annotations to a content item.\n\nThis wrapper is used throughout CHAT to attach bracketed annotations to\nwords, events, groups, and actions. The annotations appear immediately\nafter the annotated element in CHAT format.\n\n# CHAT Format Examples\n\n```text\nwant [* m]                               Word error (missing word)\ngoing [* s]                              Word error (started utterance)\ndog [= explanation]                      Explanation annotation\n&=laughs [! loudly]                      Paralinguistic note\n<I want> [/] I need                      Repetition retracing\n<the dog> [//] the cat                   Correction retracing\nperro [= dog]                            Translation\n```\n\n# Type Parameter\n\n- `T` - The inner content type being annotated (Word, Event, Group, or Action)\n\n# Common Uses\n\n- `Annotated<Word>` - Word with error codes, explanations, or comments\n- `Annotated<Event>` - Event with paralinguistic notes\n- `Annotated<Group>` - Group with retracing markers\n- `Annotated<Action>` - Action with explanatory notes\n\n# References\n\n- [Scoped Symbols](https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols)\n- [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)",
+      "not": {
+        "properties": {
+          "form_type": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "lang": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "form_type",
+          "lang"
+        ]
+      },
       "properties": {
         "category": {
           "anyOf": [
@@ -419,7 +437,7 @@
               "type": "null"
             }
           ],
-          "description": "Form type marker (@a, @b, @c, @z:custom, etc.)."
+          "description": "Form type marker (@b, @c, @z:custom, etc.)."
         },
         "inline_bullet": {
           "anyOf": [
@@ -444,11 +462,15 @@
           "description": "Language-specific marker (@s or @s:code)."
         },
         "part_of_speech": {
-          "description": "Part-of-speech tag ($adj, $n, $v, etc.).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WordPosTag"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Part-of-speech tag ($adj, $n, $v, etc.)."
         },
         "raw_text": {
           "description": "Current CHAT spelling derived from structure, including all markers.",
@@ -3695,6 +3717,14 @@
       "description": "Font specification declared in `@Font`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Font_Header>",
       "type": "string"
     },
+    "FormLabel": {
+      "minLength": 1,
+      "not": {
+        "pattern": "[^a-zA-Z0-9_]"
+      },
+      "pattern": "^[a-zA-Z0-9_]+$",
+      "type": "string"
+    },
     "FormType": {
       "description": "Special-form suffix marker attached to a word token.\n\nA word may carry one `@` marker naming what kind of form it is: a\nchild-invented word, a letter, a sung passage. The set is closed, and\ndeclared once in `spec/form_markers/form_marker_registry.json`.\n\n# Standard Markers\n\n- `@b` - Babbling (`abame@b`)\n- `@c` - Child-invented form (`gumma@c`, meaning sticky)\n- `@d` - Dialect form (`younz@d`, meaning you)\n- `@f` - Family-specific form (`bunko@f`, meaning broken)\n- `@fp` - Filled pause (`um@fp`, deprecated, use `&-um` instead, because filled pauses are excluded from grammatical analysis)\n- `@g` - General special form (`gongga@g`)\n- `@i` - Interjection, interaction (`uhhuh@i`)\n- `@k` - Multiple letters (`abcd@k`, mnemonic is \"kana\": a Japanese kana is one symbol for a whole syllable)\n- `@l` - Letter (`b@l`, the letter b)\n- `@ls` - Letter plural (`p@ls`, the plural of a letter)\n- `@n` - Neologism (`breaked@n`, meaning broke)\n- `@o` - Onomatopoeia (`woofwoof@o`, a dog barking)\n- `@p` - Phonologically consistent form (`aga@p`)\n- `@q` - Metalinguistic use (`if@q`, as in `no if@q-s or but@q-s`, when citing words)\n- `@sas` - Sign and speech (`apple@sas`, signs and says apple)\n- `@si` - Singing (`lalala@si`)\n- `@sl` - Signed language (`apple@sl`, signs apple)\n- `@t` - Test word (`wug@t`)\n- `@u` - Unibet transcription (`binga@u`)\n- `@wp` - Word play (`goobarumba@wp`)\n- `@x` - Excluded words (`stuff@x`)\n- `@z:<label>` - User-defined code (`word@z:rtfd`, any user code)\n\n# References\n\n- [Special Form Markers](https://talkbank.org/0info/manuals/CHAT.html#SpecialForm_Marker)\n\nPer-marker anchors are on each variant below.",
       "oneOf": [
@@ -3808,7 +3838,7 @@
           "description": "`@z:<label>` - User-defined code (`word@z:rtfd`, any user code)\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#User_Special_Form>",
           "properties": {
             "z": {
-              "type": "string"
+              "$ref": "#/$defs/FormLabel"
             }
           },
           "required": [
@@ -3818,7 +3848,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Text that was written in a word's `@` slot but that no registry row\ndeclares (`word@zz`, `word@x:foo`).\n\nNOT a marker: it is a record of what the transcript actually said, kept\nso that recovery does not have to invent a marker that IS declared. The\ntree-sitter parser reports E203 and stores this; the payload is the\ntext after the `@`, verbatim, so serializing the word reproduces the\ninput exactly.\n\nBefore this variant existed, that recovery path stored\n`UserDefined(payload)`, which claimed `word@zz` was the `@z`\nuser-defined marker with label `zz`, and `to_chat_marker` rendered it\nback as `word@z:zz`. It was unobservable only because every command\nthat serializes aborts on E203 first, which is a latent corruption\nrather than a safe one. The re2c parser stored nothing at all, so the\ntwo parsers disagreed on the same input.\n\n[`FormType::from_payload`] never returns this: it is reachable only\nfrom a parser that has already reported the marker undeclared.",
+          "description": "Text that was written in a word's `@` slot but that no registry row\ndeclares (`word@zz`, `word@x:foo`).\n\nNOT a marker: it is a record of what the transcript actually said, kept\nso that recovery does not have to invent a marker that IS declared. The\ntree-sitter parser reports E203 and stores this; the payload is the\ntext after the `@`, verbatim, so serializing the word reproduces the\ninput exactly.\n\nBefore this variant existed, that recovery path stored\n`UserDefined(payload)`, which claimed `word@zz` was the `@z`\nuser-defined marker with label `zz`, and `to_chat_marker` rendered it\nback as `word@z:zz`. It was unobservable only because every command\nthat serializes aborts on E203 first, which is a latent corruption\nrather than a safe one. The re2c parser stored nothing at all, so the\ntwo parsers disagreed on the same input.\n\n[`FormType::from_payload`] never returns this. Parsers use it after\nreporting an undeclared marker; JSON may retain the same recovery state.",
           "properties": {
             "undeclared": {
               "type": "string"
@@ -5032,7 +5062,7 @@
     },
     "Linker": {
       "$ref": "#/$defs/LinkerKind",
-      "description": "A cross-utterance linker token with its source position.\n\nPairs the linker [`LinkerKind`] with the byte [`Span`] it occupied in the\nsource. The span is provenance only (`#[serde(skip)]`, `#[schemars(skip)]`,\n`#[semantic_eq(skip)]`): the serialized form is transparently that of\n[`LinkerKind`], so the JSON and schema are unchanged by carrying a span, and\nsemantic equality ignores position."
+      "description": "A cross-utterance linker token with explicit source-location metadata.\n\nPairs the linker [`LinkerKind`] with its [`crate::Location`]. Parsed linkers\ncarry a source span; programmatic values and JSON readback may be unlocated.\nLocation is provenance only (`#[serde(skip)]`, `#[schemars(skip)]`,\n`#[semantic_eq(skip)]`): the serialized form is transparently that of\n[`LinkerKind`], and semantic equality ignores location."
     },
     "LinkerKind": {
       "description": "Which cross-utterance linker a token is (its classification, not its\nposition).\n\nLinkers appear at the start of an utterance to indicate its relationship\nto the previous utterance(s). The serialized form (`{\"type\": \"...\"}`) is\nthe stable wire contract; [`Linker`] is transparent over this type, so the\nJSON of a linker is exactly this enum's tagged representation.\n\n# CHAT Format Examples\n\n```text\n*MOT: are you ready ?\n*CHI: +< yes .          Lazy overlap (started before previous finished)\n*MOT: what do you want ?\n*CHI: ++ cookie !       Quick uptake (no gap)\n*MOT: she said +\".      Quotation follows\n*CHI: I'm hungry +\".\n```\n\n# References\n\n- [Utterance Linkers](https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers)",
@@ -7766,6 +7796,24 @@
     },
     "Word": {
       "description": "A word in a CHAT transcript with optional markers and internal structure.\n\nWords are the fundamental units of CHAT transcripts. They can be simple dictionary\nforms, compounds, cliticizations, or include special markers indicating dialectal\nvariations, child-invented forms, and other linguistic phenomena.",
+      "not": {
+        "properties": {
+          "form_type": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "lang": {
+            "not": {
+              "type": "null"
+            }
+          }
+        },
+        "required": [
+          "form_type",
+          "lang"
+        ]
+      },
       "properties": {
         "category": {
           "anyOf": [
@@ -7795,7 +7843,7 @@
               "type": "null"
             }
           ],
-          "description": "Form type marker (@a, @b, @c, @z:custom, etc.)."
+          "description": "Form type marker (@b, @c, @z:custom, etc.)."
         },
         "inline_bullet": {
           "anyOf": [
@@ -7820,11 +7868,15 @@
           "description": "Language-specific marker (@s or @s:code)."
         },
         "part_of_speech": {
-          "description": "Part-of-speech tag ($adj, $n, $v, etc.).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WordPosTag"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Part-of-speech tag ($adj, $n, $v, etc.)."
         },
         "raw_text": {
           "description": "Current CHAT spelling derived from structure, including all markers.",
@@ -8307,6 +8359,14 @@
     "WordPhonetic": {
       "$ref": "#/$defs/RecoveryText",
       "description": "The phonetic transcription string of a `@u` special-form word.\n\nDeliberately does NOT enforce a symbol inventory, matching the stance of\nthe `%pho` tier's `PhoWord`: IPA, legacy UNIBET (ASCII), and X-SAMPA\nnotations all pass. Strict phonetic-inventory constraints belong in\ncorpus- or project-specific validators, never here (maintainer ruling,\n2026-07-14, docs/design UNIBET modeling). Only non-emptiness is enforced."
+    },
+    "WordPosTag": {
+      "minLength": 1,
+      "not": {
+        "pattern": "[^a-zA-Z:]"
+      },
+      "pattern": "^[a-zA-Z:]+$",
+      "type": "string"
     },
     "WordShortening": {
       "$ref": "#/$defs/RecoveryText",

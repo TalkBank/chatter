@@ -10,9 +10,9 @@ pub struct UtteranceIdx(usize);
 impl UtteranceIdx {
     /// Wraps a 0-based utterance index.
     ///
-    /// Added when the inner field was closed. Construction is now explicit,
-    /// which is what would let this type reject a nonsensical index later
-    /// without that being a breaking change.
+    /// Tags the position's domain; every `usize` is representable. This does
+    /// not establish bounds or bind the position to a particular source.
+    /// The consumer must admit it against the sequence being indexed.
     pub fn new(index: usize) -> Self {
         Self(index)
     }
@@ -36,9 +36,9 @@ pub struct WordIdx(usize);
 impl WordIdx {
     /// Wraps a 0-based word index.
     ///
-    /// Added when the inner field was closed. Construction is now explicit,
-    /// which is what would let this type reject a nonsensical index later
-    /// without that being a breaking change.
+    /// Tags the position's domain; every `usize` is representable. This does
+    /// not establish bounds or bind the position to a particular source.
+    /// The consumer must admit it against the sequence being indexed.
     pub fn new(index: usize) -> Self {
         Self(index)
     }

@@ -57,7 +57,7 @@ pub fn parse_media_header<'tree>(
         errors,
     ) {
         Ok(text) => text,
-        Err(failure) => return Ok(failure.into_header(&site)),
+        Err(failure) => return Ok(failure.into_header()),
     };
 
     // Whitespace between the filename and the comma, recorded as provenance
@@ -86,7 +86,7 @@ pub fn parse_media_header<'tree>(
         errors,
     ) {
         Ok(text) => MediaType::from_text(text),
-        Err(failure) => return Ok(failure.into_header(&site)),
+        Err(failure) => return Ok(failure.into_header()),
     };
 
     // Preserve the existing optional-group policy. The sequence slot cannot
@@ -113,7 +113,7 @@ pub fn parse_media_header<'tree>(
             errors,
         ) {
             Ok(text) => Some(MediaStatus::from_text(text)),
-            Err(failure) => return Ok(failure.into_header(&site)),
+            Err(failure) => return Ok(failure.into_header()),
         },
         None => None,
     };

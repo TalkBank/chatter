@@ -64,10 +64,14 @@ struct SegmentSink<'errors, E> {
 impl<E: ErrorSink> SegmentSink<'_, E> {
     /// Rejection discards the incomplete assembly and cannot be reversed by
     /// later siblings. Traversal continues so their diagnostics remain visible.
-    fn push(&mut self, segment: BulletContentSegment) {
-        match &mut self.segments {
-            ParseOutcome::Parsed(segments) => segments.push(segment),
-            ParseOutcome::Rejected => {}
+    fn push(&mut self, segment: ParseOutcome<BulletContentSegment>) {
+        match segment {
+            ParseOutcome::Parsed(segment) => {
+                if let ParseOutcome::Parsed(segments) = &mut self.segments {
+                    segments.push(segment);
+                }
+            }
+            ParseOutcome::Rejected => self.segments = ParseOutcome::Rejected,
         }
     }
 
@@ -79,7 +83,7 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
     fn text<'tree>(&mut self, typed: SourceBound<'tree, '_, TextSegmentNode<'tree>>) {
         let text = normalize_free_text_spacing(typed.text());
         if !text.is_empty() {
-            self.push(BulletContentSegment::text(text));
+            self.push(ParseOutcome::Parsed(BulletContentSegment::text(text)));
         }
     }
 
@@ -96,14 +100,13 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
                 ))
             }
         };
-        self.push(segment);
+        self.push(ParseOutcome::Parsed(segment));
         Ok(())
     }
 
     fn picture<'tree>(&mut self, typed: SourceBound<'tree, '_, InlinePicNode<'tree>>) {
-        if let ParseOutcome::Parsed(filename) = parse_inline_pic(typed, self.errors) {
-            self.push(filename.into_segment());
-        }
+        let picture = parse_inline_pic(typed, self.errors).map(|filename| filename.into_segment());
+        self.push(picture);
     }
 
     fn unexpected<'tree>(&self, node: SourceField<'_, 'tree, '_, Node<'tree>>) {
@@ -211,7 +214,9 @@ macro_rules! text_choices {
                     sink.leaf(group.field_child_0().slot(), SegmentSink::bullet)?;
                     sink.spaces(group.field_child_1().slot(), group.field_unexpected());
                 }
-                $view::Continuation(_) => sink.push(BulletContentSegment::continuation()),
+                $view::Continuation(_) => {
+                    sink.push(ParseOutcome::Parsed(BulletContentSegment::continuation()))
+                }
                 $(
                     $view::$picture(group) => {
                         sink.leaf(group.field_child_0().slot(), |sink, picture| {

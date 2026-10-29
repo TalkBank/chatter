@@ -24,28 +24,24 @@ use super::core::Commands;
 #[command(
     about = "Tools for validating and transforming TalkBank CHAT files",
     long_about = None,
-    after_long_help = "\
-Getting started:
-  chatter validate myfile.cha          Validate a CHAT file
-  chatter validate corpus/             Validate an entire corpus
-  chatter convert to-json myfile.cha           Convert to JSON
-
-Exit codes:
-  0    All files valid / command succeeded
-  1    Validation errors found or command failed
-  2    Invalid arguments or missing required options
-
-Full documentation: https://talkbank.org/tools/"
+    after_long_help = long_help_footer()
 )]
 pub struct Cli {
     /// Logging verbosity level (can be repeated: -v, -vv, -vvv)
     #[arg(short, long, action = clap::ArgAction::Count, global = true)]
     pub verbose: u8,
 
-    /// Logging output format
+    /// Logging format on stderr; command --format selects result encoding
     #[arg(long, value_enum, default_value = "text", global = true)]
     pub log_format: LogFormat,
 
     #[command(subcommand)]
     pub command: Commands,
+}
+
+fn long_help_footer() -> String {
+    format!(
+        "Getting started:\n  chatter validate myfile.cha          Validate a CHAT file\n  chatter validate corpus/             Validate an entire corpus\n  chatter convert to-json myfile.cha    Convert to JSON\n  chatter commands list --format json  Discover commands and process statuses\n\n{}\nFull documentation: https://talkbank.org/tools/",
+        crate::exit_codes::ExitStatus::help()
+    )
 }

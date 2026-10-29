@@ -9,6 +9,7 @@
 //! `UndeclaredFormMarker`, the `WriteChat` impl) are hand-written and live in
 //! `crate::model::content::word::form`.
 
+use crate::model::content::word::FormLabel;
 use crate::model::content::word::form::FormMarkerPayload;
 use crate::model::content::word::form::UndeclaredFormMarker;
 use schemars::JsonSchema;
@@ -188,7 +189,7 @@ pub enum FormType {
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#User_Special_Form>
     #[serde(rename = "z")]
-    UserDefined(String),
+    UserDefined(FormLabel),
 
     /// Text that was written in a word's `@` slot but that no registry row
     /// declares (`word@zz`, `word@x:foo`).
@@ -207,8 +208,8 @@ pub enum FormType {
     /// rather than a safe one. The re2c parser stored nothing at all, so the
     /// two parsers disagreed on the same input.
     ///
-    /// [`FormType::from_payload`] never returns this: it is reachable only
-    /// from a parser that has already reported the marker undeclared.
+    /// [`FormType::from_payload`] never returns this. Parsers use it after
+    /// reporting an undeclared marker; JSON may retain the same recovery state.
     #[serde(rename = "undeclared")]
     Undeclared(String),
 }
@@ -276,14 +277,12 @@ impl FormType {
                     _ => None,
                 }
             }
-            // An empty label is unreachable through either parser (both require
-            // at least one character after the colon) and is refused here so it
-            // cannot be reached another way.
-            Some(label) if !label.is_empty() => match payload.code() {
-                "z" => Some(FormType::UserDefined(label.to_owned())),
+            // Labels are admitted once by their shared lexical type, including
+            // independently supplied payloads outside either parser's alphabet.
+            Some(label) => match payload.code() {
+                "z" => FormLabel::new(label).ok().map(FormType::UserDefined),
                 _ => None,
             },
-            Some(_) => None,
         };
         declared.ok_or_else(|| UndeclaredFormMarker::new(payload))
     }

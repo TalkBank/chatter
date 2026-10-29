@@ -108,7 +108,7 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
     // again below for the assignment, discarding the first result, so every
     // form-marked word paid for two splits and two case folds, and every
     // `@z:label` word built a `FormType::UserDefined` purely to drop it.
-    let is_u_form = matches!(w.form_marker, Some(FormType::U));
+    let is_u_form = matches!(w.form_marker(), Some(FormType::U));
     let content_items = if is_u_form {
         fold_phonetic(content_items)
     } else {
@@ -123,19 +123,13 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>) -> Word {
     // Both grammar paths retain the shared semantic category directly.
     word.category = w.category.clone();
 
-    // Admission already established the registry value. Invalid payloads must
-    // not disappear while cleaned word text loses the original @ spelling.
-    if let Some(declared) = &w.form_marker {
-        word = word.with_form_type(declared.clone());
-    }
-
-    // Both grammar paths retain the admitted shared value; lowering cannot
-    // reinterpret unchecked language strings or panic on an empty segment.
-    word.lang = w.lang.clone();
+    // The admitted single suffix moves through lowering without rebuilding
+    // an independently writable form/language pair.
+    word.suffix = w.suffix.clone();
 
     // POS tag, tag-extracted content
-    if let Some(tag) = w.pos_tag {
-        word = word.with_part_of_speech(tag);
+    if let Some(tag) = &w.pos_tag {
+        word = word.with_part_of_speech(tag.clone());
     }
 
     word

@@ -3,9 +3,16 @@
 //! This module provides specialized parsing functions for each tier type,
 //! organized by the linguistic category they represent.
 //!
-//! **Note:** These functions take tree-sitter `Node` arguments and are primarily
-//! for parser use. For general tier parsing, use `ChatParser::parse_dependent_tier`
-//! which accepts tier content strings directly.
+//! These functions consume typed, source-bound CST nodes or an admission proof
+//! for such a node. Source binding establishes which parsed source owns the
+//! node; it does not establish CHAT validity or absence of recovery. MOR and
+//! WOR require [`HealthyTier`], obtained by matching [`TierAdmission::admit`].
+//! Other entry points retain the recovery behavior documented by their own
+//! contracts; in particular, GRA can reject an incomplete graph from a
+//! recovery-bearing node. Always retain their diagnostics and outcomes.
+//!
+//! For general tier parsing, use `ChatParser::parse_dependent_tier`, which
+//! accepts a complete dependent-tier line directly.
 //!
 //! # Examples
 //!

@@ -138,3 +138,15 @@ record these as a committed `deny.toml` ignore list (with the
 rationale above) so `cargo deny` is green in CI and the suppressions
 are auditable, rather than leaving them as recurring noise. That is a
 Pass 0 follow-up, tracked here, not a flip blocker.
+
+## 0.33 candidate dependency follow-up, 2026-10-29
+
+The desktop E2E tooling's `serialize-javascript` 7.1.2 was affected by
+[GHSA-m5mm-p8h7-m29v](https://github.com/advisories/GHSA-m5mm-p8h7-m29v).
+The lock now selects 7.1.4 and the override requires at least 7.1.3. A clean
+install, frontend tests/build and npm audit pass with zero npm advisories.
+This development-only Mocha dependency is distinct from the shipped frontend.
+
+That npm result is not a clean Rust advisory result. The GLib/GTK disposition
+above remains open for Linux: the compatible stack has not been migrated, and
+the earlier bounded caller review does not prove runtime unreachability.

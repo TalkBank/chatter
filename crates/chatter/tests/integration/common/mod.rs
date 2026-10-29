@@ -259,6 +259,52 @@ pub fn parse_json(output: &Output) -> Result<Value, TestError> {
         .map_err(|error| TestError::Failure(format!("expected JSON output: {error}")))
 }
 
+/// Admit an entire UTF-8 JSONL stream before any record selection.
+/// Empty streams are allowed (for example, an audit with no findings), but
+/// blank lines, malformed JSON and invalid UTF-8 are not discarded or repaired.
+pub fn parse_json_lines(bytes: &[u8]) -> Result<Vec<Value>, TestError> {
+    let text = std::str::from_utf8(bytes)
+        .map_err(|error| TestError::Failure(format!("expected UTF-8 JSONL: {error}")))?;
+    text.lines()
+        .enumerate()
+        .map(|(index, line)| {
+            serde_json::from_str(line).map_err(|error| {
+                TestError::Failure(format!(
+                    "expected JSONL record at line {}: {error}",
+                    index + 1
+                ))
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn json_lines_admission_rejects_corruption_before_record_selection() -> Result<(), TestError> {
+    let records = parse_json_lines(b"{\"type\":\"file\"}\r\n{\"type\":\"summary\"}\n")?;
+    assert_eq!(
+        records,
+        [
+            serde_json::json!({"type": "file"}),
+            serde_json::json!({"type": "summary"})
+        ]
+    );
+    assert!(parse_json_lines(b"")?.is_empty());
+    assert_eq!(parse_json_lines(b"{}")?, [serde_json::json!({})]);
+    for bytes in [
+        &b"{}\nprogress message\n{}\n"[..],
+        &b"{}\n{broken\n"[..],
+        &b"{}\n\n{}\n"[..],
+        &b"{}\n  \n{}\n"[..],
+        &b"{\"text\":\"\xff\"}\n"[..],
+    ] {
+        assert!(
+            parse_json_lines(bytes).is_err(),
+            "corrupt stream admitted: {bytes:?}"
+        );
+    }
+    Ok(())
+}
+
 /// What `chatter validate` must say about a fixture.
 ///
 /// This replaces a bare `valid: bool` that three integration modules each

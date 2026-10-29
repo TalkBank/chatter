@@ -206,13 +206,13 @@ struct ParticipantValue<'source> {
 /// diagnostic order. Only the generated speaker kind can supply participant text.
 /// Generic over each slot's `Missing` payload, as `read_source_content` is.
 fn two_slots<'value, 'tree: 'value, 'source, 'w, V, MS, MV, ES, EV, AS, AV>(
-    site: &HeaderSite<'tree, '_>,
+    site: &HeaderSite<'tree, 'source>,
     speaker: SourceField<'value, 'tree, 'source, AnyKindSlot<SpeakerNode<'tree>, MS, ES, AS>>,
     speaker_words: &'w ContentSlot<'w>,
     value: SourceField<'value, 'tree, 'source, AnyKindSlot<V, MV, EV, AV>>,
     value_words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<ParticipantValue<'source>, ContentReadError<'w>>
+) -> Result<ParticipantValue<'source>, ContentReadError<'source, 'w>>
 where
     V: SourceBoundKind<'tree> + NamedKind,
     MS: SourceRecovery<'value, 'tree, 'source>,
@@ -256,7 +256,7 @@ pub(super) fn birth_of<'tree>(
             },
             errors,
         )?;
-        Ok::<_, ContentReadError<'_>>(Header::Birth {
+        Ok::<_, ContentReadError<'_, '_>>(Header::Birth {
             participant: model::SpeakerCode::new(participant),
             date: match date {
                 Some(text) => model::ChatDate::new(text),
@@ -431,12 +431,8 @@ fn option_flags(
 ) -> ParseOutcome<Vec<ChatOptionFlag>> {
     let children = extract_options_contents(options_contents);
     let mut flags = Vec::new();
-    let mut admit = |slot: &crate::generated_traversal::NarrowedKindSlot<
-        '_,
-        OptionNameNode<'_>,
-    >|
-     -> ParseOutcome<()> {
-        if let Some(name) = present(slot) {
+    let mut admit = |name: Option<&OptionNameNode<'_>>| -> ParseOutcome<()> {
+        if let Some(name) = name {
             let ParseOutcome::Parsed(text) =
                 extract_utf8_text(name.raw_node(), input, errors, "option name")
             else {
@@ -448,12 +444,12 @@ fn option_flags(
         }
         ParseOutcome::parsed(())
     };
-    if admit(children.child_0.slot()).is_none() {
+    if admit(present(children.child_0.slot())).is_none() {
         return ParseOutcome::Rejected;
     }
     for element in children.child_1.slot() {
         if let Some(sequence) = present(element.slot()) {
-            if admit(sequence.child_2.slot()).is_none() {
+            if admit(present(sequence.child_2.slot())).is_none() {
                 return ParseOutcome::Rejected;
             }
             surface_displaced(&sequence.unexpected, OPTIONS_CONTENTS, input, errors);

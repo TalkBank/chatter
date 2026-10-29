@@ -1,11 +1,11 @@
 //! Canonical word combinations travel admitted source, typed content and policy.
 use super::*;
-use talkbank_model::ErrorCollector;
 use talkbank_model::alignment::helpers::{TierDomain, WordItem, counts_for_tier, walk_words};
 use talkbank_model::model::{
     CADelimiterType, ChatFile, FormType, SemanticEq, TranscriptName, Word, WordCategory,
     WordContent, WordLanguageMarker, WordStressMarkerType,
 };
+use talkbank_model::{ErrorCode, ErrorCollector};
 
 /// Only an error-free parsed and validated file supplies control spans.
 struct AdmittedFile<'source> {
@@ -156,17 +156,23 @@ fn assert_reference(name: &str, expected: Vec<ExpectedWord>) {
             .collect();
         assert_eq!(actual, expected.content, "{}", expected.spelling);
         assert_eq!(word.category, expected.category, "{}", expected.spelling);
-        assert_eq!(word.form_type, expected.form, "{}", expected.spelling);
+        assert_eq!(
+            word.form_type().cloned(),
+            expected.form,
+            "{}",
+            expected.spelling
+        );
         assert_eq!(word.part_of_speech.as_deref(), expected.pos);
         assert_eq!(wrapper, expected.wrapper);
-        match (&word.lang, expected.language) {
+        match (word.language_marker(), expected.language) {
             (None, Language::None) | (Some(WordLanguageMarker::Shortcut), Language::Shortcut) => {}
             (Some(WordLanguageMarker::Explicit(code)), Language::Explicit(expected)) => {
                 assert_eq!(code.as_str(), expected)
             }
             _ => panic!(
                 "unexpected language marker in {}: {:?}",
-                expected.spelling, word.lang
+                expected.spelling,
+                word.language_marker().cloned()
             ),
         }
         assert_eq!(
@@ -437,12 +443,7 @@ enum Mutation {
     Append(&'static str),
     Word(&'static str),
 }
-#[derive(Clone, Copy)]
-enum ExpectedDiagnostic {
-    Parser(&'static str),
-    Validation(&'static str),
-}
-fn assert_policy_pairs(spec: &str, diagnostic: ExpectedDiagnostic, targets: &[(&str, Mutation)]) {
+fn assert_policy_pairs(spec: &str, diagnostic: ErrorCode, targets: &[(&str, Mutation)]) {
     let parser = TreeSitterParser::new().expect("parser");
     let source_for = |index| {
         std::fs::read_to_string(workspace_root().join(format!(
@@ -492,26 +493,13 @@ fn assert_policy_pairs(spec: &str, diagnostic: ExpectedDiagnostic, targets: &[(&
         let errors = ErrorCollector::new();
         mutated.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let findings = errors.into_vec();
-        match diagnostic {
-            ExpectedDiagnostic::Parser(code) => {
-                let parse_findings = parse_errors.into_vec();
-                assert_eq!(parse_findings.len(), 1, "{spec}: {parse_findings:?}");
-                assert_eq!(parse_findings[0].code.as_str(), code);
-                assert!(
-                    findings.is_empty(),
-                    "no invented validation-stage issue: {findings:?}"
-                );
-            }
-            ExpectedDiagnostic::Validation(code) => {
-                assert!(
-                    parse_errors.is_empty(),
-                    "{spec}: {:?}",
-                    parse_errors.to_vec()
-                );
-                assert_eq!(findings.len(), 1, "{spec}: {findings:?}");
-                assert_eq!(findings[0].code.as_str(), code);
-            }
-        }
+        assert!(
+            parse_errors.is_empty(),
+            "{spec}: {:?}",
+            parse_errors.to_vec()
+        );
+        assert_eq!(findings.len(), 1, "{spec}: {findings:?}");
+        assert_eq!(findings[0].code, diagnostic);
         assert_eq!(mutated.to_chat_string(), mutant_source);
     }
 }
@@ -521,7 +509,7 @@ fn category_feature_specs_keep_replacement_policy_on_the_produced_word() {
     use Mutation::Append as A;
     assert_policy_pairs(
         "E388_sound_features",
-        ExpectedDiagnostic::Validation("E388"),
+        ErrorCode::ReplacementOnNonword,
         &[
             ("&~baba@b", A(" [: babble]")),
             ("&~ba:", A(" [: babble]")),
@@ -534,7 +522,7 @@ fn category_feature_specs_keep_replacement_policy_on_the_produced_word() {
     );
     assert_policy_pairs(
         "E389_sound_features",
-        ExpectedDiagnostic::Validation("E389"),
+        ErrorCode::ReplacementOnFiller,
         &[
             ("&-hmm:", A(" [: pause]")),
             ("&-h:um", A(" [: pause]")),
@@ -549,7 +537,7 @@ fn marker_omission_specs_keep_the_single_shortening_normalization_boundary() {
     use Mutation::Word as W;
     assert_policy_pairs(
         "E209_marker_omissions",
-        ExpectedDiagnostic::Validation("E209"),
+        ErrorCode::EmptySpokenContent,
         &[
             ("⌈(maybe)", W("⌈(ma)(ybe)")),
             ("⌈(later)⌉", W("⌈(la)(ter)⌉")),
@@ -563,7 +551,7 @@ fn lengthening_and_suffix_specs_preserve_their_independent_boundaries() {
     use Mutation::Word as W;
     assert_policy_pairs(
         "E246_multiple_lengthening",
-        ExpectedDiagnostic::Validation("E246"),
+        ErrorCode::LengtheningNotAfterSpokenMaterial,
         &[
             ("va::se", W("(va)::se")),
             ("va:::se", W("(va):::se")),
@@ -573,7 +561,7 @@ fn lengthening_and_suffix_specs_preserve_their_independent_boundaries() {
     );
     assert_policy_pairs(
         "E203_feature_suffixes",
-        ExpectedDiagnostic::Parser("E203"),
+        ErrorCode::InvalidFormType,
         &[
             ("chirrup@o$n", W("chirrup@o@b$n")),
             ("chir^rup@o", W("chir^rup@o@b")),

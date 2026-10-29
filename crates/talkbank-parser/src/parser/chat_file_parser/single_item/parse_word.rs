@@ -101,6 +101,7 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
 
     fn lower(self) -> ParseResult<Word> {
         let input = self.source.source();
+        let word_span = crate::parser::node_span::span_of(self.source.raw_node());
 
         let errors_sink = crate::error::ErrorCollector::new();
         let outcome =
@@ -115,7 +116,20 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
 
         // The producer's successful outcome cannot enter a rejection fallback.
         match outcome {
-            Ok(ParseOutcome::Parsed(word)) => Ok(word),
+            Ok(ParseOutcome::Parsed(word)) => {
+                // Standalone admission retains its suffix-refusal contract.
+                // The shared model owns the rule; document lowering instead
+                // keeps this recovery for its subsequent validation phase.
+                if let Some(mut diagnostic) = word
+                    .form_type()
+                    .and_then(|form| form.recovery_diagnostic(word.location))
+                {
+                    diagnostic.context = Some(ErrorContext::new(input, word_span, input));
+                    Err(ParseErrors::from(vec![diagnostic]))
+                } else {
+                    Ok(word)
+                }
+            }
             Ok(ParseOutcome::Rejected) | Err(_) => {
                 let mut errors = ParseErrors::from(tier_errors);
                 if errors.is_empty() {

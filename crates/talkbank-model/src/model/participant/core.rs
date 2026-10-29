@@ -72,8 +72,11 @@ impl Participant {
 
     /// Construct a participant from `@Participants` entry plus `@ID`.
     ///
-    /// Snapshot constructor. Birth date, if present, is attached
-    /// later via [`Self::with_birth_date`].
+    /// Raw snapshot constructor, not a checked header join or validity
+    /// certificate. Callers supply the association; use
+    /// [`super::ParticipantView::to_owned_participant`] to snapshot an observed
+    /// join. Birth date, if present, is attached later via
+    /// [`Self::with_birth_date`].
     ///
     /// # Arguments
     ///

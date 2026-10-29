@@ -41,18 +41,20 @@ pub fn init_tracing(verbosity: u8, log_format: &LogFormat) {
         return;
     };
 
-    // Initialize subscriber based on format
+    // Select the diagnostic stream before format selection. Both format
+    // transitions consume a stderr-backed layer; stdout belongs to results.
+    let log_layer = fmt::layer().with_writer(std::io::stderr);
     match log_format {
         LogFormat::Text => {
             tracing_subscriber::registry()
                 .with(env_filter)
-                .with(fmt::layer())
+                .with(log_layer)
                 .init();
         }
         LogFormat::Json => {
             tracing_subscriber::registry()
                 .with(env_filter)
-                .with(fmt::layer().json())
+                .with(log_layer.json())
                 .init();
         }
     }

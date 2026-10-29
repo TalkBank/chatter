@@ -36,6 +36,11 @@ impl WorSlotMembershipPolicy {
     /// which also retains the selected words' producing root content; split
     /// consumers no longer reconstruct membership beside an independent walk.
     /// A replaced word is admitted by its ORIGINAL, as the projection admits it.
+    ///
+    /// This is membership evidence, not CHAT validity or timestamp admission.
+    /// In particular, a complete ASCII `digits_digits` spelling is excluded
+    /// regardless of endpoint order or numeric range. Other nonempty spellings
+    /// still pass through the word-category and untranscribed-material rules.
     pub fn admits(self, word: &Word) -> bool {
         self.admit_text(word).is_some()
     }

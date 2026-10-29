@@ -191,7 +191,7 @@ mod tests {
             crate::Location::Unlocated,
             crate::WordText::from(crate::non_empty_literal!("hello")),
         )
-        .with_form_type(crate::model::FormType::C);
+        .with_suffix(crate::model::WordSuffix::Form(crate::model::FormType::C));
         let raw = ChatRawText::from_word_raw(&word);
         let cleaned = ChatCleanedText::from_word(&word);
 

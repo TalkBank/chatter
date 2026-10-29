@@ -623,9 +623,8 @@ fn test_max_errors_reports_a_stop_only_when_the_limit_stops_the_run() -> Result<
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let stop_records: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+    let stop_records: Vec<serde_json::Value> = crate::common::parse_json_lines(&output.stdout)?
+        .into_iter()
         .filter(|record| record["type"] == "stop")
         .collect();
     assert_eq!(
@@ -657,9 +656,8 @@ fn json_stop_records(
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let stops = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+    let stops = crate::common::parse_json_lines(&output.stdout)?
+        .into_iter()
         .filter(|record| record["type"] == "stop")
         .collect();
     Ok((output.status.code(), stops))
@@ -708,9 +706,8 @@ fn json_mode_gives_a_warnings_only_file_one_valid_record() -> Result<(), TestErr
         Some(0),
         "a warning-only corpus is valid"
     );
-    let files: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+    let files: Vec<serde_json::Value> = crate::common::parse_json_lines(&output.stdout)?
+        .into_iter()
         .filter(|record| record["type"] == "file")
         .collect();
     assert_eq!(files.len(), 1, "one record per file: {files:?}");
@@ -790,10 +787,7 @@ fn json_mode_says_everything_on_stdout() -> Result<(), TestError> {
             );
             Ok((
                 output.status.code(),
-                String::from_utf8_lossy(&output.stdout)
-                    .lines()
-                    .filter_map(|line| serde_json::from_str(line).ok())
-                    .collect(),
+                crate::common::parse_json_lines(&output.stdout)?,
             ))
         };
     let (code, out) = records(&[file.as_os_str(), "--suppress".as_ref(), "E736".as_ref()])?;

@@ -19,12 +19,12 @@ pub enum Chain<'a> {
     /// A word, with whatever annotations have attached so far.
     Word(WordWithAnnotations<'a>),
     /// An event, with its annotations.
-    Event(talkbank_model::Event, Vec<ScopedAnnotationParsed<'a>>),
+    Event(super::ParsedEvent<'a>, Vec<ScopedAnnotationParsed<'a>>),
     /// A standalone `0` (an action), with its annotations. It joins the fold
     /// so a retrace marker after it wraps it, as the tree-sitter backend
     /// does; until 2026-10-19 the action kept its whole run as annotations
     /// and the lowering, which reads only scoped ones, dropped the marker.
-    Action(&'a str, Vec<ScopedAnnotationParsed<'a>>),
+    Action(super::ZeroAction<'a>, Vec<ScopedAnnotationParsed<'a>>),
     /// A bracketed group (its brackets, its contents), with its annotations.
     Group(
         Enclosure<'a>,
@@ -79,7 +79,7 @@ impl<'a> Chain<'a> {
     }
 
     /// Wrap the chain in a retrace whose marker was written as `marker`.
-    fn retraced(self, kind: RetraceKindParsed, marker: &'a str) -> Self {
+    fn retraced(self, kind: RetraceKindParsed, marker: super::RetraceMarker<'a>) -> Self {
         // A group with no annotations of its own hands its brackets to the
         // retrace, which is what `enclosure` records. Nesting it instead would
         // serialize `<<a b>> [/]`, a bracket pair nobody wrote.
@@ -134,7 +134,7 @@ impl<'a> Chain<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum BaseAnnotation<'a> {
     Scoped(ScopedAnnotationParsed<'a>),
-    Retrace(RetraceKindParsed, &'a str),
+    Retrace(RetraceKindParsed, super::RetraceMarker<'a>),
 }
 
 impl<'a> BaseAnnotation<'a> {

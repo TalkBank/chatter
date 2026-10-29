@@ -25,8 +25,11 @@ fn dona_with_ca_arrow_at_s_parses_as_shortcut_language_marker() {
         Err(errors) => panic!("expected parse success for 'dona↑@s', got errors: {errors:?}"),
     };
 
-    assert_eq!(word.lang, Some(WordLanguageMarker::Shortcut));
-    assert_eq!(word.form_type, None);
+    assert_eq!(
+        word.language_marker().cloned(),
+        Some(WordLanguageMarker::Shortcut)
+    );
+    assert_eq!(word.form_type().cloned(), None);
 }
 
 /// Rejects empty input as an invalid word.
@@ -49,7 +52,7 @@ fn word_with_form_type() {
     if let Ok(word) = &result {
         assert_eq!(word.raw_text(), "hello@b");
         assert_eq!(word.cleaned_text(), "hello");
-        assert_eq!(word.form_type, Some(FormType::B));
+        assert_eq!(word.form_type().cloned(), Some(FormType::B));
     }
 
     snapshot("word_parsing_tests__word_with_form_type", &result);
@@ -93,8 +96,10 @@ fn user_defined_form_preserves_label() {
     match &result {
         Ok(word) => {
             assert_eq!(
-                word.form_type,
-                Some(FormType::UserDefined("foo".to_string()))
+                word.form_type().cloned(),
+                Some(FormType::UserDefined(
+                    talkbank_model::FormLabel::new("foo").unwrap()
+                ))
             );
         }
         Err(errors) => {
@@ -113,7 +118,7 @@ fn word_with_multiple_language_marker_plus() {
             assert_eq!(word.raw_text(), "word@s:eng+spa");
             assert_eq!(word.cleaned_text(), "word");
             assert_eq!(
-                word.lang,
+                word.language_marker().cloned(),
                 Some(WordLanguageMarker::multiple(vec![
                     LanguageCode::new("eng").expect("test literal is non-empty"),
                     LanguageCode::new("spa").expect("test literal is non-empty")
@@ -136,7 +141,7 @@ fn word_with_ambiguous_language_marker_ampersand() {
             assert_eq!(word.raw_text(), "word@s:eng&spa");
             assert_eq!(word.cleaned_text(), "word");
             assert_eq!(
-                word.lang,
+                word.language_marker().cloned(),
                 Some(WordLanguageMarker::ambiguous(vec![
                     LanguageCode::new("eng").expect("test literal is non-empty"),
                     LanguageCode::new("spa").expect("test literal is non-empty")

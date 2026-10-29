@@ -18,19 +18,41 @@ pub use talkbank_parser::TreeSitterParser;
 /// typed `%mor` or `%gra` slot, including explicit unparsed variants. Unknown
 /// locations and similarly named tiers remain visible; recovery invalidity and
 /// the model's alignment taint are never cleared.
+/// If the attempt reports an internal failure, all diagnostics are retained
+/// without suppression, regardless of severity. The returned recovery model
+/// does not certify completion or validity; callers must inspect the findings.
 pub fn parse_lenient(
     parser: &TreeSitterParser,
     chat_text: &str,
 ) -> (ChatFile, Vec<talkbank_model::ParseError>) {
     let errors = talkbank_model::ErrorCollector::new();
     let chat_file = parser.parse_chat_file_streaming(chat_text, &errors);
+    lenient_product(chat_file, errors.into_vec())
+}
+
+fn lenient_product(
+    chat_file: ChatFile,
+    error_vec: Vec<talkbank_model::ParseError>,
+) -> (ChatFile, Vec<talkbank_model::ParseError>) {
+    let retained = match talkbank_model::CompletedDiagnostics::admit(error_vec) {
+        Ok(completed) => suppress_generated_diagnostics(&chat_file, completed),
+        Err(failure) => failure.into_diagnostics(),
+    };
+    (chat_file, retained)
+}
+
+/// Only a completed attempt may apply the generated-tier suppression policy.
+fn suppress_generated_diagnostics(
+    chat_file: &ChatFile,
+    completed: talkbank_model::CompletedDiagnostics,
+) -> Vec<talkbank_model::ParseError> {
     let generated: Vec<_> = chat_file
         .utterances()
         .flat_map(|utterance| &utterance.dependent_tiers)
         .filter_map(|entry| GeneratedTier::from_tier(&entry.tier))
         .collect();
-    let error_vec = errors.into_vec();
-    let error_vec = error_vec
+    completed
+        .into_diagnostics()
         .into_iter()
         // An unlocated diagnostic lies in no generated tier, so it is kept.
         .filter(|error| {
@@ -39,8 +61,7 @@ pub fn parse_lenient(
                 .span()
                 .is_some_and(|span| generated.iter().any(|tier| tier.owns(span)))
         })
-        .collect();
-    (chat_file, error_vec)
+        .collect()
 }
 
 /// Only actual generated tiers from this parse can own ignored diagnostics.
@@ -78,26 +99,39 @@ impl<'file> GeneratedTier<'file> {
     }
 }
 
-/// Parse CHAT text strictly (tree-sitter, no error recovery).
+/// Parse CHAT text, refusing incomplete attempts and error-severity findings.
 ///
 /// This reproduces the pre-`ParseProduct` strict contract explicitly and
-/// deliberately: a caller of `parse_strict` wants "did this text parse
-/// completely cleanly," not "give me whatever model was built." A
+/// deliberately: a caller of `parse_strict` requires a completed, error-free
+/// parse, not merely a recovered model. Ordinary warnings are allowed. A
 /// [`talkbank_parser::ParseProduct::Built`] that carries an error-severity
 /// diagnostic is therefore an `Err` here, the same as
 /// [`talkbank_parser::ParseProduct::Unbuildable`], even though the
 /// underlying parser call did build a model in the `Built` case.
+/// Internal failures are refused regardless of severity. Success does not
+/// certify model validity or lossless serialization.
 pub fn parse_strict(
     parser: &TreeSitterParser,
     chat_text: &str,
 ) -> Result<ChatFile, talkbank_model::ParseErrors> {
-    match parser.parse_chat_file(chat_text) {
+    strict_product(parser.parse_chat_file(chat_text))
+}
+
+fn strict_product(
+    product: talkbank_parser::ParseProduct,
+) -> Result<ChatFile, talkbank_model::ParseErrors> {
+    match product {
         talkbank_parser::ParseProduct::Built { file, diagnostics } => {
-            if diagnostics
+            let completed = talkbank_model::CompletedDiagnostics::admit(diagnostics)
+                .map_err(|failure| talkbank_model::ParseErrors::from(failure.into_diagnostics()))?;
+            if completed
+                .diagnostics()
                 .iter()
                 .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
             {
-                Err(talkbank_model::ParseErrors::from(diagnostics))
+                Err(talkbank_model::ParseErrors::from(
+                    completed.into_diagnostics(),
+                ))
             } else {
                 Ok(file)
             }
@@ -158,6 +192,107 @@ mod tests {
     const BULLETS_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Options:\tbullets\n\
 @Participants:\tCHI Target_Child\n@ID:\teng|test|CHI||female|||Target_Child|||\n\
 *CHI:\thello world .\n@End\n";
+
+    #[test]
+    fn lenient_product_preserves_failed_attempt_diagnostics() {
+        use talkbank_model::{ErrorCode, ParseError, Severity};
+
+        let parser = TreeSitterParser::new().expect("parser");
+        let file = parse_strict(
+            &parser,
+            include_str!("../../../corpus/reference/tiers/mor-gra.cha"),
+        )
+        .expect("reference parses");
+        let spans: Vec<_> = file
+            .utterances()
+            .flat_map(|utterance| &utterance.dependent_tiers)
+            .filter_map(|entry| match &entry.tier {
+                DependentTier::Mor(tier) => tier.location.span(),
+                DependentTier::Gra(tier) => tier.location.span(),
+                _ => None,
+            })
+            .collect();
+        assert!(spans.len() >= 2, "reference includes generated tiers");
+        for span in spans {
+            for severity in [Severity::Error, Severity::Warning] {
+                let findings = vec![
+                    ParseError::at_span(
+                        ErrorCode::SyntaxError,
+                        Severity::Error,
+                        span,
+                        "input finding",
+                    ),
+                    ParseError::at_span(ErrorCode::InternalError, severity, span, "producer fault"),
+                ];
+                let (_, retained) = lenient_product(file.clone(), findings);
+                assert_eq!(retained.len(), 2, "a failed attempt cannot be suppressed");
+                assert_eq!(retained[0].code, ErrorCode::SyntaxError);
+                assert_eq!(retained[1].code, ErrorCode::InternalError);
+                assert_eq!(retained[1].severity, severity);
+            }
+        }
+    }
+
+    #[test]
+    fn strict_product_refuses_internal_warnings() {
+        use talkbank_model::{ErrorCode, ParseError, Severity, Span};
+        use talkbank_parser::ParseProduct;
+
+        let parser = TreeSitterParser::new().expect("parser");
+        let file = parse_strict(
+            &parser,
+            include_str!("../../../corpus/reference/core/basic-conversation.cha"),
+        )
+        .expect("reference parses");
+        let fault = ParseError::at_span(
+            ErrorCode::InternalError,
+            Severity::Warning,
+            Span::new(0, 1),
+            "producer fault",
+        );
+        for product in [
+            ParseProduct::Built {
+                file: file.clone(),
+                diagnostics: vec![fault.clone()],
+            },
+            ParseProduct::Unbuildable {
+                diagnostics: vec![fault],
+            },
+        ] {
+            let errors = strict_product(product)
+                .expect_err("internal failure")
+                .into_error_vec();
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].code, ErrorCode::InternalError);
+            assert_eq!(errors[0].severity, Severity::Warning);
+        }
+        for severity in [Severity::Warning, Severity::Error] {
+            let diagnostic = ParseError::at_span(
+                ErrorCode::UnknownAnnotation,
+                severity,
+                Span::new(0, 1),
+                "input finding",
+            );
+            let result = strict_product(ParseProduct::Built {
+                file: file.clone(),
+                diagnostics: vec![diagnostic],
+            });
+            match severity {
+                Severity::Warning => assert!(result.is_ok()),
+                Severity::Error => {
+                    let errors = result.expect_err("input error").into_error_vec();
+                    assert_eq!(errors.len(), 1);
+                    assert_eq!(errors[0].code, ErrorCode::UnknownAnnotation);
+                }
+            }
+        }
+        assert!(
+            strict_product(ParseProduct::Unbuildable {
+                diagnostics: vec![]
+            })
+            .is_err()
+        );
+    }
 
     #[test]
     fn test_parse_strict_round_trip_basics() {

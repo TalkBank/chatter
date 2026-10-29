@@ -21,9 +21,10 @@
 //! Re-home: `word@zz` PARSES into a structured word with a `form_marker` child
 //! (`@zz`). The parser's typed dispatch reads that parsed `form_marker` node's
 //! own text and hands it to `FormType::from_payload`, which owns the question
-//! of which markers exist; `zz` is not one of them, so E203 (`InvalidFormType`)
-//! is emitted. Reading a parsed node's own content for validation is
-//! typed-model work, NOT raw-CHAT / ERROR-text scanning.
+//! of which markers exist. `zz` is retained as explicit undeclared recovery;
+//! shared-model validation emits E203 (`InvalidFormType`) once. Reading a parsed
+//! node's own content for recovery is typed-model work, NOT raw-CHAT / ERROR-text
+//! scanning.
 //!
 //! This comment used to enumerate the valid set, and by 2026-08-11 it was the
 //! last place in the repository still advertising `@a`, one commit after `@a`
@@ -72,9 +73,10 @@ fn unknown_form_marker_emits_e203_not_e316() {
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
-    assert!(
-        codes.contains(&"E203"),
-        "Expected E203 (invalid form type) for `word@zz`, got: {diags:#?}",
+    assert_eq!(
+        codes.iter().filter(|code| **code == "E203").count(),
+        1,
+        "Expected exactly one E203 for `word@zz`, got: {diags:#?}",
     );
     assert!(
         !codes.contains(&"E316"),
@@ -213,9 +215,8 @@ fn a_word_with_two_at_suffixes_round_trips_unchanged() {
 /// 1. **E203, not a generic E316.** Before the grammar formed these words the
 ///    utterance fell to error recovery and said only "content could not be
 ///    parsed".
-/// 2. **Exactly ONCE.** The parser names the run and the model's `at_count > 1`
-///    branch names the same word, so E203 arrived TWICE. `contains` cannot see
-///    that, which is why this counts.
+/// 2. **Exactly ONCE.** The model owns rejected suffix diagnostics; a parser
+///    mirror would report the same failure twice. `contains` cannot see that.
 /// 3. **The message names the RUN.** `@c` in `@c@s:spa` is a real marker, so
 ///    "Undeclared form marker '@c@s:spa'" would send a transcriber hunting for
 ///    a marker that does not exist rather than deleting one of the two that do.

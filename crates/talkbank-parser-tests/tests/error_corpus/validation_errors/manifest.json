@@ -430,6 +430,30 @@
       "source_spec": "spec/errors/E209.md"
     },
     {
+      "fixture": "E209_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E209",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E209.md"
+    },
+    {
+      "fixture": "E209_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E209",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E209.md"
+    },
+    {
+      "fixture": "E209_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E209",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E209.md"
+    },
+    {
       "fixture": "E209_ca_shortening_1.cha",
       "transcript_name": "anonymous",
       "code": "E209",
@@ -10548,6 +10572,22 @@
     },
     {
       "fixture": "E716_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E716",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E716.md"
+    },
+    {
+      "fixture": "E716_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E716",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E716.md"
+    },
+    {
+      "fixture": "E716_5.cha",
       "transcript_name": "anonymous",
       "code": "E716",
       "claim": "violates",

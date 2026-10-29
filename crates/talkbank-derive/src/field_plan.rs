@@ -1,11 +1,15 @@
 //! Admission shared by field derives; emitters cannot consume unchecked syntax.
 
-use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote};
+use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{Attribute, Data, DeriveInput, Fields, Ident, Member};
+
+use crate::bindings::{BindingScope, SemanticBindings, ShiftBindings};
 
 /// Admission policy for each field derive.
 pub(crate) trait DeriveKind {
+    type Bindings;
+    fn admit_bindings(scope: &mut BindingScope) -> Self::Bindings;
     const ATTRIBUTE: &'static str;
     const NAME: &'static str;
     const HAS_CONTEXT: bool;
@@ -14,6 +18,10 @@ pub(crate) trait DeriveKind {
 /// Equality and diff must consume the same semantic plan.
 pub(crate) struct Semantic;
 impl DeriveKind for Semantic {
+    type Bindings = SemanticBindings;
+    fn admit_bindings(scope: &mut BindingScope) -> Self::Bindings {
+        SemanticBindings::admit(scope)
+    }
     const ATTRIBUTE: &'static str = "semantic_eq";
     const NAME: &'static str = "SemanticEq";
     const HAS_CONTEXT: bool = true;
@@ -22,6 +30,10 @@ impl DeriveKind for Semantic {
 /// Span movement cannot consume a semantic exclusion plan.
 pub(crate) struct Shift;
 impl DeriveKind for Shift {
+    type Bindings = ShiftBindings;
+    fn admit_bindings(scope: &mut BindingScope) -> Self::Bindings {
+        ShiftBindings::admit(scope)
+    }
     const ATTRIBUTE: &'static str = "span_shift";
     const NAME: &'static str = "SpanShift";
     const HAS_CONTEXT: bool = false;
@@ -78,15 +90,15 @@ impl FieldPlan {
         matches!(self.participation, Participation::Include)
     }
 
-    pub(crate) fn push_path(&self) -> TokenStream {
+    pub(crate) fn push_path(&self, path: &Ident) -> TokenStream {
         match &self.member {
             Member::Named(name) => {
                 let literal = syn::LitStr::new(&name.to_string(), name.span());
-                quote! { path.push_field(#literal); }
+                quote! { #path.push_field(#literal); }
             }
             Member::Unnamed(index) => {
                 let index = index.index as usize;
-                quote! { path.push_index(#index); }
+                quote! { #path.push_index(#index); }
             }
         }
     }
@@ -114,7 +126,12 @@ pub(crate) struct FieldsPlan {
 }
 
 impl FieldsPlan {
-    fn admit<K: DeriveKind>(fields: &Fields, enum_variant: bool) -> syn::Result<Self> {
+    fn admit<K: DeriveKind>(
+        fields: &Fields,
+        enum_variant: bool,
+        scope: &BindingScope,
+    ) -> syn::Result<Self> {
+        let mut scope = scope.clone();
         let shape = match fields {
             Fields::Named(_) => Shape::Named,
             Fields::Unnamed(_) => Shape::Tuple,
@@ -131,8 +148,8 @@ impl FieldsPlan {
                 Ok(FieldPlan {
                     member,
                     ty: field.ty.clone(),
-                    left: format_ident!("__tb_left_{index}", span = Span::mixed_site()),
-                    right: format_ident!("__tb_right_{index}", span = Span::mixed_site()),
+                    left: scope.reserve(&format!("__tb_left_{index}")),
+                    right: scope.reserve(&format!("__tb_right_{index}")),
                     participation: admit_participation::<K>(&field.attrs)?,
                 })
             })
@@ -194,10 +211,13 @@ impl FieldsPlan {
     }
 
     pub(crate) fn variant_name_arm(&self, variant: &Ident) -> TokenStream {
+        // Admit the description here; resolving a macro in the consumer's
+        // scope would let a caller replace the name with unrelated text.
+        let name = syn::LitStr::new(&variant.to_string(), variant.span());
         match self.shape {
-            Shape::Named => quote! { Self::#variant { .. } => stringify!(#variant), },
-            Shape::Tuple => quote! { Self::#variant(..) => stringify!(#variant), },
-            Shape::Unit => quote! { Self::#variant => stringify!(#variant), },
+            Shape::Named => quote! { Self::#variant { .. } => #name, },
+            Shape::Tuple => quote! { Self::#variant(..) => #name, },
+            Shape::Unit => quote! { Self::#variant => #name, },
         }
     }
 
@@ -240,18 +260,23 @@ pub(crate) enum BodyPlan {
 }
 
 /// The sole field-derive input admission boundary.
-pub(crate) struct InputPlan<K> {
+pub(crate) struct InputPlan<K: DeriveKind> {
     pub(crate) name: Ident,
     pub(crate) generics: syn::Generics,
     pub(crate) body: BodyPlan,
+    pub(crate) bindings: K::Bindings,
     kind: std::marker::PhantomData<K>,
 }
 
 impl<K: DeriveKind> InputPlan<K> {
     pub(crate) fn admit(input: DeriveInput) -> syn::Result<Self> {
         require_field_location::<K>(&input.attrs)?;
+        let mut scope = BindingScope::new(&input.generics);
+        let bindings = K::admit_bindings(&mut scope);
         let body = match &input.data {
-            Data::Struct(data) => BodyPlan::Struct(FieldsPlan::admit::<K>(&data.fields, false)?),
+            Data::Struct(data) => {
+                BodyPlan::Struct(FieldsPlan::admit::<K>(&data.fields, false, &scope)?)
+            }
             Data::Enum(data) => BodyPlan::Enum(
                 data.variants
                     .iter()
@@ -259,7 +284,7 @@ impl<K: DeriveKind> InputPlan<K> {
                         require_field_location::<K>(&variant.attrs)?;
                         Ok(VariantPlan {
                             name: variant.ident.clone(),
-                            fields: FieldsPlan::admit::<K>(&variant.fields, true)?,
+                            fields: FieldsPlan::admit::<K>(&variant.fields, true, &scope)?,
                         })
                     })
                     .collect::<syn::Result<Vec<_>>>()?,
@@ -275,6 +300,7 @@ impl<K: DeriveKind> InputPlan<K> {
             name: input.ident,
             generics: input.generics,
             body,
+            bindings,
             kind: std::marker::PhantomData,
         })
     }

@@ -33,7 +33,7 @@ use talkbank_parser_tests::from_source::{Rules, SingleSpeaker, diagnostics_of};
 use talkbank_parser_tests::test_error::TestError;
 
 /// Every diagnostic for `*CHI: hello .` followed by an empty `%name:` tier.
-fn empty_tier_report(name: &str) -> Result<Vec<talkbank_model::ParseError>, TestError> {
+fn empty_tier_report(name: &str) -> Result<talkbank_model::CompletedDiagnostics, TestError> {
     let lines = format!("*CHI:\thello .\n%{name}:\t");
     diagnostics_of(&SingleSpeaker::english(&lines).source(), Rules::Default)
 }
@@ -41,7 +41,8 @@ fn empty_tier_report(name: &str) -> Result<Vec<talkbank_model::ParseError>, Test
 /// A user-defined tier is reported once, named with ONE `%` and its own `x`.
 #[test]
 fn the_report_names_the_tier_with_one_percent_prefix() -> Result<(), TestError> {
-    let reported = empty_tier_report("xfoo")?;
+    let completed = empty_tier_report("xfoo")?;
+    let reported = completed.diagnostics();
     assert_eq!(reported.len(), 1, "{reported:?}");
     assert_eq!(reported[0].code, ErrorCode::EmptyDependentTier);
     assert_eq!(reported[0].severity, Severity::Error);
@@ -53,7 +54,8 @@ fn the_report_names_the_tier_with_one_percent_prefix() -> Result<(), TestError> 
 /// A standard tier reports under the same code and reads naturally.
 #[test]
 fn a_standard_tier_reports_under_the_same_code() -> Result<(), TestError> {
-    let reported = empty_tier_report("eng")?;
+    let completed = empty_tier_report("eng")?;
+    let reported = completed.diagnostics();
     assert_eq!(reported.len(), 1, "{reported:?}");
     assert_eq!(reported[0].code, ErrorCode::EmptyDependentTier);
     assert!(reported[0].message.contains("%eng"));

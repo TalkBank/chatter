@@ -72,12 +72,12 @@ use crate::validation::{AlignmentValidation, ValidationPolicy};
 ///
 /// These names are historical, not complete validity capabilities. The
 /// `talkbank-transform` legacy helper checks an already-supplied model and
-/// diagnostic slice; it does not parse input or prove that the slice belongs
-/// to that model. Complete admission requires the checked parsing/construction
+/// completed diagnostic batch; it does not parse input or prove that the batch
+/// belongs to that model. Complete admission requires the checked parsing/construction
 /// boundary under a [`ValidationPolicy`], not a level label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValidityLevel {
-    /// L0: The supplied diagnostic slice is empty; the helper does not parse.
+    /// L0: The supplied completed diagnostic batch is empty; no parsing occurs.
     Parseable = 0,
     /// L1: L0 plus a declared speaker roster and languages, declared utterance
     /// speakers, and terminators unless the CA option waives them.

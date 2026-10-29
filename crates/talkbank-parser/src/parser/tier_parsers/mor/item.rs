@@ -15,7 +15,6 @@ use talkbank_model::model::{Mor, MorWord};
 use super::word::parse_mor_word;
 use crate::node_types::{MOR_CONTENT, MOR_POST_CLITIC};
 use crate::parser::tier_parsers::admission::recovery_inside_healthy_tier;
-use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 
 /// Converts a `mor_content` CST node into one `Mor` item.
@@ -38,13 +37,13 @@ use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 /// (see the tier module's doc), so a repeated clitic in the `Error` state or
 /// a MISSING tilde contradicts that admission and reports the producer fault;
 /// displaced children, payload rejection and source failures keep their own
-/// handling.
+/// handling. A rejected main word or clitic rejects the whole item; neither
+/// can be reclassified as absent or omitted from successful output.
 pub fn parse_mor_content<'tree>(
     typed: SourceBound<'tree, '_, MorContentNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<ParseOutcome<Mor>, crate::CstFailure> {
     let source = typed.source();
-    let node = typed.raw_node();
     let bound_children = crate::parser::typed_cst::extract_inner(typed)?;
     let children = bound_children.children();
     surface_displaced(&children.unexpected, "mor_content", source, errors);
@@ -52,20 +51,18 @@ pub fn parse_mor_content<'tree>(
     let admitted = bound_children.admit_ranges()?;
     let children = admitted.children();
     let SlotView::Present(word) = children.main.slot.view();
-    let main_word = match parse_mor_word(*word, errors)? {
-        ParseOutcome::Parsed(word) => Some(word),
-        ParseOutcome::Rejected => None,
+    let main = match parse_mor_word(*word, errors)? {
+        ParseOutcome::Parsed(word) => word,
+        ParseOutcome::Rejected => return Ok(ParseOutcome::Rejected),
     };
 
     let mut post_clitics = Vec::new();
     for element in &children.post_clitics.slot {
         match &element.slot {
-            ReadableSlot::Present(clitic) => {
-                if let ParseOutcome::Parsed(Some(clitic)) = parse_mor_post_clitic(*clitic, errors)?
-                {
-                    post_clitics.push(clitic);
-                }
-            }
+            ReadableSlot::Present(clitic) => match parse_mor_post_clitic(*clitic, errors)? {
+                ParseOutcome::Parsed(clitic) => post_clitics.push(clitic),
+                ParseOutcome::Rejected => return Ok(ParseOutcome::Rejected),
+            },
             ReadableSlot::Error(raw) => {
                 recovery_inside_healthy_tier(raw.raw_node(), raw.source(), MOR_CONTENT, errors);
                 return Ok(ParseOutcome::rejected());
@@ -74,15 +71,6 @@ pub fn parse_mor_content<'tree>(
             ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
         }
     }
-
-    let Some(main) = main_word else {
-        errors.report(unexpected_node_error(
-            node,
-            source,
-            "mor_content missing main mor_word",
-        ));
-        return Ok(ParseOutcome::rejected());
-    };
 
     Ok(ParseOutcome::parsed(
         Mor::new(main).with_post_clitics(post_clitics),
@@ -103,9 +91,8 @@ pub fn parse_mor_content<'tree>(
 fn parse_mor_post_clitic<'tree>(
     typed: SourceBound<'tree, '_, MorPostCliticNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<ParseOutcome<Option<MorWord>>, crate::CstFailure> {
+) -> Result<ParseOutcome<MorWord>, crate::CstFailure> {
     let source = typed.source();
-    let node = typed.raw_node();
     let bound_children = crate::parser::typed_cst::extract_inner(typed)?;
     let children = bound_children.children();
     surface_displaced(&children.unexpected, "mor_post_clitic", source, errors);
@@ -125,18 +112,6 @@ fn parse_mor_post_clitic<'tree>(
         }
     }
 
-    match children.child_1.slot.view() {
-        SlotView::Present(word) => {
-            if let ParseOutcome::Parsed(word) = parse_mor_word(*word, errors)? {
-                return Ok(ParseOutcome::parsed(Some(word)));
-            }
-        }
-    }
-
-    errors.report(unexpected_node_error(
-        node,
-        source,
-        "mor_post_clitic missing mor_word",
-    ));
-    Ok(ParseOutcome::parsed(None))
+    let SlotView::Present(word) = children.child_1.slot.view();
+    parse_mor_word(*word, errors)
 }

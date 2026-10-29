@@ -186,9 +186,9 @@ impl WordFeatureSignature {
             .map(ContentKind::from_content)
             .collect();
 
-        let form_type_class = word.form_type.as_ref().map(FormTypeClass::from_form_type);
+        let form_type_class = word.form_type().map(FormTypeClass::from_form_type);
 
-        let lang_type = match &word.lang {
+        let lang_type = match word.language_marker() {
             None => LangPresence::None,
             Some(WordLanguageMarker::Shortcut) => LangPresence::Shortcut,
             Some(WordLanguageMarker::Explicit(_)) => LangPresence::Explicit,

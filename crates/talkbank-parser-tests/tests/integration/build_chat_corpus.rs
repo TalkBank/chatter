@@ -43,6 +43,25 @@ fn reference_participant_views_preserve_known_and_absent_demographics() {
                 .collect::<Vec<_>>(),
             ["eng", "ara"],
         );
+        let snapshot = participant.to_owned_participant();
+        let decoded: talkbank_model::model::Participant =
+            serde_json::from_str(&serde_json::to_string(&snapshot).expect("snapshot wire"))
+                .expect("snapshot readback");
+        for owned in [&snapshot, &decoded] {
+            assert_eq!(owned.speaker_code(), code);
+            assert_eq!(owned.age(), age);
+            assert_eq!(owned.sex(), sex.as_ref());
+            assert_eq!(owned.has_birth_date(), birth);
+            assert_eq!(owned.corpus(), Some("corpus"));
+            assert_eq!(
+                owned
+                    .languages()
+                    .iter()
+                    .map(|code| code.as_str())
+                    .collect::<Vec<_>>(),
+                ["eng", "ara"],
+            );
+        }
     }
     assert!(file.get_participant("UNK").is_none());
 
@@ -59,6 +78,17 @@ fn reference_participant_views_preserve_known_and_absent_demographics() {
     assert_eq!(participant.age(), None);
     assert_eq!(participant.sex(), None);
     assert!(!participant.has_birth_date());
+    let snapshot = participant.to_owned_participant();
+    let decoded: talkbank_model::model::Participant =
+        serde_json::from_str(&serde_json::to_string(&snapshot).expect("recovery snapshot wire"))
+            .expect("recovery snapshot readback");
+    for owned in [&snapshot, &decoded] {
+        assert_eq!(owned.speaker_code(), "CHI");
+        assert_eq!(owned.corpus(), None);
+        assert_eq!(owned.age(), None);
+        assert_eq!(owned.sex(), None);
+        assert!(!owned.has_birth_date());
+    }
     let errors = talkbank_model::ErrorCollector::new();
     file.validate_with_alignment(&errors, talkbank_model::model::TranscriptName::Anonymous);
     assert!(

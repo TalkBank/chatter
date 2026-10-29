@@ -222,9 +222,10 @@ fn parse_optional_langcode<'tree, 'source>(
     // admission excludes a MISSING langcode; Error/Absent still yield no code.
     let token = match group.child_0.slot.view() {
         SlotView::Present(langcode) => langcode,
-        SlotView::Error(_) | SlotView::Absent(NoChild) => {
+        SlotView::Error(_) => {
             return ParsedLangcode::Malformed;
         }
+        SlotView::Absent(never) => match never {},
     };
 
     // The `langcode` node spans the whole `[- code]` precode (opening `[` at

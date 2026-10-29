@@ -52,11 +52,10 @@
 //! unknown header, and every gem case passes for the wrong reason. So every
 //! case, legal or not, is refused if any FIXTURE-FAULT code fires, which is
 //! the guard the parse-then-assert shape needs and a hand-built sequence never
-//! did.
+//! did. Shared diagnostic admission first rejects every internal tool failure,
+//! including a failure presented at warning severity.
 
-use talkbank_model::ErrorCollector;
-use talkbank_model::model::TranscriptName;
-use talkbank_parser::TreeSitterParser;
+use talkbank_parser_tests::from_source::{Rules, diagnostics_of};
 use talkbank_parser_tests::test_error::TestError;
 
 /// One code the case expects, exactly once, with a fragment of its message.
@@ -380,15 +379,12 @@ fn document(case: &Case) -> String {
 /// header LINES to the `Vec<(&Header, Span)>` a validator walks.
 #[test]
 fn every_header_structure_rule_holds_over_a_parsed_block() -> Result<(), TestError> {
-    let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
     let mut wrong = Vec::new();
 
     for case in CASES {
         let source = document(case);
-        let errors = ErrorCollector::new();
-        let mut file = parser.parse_chat_file_streaming(&source, &errors);
-        file.validate_with_alignment(&errors, TranscriptName::Anonymous);
-        let reported = errors.to_vec();
+        let completed = diagnostics_of(&source, Rules::Default)?;
+        let reported = completed.diagnostics();
         let codes: Vec<&str> = reported.iter().map(|e| e.code.as_str()).collect();
 
         // The fixture must be sound before its verdict means anything.

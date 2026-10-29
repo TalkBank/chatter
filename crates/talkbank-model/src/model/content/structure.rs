@@ -147,9 +147,9 @@ impl<'a> RetraceRef<'a> {
 
     /// The retrace node itself, in either spelling.
     ///
-    /// Use [`Self::span`] rather than `inner().span` to LOCATE the construct:
-    /// the annotated spelling's own span covers its annotations and the inner
-    /// one does not.
+    /// Use [`Self::location`] rather than `inner().location` to locate the
+    /// construct. When located, the annotated spelling's span includes its
+    /// annotations; the inner retrace's span does not.
     #[inline]
     pub fn inner(self) -> &'a Retrace {
         match self {

@@ -38,8 +38,12 @@ By default, `chatter convert to-json`:
 - validates the emitted JSON against the schema unless
   `--skip-schema-validation` is passed.
 
-These controls are independent. `--skip-schema-validation` skips only the
-JSON Schema check after CHAT parsing and validation. It retains the input
+`--skip-validation` skips both CHAT validation and alignment.
+`--skip-alignment` keeps structural CHAT validation but omits tier alignment;
+the two flags conflict. The JSON Schema policy is separate:
+`--skip-schema-validation` skips only the JSON Schema check. Parsing still
+must succeed under every policy. With CHAT validation enabled, skipping the
+schema check retains the input
 filename, so filename-dependent rules such as E531 (`@Media` name mismatch)
 still run for both single files and directory conversions. A directory run
 prints individual parse/validation diagnostics and exits unsuccessfully if

@@ -11,7 +11,7 @@ pub(super) fn content_ref_to_bracketed(
         ast::ContentRef::Chain(item) => match item {
             ast::Chain::Word(w) => word(w),
             ast::Chain::Event(e, annotations) => event(e, annotations),
-            ast::Chain::Action(zero, annotations) => action(zero, annotations, source),
+            ast::Chain::Action(zero, annotations) => action(*zero, annotations),
             ast::Chain::Group(enclosure, contents, annotations) => {
                 group(*enclosure, contents, annotations, source)
             }
@@ -25,7 +25,6 @@ pub(super) fn content_ref_to_bracketed(
 }
 
 pub(super) fn word(w: &ast::WordWithAnnotations<'_>) -> BracketedItem {
-    let source = w.source().source();
     let word = word_from_parsed(w);
     let parsed_replacement = w.replacement();
 
@@ -33,7 +32,7 @@ pub(super) fn word(w: &ast::WordWithAnnotations<'_>) -> BracketedItem {
         let replacement = replacement_to_model(parsed_replacement);
         let scoped = annotations_to_scoped(&w.annotations);
         let replaced = ReplacedWord::new(
-            replaced_word_location(&word, parsed_replacement, &w.annotations, source),
+            replaced_word_location(w.source(), parsed_replacement, &w.annotations),
             word,
             replacement,
         )
@@ -53,11 +52,11 @@ pub(super) fn word(w: &ast::WordWithAnnotations<'_>) -> BracketedItem {
 }
 
 pub(super) fn event(
-    event: &Event,
+    event: &ast::ParsedEvent<'_>,
     annotations: &[ast::ScopedAnnotationParsed<'_>],
 ) -> BracketedItem {
-    let event_location = event.location;
-    let event_model = event.clone();
+    let event_location = talkbank_model::Location::Located(event.span());
+    let event_model = event.to_model();
     let scoped = annotations_to_scoped(annotations);
     match AnnotatedContentAnnotations::new(scoped) {
         None => BracketedItem::Event(event_model),
@@ -70,12 +69,11 @@ pub(super) fn event(
 }
 
 pub(super) fn action(
-    zero: &str,
+    zero: ast::ZeroAction<'_>,
     annotations: &[ast::ScopedAnnotationParsed<'_>],
-    source: SourceText<'_>,
 ) -> BracketedItem {
     let scoped = annotations_to_scoped(annotations);
-    let location = crate::convert::locate(source, zero);
+    let location = talkbank_model::Location::Located(zero.span());
     match AnnotatedContentAnnotations::new(scoped) {
         None => BracketedItem::Action(Action::new(location)),
         Some(scoped) => BracketedItem::AnnotatedAction(Annotated::new(
@@ -96,7 +94,7 @@ pub(super) fn group(
         .iter()
         .map(|i| content_item_to_bracketed(i, source))
         .collect();
-    let group_location = crate::convert::located(enclosure.span_in(source));
+    let group_location = talkbank_model::Location::Located(enclosure.span());
     let group = Group::new(group_location, BracketedContent::new(inner));
     // `BracketedItem` HAS a bare `Group` now. It did not until
     // 2026-08-26, which is why this used to hand an empty annotation
@@ -124,10 +122,10 @@ pub(super) fn retrace(r: &ast::Retrace<'_>, source: SourceText<'_>) -> Bracketed
         .items()
         .map(|i| content_ref_to_bracketed(i, source))
         .collect();
-    let retrace_location = crate::convert::located(retrace_span(r, source));
+    let retrace_location = talkbank_model::Location::Located(retrace_span(r));
     let mut retrace = talkbank_model::model::Retrace::new(
         retrace_location,
-        crate::convert::locate(source, r.marker),
+        talkbank_model::Location::Located(r.marker.span()),
         BracketedContent::new(inner),
         kind,
     );

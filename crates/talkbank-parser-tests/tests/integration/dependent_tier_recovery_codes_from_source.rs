@@ -56,7 +56,8 @@ const ROWS: &[(&str, &[&str])] = &[
 #[test]
 fn a_recovery_error_is_classified_by_its_tier_not_by_a_substring() -> Result<(), TestError> {
     for (tier, expected_codes) in ROWS {
-        let reported = diagnostics_of(&file(tier), Rules::Default)?;
+        let completed = diagnostics_of(&file(tier), Rules::Default)?;
+        let reported = completed.diagnostics();
         let mut got: Vec<String> = reported.iter().map(|e| e.code.to_string()).collect();
         got.sort_unstable();
         let mut expected: Vec<&str> = expected_codes.to_vec();

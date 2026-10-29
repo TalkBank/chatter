@@ -22,9 +22,11 @@ use super::category::WordCategory;
 use super::content::{WordContent, WordText};
 use super::form::FormType;
 use super::language::WordLanguageMarker;
+use super::pos_tag::WordPosTag;
+use super::suffix::WordSuffix;
 use super::untranscribed::UntranscribedStatus;
 use super::word_contents::WordContents;
-use crate::model::{Bullet, LanguageCode};
+use crate::model::Bullet;
 
 /// A cached string value that is transparent to equality comparisons.
 ///
@@ -98,6 +100,7 @@ impl PartialEq for CachedStr {
 /// and comma carry `%mor` items. Its own tests passed throughout, because on
 /// flat utterances the two implementations agree.
 #[derive(Clone, Debug, PartialEq, Deserialize, SemanticEq, SpanShift)]
+#[serde(try_from = "super::word_wire::WordWire")]
 pub struct Word {
     /// Source location (byte offsets in original input).
     #[serde(skip, default = "crate::Location::unlocated")]
@@ -117,17 +120,12 @@ pub struct Word {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub category: Option<WordCategory>,
 
-    /// Form type marker (@a, @b, @c, @z:custom, etc.).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub form_type: Option<FormType>,
-
-    /// Language-specific marker (@s or @s:code).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lang: Option<WordLanguageMarker>,
+    /// At most one form or language marker in the word's `@` slot.
+    pub suffix: Option<WordSuffix>,
 
     /// Part-of-speech tag ($adj, $n, $v, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub part_of_speech: Option<smol_str::SmolStr>,
+    pub part_of_speech: Option<WordPosTag>,
 
     /// Inline timing bullet parsed directly from %wor tier.
     ///
@@ -168,8 +166,7 @@ impl Word {
             word_id: None,
             content,
             category: None,
-            form_type: None,
-            lang: None,
+            suffix: None,
             part_of_speech: None,
             inline_bullet: None,
             cached_cleaned_text: CachedStr::default(),
@@ -231,11 +228,10 @@ impl Word {
     /// `chatter to-json` over the corpus) and the `%mor` / `%wor` alignment
     /// rules.
     ///
-    /// An earlier pass fixed ONE of those call sites by inlining this body at
-    /// the E209 check, which was the wrong altitude twice over: E209 sits behind
-    /// a short-circuit and so was among the coldest of the ten, and hardcoding
-    /// the category-blind semantics at a caller made the pending
-    /// category-aware change to `compute_untranscribed` harder to land.
+    /// Classification is not spoken-content or validity evidence. Cleaned text
+    /// includes shortening segments, so a shortening-only word can have one of
+    /// these spellings while still lacking spoken content. Validators inspect
+    /// typed content leaves independently.
     pub fn untranscribed(&self) -> Option<UntranscribedStatus> {
         UntranscribedStatus::from_marker_text(self.cleaned_text())
     }
@@ -283,35 +279,34 @@ impl Word {
         self
     }
 
-    /// Sets the optional special-form suffix marker (`@...`).
-    ///
-    /// This captures CHAT form annotations such as dialectal or invented-word markers.
-    pub fn with_form_type(mut self, form_type: FormType) -> Self {
-        self.form_type = Some(form_type);
+    /// Replace the complete `@` suffix with one explicit form or language marker.
+    pub fn with_suffix(mut self, suffix: WordSuffix) -> Self {
+        self.suffix = Some(suffix);
         self
     }
 
-    /// Sets an explicit language override marker (`@s:code`).
-    ///
-    /// Explicit markers override tier/file defaults during language-aware validation.
-    pub fn with_lang(mut self, lang: impl Into<LanguageCode>) -> Self {
-        self.lang = Some(WordLanguageMarker::explicit(lang));
-        self
+    /// Borrow a form marker from the single suffix slot.
+    pub fn form_type(&self) -> Option<&FormType> {
+        self.suffix.as_ref().and_then(WordSuffix::form_type)
     }
 
-    /// Sets the bare language-shortcut marker (`@s`).
-    ///
-    /// Shortcut resolution depends on declared-language ordering in the active validation context.
-    pub fn with_language_shortcut(mut self) -> Self {
-        self.lang = Some(WordLanguageMarker::Shortcut);
-        self
+    /// Borrow a language marker from the single suffix slot.
+    pub fn language_marker(&self) -> Option<&WordLanguageMarker> {
+        self.suffix.as_ref().and_then(WordSuffix::language_marker)
+    }
+
+    /// Mutate only an existing language payload, preserving suffix exclusivity.
+    pub fn language_marker_mut(&mut self) -> Option<&mut WordLanguageMarker> {
+        self.suffix
+            .as_mut()
+            .and_then(WordSuffix::language_marker_mut)
     }
 
     /// Sets an optional part-of-speech tag (`$...`).
     ///
-    /// This field preserves transcript-provided tags and is not schema-normalized at construction.
-    pub fn with_part_of_speech(mut self, pos: impl Into<smol_str::SmolStr>) -> Self {
-        self.part_of_speech = Some(pos.into());
+    /// The admitted payload preserves transcript spelling without imposing a vocabulary.
+    pub fn with_part_of_speech(mut self, pos: WordPosTag) -> Self {
+        self.part_of_speech = Some(pos);
         self
     }
 
@@ -393,6 +388,52 @@ impl Word {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn word_suffix_wire_refuses_conflicting_form_and_language() {
+        let word = Word::new(crate::Location::Unlocated, WordText::new("word").unwrap());
+        let mut wire = serde_json::to_value(word).unwrap();
+        wire["form_type"] = serde_json::json!("b");
+        wire["lang"] = serde_json::json!({ "type": "explicit", "code": "eng" });
+        assert!(serde_json::from_value::<Word>(wire).is_err());
+    }
+
+    #[test]
+    fn word_suffix_recovery_invalidity_survives_json() {
+        use crate::validation::Validate;
+        for payload in ["zz", "c@d", "c@s:spa", "@c"] {
+            let word = Word::new(crate::Location::Unlocated, WordText::new("word").unwrap())
+                .with_suffix(WordSuffix::Form(FormType::Undeclared(payload.to_owned())));
+            let wire = serde_json::to_value(word).unwrap();
+            let readback: Word = serde_json::from_value(wire).unwrap();
+            let errors = crate::ErrorCollector::new();
+            readback.validate(&crate::validation::ValidationContext::default(), &errors);
+            let diagnostics = errors.into_vec();
+            let form_errors: Vec<_> = diagnostics
+                .iter()
+                .filter(|error| error.code == crate::ErrorCode::InvalidFormType)
+                .collect();
+            assert_eq!(form_errors.len(), 1, "{payload}: {diagnostics:?}");
+            assert!(form_errors[0].message.contains(payload));
+        }
+    }
+
+    #[test]
+    fn word_json_refuses_pos_payloads_that_change_chat_structure() {
+        let word = Word::new(
+            crate::Location::Unlocated,
+            WordText::new("hello").expect("word"),
+        );
+        let original = serde_json::to_value(word).expect("word JSON");
+        for payload in ["", "n v", "n\tv", "n\n@End", "n$adj", "n@f", "n1", "名"] {
+            let mut wire = original.clone();
+            wire["part_of_speech"] = serde_json::json!(payload);
+            assert!(
+                serde_json::from_value::<Word>(wire).is_err(),
+                "accepted POS payload {payload:?}"
+            );
+        }
+    }
 
     #[test]
     fn structured_content_constructor_derives_text_without_a_seed() {

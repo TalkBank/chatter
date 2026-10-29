@@ -37,31 +37,31 @@ talkbank-spec-vocabulary = { path = "vocabulary" }
 anyhow = "1.0"
 
 # CLI and file handling
-clap = { version = "4.5", features = ["derive"] }
-comrak = "0.50"
+clap = { version = "4.6", features = ["derive"] }
+comrak = "0.59"
 
 
 # Utilities
-regex = "1.12"
+regex = "1.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml_ng = "0.10"
-tera = "1.20"
+tera = { version = "2.4", features = ["glob_fs"] }
 unicode-normalization = "0.1"
 
 # Spec parsing
 thiserror = "2.0"
-toml = "1.0"
+toml = "1.1"
 toml_edit = "0.25"
 
 # Tree-sitter (for template generation - spec tools CAN use tree-sitter for parsing examples)
 tree-sitter = "0.27.1"
 tree-sitter-talkbank = { path = "../grammar" }
 walkdir = "2.5"
-oxc_allocator = "0.116.0"
-oxc_ast = "0.116.0"
-oxc_parser = "0.116.0"
-oxc_span = "0.116.0"
+oxc_allocator = "0.156.0"
+oxc_ast = "0.156.0"
+oxc_parser = "0.156.0"
+oxc_span = "0.156.0"
 
 # Runtime-aware spec tooling lives in `spec/runtime-tools`, separate from the
 # core generation crate in `spec/tools`.

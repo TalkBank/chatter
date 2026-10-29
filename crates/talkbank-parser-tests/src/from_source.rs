@@ -32,7 +32,7 @@
 //! main tier counted for neither rule.
 
 use talkbank_model::model::{ChatFile, Line, MainTier, TranscriptName, Utterance};
-use talkbank_model::{ErrorCollector, ParseError, RuleSelection};
+use talkbank_model::{CompletedDiagnostics, ErrorCollector, RuleSelection};
 use talkbank_parser::TreeSitterParser;
 
 use crate::test_error::TestError;
@@ -184,7 +184,7 @@ impl Dialogue<'_> {
 
     /// Every diagnostic parsing and validating the fixture reports under
     /// `rules`: the table's own verdict, when the table is about diagnostics.
-    pub fn diagnostics(&self, rules: Rules) -> Result<Vec<ParseError>, TestError> {
+    pub fn diagnostics(&self, rules: Rules) -> Result<CompletedDiagnostics, TestError> {
         diagnostics_of(&self.source(), rules)
     }
 
@@ -202,8 +202,9 @@ impl Dialogue<'_> {
     }
 }
 
-/// Parse and validate `source` under `rules`, returning every diagnostic.
-pub fn diagnostics_of(source: &str, rules: Rules) -> Result<Vec<ParseError>, TestError> {
+/// Parse and validate `source` under `rules`, retaining completed diagnostics.
+/// Internal tool failures cannot be expected fixture verdicts, regardless of severity.
+pub fn diagnostics_of(source: &str, rules: Rules) -> Result<CompletedDiagnostics, TestError> {
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
     let verdict = ErrorCollector::new();
     let mut checked = parser.parse_chat_file_streaming(source, &verdict);
@@ -212,7 +213,8 @@ pub fn diagnostics_of(source: &str, rules: Rules) -> Result<Vec<ParseError>, Tes
         &verdict,
         TranscriptName::Anonymous,
     );
-    Ok(verdict.into_vec())
+    CompletedDiagnostics::admit(verdict.into_vec())
+        .map_err(|failure| TestError::Failure(failure.to_string()))
 }
 
 /// The verdict check behind `parsed`: refuse any code set but `expected_codes`,
@@ -235,7 +237,8 @@ fn parsed_with_verdict(
     expected_codes: &[&str],
     rules: Rules,
 ) -> Result<ChatFile, TestError> {
-    let reported = diagnostics_of(source, rules)?;
+    let completed = diagnostics_of(source, rules)?;
+    let reported = completed.diagnostics();
     let mut got: Vec<&str> = reported.iter().map(|e| e.code.as_str()).collect();
     got.sort_unstable();
     got.dedup();
@@ -254,7 +257,10 @@ fn parsed_with_verdict(
     }
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
     let fresh = ErrorCollector::new();
-    Ok(parser.parse_chat_file_streaming(source, &fresh))
+    let file = parser.parse_chat_file_streaming(source, &fresh);
+    CompletedDiagnostics::admit(fresh.into_vec())
+        .map_err(|failure| TestError::Failure(failure.to_string()))?;
+    Ok(file)
 }
 
 /// One code a fixture must report exactly once, with a fragment its message
@@ -273,8 +279,13 @@ pub struct Fired {
 ///
 /// Returns the mismatches as sentences prefixed with `what`, so a table can
 /// collect every row's failures into one report rather than stop at the
-/// first.
-pub fn fired_mismatches(what: &str, reported: &[ParseError], fired: &[Fired]) -> Vec<String> {
+/// first. The diagnostic batch must already have passed internal-failure admission.
+pub fn fired_mismatches(
+    what: &str,
+    reported: &CompletedDiagnostics,
+    fired: &[Fired],
+) -> Vec<String> {
+    let reported = reported.diagnostics();
     let mut wrong = Vec::new();
     let mut got: Vec<&str> = reported.iter().map(|e| e.code.as_str()).collect();
     got.sort_unstable();

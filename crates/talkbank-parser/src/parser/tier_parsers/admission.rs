@@ -1,5 +1,4 @@
-//! Whole-tier recovery admission: the one gate between a dependent tier's
-//! source-bound node and its typed parser.
+//! Whole-tier recovery admission for dependent-tier document dispatch.
 //!
 //! tree-sitter sets `has_error()` on a node when the node itself or any
 //! descendant is an ERROR or a MISSING placeholder: in the runtime,
@@ -13,18 +12,22 @@
 //!   dispatcher reports every ERROR and MISSING node in it with the
 //!   whole-tier recovery walk and substitutes the tier's recovery
 //!   disposition (explicit unparsed source for MOR/GRA/PHO/MOD/SIN/WOR).
-//!   No typed tier parser runs on it.
-//! - [`HealthyTier`]: no descendant is ERROR or MISSING. This is the only
-//!   value a typed tier parser accepts, so inside such a parser a slot in
-//!   the `Missing` or `Error` state contradicts the admission and is a
-//!   producer fault ([`CstFailure::RecoveryInsideHealthyTier`]), never a
-//!   CHAT diagnostic.
+//!   The document dispatcher does not run the typed tier parser on it.
+//! - [`HealthyTier`]: no descendant is ERROR or MISSING. MOR and WOR require
+//!   this proof at their lowering entry points. A recovery slot encountered
+//!   under that proof contradicts admission and is a producer fault
+//!   ([`CstFailure::RecoveryInsideHealthyTier`]), never a CHAT diagnostic.
 //!
-//! The proof is in the signature; the slot types inside the parsers still
-//! admit `Missing` and `Error`, so their arms remain and report the
-//! contradiction. Making those states uninhabited under the proof is a
-//! generator change (a `HealthyTier`-narrowed extraction), recorded with the
-//! coverage drive.
+//! Other typed tier entry points accept a source-bound node without this
+//! proof. In particular, the public GRA CST API also handles recovery-bearing
+//! nodes and rejects incomplete graphs. Document-dispatch admission does not
+//! make recovery unreachable through those direct APIs. Their recovery arms
+//! must retain their own diagnostic and rejection contracts.
+//!
+//! Even where the entry signature requires the proof, generated slot types
+//! still admit recovery states. Making those states uninhabited under the proof
+//! is a generator change (a `HealthyTier`-narrowed extraction), recorded with
+//! the coverage drive.
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{AsRawNode, SourceBound, SourceBoundKind, SourceSlice};
@@ -49,8 +52,8 @@ pub struct HealthyTier<'tree, 'source, T: SourceBoundKind<'tree>>(SourceBound<'t
 
 impl<'tree, 'source, T: SourceBoundKind<'tree>> HealthyTier<'tree, 'source, T> {
     /// The admitted node. Typed parsers that still take a bare source-bound
-    /// node (every tier but `%mor`, as of 2026-10-19) read it here; the
-    /// proof is in having been handed a `HealthyTier` at all. Note that
+    /// node read it here; MOR and WOR instead require the proof at their
+    /// lowering entry points. Note that
     /// `SourceBound` is `Copy`, so the raw node a caller admitted stays in
     /// its scope too; only the parsers that take the proof close that.
     pub fn node(self) -> SourceBound<'tree, 'source, T> {

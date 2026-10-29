@@ -15,4 +15,7 @@
 @Comment:	A later top reuses the index; subsequent bottoms answer this turn.
 *SPK:	⌈2 three ⌉2 . 1000_2000
 *LSN:	⌊2 okay ⌋2 . 1000_2000
+@Comment:	Different speakers and indices do not supply vacant siblings for repeated responses.
+*OBS:	⌈3 four ⌉3 ⌈2 five ⌉2 .
+*SPK:	⌊3 yes ⌋3 ⌊3 indeed ⌋3 ⌊2 good ⌋2 .
 @End

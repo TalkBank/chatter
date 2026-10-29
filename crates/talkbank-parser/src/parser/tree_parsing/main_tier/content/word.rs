@@ -119,7 +119,7 @@ pub(crate) fn parse_word_content<'tree>(
                     ));
                     Ok(ReplacementSyntax::Recovered)
                 }
-                SlotView::Absent(NoChild) => Ok(ReplacementSyntax::Recovered),
+                SlotView::Absent(never) => match never {},
             },
             // An ERROR where the group should be is classified in context, as
             // the old walk's catch-all classified it (a bare `[` is an

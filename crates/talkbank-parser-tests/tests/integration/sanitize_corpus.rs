@@ -6,6 +6,21 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, test_error::strict_parse};
 use talkbank_transform::redact::{SanitizationPolicy, sanitize};
 
+#[derive(Debug, PartialEq, Eq)]
+enum SinkError {
+    Closed,
+}
+
+struct ClosedSink;
+
+impl talkbank_model::ChatWriter for ClosedSink {
+    type Error = SinkError;
+
+    fn write_str(&mut self, _: &str) -> Result<(), Self::Error> {
+        Err(SinkError::Closed)
+    }
+}
+
 fn lexical_runs(parser: &impl talkbank_model::ChatParser) {
     let source =
         include_str!("../../../../corpus/reference/word-features/registry-lexical-boundaries.cha");
@@ -16,7 +31,16 @@ fn lexical_runs(parser: &impl talkbank_model::ChatParser) {
         .unwrap();
     assert!(errors.into_vec().is_empty());
     let policy = SanitizationPolicy::strict();
-    let output = sanitize(original, &policy).unwrap().to_chat_string();
+    let sanitized = sanitize(original, &policy).unwrap();
+    let output = talkbank_model::ChatString::render(|sink| sanitized.write_chat(sink));
+    let mut formatted = String::new();
+    sanitized.write_chat(&mut formatted).unwrap();
+    assert_eq!(formatted, output);
+    assert_eq!(sanitized.to_chat_string(), output);
+    assert_eq!(
+        sanitized.write_chat(&mut ClosedSink),
+        Err(SinkError::Closed)
+    );
     assert!(
         output.contains("*CHI:\tworda wordb .\n"),
         "one placeholder per lexical run: {output}"

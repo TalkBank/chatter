@@ -89,7 +89,7 @@ includes every check below it.
 
 | Level | Name | Checks |
 |---|---|---|
-| L0 | `Parseable` | supplied parse-diagnostic slice is empty; the helper does not parse input |
+| L0 | `Parseable` | supplied completed diagnostic batch is empty; the helper does not parse input |
 | L1 | `StructurallyComplete` | nonempty declared speaker roster and language list, all utterance speakers declared, terminators present unless CA waives them |
 | L2 | `MainTierValid` | L1 plus rejection of a main tier with no content, linkers or language precode |
 
@@ -98,12 +98,12 @@ particular, L2 does not validate individual words or timing intervals, and L1
 does not require every declared speaker's `@ID` record. Use complete checked
 admission when the consumer needs those guarantees.
 
-```rust,ignore
-use talkbank_transform::validate::validate_to_level;
-
-// parse_errors come from the parser (typically parse_lenient).
-validate_to_level(&file, &parse_errors, ValidityLevel::MainTierValid)?;
-```
+Before calling `validate_to_level`, pass the producing parser's complete
+collection to `CompletedDiagnostics::admit`. Handle its `InternalFailure`
+separately; a tool fault cannot enter the partial-check API as an L0 input
+finding. Pass the successful `&CompletedDiagnostics` alongside the model and
+requested `ValidityLevel`. The batch proves that no internal failure was
+reported, not that the findings belong to this model or that the model is valid.
 
 `validate_to_level` aggregates findings from these selected checks, not all
 CHAT rules. The L0 gate surfaces the first parse error's code, source
@@ -133,28 +133,23 @@ complete admission merely because a file is parseable.
 `validate_output` checks selected invariants of the supplied model. It receives
 neither the input document nor serialized output, so it cannot prove
 preservation, absence of degradation or successful output parsing. It checks
-terminator presence (with the CA exemption), then existing MOR counts for
-`"morphotag"` or backwards utterance-bullet timing for `"align"`. It does not
-require a missing MOR tier to appear or establish full timing validity.
+terminator presence (with the CA exemption) under every `OutputChecks` policy:
 
-**Known defect, recorded here rather than left for the next reader to
-rediscover.** `validate_output` takes the command as a `&str` and dispatches
-with `match command { "morphotag" => ..., "align" => ..., _ => {} }`. Two
-things are wrong with that and neither is cosmetic:
+| Policy | Additional checks |
+| --- | --- |
+| `Terminators` | None |
+| `MorphologyCounts` | Existing MOR tier counts against main-tier positions |
+| `UtteranceTiming` | Unparsed terminal bullets and backwards terminal timing |
 
-- The catch-all silently skips every command-specific check. A caller passing
-  a typo, or any command the match does not list, gets the terminator check
-  and nothing else, with no error and no warning. It type-checks perfectly.
-  `clippy::wildcard_enum_match_arm` cannot see this one, because the match is
-  over an open set of strings rather than a closed enum.
-- The strings name commands belonging to a downstream ML pipeline, which is
-  workflow-specific knowledge embedded in a general-purpose CHAT library.
+Callers choose the enum variant explicitly. There is no command-string dispatch,
+unknown-command fallback or default policy. Downstream command adapters own an
+exhaustive mapping from their commands to these generic checks.
 
-This legacy helper remains a partial check, not an output-admission API.
-New integrations should use the shared checked source/construction boundaries
-rather than extend the command-string dispatch. Any redesign must account for
-actual consumers and the required typed policy; this chapter does not claim
-that compatibility is the only remaining design issue.
+The checks do not require missing MOR tiers or timing to appear. They do not
+establish full timing validity, word validity, source preservation or complete
+CHAT admission. `Ok(())` is only the result of the selected partial checks;
+new integrations should use the shared checked source/construction boundaries
+when they require accepted output.
 
 ## Severity posture
 

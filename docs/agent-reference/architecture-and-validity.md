@@ -94,7 +94,7 @@ rules or alter fixtures merely to obtain a passing test.
 
 ## Cache policy
 
-The validation cache lives in the OS cache directory; `--force` refreshes
+The validation cache lives in the OS cache directory; `--refresh-cache` refreshes
 specific paths; `TALKBANK_CHAT_CACHE_DIR` relocates the root. Integration
 tests isolate the cache through `CliHarness`, never `HOME` tricks.
 Treat cross-thread/process initialization, contention and cleanup as explicit

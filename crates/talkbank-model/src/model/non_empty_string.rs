@@ -360,13 +360,38 @@ impl Validate for RecoveryText {
 /// # use talkbank_model::non_empty_literal;
 /// let _ = non_empty_literal!("");
 /// ```
+///
+/// Caller-defined names cannot change admission or substitute recovery text.
+///
+/// ```
+/// use talkbank_model::non_empty_literal;
+/// enum CallerNames { Ok, Err }
+/// use CallerNames::{Ok, Err};
+/// let _ = (Ok, Err);
+/// assert_eq!(non_empty_literal!("word").as_str(), "word");
+/// ```
+///
+/// ```compile_fail,E0080
+/// use talkbank_model::non_empty_literal;
+/// macro_rules! panic {
+///     ($($ignored:tt)*) => {
+///         match talkbank_model::model::NonEmptyLiteral::new("substitute") {
+///             ::core::result::Result::Ok(text) => text,
+///             ::core::result::Result::Err(_) => ::core::panic!("invalid control"),
+///         }
+///     };
+/// }
+/// let _ = non_empty_literal!("");
+/// ```
 #[macro_export]
 macro_rules! non_empty_literal {
     ($literal:literal) => {{
         const LITERAL: $crate::model::NonEmptyLiteral =
             match $crate::model::NonEmptyLiteral::new($literal) {
-                Ok(literal) => literal,
-                Err(_) => panic!("a non-empty literal is empty"),
+                ::core::result::Result::Ok(literal) => literal,
+                ::core::result::Result::Err(_) => {
+                    ::core::panic!("a non-empty literal is empty")
+                }
             };
         $crate::model::NonEmptyString::from_checked_literal(LITERAL)
     }};

@@ -36,7 +36,7 @@ use tree_sitter::Node;
 /// every simple header used to write. Generic over the content slot's
 /// `Missing` payload, as [`read_source_content`] is.
 pub(super) fn simple_header<'value, 'tree: 'value, 'source, T, M, E, A>(
-    site: &HeaderSite<'tree, '_>,
+    site: &HeaderSite<'tree, 'source>,
     content_slot: SourceField<'value, 'tree, 'source, AnyKindSlot<T, M, E, A>>,
     unexpected: &[Node<'tree>],
     words: &ContentSlot<'_>,
@@ -60,7 +60,7 @@ where
 /// Optional payloads preserve omission separately from recovery and source faults.
 /// The header-specific constructor owns how the model represents an omission.
 fn optional_header<'value, 'tree: 'value, 'source, T, M, E>(
-    site: &HeaderSite<'tree, '_>,
+    site: &HeaderSite<'tree, 'source>,
     content_slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<T, M, E>>>,
     unexpected: &[Node<'tree>],
     words: &ContentSlot<'_>,

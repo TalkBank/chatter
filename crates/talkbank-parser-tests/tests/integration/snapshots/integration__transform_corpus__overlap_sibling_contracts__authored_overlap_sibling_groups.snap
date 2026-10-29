@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser-tests/tests/integration/overlap_sibling_corpus.rs
-assertion_line: 81
 expression: groups
 ---
 [
@@ -107,6 +106,59 @@ expression: groups
       "kind": "Top",
       "speaker": "SPK",
       "utterance": 4
+    }
+  },
+  {
+    "bottoms": [
+      {
+        "begin_at_word": 0,
+        "bullet": null,
+        "end_at_word": 1,
+        "index": 3,
+        "kind": "Bottom",
+        "speaker": "SPK",
+        "utterance": 7
+      },
+      {
+        "begin_at_word": 1,
+        "bullet": null,
+        "end_at_word": 2,
+        "index": 3,
+        "kind": "Bottom",
+        "speaker": "SPK",
+        "utterance": 7
+      }
+    ],
+    "top": {
+      "begin_at_word": 0,
+      "bullet": null,
+      "end_at_word": 1,
+      "index": 3,
+      "kind": "Top",
+      "speaker": "OBS",
+      "utterance": 6
+    }
+  },
+  {
+    "bottoms": [
+      {
+        "begin_at_word": 2,
+        "bullet": null,
+        "end_at_word": 3,
+        "index": 2,
+        "kind": "Bottom",
+        "speaker": "SPK",
+        "utterance": 7
+      }
+    ],
+    "top": {
+      "begin_at_word": 1,
+      "bullet": null,
+      "end_at_word": 2,
+      "index": 2,
+      "kind": "Top",
+      "speaker": "OBS",
+      "utterance": 6
     }
   }
 ]

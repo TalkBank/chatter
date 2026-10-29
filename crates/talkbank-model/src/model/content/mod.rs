@@ -93,11 +93,12 @@ pub use utterance_content::*;
 
 // Re-export word types at content level
 pub use word::{
-    CADelimiter, CADelimiterType, CAElement, CAElementType, FormMarkerPayload, FormType,
-    UndeclaredFormMarker, UnderlineMarker, Word, WordCategory, WordCliticBoundary,
-    WordCompoundMarker, WordContent, WordContents, WordLanguageMarker, WordLengthening,
-    WordMaterial, WordPhonetic, WordShortening, WordStressMarker, WordStressMarkerType,
-    WordSyllablePause, WordText, WordUnderlineBegin, WordUnderlineEnd,
+    CADelimiter, CADelimiterType, CAElement, CAElementType, ConflictingWordSuffixes, FormLabel,
+    FormMarkerPayload, FormType, InvalidFormLabel, InvalidWordPosTag, UndeclaredFormMarker,
+    UnderlineMarker, Word, WordCategory, WordCliticBoundary, WordCompoundMarker, WordContent,
+    WordContents, WordLanguageMarker, WordLengthening, WordMaterial, WordPhonetic, WordPosTag,
+    WordShortening, WordStressMarker, WordStressMarkerType, WordSuffix, WordSyllablePause,
+    WordText, WordUnderlineBegin, WordUnderlineEnd,
 };
 
 // Re-export types needed by submodules via super::

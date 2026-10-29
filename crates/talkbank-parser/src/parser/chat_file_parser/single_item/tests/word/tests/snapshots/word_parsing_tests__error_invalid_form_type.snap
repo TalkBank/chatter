@@ -11,7 +11,7 @@ Err(
                 severity: Error,
                 location: Known {
                     span: Span {
-                        start: 5,
+                        start: 0,
                         end: 7,
                     },
                     position: None,
@@ -20,16 +20,16 @@ Err(
                     ErrorContext {
                         source_text: "hello@z",
                         span: Span {
-                            start: 5,
+                            start: 0,
                             end: 7,
                         },
                         expected: [],
-                        found: "",
+                        found: "hello@z",
                         line_offset: None,
                     },
                 ),
                 labels: [],
-                message: "Undeclared form marker '@z'",
+                message: "Invalid or undeclared form marker '@z'",
                 suggestion: Some(
                     "Valid form markers: @b @c @d @f @fp @g @i @k @l @ls @n @o @p @q @sas @si @sl @t @u @wp @x @z:<label>",
                 ),

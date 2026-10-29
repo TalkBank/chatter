@@ -37,7 +37,7 @@ tree-sitter = { workspace = true }
 tree-sitter-talkbank = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.8"
+tempfile = "3.27"
 
 # These are generator and audit commands. Their behavior is covered by the
 # library and integration tests; compiling each source again as a libtest

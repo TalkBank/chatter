@@ -15687,7 +15687,13 @@ impl<'a> Iterator for Lexer<'a> {
             let raw_text = &yyinput[start..end];
             let body = &yyinput[start..self.t2];
             let form_marker = if self.t3 != NONE && self.t4 != NONE { Some(&yyinput[self.t3..self.t4]) } else { None };
-            let lang_suffix = if self.t6 != NONE { if self.t5 != NONE { Some(&yyinput[self.t5..self.t6]) } else { Some("") } } else { None };
+            let lang_suffix = if self.t6 != NONE {
+                Some(if self.t5 != NONE {
+                    crate::token::WordLanguagePayload::Codes(&yyinput[self.t5..self.t6])
+                } else {
+                    crate::token::WordLanguagePayload::Shortcut
+                })
+            } else { None };
             let pos_tag = if self.t7 != NONE && self.t8 != NONE { Some(&yyinput[self.t7..self.t8]) } else { None };
             return Some((Token::Word { raw_text, prefix: None, body, form_marker, lang_suffix, pos_tag }, start..end));
         }
@@ -19453,7 +19459,13 @@ impl<'a> Iterator for Lexer<'a> {
             let raw_text = &yyinput[start..end];
             let body = &yyinput[self.t1..self.t2];
             let form_marker = if self.t3 != NONE && self.t4 != NONE { Some(&yyinput[self.t3..self.t4]) } else { None };
-            let lang_suffix = if self.t6 != NONE { if self.t5 != NONE { Some(&yyinput[self.t5..self.t6]) } else { Some("") } } else { None };
+            let lang_suffix = if self.t6 != NONE {
+                Some(if self.t5 != NONE {
+                    crate::token::WordLanguagePayload::Codes(&yyinput[self.t5..self.t6])
+                } else {
+                    crate::token::WordLanguagePayload::Shortcut
+                })
+            } else { None };
             let pos_tag = if self.t7 != NONE && self.t8 != NONE { Some(&yyinput[self.t7..self.t8]) } else { None };
             return Some((Token::Word { raw_text, prefix: Some("0"), body, form_marker, lang_suffix, pos_tag }, start..end));
         }
@@ -22645,7 +22657,13 @@ impl<'a> Iterator for Lexer<'a> {
             let prefix = Some(&yyinput[start..self.t1]);
             let body = &yyinput[self.t1..self.t2];
             let form_marker = if self.t3 != NONE && self.t4 != NONE { Some(&yyinput[self.t3..self.t4]) } else { None };
-            let lang_suffix = if self.t6 != NONE { if self.t5 != NONE { Some(&yyinput[self.t5..self.t6]) } else { Some("") } } else { None };
+            let lang_suffix = if self.t6 != NONE {
+                Some(if self.t5 != NONE {
+                    crate::token::WordLanguagePayload::Codes(&yyinput[self.t5..self.t6])
+                } else {
+                    crate::token::WordLanguagePayload::Shortcut
+                })
+            } else { None };
             let pos_tag = if self.t7 != NONE && self.t8 != NONE { Some(&yyinput[self.t7..self.t8]) } else { None };
             return Some((Token::Word { raw_text, prefix, body, form_marker, lang_suffix, pos_tag }, start..end));
         }

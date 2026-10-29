@@ -49,6 +49,7 @@ talkbank-parser = { path = "../talkbank-parser" }
 # talkbank-parser-tests' lib graph reaches this crate.
 talkbank-parser-tests = { path = "../talkbank-parser-tests" }
 walkdir = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
 # Opt-in suite of trait-implementation tests for the ChatParser trait

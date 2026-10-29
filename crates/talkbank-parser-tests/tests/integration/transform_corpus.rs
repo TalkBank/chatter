@@ -89,6 +89,8 @@ mod utterance_split_contracts;
 mod validation_contracts;
 #[path = "wor_timing_corpus.rs"]
 mod wor_timing_contracts;
+#[path = "word_suffix_corpus.rs"]
+mod word_suffix_contracts;
 
 #[test]
 fn reference_header_json_conforms_to_generated_model_schema() {

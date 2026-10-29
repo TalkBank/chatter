@@ -8,4 +8,5 @@
 	group only for that word; the following word resumes the enclosing scope.
 *CHI:	<hello [!] there [e]> [!] after .
 *CHI:	<hello [@s:eng] hola> [@s:spa] after .
+*CHI:	<hello <there> [!]> [e] after .
 @End

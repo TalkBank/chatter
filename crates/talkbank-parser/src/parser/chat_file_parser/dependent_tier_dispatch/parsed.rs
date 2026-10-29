@@ -385,7 +385,7 @@ impl<'tree, 'source> WorSource<'tree, 'source> {
         };
         let node = healthy.node();
         match crate::parser::typed_cst::report_admission(
-            parse_wor_tier(node, errors),
+            parse_wor_tier(healthy, errors),
             node.raw_node(),
             node.source(),
             errors,

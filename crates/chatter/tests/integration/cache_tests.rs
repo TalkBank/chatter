@@ -261,9 +261,8 @@ fn force_clears_rows_whatever_spelling_the_argument_used() -> Result<(), TestErr
             .args(["validate", spelling, "--format", "json", "--refresh-cache"])
             .output()?;
         assert!(output.status.success(), "{}", combined_output(&output));
-        let cleared: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        let cleared: Vec<serde_json::Value> = crate::common::parse_json_lines(&output.stdout)?
+            .into_iter()
             .filter(|record| record["action"] == "clear")
             .collect();
         assert_eq!(

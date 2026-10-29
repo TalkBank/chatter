@@ -191,7 +191,8 @@ fn source(row: &Row) -> String {
 #[test]
 fn every_transcript_reports_the_codes_its_row_says() -> Result<(), TestError> {
     for row in ROWS {
-        let reported = diagnostics_of(&source(row), Rules::Default)?;
+        let completed = diagnostics_of(&source(row), Rules::Default)?;
+        let reported = completed.diagnostics();
         let mut got: Vec<&str> = reported.iter().map(|e| e.code.as_str()).collect();
         got.sort_unstable();
         got.dedup();

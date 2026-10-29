@@ -143,7 +143,7 @@ operational errors, notices and progress go to stderr.
 
 Audit mode can reuse eligible results from an existing cache but does not
 create, migrate, prune, clear or write that cache. Without a usable cache it
-validates directly and reports the cache problem. `--force` with `--audit` is
+validates directly and reports the cache problem. `--refresh-cache` with `--audit` is
 a usage error.
 
 Use a separate report path. Regular-file reports are staged beside the destination

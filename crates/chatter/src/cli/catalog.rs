@@ -259,6 +259,7 @@ struct Leaf {
 #[derive(Serialize)]
 struct Discovery {
     schema: &'static str,
+    exit_codes: [crate::exit_codes::ExitDescription; 6],
     commands: Vec<Leaf>,
 }
 
@@ -369,6 +370,7 @@ pub(crate) fn run(
     }
     let discovery = Discovery {
         schema: "chatter.commands.v1",
+        exit_codes: crate::exit_codes::ExitStatus::descriptions(),
         commands: leaves,
     };
     match format {

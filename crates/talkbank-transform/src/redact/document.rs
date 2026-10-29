@@ -21,8 +21,8 @@ pub struct SanitizedDocument {
 }
 
 impl SanitizedDocument {
-    /// Writes the sanitized document in CHAT surface form to `w`.
-    pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    /// Writes CHAT surface form, preserving the destination's error type.
+    pub fn write_chat<W: talkbank_model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         self.inner.write_chat(w)
     }
 

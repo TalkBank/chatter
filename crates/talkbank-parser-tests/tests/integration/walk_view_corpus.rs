@@ -146,6 +146,7 @@ fn nested_word_annotations_preserve_domain_exclusion_and_language_scope() {
     enum Control {
         Exclusion,
         LanguageScope,
+        GroupExclusion,
     }
 
     fn check(parser: &impl ChatParser, source: &str, path: &std::path::Path) {
@@ -165,12 +166,13 @@ fn nested_word_annotations_preserve_domain_exclusion_and_language_scope() {
                 Line::Header { .. } => None,
             })
             .collect();
-        let [excluded, scoped] = utterances.as_mut_slice() else {
-            panic!("two authored annotation controls");
+        let [excluded, scoped, group_excluded] = utterances.as_mut_slice() else {
+            panic!("three authored annotation controls");
         };
         for (control, utterance) in [
             (Control::Exclusion, excluded),
             (Control::LanguageScope, scoped),
+            (Control::GroupExclusion, group_excluded),
         ] {
             assert_walk_views(utterance.main.content.content.as_mut_slice(), source, path);
             for domain in [
@@ -184,8 +186,9 @@ fn nested_word_annotations_preserve_domain_exclusion_and_language_scope() {
                     (Control::Exclusion, Some(TierDomain::Mor)) => {
                         vec![("hello", None), ("after", None)]
                     }
+                    (Control::GroupExclusion, Some(TierDomain::Mor)) => vec![("after", None)],
                     (
-                        Control::Exclusion,
+                        Control::Exclusion | Control::GroupExclusion,
                         None | Some(TierDomain::Pho | TierDomain::Sin | TierDomain::Wor),
                     ) => vec![("hello", None), ("there", None), ("after", None)],
                     (Control::LanguageScope, _) => vec![

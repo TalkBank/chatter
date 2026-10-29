@@ -1,4 +1,6 @@
 //! Rejected word-timing source stays explicit through file parsing and JSON.
+use super::completed;
+
 use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
 use talkbank_model::{
     ChatParser, DependentTier, ErrorCode, ErrorCollector, ParseHealthTier, ParseOutcome, Severity,
@@ -12,8 +14,8 @@ fn control(parser: &impl ChatParser, source: &str) -> DependentTier {
         .into_option()
         .unwrap();
     assert!(
-        !errors
-            .into_vec()
+        !completed(errors)
+            .into_diagnostics()
             .iter()
             .any(|e| e.severity == Severity::Error)
     );
@@ -41,12 +43,13 @@ fn check(
     let ParseOutcome::Parsed(file) = parser.parse_chat_file(source, origin, &errors) else {
         panic!("file recovery required");
     };
-    let diagnostics = errors.into_vec();
+    let diagnostics = completed(errors).into_diagnostics();
     assert!(diagnostics.iter().any(|e| e.severity == Severity::Error));
-    assert!(!diagnostics.iter().any(|e| matches!(
-        e.code,
-        ErrorCode::InternalError | ErrorCode::UnsupportedDependentTier
-    )));
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|e| e.code == ErrorCode::UnsupportedDependentTier)
+    );
     let utterance = file
         .utterances()
         .find(|u| {
@@ -115,8 +118,8 @@ fn check(
             .is_err()
     );
     assert!(
-        errors
-            .into_vec()
+        completed(errors)
+            .into_diagnostics()
             .iter()
             .any(|e| e.code == ErrorCode::UnparsableContent)
     );
@@ -193,8 +196,8 @@ fn both_backends_reject_unassociated_wor_timing_without_source_loss() {
                         parser.parser_name()
                     );
                     assert!(
-                        errors
-                            .into_vec()
+                        completed(errors)
+                            .into_diagnostics()
                             .iter()
                             .any(|e| e.severity == Severity::Error)
                     );
@@ -340,8 +343,8 @@ fn wor_annotations_are_rejected_without_erasure() {
                             parser.parser_name()
                         );
                         assert!(
-                            errors
-                                .into_vec()
+                            completed(errors)
+                                .into_diagnostics()
                                 .iter()
                                 .any(|e| e.severity == Severity::Error)
                         );

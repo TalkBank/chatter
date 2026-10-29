@@ -5,6 +5,121 @@ use talkbank_model::model::{DependentTier, SemanticEq, TranscriptName, WriteChat
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, test_error::strict_parse};
 
+#[test]
+fn authored_custom_form_preserves_both_parser_wire_and_schema_admission() {
+    fn check(parser: &impl talkbank_model::ChatParser, source: &str) {
+        use talkbank_model::{ErrorCollector, FormType, UtteranceContent, Word};
+        let schema = serde_json::to_value(schemars::schema_for!(Word)).expect("word schema");
+        let validator = jsonschema::validator_for(&schema).expect("word validator");
+        for origin in [0, 59] {
+            let errors = ErrorCollector::new();
+            let main = parser
+                .parse_main_tier(source, origin, &errors)
+                .into_option()
+                .expect("authored custom form");
+            assert!(errors.is_empty(), "{:?}", errors.to_vec());
+            let UtteranceContent::Word(word) = &main.content.content[0] else {
+                panic!("authored first word");
+            };
+            let Some(FormType::UserDefined(label)) = word.form_type() else {
+                panic!("declared custom label");
+            };
+            assert_eq!(label.as_str(), "m");
+            let span = word.location.span().expect("located word");
+            assert_eq!(
+                &source[span.start() - origin..span.end() - origin],
+                word.to_chat()
+            );
+            let original = serde_json::to_value(word).expect("word JSON");
+            assert_eq!(original["form_type"], serde_json::json!({ "z": "m" }));
+            assert!(validator.is_valid(&original));
+            let roundtrip: Word = serde_json::from_value(original.clone()).expect("word readback");
+            assert_eq!(roundtrip.to_chat(), word.to_chat());
+            assert!(roundtrip.location.span().is_none());
+            for label in [
+                "",
+                "two words",
+                "x\ty",
+                "x\n",
+                "x\n@End",
+                "x@f",
+                "x$n",
+                "x:y",
+                "x-y",
+                "名",
+            ] {
+                let mut wire = original.clone();
+                wire["form_type"] = serde_json::json!({ "z": label });
+                assert!(!validator.is_valid(&wire), "schema accepted {label:?}");
+                assert!(
+                    serde_json::from_value::<Word>(wire).is_err(),
+                    "model accepted {label:?}"
+                );
+            }
+        }
+    }
+    let spec = include_str!("../../../../spec/constructs/word/user_form.md");
+    let (_, fence) = spec.split_once("```main_tier\n").expect("authored input");
+    let (source, _) = fence.split_once("```").expect("input closing fence");
+    check(&TreeSitterParser::new().expect("parser"), source);
+    check(&talkbank_parser_re2c::Re2cParser::new(), source);
+}
+
+#[test]
+fn reference_pos_hints_preserve_both_parser_wire_and_schema_admission() {
+    fn check(parser: &impl talkbank_model::ChatParser, source: &str) {
+        use talkbank_model::alignment::helpers::{WordItem, walk_words};
+        use talkbank_model::{ErrorCollector, Word};
+        let errors = ErrorCollector::new();
+        let file = parser
+            .parse_chat_file(source, 0, &errors)
+            .into_option()
+            .expect("POS reference model");
+        assert!(
+            errors.is_empty(),
+            "POS reference must have no parser findings"
+        );
+        let schema = serde_json::to_value(schemars::schema_for!(Word)).expect("word schema");
+        let validator = jsonschema::validator_for(&schema).expect("word validator");
+        let mut witnesses = 0;
+        for utterance in file.utterances() {
+            walk_words(&utterance.main.content.content, None, &mut |item| {
+                let word = match item {
+                    WordItem::Word(word) => word,
+                    WordItem::ReplacedWord(replaced) => &replaced.word,
+                    WordItem::Separator(_) => return,
+                };
+                let Some(tag) = &word.part_of_speech else {
+                    return;
+                };
+                witnesses += 1;
+                let original = serde_json::to_value(word).expect("word JSON");
+                assert_eq!(original["part_of_speech"], tag.as_str());
+                assert!(validator.is_valid(&original), "{original}");
+                let roundtrip: Word =
+                    serde_json::from_value(original.clone()).expect("word readback");
+                assert_eq!(roundtrip.to_chat(), word.to_chat());
+                assert!(roundtrip.location.span().is_none());
+                for payload in [
+                    "", "n v", "n\tv", "n\n", "n\n@End", "n$adj", "n@f", "n1", "名",
+                ] {
+                    let mut wire = original.clone();
+                    wire["part_of_speech"] = serde_json::json!(payload);
+                    assert!(!validator.is_valid(&wire), "schema accepted {payload:?}");
+                    assert!(
+                        serde_json::from_value::<Word>(wire).is_err(),
+                        "model accepted {payload:?}"
+                    );
+                }
+            });
+        }
+        assert!(witnesses > 0, "reference must exercise POS hints");
+    }
+    let source = include_str!("../../../../corpus/reference/word/pos-hint-vocabulary.cha");
+    check(&TreeSitterParser::new().expect("parser"), source);
+    check(&talkbank_parser_re2c::Re2cParser::new(), source);
+}
+
 /// Public consumer policy: select the first stored payload, preserve identity
 /// for borrowed access, and distinguish absent tiers from empty payloads.
 #[test]

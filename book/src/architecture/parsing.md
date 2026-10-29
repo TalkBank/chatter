@@ -194,6 +194,13 @@ composite-node Missing state is uninhabited in the generated slot type. This
 does not by itself prove required presence or nonempty lexical payloads.
 The ordinary tier envelope separately consumes required-presence admission;
 nested positions retain the recovery states allowed by their own types.
+Selected nested sequences of fixed terminal positions now retain an
+arity-indexed decision array through construction. Their members cannot be
+absent, so GEM labels, replacement annotations, language-code groups and
+bracketed phonology/sign content no longer carry an absent-member fallback.
+Shared list helpers retain the generated absence axis for both root positions
+and selected separator/item pairs. Lexical MISSING, ERROR, outer absence,
+empty repeats and absent optionals retain their existing handling.
 Displaced-node and lexical missing-placeholder recovery remain. Structural
 delimiter recovery uses the retained slot evidence with
 the owner's source. POS, lemma and feature-value tokens still permit Missing;

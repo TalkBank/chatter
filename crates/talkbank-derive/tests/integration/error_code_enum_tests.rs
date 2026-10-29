@@ -17,6 +17,70 @@
 
 use talkbank_derive::error_code_enum;
 
+mod macro_shadowing {
+    use super::error_code_enum;
+
+    macro_rules! format {
+        ($($tokens:tt)*) => {
+            ::std::string::String::from("caller format")
+        };
+    }
+    macro_rules! write {
+        ($sink:expr, $($tokens:tt)*) => {
+            $sink.write_str("caller write")
+        };
+    }
+
+    #[error_code_enum]
+    enum Code {
+        #[code("E999")]
+        UnknownError,
+    }
+
+    #[test]
+    fn generated_code_text_does_not_resolve_caller_macros() {
+        assert_eq!(format!(control), "caller format");
+        let mut control = ::std::string::String::new();
+        use ::std::fmt::Write;
+        write!(&mut control, "control").unwrap();
+        assert_eq!(control, "caller write");
+        assert_eq!(Code::UnknownError.to_string(), "E999");
+        assert_eq!(
+            Code::UnknownError.documentation_url(),
+            "https://talkbank.org/errors/E999"
+        );
+    }
+}
+
+mod type_shadowing {
+    use super::error_code_enum;
+
+    #[error_code_enum]
+    enum String {
+        #[code("E999")]
+        UnknownError,
+    }
+
+    #[error_code_enum]
+    enum Option {
+        #[code("E999")]
+        UnknownError,
+    }
+
+    #[test]
+    fn registry_names_do_not_replace_generated_return_types() {
+        assert_eq!(String::parse_exact("E999"), Some(String::UnknownError));
+        assert_eq!(Option::parse_exact("E999"), Some(Option::UnknownError));
+        assert_eq!(Option::parse_exact("missing"), None);
+        assert_eq!(String::UnknownError.to_string(), "E999");
+        assert_eq!(
+            String::UnknownError.documentation_url(),
+            "https://talkbank.org/errors/E999"
+        );
+        assert_eq!(Option::iter().count(), 1);
+    }
+}
+
 // No hand-written `#[derive(PartialOrd, Ord)]` here: the macro emits both, and
 // a second copy is a conflicting implementation rather than a harmless one. The
 // hand-written pair used to sit on this line, unused by any test, which is how

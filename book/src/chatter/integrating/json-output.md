@@ -18,15 +18,18 @@ chatter convert to-json file.cha
 # Write to file
 chatter convert to-json file.cha -o file.json
 
-# Skip validation (parse only, faster)
+# Skip CHAT validation and alignment; parsing and schema checks still run
 chatter convert to-json file.cha --skip-validation
 
 # Skip alignment only
 chatter convert to-json file.cha --skip-alignment
 ```
 
-Validation and alignment are **on by default**. Use `--skip-validation`
-or `--skip-alignment` to opt out.
+Validation and alignment are **on by default**. `--skip-validation` skips
+both CHAT validation and alignment; `--skip-alignment` retains structural CHAT
+validation. These two flags conflict. JSON Schema validation remains enabled
+unless `--skip-schema-validation` is also supplied. Parsing still must succeed;
+none of these flags grants recovery from parser errors.
 
 ## Top-Level Structure
 
@@ -36,9 +39,11 @@ or `--skip-alignment` to opt out.
 }
 ```
 
-A `ChatFile` preserves file order in `lines`. It also serializes the
-`participants`, `languages`, and `options` metadata projections and, when
-present, `media`. Each line has a `line_type` discriminator:
+A `ChatFile` serializes one top-level field, `lines`, which preserves file
+order. Participant declarations, ID metadata, languages, options and media
+remain in their header lines; there are no separate top-level copies. Rust
+metadata accessors derive their views from the current headers. The source
+line index is not serialized. Each line has a `line_type` discriminator:
 
 | `line_type` | Description |
 |-------------|-------------|
@@ -476,9 +481,11 @@ Participant declarations keep the observed name and role inside `details`:
 The `"complete"` state may also include a `name`. A declaration containing only
 a speaker code has `"details": {"state": "missing_role"}`; it does not acquire
 a role from an `@ID` header or a default value. This is a recovery state, not a
-valid declaration. The top-level `participants` metadata projection uses
-`code` instead of `speaker_code` and also carries `details` alongside `id`.
-Deserialization and schema shape checks do not replace transcript validation.
+valid declaration. Matching ID metadata remains in a separate `"id"` header.
+Rust callers can obtain a borrowed `ParticipantView` from current headers or
+explicitly create an owned `Participant` snapshot; neither is a top-level
+field of transcript JSON. Deserialization and schema shape checks do not
+replace transcript validation.
 
 ## Timing
 

@@ -33,7 +33,7 @@ proptest! {
                     input
                 );
                 prop_assert!(
-                    word.form_type.is_some(),
+                    word.form_type().is_some(),
                     "[{}] form_type missing for '{}'",
                     parser.name(),
                     input

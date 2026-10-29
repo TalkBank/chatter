@@ -12,6 +12,12 @@ use talkbank_parser_tests::repo_paths::workspace_root;
 #[path = "presentation_corpus.rs"]
 mod presentation_contracts;
 
+#[path = "duration_admission_corpus.rs"]
+mod duration_admission_contracts;
+
+#[path = "mor_preview_corpus.rs"]
+mod mor_preview_contracts;
+
 /// Imported age values preserve unsupported text without claiming source provenance.
 #[test]
 fn age_spec_values_preserve_the_string_wire_contract() {
@@ -24,6 +30,7 @@ fn age_spec_values_preserve_the_string_wire_contract() {
     fn check(parser: &impl talkbank_model::ChatParser, corpus: &ChatCorpus) {
         let mut supported = 0;
         let mut unsupported = 0;
+        let mut projected_controls = std::collections::BTreeSet::new();
         for fixture in corpus.fixtures().iter().filter(|fixture| {
             fixture
                 .path()
@@ -51,6 +58,22 @@ fn age_spec_values_preserve_the_string_wire_contract() {
                     Some(_) => supported += 1,
                     None => unsupported += 1,
                 }
+                // These authored E517 controls distinguish absent components
+                // from numeric zero; no projection is inferred from a raw parse.
+                let expected = match age.as_str() {
+                    "2;06.05" => Some((2, Some(6), Some(5))),
+                    "2;06." => Some((2, Some(6), None)),
+                    "2;" => Some((2, None, None)),
+                    _ => None,
+                };
+                if let Some(expected) = expected {
+                    let components = age.components().expect("authored numeric control");
+                    assert_eq!(
+                        (components.years(), components.months(), components.days()),
+                        expected
+                    );
+                    projected_controls.insert(age.as_str().to_owned());
+                }
                 assert_eq!(AgeValue::from(age.as_str()), *age);
                 assert_eq!(AgeValue::from(age.as_str().to_owned()), *age);
                 assert_eq!(age.to_string(), age.as_str());
@@ -66,6 +89,11 @@ fn age_spec_values_preserve_the_string_wire_contract() {
                 );
             }
         }
+        assert_eq!(
+            projected_controls.len(),
+            3,
+            "all numeric controls must be present"
+        );
         assert!(
             supported > 0 && unsupported > 0,
             "both preserved states need canonical witnesses: {supported}/{unsupported}"
@@ -2155,8 +2183,7 @@ fn shortening_specs_distinguish_embedded_markers_from_admitted_suffixes() {
                     panic!("ordinary shortened word");
                 };
                 forms.push(
-                    word.form_type
-                        .as_ref()
+                    word.form_type()
                         .map(|form| form.to_chat_marker().to_string()),
                 );
             });

@@ -52,7 +52,7 @@ fn a_shortened_form_marked_word_carries_its_pieces() -> Result<(), TestError> {
 
     assert_eq!(word.raw_text(), "hel(lo)@b");
     assert_eq!(word.cleaned_text(), "hello");
-    assert_eq!(word.form_type, Some(FormType::B));
+    assert_eq!(word.form_type().cloned(), Some(FormType::B));
     let pieces: Vec<&str> = word
         .content()
         .iter()

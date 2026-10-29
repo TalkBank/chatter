@@ -135,12 +135,18 @@ pub(in crate::parser) fn convert_word_node<'tree>(
         ReadableSlot::Missing(_) | ReadableSlot::Error(_) => None,
     });
 
+    let suffix = talkbank_model::WordSuffix::from_markers(form_type, lang);
+
     // Position 4: `$tag`.
-    let part_of_speech = children.child_4.slot.as_ref().and_then(|slot| match slot {
-        ReadableSlot::Present(tag) => tokens::part_of_speech(*tag, errors),
-        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
-        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => None,
-    });
+    let part_of_speech = match children.child_4.slot.as_ref() {
+        Some(ReadableSlot::Present(tag)) => match tokens::part_of_speech(*tag, errors) {
+            Some(tag) => Some(tag),
+            None => return Ok(LoweredWord::rejected()),
+        },
+        None => None,
+        Some(ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never)) => match *never {},
+        Some(ReadableSlot::Missing(_) | ReadableSlot::Error(_)) => None,
+    };
 
     // Whatever filled no position, after the positions, so that the
     // diagnostics keep the order the old child walk emitted them in.
@@ -156,6 +162,20 @@ pub(in crate::parser) fn convert_word_node<'tree>(
     // A failed body projection is not an empty recovered body. Finish the
     // sibling diagnostics above, then refuse the entire word.
     body_result?;
+
+    let suffix = match suffix {
+        Ok(suffix) => suffix,
+        Err(conflict) => {
+            errors.report(ParseError::new(
+                ErrorCode::InvalidFormType,
+                Severity::Error,
+                DiagnosticLocation::new(span),
+                ErrorContext::new(source, span, ""),
+                conflict.to_string(),
+            ));
+            return Ok(LoweredWord::rejected());
+        }
+    };
 
     // Parser recovery can produce a word node with empty text (from
     // `[: unclosed`, for instance). Source admission proves a readable slice,
@@ -236,7 +256,12 @@ pub(in crate::parser) fn convert_word_node<'tree>(
     // (option B of the 2026-07-13 UNIBET design; scope is @u ONLY per the
     // 2026-07-14 adjudication). The fold serializes each piece's CHAT
     // surface form, so round-tripping is lossless.
-    let content_items = if matches!(form_type, Some(FormType::U)) {
+    let content_items = if matches!(
+        suffix
+            .as_ref()
+            .and_then(talkbank_model::WordSuffix::form_type),
+        Some(FormType::U)
+    ) {
         fold_phonetic(content_items)
     } else {
         content_items
@@ -244,8 +269,7 @@ pub(in crate::parser) fn convert_word_node<'tree>(
 
     let mut word = Word::new(span, cleaned);
     word.category = category;
-    word.form_type = form_type;
-    word.lang = lang;
+    word.suffix = suffix;
     word.part_of_speech = part_of_speech;
     word = word.with_content(WordContents::new(content_items));
 

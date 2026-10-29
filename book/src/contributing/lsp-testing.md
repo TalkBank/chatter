@@ -50,6 +50,19 @@ preconditions.
 
 ## Automated protocol contracts
 
+Incoming ranged changes first construct `AdmittedDocumentEdit`, which holds
+the mutable source revision together with ordered UTF-8 byte boundaries.
+Construction distinguishes a valid boundary (including protocol line-end
+clamping) from a split UTF-16 character or nonexistent line. Only the admitted
+capability can apply the edit. A rejected batch transitions the existing
+document session to `AwaitingReplacement` and exposes no partly edited source.
+Read-only position conversion retains its documented tolerant clamping.
+
+The real-stdio `invalid_change_coordinates_require_a_full_replacement`
+regression covers split start/end endpoints, a missing line, discard of an
+earlier valid edit in the same batch, and full-text recovery. Library boundary
+controls retain overlong columns, final empty lines and LF/CRLF/CR behavior.
+
 The existing `position_conversion_tests` integration target includes position
 conversion and real stdio lifecycle cases. Discover its actual test names before
 selecting a focused regression:

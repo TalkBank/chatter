@@ -95,9 +95,9 @@ impl DependentTierEntry {
         self.tier.kind()
     }
 
-    /// The tier's source span, INCLUDING its `%label:` prefix.
+    /// The tier's source location, including its `%label:` prefix when located.
     ///
-    /// Forwards to [`DependentTier::span`], with the same reasoning as
+    /// Forwards to [`DependentTier::location`], with the same reasoning as
     /// [`Self::kind`]. For the content without the prefix, see
     /// [`Self::content_span`].
     pub fn location(&self) -> crate::Location {

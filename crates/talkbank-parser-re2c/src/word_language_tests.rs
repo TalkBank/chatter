@@ -29,7 +29,7 @@ fn word_language_markers_preserve_meaning_spelling_and_origin() {
                         .parse_word(&input, offset, &errors)
                         .into_option()
                         .unwrap();
-                    assert_eq!(word.lang.as_ref(), Some(expected), "{input}");
+                    assert_eq!(word.language_marker(), Some(expected), "{input}");
                     assert_eq!(word.to_chat_string(), input);
                     assert_eq!(
                         word.location,

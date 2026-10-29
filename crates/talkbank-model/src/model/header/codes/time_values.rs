@@ -111,7 +111,7 @@ enum TimeDurationState {
     Parsed {
         /// Structured time segments extracted from the text.
         #[span_shift(skip)]
-        segments: Vec<TimeSegment>,
+        segments: ParsedDurationSegments,
         /// Original text preserved for roundtrip.
         #[semantic_eq(skip)]
         #[span_shift(skip)]
@@ -150,11 +150,13 @@ impl TimeDurationValue {
     /// Parse a CHAT time duration string.
     ///
     /// Empty text stays absent; nonempty text is parsed or retained as unsupported.
+    /// Every comma-separated segment must parse; an empty or malformed segment
+    /// retains the entire value as unsupported rather than exposing a partial list.
     pub fn from_text(value: &str) -> Self {
         let state = if value.is_empty() {
             TimeDurationState::Empty
         } else {
-            match parse_duration_segments(value) {
+            match ParsedDurationSegments::parse(value) {
                 Some(segments) => TimeDurationState::Parsed {
                     segments,
                     raw: SmolStr::from(value),
@@ -177,7 +179,7 @@ impl TimeDurationValue {
     /// Returns the structured segments (empty for absent or unsupported text).
     pub fn segments(&self) -> &[TimeSegment] {
         match &self.state {
-            TimeDurationState::Parsed { segments, .. } => segments,
+            TimeDurationState::Parsed { segments, .. } => segments.as_slice(),
             TimeDurationState::Unsupported(_) | TimeDurationState::Empty => &[],
         }
     }
@@ -280,27 +282,47 @@ fn matches_duration_depfile(raw: &str) -> bool {
 }
 
 /// Parse comma-separated time segments from a duration string.
-fn parse_duration_segments(duration: &str) -> Option<Vec<TimeSegment>> {
-    let mut segments = Vec::new();
-    for segment in duration.split(',') {
-        let segment = segment.trim();
-        if segment.is_empty() {
-            continue;
+/// Complete, nonempty segment admission. No mutable view can empty this proof.
+#[derive(Clone, PartialEq, Eq, Hash, SemanticEq)]
+struct ParsedDurationSegments(Vec<TimeSegment>);
+
+impl ParsedDurationSegments {
+    fn parse(duration: &str) -> Option<Self> {
+        let mut parts = duration.split(',');
+        let first = parse_duration_segment(parts.next()?)?;
+        let mut segments = vec![first];
+        for part in parts {
+            segments.push(parse_duration_segment(part)?);
         }
-        let parsed = if let Some((left, right)) = segment.split_once('-') {
-            let start = parse_time_value_with_pair(left, TimePairMeaning::HoursMinutes)?;
-            let end = parse_time_value_with_pair(right, TimePairMeaning::HoursMinutes)?;
-            TimeSegment::Range { start, end }
-        } else if let Some((left, right)) = segment.split_once(';') {
-            let start = parse_time_value_with_pair(left, TimePairMeaning::HoursMinutes)?;
-            let end = parse_time_value_with_pair(right, TimePairMeaning::HoursMinutes)?;
-            TimeSegment::Range { start, end }
-        } else {
-            TimeSegment::Single(parse_time_value(segment)?)
-        };
-        segments.push(parsed);
+        Some(Self(segments))
     }
-    Some(segments)
+
+    fn as_slice(&self) -> &[TimeSegment] {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for ParsedDurationSegments {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+fn parse_duration_segment(segment: &str) -> Option<TimeSegment> {
+    let segment = segment.trim();
+    if let Some((left, right)) = segment.split_once('-') {
+        Some(TimeSegment::Range {
+            start: parse_time_value_with_pair(left, TimePairMeaning::HoursMinutes)?,
+            end: parse_time_value_with_pair(right, TimePairMeaning::HoursMinutes)?,
+        })
+    } else if let Some((left, right)) = segment.split_once(';') {
+        Some(TimeSegment::Range {
+            start: parse_time_value_with_pair(left, TimePairMeaning::HoursMinutes)?,
+            end: parse_time_value_with_pair(right, TimePairMeaning::HoursMinutes)?,
+        })
+    } else {
+        parse_time_value(segment).map(TimeSegment::Single)
+    }
 }
 
 /// Parse a single `HH:MM:SS`, `MM:SS`, bare `SS`, or any with `.mmm` millis.

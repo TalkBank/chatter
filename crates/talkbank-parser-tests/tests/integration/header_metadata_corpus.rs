@@ -4,7 +4,7 @@ use talkbank_model::model::{ChatOptionFlag, ChatOptionFlags};
 use talkbank_model::{ChatFile, ChatParser, ErrorCollector, Header, Line};
 use talkbank_parser_tests::repo_paths::workspace_root;
 use talkbank_transform::parse::{is_ca, is_no_align};
-use talkbank_transform::validate::validate_output;
+use talkbank_transform::validate::{OutputChecks, validate_output};
 
 fn reference(parser: &impl ChatParser, path: &str) -> ChatFile {
     let source = std::fs::read_to_string(workspace_root().join(path)).unwrap();
@@ -26,7 +26,7 @@ fn edited_option_policy(parser: &impl ChatParser) {
             utterance.forget_parse_provenance();
         }
     }
-    assert!(validate_output(&file, "edit").is_ok());
+    assert!(validate_output(&file, OutputChecks::Terminators).is_ok());
     let index = file
         .lines
         .iter()
@@ -35,14 +35,14 @@ fn edited_option_policy(parser: &impl ChatParser) {
     let header = file.lines.remove(index);
     assert!(!is_ca(&file), "removed CA header must stop waiving policy");
     assert!(
-        validate_output(&file, "edit")
+        validate_output(&file, OutputChecks::Terminators)
             .unwrap_err()
             .iter()
             .any(|error| { error.message.contains("lost its terminator") })
     );
     file.lines.insert(index, header);
     assert!(is_ca(&file), "restored header restores policy");
-    assert!(validate_output(&file, "edit").is_ok());
+    assert!(validate_output(&file, OutputChecks::Terminators).is_ok());
     for line in &mut file.lines {
         if let Line::Header { header, .. } = line
             && let Header::Options { options } = header.as_mut()

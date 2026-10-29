@@ -1,5 +1,7 @@
 //! Rejected file GRA retains source rather than exposing a fabricated graph.
 
+use super::completed;
+
 use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
 use talkbank_model::{ChatParser, DependentTier, ErrorCode, ErrorCollector, WriteChat};
 use talkbank_parser_tests::test_error::ParseProductTestExt;
@@ -106,7 +108,7 @@ fn both_backends_preserve_rejected_gra_source_and_wire_invalidity() {
                                 )
                                 .is_err()
                         );
-                        let findings = findings.into_vec();
+                        let findings = completed(findings).into_diagnostics();
                         assert!(
                             findings
                                 .iter()
@@ -140,7 +142,13 @@ fn parse(parser: &impl ChatParser, source: &str, offset: usize) -> talkbank_mode
         .parse_chat_file(source, offset, &errors)
         .into_option()
         .expect("recovery model");
-    assert!(errors.has_errors(), "rejection requires a diagnostic");
+    assert!(
+        completed(errors)
+            .diagnostics()
+            .iter()
+            .any(|error| error.severity == talkbank_model::Severity::Error),
+        "rejection requires a diagnostic"
+    );
     file
 }
 
@@ -150,7 +158,7 @@ fn reject_fragment(parser: &impl ChatParser, body: &str, offset: usize) {
         parser.parse_gra_tier(body, offset, &errors),
         talkbank_model::ParseOutcome::Rejected
     ));
-    let diagnostics = errors.into_vec();
+    let diagnostics = completed(errors).into_diagnostics();
     assert!(
         !diagnostics.is_empty(),
         "fragment rejection must be diagnosed"

@@ -22,6 +22,11 @@ construction overflowing on Windows before argument parsing began.
    error and returns the internal-failure status 3.
 
 Every ordinary handler returns `CommandResult<T>` through the dispatcher.
+`ExitStatus` owns the numeric process codes. The boundary returns that typed
+status, and both top-level help and JSON command discovery describe the same
+closed set. Help can no longer omit classified statuses by maintaining a
+separate hand-written table; machine discovery exposes the process contract
+without implying that every command can produce every status.
 `CommandStop` distinguishes already-rendered domain failures, usage diagnostics
 and human or machine output failures. The main thread consumes that result and
 returns `ExitCode`; handlers and signal callbacks do not terminate the process.

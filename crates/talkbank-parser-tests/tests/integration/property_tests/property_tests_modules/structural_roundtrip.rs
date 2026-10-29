@@ -113,7 +113,7 @@ proptest! {
                     parser.name(), input, output
                 );
                 prop_assert!(
-                    word.form_type.is_some(),
+                    word.form_type().is_some(),
                     "[{}] form_type missing for '{}'",
                     parser.name(), input
                 );
@@ -137,7 +137,7 @@ proptest! {
                     parser.name(), input, output
                 );
                 prop_assert!(
-                    word.lang.is_some(),
+                    word.language_marker().is_some(),
                     "[{}] lang missing for '{}'",
                     parser.name(), input
                 );
@@ -233,7 +233,7 @@ proptest! {
                     parser.name(), input, output
                 );
                 prop_assert!(word.category.is_some());
-                prop_assert!(word.form_type.is_some());
+                prop_assert!(word.form_type().is_some());
             }
         }
     }

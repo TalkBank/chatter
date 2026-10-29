@@ -81,17 +81,20 @@ pub(super) fn excluded_by_annotations(
     }
 }
 
-/// [`excluded_by_annotations`] shaped as a [`Verdict`], for the container path.
+/// [`excluded_by_annotations`] shaped as an [`EntryDecision`], for containers.
 ///
-/// Two views of ONE rule rather than two rules: a WORD is never atomic, so the
-/// word arms in the walkers want the boolean, while a container has three
-/// possible answers and wants the verdict.
+/// Two views of one rule: word arms use the exclusion predicate, while a
+/// container consumes an explicit entry decision. An annotation cannot grant
+/// atomic measurement; that belongs to the phonological/sign-group policy.
 #[inline]
-fn annotation_verdict(annotations: &[ContentAnnotation], domain: Option<TierDomain>) -> Verdict {
+fn annotation_verdict(
+    annotations: &[ContentAnnotation],
+    domain: Option<TierDomain>,
+) -> EntryDecision {
     if excluded_by_annotations(annotations, domain) {
-        Verdict::Excluded
+        EntryDecision::Excluded
     } else {
-        Verdict::Enter
+        EntryDecision::Enter
     }
 }
 
@@ -108,19 +111,22 @@ pub(super) enum AtomicKind {
     Sin,
 }
 
-/// What a traversal does with a container, before any payload is attached.
+/// Whether a traversal enters a container's contents.
+///
+/// An annotation or retrace cannot turn its container into an atomic unit.
+/// Measurement retains that distinct outcome in `Measured`/`Descent`; only
+/// mutable word traversal projects it to non-entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Verdict {
+enum EntryDecision {
     Enter,
-    Atomic,
     Excluded,
 }
 
 /// Payload-free projection of the typed measuring policy for mutable walks.
-/// Atomic and excluded remain distinct; neither is permission to enter.
+/// Neither an atomic unit nor excluded content permits entering its words.
 #[inline]
-fn measuring_verdict(kind: AtomicKind, domain: Option<TierDomain>) -> Verdict {
-    fn verdict<M: Measurement>(kind: AtomicKind) -> Verdict {
+fn measuring_verdict(kind: AtomicKind, domain: Option<TierDomain>) -> EntryDecision {
+    fn verdict<M: Measurement>(kind: AtomicKind) -> EntryDecision {
         // Only the decision is needed by mutable traversal; no AST payload is
         // fabricated or borrowed through a second route.
         let group = match kind {
@@ -128,9 +134,8 @@ fn measuring_verdict(kind: AtomicKind, domain: Option<TierDomain>) -> Verdict {
             AtomicKind::Sin => MeasuringGroup::Sin(()),
         };
         match M::measure(group) {
-            Measured::Enter => Verdict::Enter,
-            Measured::Atomic(_) => Verdict::Atomic,
-            Measured::Excluded => Verdict::Excluded,
+            Measured::Enter => EntryDecision::Enter,
+            Measured::Atomic(_) | Measured::Excluded => EntryDecision::Excluded,
         }
     }
     match domain {
@@ -155,10 +160,10 @@ fn measuring_verdict(kind: AtomicKind, domain: Option<TierDomain>) -> Verdict {
 /// `%mor` does not morphologically analyse retraced material. Every other
 /// domain includes it, because the speaker did produce it.
 #[inline]
-fn retrace_verdict(domain: Option<TierDomain>) -> Verdict {
+fn retrace_verdict(domain: Option<TierDomain>) -> EntryDecision {
     match domain {
-        Some(TierDomain::Mor) => Verdict::Excluded,
-        Some(TierDomain::Pho | TierDomain::Sin | TierDomain::Wor) | None => Verdict::Enter,
+        Some(TierDomain::Mor) => EntryDecision::Excluded,
+        Some(TierDomain::Pho | TierDomain::Sin | TierDomain::Wor) | None => EntryDecision::Enter,
     }
 }
 
@@ -320,20 +325,18 @@ pub(super) fn descend_for<'a, D: TraversalDomain>(
         }
         ContentStructure::Group(group @ (GroupRef::Angle(_) | GroupRef::Quotation(_))) => {
             match annotation_verdict(group.scoped_annotations(), domain) {
-                Verdict::Enter => into(group),
-                // An angle group or quotation is never a unit of its own; only a
-                // phonological or sign group is, which is what `AtomicKind` says.
-                Verdict::Atomic | Verdict::Excluded => Descent::Excluded,
+                EntryDecision::Enter => into(group),
+                EntryDecision::Excluded => Descent::Excluded,
             }
         }
         // Rule and rationale: `retrace_verdict`.
         ContentStructure::Retrace(retrace) => match retrace_verdict(domain) {
-            Verdict::Enter => Descent::Into(Entered {
+            EntryDecision::Enter => Descent::Into(Entered {
                 content: &retrace.inner().content,
                 // A retrace opens no code-switch scope; see `Entered`.
                 scope_annotations: &[],
             }),
-            Verdict::Atomic | Verdict::Excluded => Descent::Excluded,
+            EntryDecision::Excluded => Descent::Excluded,
         },
         ContentStructure::Word(_) | ContentStructure::Leaf(_) => Descent::Excluded,
     }
@@ -364,17 +367,13 @@ pub(super) fn descend_mut<'a>(
                 GroupKind::Angle | GroupKind::Quotation => annotation_verdict(annotations, domain),
             };
             match verdict {
-                Verdict::Enter => Some(content),
-                // A `_mut` traversal rewrites words and counts nothing, so it
-                // treats both refusals alike. Matched rather than compared with
-                // `== Verdict::Enter`, which a fourth variant would silently
-                // read as "does not enter".
-                Verdict::Atomic | Verdict::Excluded => None,
+                EntryDecision::Enter => Some(content),
+                EntryDecision::Excluded => None,
             }
         }
         ContainerMut::Retrace(content) => match retrace_verdict(domain) {
-            Verdict::Enter => Some(content),
-            Verdict::Atomic | Verdict::Excluded => None,
+            EntryDecision::Enter => Some(content),
+            EntryDecision::Excluded => None,
         },
     }
 }

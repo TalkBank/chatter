@@ -19,24 +19,25 @@
 //!
 //! Memory-efficient: streams files via iterator (no upfront collection),
 //! recreates parsers periodically to release tree-sitter's internal memory
-//! pool. Runs comfortably on a 64 GB machine (~200 MB peak).
+//! pool. Resource use depends on the selected population and build.
 //!
 //! # Why this is `#[ignore]`d, and what that costs
 //!
-//! It needs a corpus that no CI runner has, and it reads roughly 100,000
-//! files with two parsers, so it cannot sit in the inner loop. It is
+//! It needs an explicitly supplied external corpus and reads every selected
+//! file with two parsers, so it does not sit in the inner loop. It is
 //! therefore a NAMED target rather than folklore in a doc comment:
 //!
 //! ```bash
 //! just corpus-parse-equivalence
 //! ```
 //!
-//! What that costs is real and worth stating: this is the only test in the
-//! workspace that runs both parsers over real data, so between deliberate
-//! runs nothing here is watching. The parity baseline over spec cases
-//! compares CODES; this compares parsed MODELS, which is strictly more, and
-//! is why it still
-//! exists.
+//! This survey runs only when explicitly invoked; it provides no continuous
+//! observation of external data. The spec error-parity suite separately requires
+//! an error whenever tree-sitter reports one, without requiring identical codes.
+//! This survey compares parsed models. Those are different obligations: equal
+//! recovered models cannot establish error detection or input validity, and
+//! different recovered models need not violate the backend contract. The valid
+//! reference suite independently checks acceptance and semantic agreement.
 //!
 //! # It could pass by doing nothing, and on most machines it did
 //!
@@ -194,9 +195,7 @@ fn truncate(value: &str) -> String {
 const PARSER_RESET_INTERVAL: usize = 5_000;
 
 #[test]
-#[ignore = "needs the wild corpus, which no contributor has. This is the only \
-           test that runs both parsers over production data, so between \
-           deliberate runs nothing here is watching."]
+#[ignore = "requires an explicit external corpus via TALKBANK_DATA; model-comparison survey, not a validity gate"]
 fn full_corpus_parse_equivalence() {
     let base = CorpusRoot::resolve().require();
 

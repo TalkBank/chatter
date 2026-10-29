@@ -47,6 +47,14 @@ recovery support means representing what was observed, not weakening a checked
 constructor or filling required fields with plausible placeholders. Successful
 admission into `ValidChatFile` remains separate from a mutable recovery model.
 
+Freecode and postcode payloads distinguish classified text from retained
+unparsed source. Their private `TextPayload` can contain a code or missing
+content; it cannot contain an unparsed lexeme. The lexer-facing constructor
+consumes that classification: accepted text becomes a text payload, while
+missing content retains the supplied whole lexeme as recovery. Wire-imported
+text passes through the same text classifier. Validation still rejects missing
+and unparsed content, and serialization preserves their respective spelling.
+
 ### Literal admission and remaining recovery boundaries
 
 `non_empty_literal!` constructs `NonEmptyLiteral` evidence at compile time.
@@ -95,6 +103,50 @@ callers by moving the same fallback constructor into their local code.
 These removals do not ban literal text in authored CHAT. The text projection
 wrappers also support wire deserialization, so neither their types nor their
 successful deserialization certify source provenance or CHAT validity.
+
+### One word suffix
+
+`Word::suffix: Option<WordSuffix>` owns the word's single `@` slot. Its variants
+are `Form(FormType)` and `Language(WordLanguageMarker)`. The former independent
+form and language fields could hold two individually legal markers together,
+even though CHAT forbids that combination. Both parsers now admit external
+field pairs with `WordSuffix::from_markers` and retain that same value through
+lowering. Language rewrites mutate a borrowed language payload inside the slot.
+
+JSON retains the `form_type` and `lang` property names. Admission refuses two
+non-null values; explicit null and missing properties both express absence.
+Undeclared or repeated source-marker text stays in `FormType::Undeclared`, and
+shared validation reports E203 even after locations and parser diagnostics have
+been lost on JSON readback. Rendering preserves recovery text and does not
+certify validity.
+
+### Custom form labels
+
+`FormType::UserDefined(FormLabel)` represents a declared `@z:label` marker.
+`FormLabel::new` admits the shared grammar's nonempty ASCII-letter, digit and
+underscore alphabet without changing case or imposing a vocabulary. Both
+parsers, JSON deserialization and the schema use that boundary. Construct a
+custom form with `FormType::UserDefined(FormLabel::new("Code_9")?)`.
+Valid JSON retains its `{"z":"Code_9"}` shape. Undeclared markers remain
+`FormType::Undeclared` recovery values and still require validation; they are
+never promoted to declared custom forms by replacing their text.
+
+### Main-tier part-of-speech hints
+
+`Word::part_of_speech` is `Option<WordPosTag>`. The present payload is nonempty
+and contains only ASCII letters and colons, matching both parser grammars.
+`WordPosTag::new` and JSON deserialization use the same admission boundary;
+the JSON field remains a string, and its schema enforces that alphabet.
+`with_part_of_speech` accepts the admitted type. Case, repeated colons and
+custom labels retain their spelling; the type does not select a POS vocabulary
+or infer Universal Dependencies morphology.
+
+Native rich-word admission stores the shared tag directly, so lowering does
+not reconstruct or recheck a string. Tree-sitter lowers the bound `$tag`
+payload through the same constructor; a present but inadmissible payload
+rejects word lowering instead of disappearing into `None`. The writer consumes
+the admitted payload without repeating lexical checks. Optional absence and
+parser recovery remain separate from an ordinary present hint.
 
 ### Participant role evidence
 

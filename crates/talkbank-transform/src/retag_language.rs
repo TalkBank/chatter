@@ -146,11 +146,11 @@ fn names_code_in_span(chat_file: &ChatFile, from: &LanguageCode) -> bool {
 /// Retag one word's own `@s:code` marker.
 fn retag_word_item(item: WordItemMut<'_>, from: &LanguageCode, to: &LanguageCode) -> usize {
     match item {
-        WordItemMut::Word(word) => usize::from(retag_marker(&mut word.lang, from, to)),
+        WordItemMut::Word(word) => usize::from(retag_marker(word.language_marker_mut(), from, to)),
         WordItemMut::ReplacedWord(replaced) => {
-            let mut n = usize::from(retag_marker(&mut replaced.word.lang, from, to));
+            let mut n = usize::from(retag_marker(replaced.word.language_marker_mut(), from, to));
             for word in &mut replaced.replacement.words {
-                n += usize::from(retag_marker(&mut word.lang, from, to));
+                n += usize::from(retag_marker(word.language_marker_mut(), from, to));
             }
             n
         }
@@ -158,13 +158,13 @@ fn retag_word_item(item: WordItemMut<'_>, from: &LanguageCode, to: &LanguageCode
     }
 }
 
-/// Retag one `Option<WordLanguageMarker>`, reporting whether it moved.
+/// Retag a borrowed language payload, reporting whether it moved.
 fn retag_marker(
-    marker: &mut Option<WordLanguageMarker>,
+    marker: Option<&mut WordLanguageMarker>,
     from: &LanguageCode,
     to: &LanguageCode,
 ) -> bool {
-    let Some(WordLanguageMarker::Explicit(code)) = marker.as_mut() else {
+    let Some(WordLanguageMarker::Explicit(code)) = marker else {
         return false;
     };
     if code != from {

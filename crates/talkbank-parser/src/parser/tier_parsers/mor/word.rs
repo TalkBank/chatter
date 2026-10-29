@@ -109,11 +109,10 @@ pub fn parse_mor_word<'tree>(
     let mut features = Vec::new();
     for element in &children.child_3.slot {
         match &element.slot {
-            ReadableSlot::Present(feature) => {
-                if let ParseOutcome::Parsed(Some(feature)) = parse_mor_feature(*feature, errors)? {
-                    features.push(feature);
-                }
-            }
+            ReadableSlot::Present(feature) => match parse_mor_feature(*feature, errors)? {
+                ParseOutcome::Parsed(feature) => features.push(feature),
+                ParseOutcome::Rejected => return Ok(ParseOutcome::Rejected),
+            },
             ReadableSlot::Error(bad) => {
                 recovery_inside_healthy_tier(bad.raw_node(), bad.source(), MOR_WORD, errors);
                 return Ok(ParseOutcome::rejected());
@@ -210,10 +209,12 @@ fn missing_part(node: Node, message: &'static str, source: &str) -> ParseError {
 /// hyphen and feature-value positions as typed `Positioned` slots. A MISSING
 /// node at either position contradicts the tier's admission as recovery-free
 /// and reports the producer fault, like every other position in this file.
+/// A present feature produces one value or rejects its word; there is no
+/// successful absent-feature state that a caller can silently omit.
 fn parse_mor_feature<'tree>(
     typed: SourceBound<'tree, '_, MorFeatureNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<ParseOutcome<Option<MorFeature>>, crate::CstFailure> {
+) -> Result<ParseOutcome<MorFeature>, crate::CstFailure> {
     let source = typed.source();
     let bound_children = crate::parser::typed_cst::extract_inner(typed)?;
     surface_displaced(
@@ -234,18 +235,12 @@ fn parse_mor_feature<'tree>(
     }
 
     match children.child_1.slot.view() {
-        SlotView::Present(value_node) => {
-            if let Some(feature) = decode_feature_value(*value_node, errors) {
-                return Ok(ParseOutcome::parsed(Some(feature)));
-            }
-        }
+        SlotView::Present(value_node) => Ok(decode_feature_value(*value_node, errors)),
         SlotView::Missing(missing) => {
             recovery_inside_healthy_tier(missing.raw_node(), missing.source(), MOR_FEATURE, errors);
-            return Ok(ParseOutcome::rejected());
+            Ok(ParseOutcome::rejected())
         }
     }
-
-    Ok(ParseOutcome::parsed(None))
 }
 
 /// Decode a present `mor_feature_value` node; an empty text is a lexical
@@ -254,18 +249,18 @@ fn parse_mor_feature<'tree>(
 fn decode_feature_value<'tree>(
     typed: SourceBound<'tree, '_, MorFeatureValueNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Option<MorFeature> {
+) -> ParseOutcome<MorFeature> {
     let node = typed.raw_node();
     let text = typed.text();
     if !text.is_empty() {
-        Some(MorFeature::new(text))
+        ParseOutcome::Parsed(MorFeature::new(text))
     } else {
         errors.report(unexpected_node_error(
             node,
             typed.source(),
             "mor_feature_value empty",
         ));
-        None
+        ParseOutcome::Rejected
     }
 }
 
@@ -275,6 +270,57 @@ mod tests {
     use crate::TreeSitterParser;
     use crate::generated_traversal::SourceBindingError;
     use talkbank_model::ErrorCollector;
+
+    #[test]
+    fn rejected_feature_cannot_be_omitted_from_a_word() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E342_5.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let mut checked = 0;
+        let mut checked_items = 0;
+        for node in parsed.root().expect("root").descendants() {
+            let node = node.expect("readable node");
+            if let Some(item) = node.typed::<crate::generated_traversal::MorContentNode>()
+                && item.text() == "pron|it~aux|be-Fin--Ind"
+            {
+                checked_items += 1;
+                let errors = ErrorCollector::new();
+                assert!(
+                    super::super::item::parse_mor_content(item, &errors)
+                        .expect("typed structure")
+                        .is_rejected()
+                );
+                assert_eq!(
+                    errors.to_vec().len(),
+                    1,
+                    "retain the feature fault without a missing-word cascade"
+                );
+            }
+            let Some(word) = node.typed::<MorWordNode>() else {
+                continue;
+            };
+            if word.text() != "aux|be-Fin--Ind" {
+                continue;
+            }
+            checked += 1;
+            let errors = ErrorCollector::new();
+            // Deliberately exercise lowering below healthy-tier admission.
+            // Public tier parsing rejects this recovery before entering here.
+            assert!(
+                parse_mor_word(word, &errors)
+                    .expect("typed structure")
+                    .is_rejected()
+            );
+            assert_eq!(errors.to_vec().len(), 1);
+        }
+        assert_eq!(checked, 1, "spec must contain the rejected-feature word");
+        assert_eq!(checked_items, 1, "spec must contain its owning clitic item");
+    }
 
     #[test]
     fn real_feature_values_require_readable_source() {
@@ -301,7 +347,7 @@ mod tests {
             let errors = ErrorCollector::new();
             assert_eq!(
                 decode_feature_value(feature, &errors),
-                Some(MorFeature::new("Fin"))
+                ParseOutcome::Parsed(MorFeature::new("Fin"))
             );
             assert!(errors.to_vec().is_empty());
             // The decoder has no independent text parameter. Equal bytes in

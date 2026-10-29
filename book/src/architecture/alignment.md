@@ -143,6 +143,15 @@ index spaces: `MorAlignmentPair` uses `MainWordIndex`/`MorItemIndex`,
 uses `MainWordIndex`/`SinItemIndex`. Main-tier positions remain domain-relative;
 sharing `MainWordIndex` does not make Mor and Pho positions interchangeable.
 
+Index construction is also distinct from sequence admission. Zero-based index
+newtypes accept any `usize`; they identify a domain without certifying bounds
+or a particular transcript. `SemanticWordIndex1` additionally excludes zero,
+including on JSON import. Its `to_chunk_index()` safely subtracts one, but the
+result may still exceed the MOR tier's chunk count. `MorTier::chunk_at()` takes
+the raw zero-based index and returns `None` when no chunk exists. `GraHeadRef`
+classifies wire zero as `Root` and positive values as word references; this
+classification does not validate a dependency graph.
+
 `is_complete()` checks only that both indices are present;
 `is_placeholder()` checks for absence. Neither proves bounds, source identity
 or that a producer computed the row. Likewise,

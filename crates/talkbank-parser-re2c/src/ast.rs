@@ -8,14 +8,18 @@ use serde::Serialize;
 use talkbank_model::model::OverlapPointKind;
 
 pub(crate) mod chain;
+mod chain_atoms;
 mod content_ref;
+mod enclosure;
 mod file;
 pub use chain::Chain;
+pub use chain_atoms::{ParsedEvent, ZeroAction};
 pub use content_ref::{ContentChildren, ContentRef};
+pub use enclosure::Enclosure;
 
 mod word;
 pub use word::{
-    LengtheningRun, ParsedAnnotation, ReplacementParsed, ScopedAnnotationParsed,
+    LengtheningRun, ParsedAnnotation, ReplacementParsed, RetraceMarker, ScopedAnnotationParsed,
     ScopedOverlapIndex, WordBodyItem, WordWithAnnotations,
 };
 
@@ -141,7 +145,7 @@ pub enum ContentItem<'a> {
     Quotation(Quotation<'a>),
     /// A source-located event with its ordered, scoped annotations.
     /// Lowering chooses the shared bare or annotated shape once.
-    Event(talkbank_model::Event, Vec<ScopedAnnotationParsed<'a>>),
+    Event(ParsedEvent<'a>, Vec<ScopedAnnotationParsed<'a>>),
     /// Media bullet with lexer-owned numeric admission and original spelling.
     /// Rejected timing remains present until lowering, never a zero sentinel.
     MediaBullet {
@@ -180,9 +184,8 @@ pub enum ContentItem<'a> {
     /// grammar.js: nonword = choice(event, zero)
     /// With annotations: annotated_action; without: bare action.
     Action {
-        /// The omission marker as written; always `0` today, kept as text
-        /// because `%wor` reconstructs `raw_text` from it.
-        zero: &'a str,
+        /// The admitted standalone zero spelling and its source coordinates.
+        zero: ZeroAction<'a>,
         annotations: Vec<ScopedAnnotationParsed<'a>>,
     },
 }
@@ -245,15 +248,6 @@ impl<'a> ContentItem<'a> {
     }
 }
 
-/// The opening and closing delimiters of an enclosed run (`<` and `>`, or the
-/// two quotation marks), as written, so the construct can be placed from one
-/// to the other.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub struct Enclosure<'a> {
-    pub open: &'a str,
-    pub close: &'a str,
-}
-
 /// An unannotated group retains its delimiters through model lowering.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(transparent)]
@@ -261,21 +255,6 @@ pub struct EnclosedGroup<'a> {
     #[serde(skip)]
     pub enclosure: Enclosure<'a>,
     pub contents: Vec<ContentItem<'a>>,
-}
-
-impl Enclosure<'_> {
-    /// The extent from the opening delimiter through the closing one, when
-    /// both are slices of `source`.
-    pub fn span_in(
-        self,
-        source: crate::source_text::SourceText<'_>,
-    ) -> Option<talkbank_model::Span> {
-        Some(
-            source
-                .span_of(self.open)?
-                .merge(source.span_of(self.close)?),
-        )
-    }
 }
 
 /// What a retrace marker scopes over: the two shapes the chain fold builds,
@@ -318,7 +297,7 @@ pub struct Retrace<'a> {
     /// The retrace kind.
     pub kind: RetraceKindParsed,
     /// The retrace marker as written (`[/]`, `[//]`, ...), for placement.
-    pub marker: &'a str,
+    pub marker: RetraceMarker<'a>,
     /// Non-retrace annotations that followed the retrace marker (e.g., `[?]` after `[/]`).
     /// In grammar.js, annotations attach to `word_with_optional_annotations`, so
     /// they belong to the retrace, not the word inside it.
@@ -431,6 +410,16 @@ pub enum DependentTierParsed<'a> {
 mod children_tests {
     use super::*;
 
+    fn enclosure(text: &str) -> Enclosure<'_> {
+        let (split, _) = text.char_indices().nth(1).expect("two delimiter fixture");
+        Enclosure::new(
+            crate::source_text::SourceText::new(text),
+            &text[..split],
+            &text[split..],
+        )
+        .expect("ordered fixture delimiters")
+    }
+
     /// A distinguishable leaf to look for on the far side of a container.
     fn marker<'a>() -> ContentItem<'a> {
         ContentItem::Pause(talkbank_model::model::Pause::new(
@@ -441,15 +430,9 @@ mod children_tests {
 
     fn retrace<'a>(content: Vec<ContentItem<'a>>) -> ContentItem<'a> {
         ContentItem::Retrace(Retrace {
-            body: RetraceBody::Enclosed(
-                Enclosure {
-                    open: "<",
-                    close: ">",
-                },
-                content,
-            ),
+            body: RetraceBody::Enclosed(enclosure("<>"), content),
             kind: RetraceKindParsed::Complete,
-            marker: "[//]",
+            marker: RetraceMarker::new(crate::source_text::SourceText::new("[//]").whole_slice()),
             annotations: vec![],
         })
     }
@@ -478,10 +461,7 @@ mod children_tests {
             (
                 "Group",
                 ContentItem::Group(Group {
-                    enclosure: Enclosure {
-                        open: "<",
-                        close: ">",
-                    },
+                    enclosure: enclosure("<>"),
                     contents: vec![marker()],
                     annotations: vec![],
                 }),
@@ -489,10 +469,7 @@ mod children_tests {
             (
                 "Quotation",
                 ContentItem::Quotation(Quotation {
-                    enclosure: Enclosure {
-                        open: "\u{201C}",
-                        close: "\u{201D}",
-                    },
+                    enclosure: enclosure("\u{201C}\u{201D}"),
                     contents: vec![marker()],
                     annotations: vec![],
                 }),
@@ -500,20 +477,14 @@ mod children_tests {
             (
                 "PhoGroup",
                 ContentItem::PhoGroup(EnclosedGroup {
-                    enclosure: Enclosure {
-                        open: "‹",
-                        close: "›",
-                    },
+                    enclosure: enclosure("‹›"),
                     contents: vec![marker()],
                 }),
             ),
             (
                 "SinGroup",
                 ContentItem::SinGroup(EnclosedGroup {
-                    enclosure: Enclosure {
-                        open: "〔",
-                        close: "〕",
-                    },
+                    enclosure: enclosure("〔〕"),
                     contents: vec![marker()],
                 }),
             ),
@@ -532,10 +503,7 @@ mod children_tests {
     /// Every restricted container remains visible through a single retrace.
     #[test]
     fn single_retrace_descent_preserves_each_chain_container() {
-        let enclosure = Enclosure {
-            open: "<",
-            close: ">",
-        };
+        let enclosure = enclosure("<>");
         let cases = [
             Chain::Group(enclosure, vec![marker()], vec![]),
             Chain::Quotation(Quotation {
@@ -546,7 +514,9 @@ mod children_tests {
             Chain::Wrapped(Retrace {
                 body: RetraceBody::Enclosed(enclosure, vec![marker()]),
                 kind: RetraceKindParsed::Complete,
-                marker: "[//]",
+                marker: RetraceMarker::new(
+                    crate::source_text::SourceText::new("[//]").whole_slice(),
+                ),
                 annotations: vec![],
             }),
         ];
@@ -554,7 +524,9 @@ mod children_tests {
             let outer = ContentItem::Retrace(Retrace {
                 body: RetraceBody::Single(Box::new(chain)),
                 kind: RetraceKindParsed::Partial,
-                marker: "[/]",
+                marker: RetraceMarker::new(
+                    crate::source_text::SourceText::new("[/]").whole_slice(),
+                ),
                 annotations: vec![],
             });
             let mut children = outer.children();
@@ -576,8 +548,8 @@ mod children_tests {
     fn a_leaf_yields_nothing() {
         assert!(
             ContentItem::Event(
-                talkbank_model::Event::new(
-                    talkbank_model::Span::new(0, 8),
+                ParsedEvent::new(
+                    crate::source_text::SourceText::new("&=laughs").whole_slice(),
                     talkbank_model::EventType::new("laughs").unwrap(),
                 ),
                 Vec::new()
@@ -594,10 +566,7 @@ mod children_tests {
     #[test]
     fn descent_reaches_content_inside_a_pho_group() {
         let nested = ContentItem::PhoGroup(EnclosedGroup {
-            enclosure: Enclosure {
-                open: "‹",
-                close: "›",
-            },
+            enclosure: enclosure("‹›"),
             contents: vec![retrace(vec![])],
         });
         let found = nested

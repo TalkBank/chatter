@@ -173,17 +173,6 @@ fn assert_manifest_contracts(
     }
 }
 
-fn parse_json_lines(output: &Output) -> Result<Vec<Value>, TestError> {
-    stdout_string(output)
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            serde_json::from_str(line)
-                .map_err(|error| TestError::Failure(format!("expected JSONL output: {error}")))
-        })
-        .collect()
-}
-
 fn summary_event(events: &[Value]) -> &Value {
     events
         .iter()
@@ -375,7 +364,7 @@ fn validate_matrix_single_file_json_reports_cached_state() -> Result<(), TestErr
 
     let first = harness.run_validate(&file_path, &["--format", "json"])?;
     assert_success(&first, "first validate --format json");
-    let first_events = parse_json_lines(&first)?;
+    let first_events = crate::common::parse_json_lines(&first.stdout)?;
     let first_file = first_events
         .iter()
         .find(|event| event["type"].as_str() == Some("file"))
@@ -391,7 +380,7 @@ fn validate_matrix_single_file_json_reports_cached_state() -> Result<(), TestErr
 
     let second = harness.run_validate(&file_path, &["--format", "json"])?;
     assert_success(&second, "second validate --format json");
-    let second_events = parse_json_lines(&second)?;
+    let second_events = crate::common::parse_json_lines(&second.stdout)?;
     let second_file = second_events
         .iter()
         .find(|event| event["type"].as_str() == Some("file"))
@@ -428,7 +417,7 @@ fn validate_matrix_directory_json_stream_reports_summary_and_cache_hits() -> Res
 
     let first = harness.run_validate(&corpus, &["--format", "json"])?;
     assert_success(&first, "first directory validate --format json");
-    let first_events = parse_json_lines(&first)?;
+    let first_events = crate::common::parse_json_lines(&first.stdout)?;
     let first_summary = summary_event(&first_events);
     let first_file_events: Vec<_> = first_events
         .iter()
@@ -455,7 +444,7 @@ fn validate_matrix_directory_json_stream_reports_summary_and_cache_hits() -> Res
 
     let second = harness.run_validate(&corpus, &["--format", "json"])?;
     assert_success(&second, "second directory validate --format json");
-    let second_events = parse_json_lines(&second)?;
+    let second_events = crate::common::parse_json_lines(&second.stdout)?;
     let second_summary = summary_event(&second_events);
     let second_file_events: Vec<_> = second_events
         .iter()
@@ -514,15 +503,7 @@ fn validate_matrix_audit_mode_writes_jsonl_without_cache_writes() -> Result<(), 
     );
     assert!(audit_path.exists(), "audit output file should be created");
 
-    let audit_records: Vec<Value> = fs::read_to_string(&audit_path)?
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            serde_json::from_str(line).map_err(|error| {
-                TestError::Failure(format!("expected audit JSONL output: {error}"))
-            })
-        })
-        .collect::<Result<_, _>>()?;
+    let audit_records = crate::common::parse_json_lines(&fs::read(&audit_path)?)?;
 
     assert_eq!(audit_records.len(), 1);
     assert_eq!(

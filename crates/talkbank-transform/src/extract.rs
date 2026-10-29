@@ -253,7 +253,7 @@ fn push_word(out: &mut Vec<ExtractedWord>, word: &Word, scope: LanguageScope<'_>
         out,
         ChatCleanedText::from_word(word),
         ChatRawText::from_word_raw(word),
-        word.form_type.clone(),
+        word.form_type().cloned(),
         GoverningMark::of(word, scope.span()),
     );
 }

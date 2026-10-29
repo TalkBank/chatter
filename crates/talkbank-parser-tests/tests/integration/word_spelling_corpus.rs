@@ -74,8 +74,8 @@ fn phonological_fragments_preserve_typed_features_source_and_tier_policy() {
             .collect();
         assert_eq!(actual, sequence, "{spelling}");
         assert_eq!(word.category, Some(WordCategory::PhonologicalFragment));
-        assert_eq!(word.form_type, form);
-        assert_eq!(word.lang, None);
+        assert_eq!(word.form_type().cloned(), form);
+        assert_eq!(word.language_marker().cloned(), None);
         assert_eq!(word.part_of_speech, None);
         assert_eq!(
             source.get(
@@ -222,14 +222,14 @@ fn language_candidate_suffix_specs_preserve_every_code_and_source_spelling() {
                     WordItem::ReplacedWord(replaced) => &replaced.word,
                     WordItem::Separator(_) => return,
                 };
-                if word.lang.is_some() {
+                if word.language_marker().is_some() {
                     marked.push(word);
                 }
             });
         }
         assert_eq!(marked.len(), 1, "spec has exactly one suffix: {spec}");
         let word = marked[0];
-        let marker = word.lang.as_ref().expect("authored suffix retained");
+        let marker = word.language_marker().expect("authored suffix retained");
         let wire = match kind {
             "explicit" => serde_json::json!({"type": kind, "code": codes[0]}),
             "multiple" | "ambiguous" => serde_json::json!({"type": kind, "code": codes}),
@@ -261,7 +261,7 @@ fn language_candidate_suffix_specs_preserve_every_code_and_source_spelling() {
         let ParseOutcome::Parsed(fragment) = fragment else {
             panic!("authored suffix refused: {spec}");
         };
-        assert_eq!(fragment.lang.as_ref(), Some(marker), "{spec}");
+        assert_eq!(fragment.language_marker(), Some(marker), "{spec}");
         assert_eq!(fragment.location, word.location, "{spec}");
         assert_eq!(fragment.to_chat(), spelling, "{spec}");
         assert_eq!(file.to_chat_string(), source, "{spec}");
@@ -470,50 +470,47 @@ fn reference_word_wire_preserves_recorded_spelling_without_source_coordinates() 
                     rebuilt = rebuilt.with_category(category);
                     annotation_witnesses[0] += 1;
                 }
-                if let Some(form) = rebuilt.form_type.take() {
-                    rebuilt = rebuilt.with_form_type(form);
+                if rebuilt.form_type().is_some() {
                     annotation_witnesses[1] += 1;
                 }
                 if let Some(pos) = rebuilt.part_of_speech.take() {
                     rebuilt = rebuilt.with_part_of_speech(pos);
                     annotation_witnesses[2] += 1;
                 }
-                if let Some(marker) = rebuilt.lang.take() {
+                if let Some(suffix) = rebuilt.suffix.take() {
+                    rebuilt = rebuilt.with_suffix(suffix);
+                }
+                if let Some(marker) = rebuilt.language_marker() {
                     assert_eq!(
                         marker.is_shortcut(),
                         matches!(marker, WordLanguageMarker::Shortcut)
                     );
-                    match &marker {
+                    match marker {
                         WordLanguageMarker::Shortcut => {
                             assert!(marker.as_language().is_none());
                             assert!(marker.as_multiple().is_none());
                             assert!(marker.as_ambiguous().is_none());
-                            rebuilt = rebuilt.with_language_shortcut();
                             language_witnesses[0] += 1;
                         }
                         WordLanguageMarker::Explicit(code) => {
                             assert_eq!(marker.as_language(), Some(code));
                             assert!(marker.as_multiple().is_none());
                             assert!(marker.as_ambiguous().is_none());
-                            rebuilt = rebuilt.with_lang(code.clone());
                             language_witnesses[1] += 1;
                         }
                         WordLanguageMarker::Multiple(codes) => {
                             assert_eq!(marker.as_language(), codes.first());
                             assert_eq!(marker.as_multiple(), Some(codes.as_slice()));
                             assert!(marker.as_ambiguous().is_none());
-                            rebuilt.lang = Some(WordLanguageMarker::multiple(codes.clone()));
                             language_witnesses[2] += 1;
                         }
                         WordLanguageMarker::Ambiguous(codes) => {
                             assert_eq!(marker.as_language(), codes.first());
                             assert!(marker.as_multiple().is_none());
                             assert_eq!(marker.as_ambiguous(), Some(codes.as_slice()));
-                            rebuilt.lang = Some(WordLanguageMarker::ambiguous(codes.clone()));
                             language_witnesses[3] += 1;
                         }
                     }
-                    assert_eq!(rebuilt.lang.as_ref(), Some(&marker));
                 }
                 assert_eq!(rebuilt.cleaned_text(), word.cleaned_text());
                 assert_eq!(rebuilt.to_chat_string(), word.to_chat_string());
@@ -664,9 +661,9 @@ fn shortening_combinations_preserve_typed_order_suffixes_and_replacement_scope()
             })
             .collect();
         assert_eq!(actual, sequence, "{spelling}");
-        assert_eq!(word.form_type, form, "{spelling}");
+        assert_eq!(word.form_type().cloned(), form, "{spelling}");
         assert_eq!(
-            word.lang.as_ref(),
+            word.language_marker(),
             language.then_some(&WordLanguageMarker::Shortcut),
             "{spelling}"
         );
@@ -730,9 +727,9 @@ fn shortening_suffix_specs_do_not_supply_missing_spoken_material() {
             word.content().as_slice(),
             [WordContent::Shortening(_)]
         ));
-        assert_eq!(word.form_type, form);
+        assert_eq!(word.form_type().cloned(), form);
         assert_eq!(
-            word.lang.as_ref(),
+            word.language_marker(),
             language.then_some(&WordLanguageMarker::Shortcut)
         );
         assert_eq!(
@@ -885,8 +882,8 @@ fn ca_boundary_combinations_preserve_typed_order_and_source_spelling() {
             assert_eq!(&actual, sequence, "{spelling:?}");
             assert_eq!(word.cleaned_text(), *cleaned, "{spelling:?}");
             assert_eq!(word.category, None);
-            assert_eq!(word.form_type, None);
-            assert_eq!(word.lang, None);
+            assert_eq!(word.form_type().cloned(), None);
+            assert_eq!(word.language_marker().cloned(), None);
             assert_eq!(word.part_of_speech, None);
             assert_eq!(
                 source.get(

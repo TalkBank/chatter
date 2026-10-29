@@ -220,8 +220,12 @@ impl SemanticWordIndex1 {
         self.0.get()
     }
 
-    /// Convert to a 0-indexed [`MorChunkIndex`] suitable for
-    /// [`MorTier::chunk_at`](crate::model::MorTier::chunk_at).
+    /// Convert to a 0-indexed [`MorChunkIndex`] without underflow.
+    ///
+    /// This changes the numbering convention, not sequence membership. Pass
+    /// the result's `as_usize()` to [`MorTier::chunk_at`](crate::model::MorTier::chunk_at)
+    /// for checked lookup; a positive semantic index can still exceed a tier's
+    /// chunk count.
     #[inline]
     pub const fn to_chunk_index(self) -> MorChunkIndex {
         MorChunkIndex::new(self.0.get() - 1)

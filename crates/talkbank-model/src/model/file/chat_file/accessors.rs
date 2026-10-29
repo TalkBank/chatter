@@ -99,12 +99,12 @@ impl ChatFile {
 
     /// Finds the utterance whose main tier or a dependent tier contains `offset`.
     ///
-    /// Containment is HALF-OPEN (`start <= offset < end`), matching [`Span`]'s
-    /// documented semantics, so an offset sitting exactly at one utterance's
-    /// end belongs to the next utterance, never to both. This is the shared
-    /// home for "which utterance is byte N in": callers that want inclusive-end
-    /// behaviour (for example an editor cursor resting at the end of a word)
-    /// must widen the offset themselves and document why.
+    /// Containment is half-open (`start <= offset < end`), matching
+    /// [`crate::Span`]. An offset at a tier's end is excluded from that tier;
+    /// another tier contains it only if its own span includes the offset.
+    /// Unlocated tiers cannot match. If model spans overlap, the first matching
+    /// utterance in file order is returned. Callers that need an inclusive-end
+    /// cursor policy must apply it separately and document that choice.
     pub fn utterance_containing(&self, offset: usize) -> Option<&Utterance> {
         self.utterances().find(|utterance| {
             span_contains_half_open(utterance.main.location, offset)

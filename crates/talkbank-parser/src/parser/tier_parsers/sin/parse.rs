@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::generated_traversal::{
-    AdmittedSinGroupsChildren, AsRawNode, NoChild, RangeAdmittedChildren, Ranged, ReadableSlot,
+    AdmittedSinGroupsChildren, AsRawNode, RangeAdmittedChildren, Ranged, ReadableSlot,
     SinDependentTierChildren, SinDependentTierNode, SinGroupNode, SinGroupsNode, SourceBound,
     SourceChildren,
 };
@@ -197,11 +197,12 @@ fn lower_sin_groups<'tree, 'source>(
 /// Compiled admission excludes MISSING groups; Error and Absent remain independent.
 /// Present groups retain flat/grouped decoding; Error is diagnosed and Absent
 /// emits nothing. Source failures propagate independently of CHAT recovery.
-fn push_sin_group<'tree, 'source>(
+fn push_sin_group<'tree, 'source, A: crate::generated_traversal::Absence>(
     slot: &crate::generated_traversal::NonMissingKindSlot<
         'tree,
         SourceBound<'tree, 'source, SinGroupNode<'tree>>,
         Ranged<'source>,
+        A,
     >,
     errors: &impl ErrorSink,
     items: &mut Vec<SinItem>,
@@ -217,12 +218,15 @@ fn push_sin_group<'tree, 'source>(
                 "sin_groups",
             ));
         }
-        ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Absent(_) => {}
         ReadableSlot::Missing(missing) => match missing.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
     }
     Ok(())
 }
+
+#[cfg(test)]
+use crate::generated_traversal::NoChild;
 
 #[cfg(test)]
 mod range_tests {

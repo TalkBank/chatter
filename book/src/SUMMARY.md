@@ -93,6 +93,7 @@
 - [Coding Standards (Extended)](contributing/coding-standards-extended.md)
 - [Toward Chatter 1.0](contributing/one-zero-readiness.md)
 - [CI and Release](contributing/ci-and-release.md)
+- [Migrating to 0.33](contributing/migration-0.33.md)
 - [Migrating to 0.32](contributing/migration-0.32.md)
 - [Crates.io Publication](contributing/crates-io-publication.md)
 - [Quality Gates](contributing/quality-gates.md)

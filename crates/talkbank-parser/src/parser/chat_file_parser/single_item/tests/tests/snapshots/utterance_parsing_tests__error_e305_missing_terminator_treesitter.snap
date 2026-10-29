@@ -1,6 +1,6 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/utterance.rs
-assertion_line: 289
+assertion_line: 294
 expression: result
 ---
 Ok(
@@ -38,8 +38,7 @@ Ok(
                                 ],
                             ),
                             category: None,
-                            form_type: None,
-                            lang: None,
+                            suffix: None,
                             part_of_speech: None,
                             inline_bullet: None,
                             cached_cleaned_text: CachedStr(

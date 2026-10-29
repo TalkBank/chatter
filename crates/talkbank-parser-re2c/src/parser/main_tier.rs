@@ -258,14 +258,7 @@ fn unannotated_word<'tokens, 'a: 'tokens>(
     }
     .try_map(
         move |(raw_text, prefix, body_str, form_marker, lang_suffix_opt, pos_tag), _| {
-            let span = source.span_of(raw_text).ok_or_else(Default::default)?;
-            let word_source = source
-                .slice(span.to_range())
-                .map_err(|_| Default::default())?;
-            // A word has one @ suffix, not independent form and language slots.
-            if form_marker.is_some() && lang_suffix_opt.is_some() {
-                return Err(Default::default());
-            }
+            let word_source = source.bind_slice(raw_text).ok_or_else(Default::default)?;
             let form_marker = form_marker
                 .map(|payload| {
                     talkbank_model::model::FormType::from_payload(
@@ -284,14 +277,19 @@ fn unannotated_word<'tokens, 'a: 'tokens>(
             };
             let body = parse_word_body(body_str).map_err(|_| Default::default())?;
             let lang = lang_suffix_opt
-                .map(|codes| admit_word_language(if codes.is_empty() { None } else { Some(codes) }))
+                .map(admit_word_language)
+                .transpose()
+                .map_err(|_| Default::default())?;
+            let suffix = talkbank_model::WordSuffix::from_markers(form_marker, lang)
+                .map_err(|_| Default::default())?;
+            let pos_tag = pos_tag
+                .map(talkbank_model::WordPosTag::new)
                 .transpose()
                 .map_err(|_| Default::default())?;
             let word = WordWithAnnotations {
                 category,
                 body,
-                form_marker,
-                lang,
+                suffix,
                 pos_tag,
                 replacement: None,
                 annotations: Vec::new(),
@@ -309,10 +307,8 @@ fn zero_action<'tokens, 'a: 'tokens>(
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! { Token::Zero(zero) => zero }
         .try_map(move |zero, _| {
-            source
-                .span_of(zero)
-                .ok_or_else(Default::default)
-                .map(|_| zero)
+            let source = source.bind_slice(zero).ok_or_else(Default::default)?;
+            ZeroAction::new(source).map_err(|_| chumsky::error::EmptyErr::default())
         })
         .then(trailing_base_annotations(source))
         .map(|(zero, annotations)| {
@@ -339,12 +335,12 @@ fn event<'tokens, 'a: 'tokens>(
 ) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! { Token::Event(event) => event }
         .try_map(move |event, _| {
-            let location = source
-                .span_of(event.lexeme())
+            let source = source
+                .bind_slice(event.lexeme())
                 .ok_or_else(Default::default)?;
             let event_type = talkbank_model::EventType::new(event.text())
                 .map_err(|_| chumsky::error::EmptyErr::default())?;
-            Ok(talkbank_model::Event::new(location, event_type))
+            Ok(ParsedEvent::new(source, event_type))
         })
         .then(trailing_base_annotations(source))
         .map(|(event, annotations)| {
@@ -386,61 +382,60 @@ pub fn contents_parser<'tokens, 'a: 'tokens>(
         let enclosed = contents
             .clone()
             .try_map(|items, _| EnclosedContents::new(items).ok_or_else(Default::default));
-        // Group: < contents > annotations
+        // Admit each delimiter pair once, before folding any annotations.
         let group = select! { Token::LessThan(open) => open }
             .then(enclosed.clone())
             .then(select! { Token::GreaterThan(close) => close })
             .then(trailing_base_annotations(source))
-            .map(
-                |(((open, contents), close), annotations): (
-                    ((&'a str, EnclosedContents<'a>), &'a str),
-                    Vec<BaseAnnotation<'a>>,
-                )| {
-                    // Fold only annotations actually present in the token stream.
-                    // With none, retain the written bare group; the sink-bearing
-                    // dispatcher reports its missing annotation before lowering.
-                    Chain::Group(Enclosure { open, close }, contents.into_items(), Vec::new())
-                        .fold(annotations)
-                        .into_content_item()
-                },
-            );
+            .try_map(move |(((open, contents), close), annotations), _| {
+                let enclosure = Enclosure::new(source, open, close)
+                    .map_err(|_| chumsky::error::EmptyErr::default())?;
+                // A bare group remains bare; the sink-bearing dispatcher reports
+                // its missing annotation before lowering.
+                Ok(Chain::Group(enclosure, contents.into_items(), Vec::new())
+                    .fold(annotations)
+                    .into_content_item())
+            });
 
-        // grammar.js: quotation_with_optional_annotations. The same ordered
-        // chain owns scoped annotations and retraces for every seed kind.
+        // The same ordered chain owns quotation annotations and retraces.
         let quotation = select! { Token::LeftDoubleQuote(open) => open }
             .then(enclosed.clone())
             .then(select! { Token::RightDoubleQuote(close) => close })
             .then(trailing_base_annotations(source))
-            .map(|(((open, contents), close), annotations)| {
-                Chain::Quotation(Quotation {
-                    enclosure: Enclosure { open, close },
+            .try_map(move |(((open, contents), close), annotations), _| {
+                let enclosure = Enclosure::new(source, open, close)
+                    .map_err(|_| chumsky::error::EmptyErr::default())?;
+                Ok(Chain::Quotation(Quotation {
+                    enclosure,
                     contents: contents.into_items(),
                     annotations: Vec::new(),
                 })
                 .fold(annotations)
-                .into_content_item()
+                .into_content_item())
             });
 
-        // PhoGroup: ‹ contents ›
         let pho_group = select! { Token::PhoGroupBegin(open) => open }
             .then(enclosed.clone())
             .then(select! { Token::PhoGroupEnd(close) => close })
-            .map(|((open, contents), close)| {
-                ContentItem::PhoGroup(EnclosedGroup {
-                    enclosure: Enclosure { open, close },
+            .try_map(move |((open, contents), close), _| {
+                let enclosure = Enclosure::new(source, open, close)
+                    .map_err(|_| chumsky::error::EmptyErr::default())?;
+                Ok(ContentItem::PhoGroup(EnclosedGroup {
+                    enclosure,
                     contents: contents.into_items(),
-                })
+                }))
             });
 
-        // SinGroup: 〔 contents 〕
         let sin_group = select! { Token::SinGroupBegin(open) => open }
             .then(enclosed)
             .then(select! { Token::SinGroupEnd(close) => close })
-            .map(|((open, contents), close)| {
-                ContentItem::SinGroup(EnclosedGroup {
-                    enclosure: Enclosure { open, close },
+            .try_map(move |((open, contents), close), _| {
+                let enclosure = Enclosure::new(source, open, close)
+                    .map_err(|_| chumsky::error::EmptyErr::default())?;
+                Ok(ContentItem::SinGroup(EnclosedGroup {
+                    enclosure,
                     contents: contents.into_items(),
-                })
+                }))
             });
 
         // A single content item: one of many alternatives.
@@ -678,6 +673,27 @@ mod base_annotation_boundary_tests {
     }
 
     #[test]
+    fn malformed_rich_word_pos_payloads_are_rejected_at_admission() {
+        for payload in ["", "n v", "n\tv", "n\n@End", "n$adj", "n1", "名"] {
+            let tokens = [Token::Word {
+                raw_text: "word",
+                prefix: None,
+                body: "word",
+                form_marker: None,
+                lang_suffix: None,
+                pos_tag: Some(payload),
+            }];
+            assert!(
+                unannotated_word(SourceText::new("word"))
+                    .parse(tokens.as_slice())
+                    .into_result()
+                    .is_err(),
+                "accepted POS payload {payload:?}"
+            );
+        }
+    }
+
+    #[test]
     fn unknown_rich_word_prefix_is_rejected_instead_of_becoming_absent() {
         for prefix in ["", "&?", "00", "unknown"] {
             let tokens = [Token::Word {
@@ -728,9 +744,16 @@ mod base_annotation_boundary_tests {
                 ),
                 SourceText::new("[=! softly]").whole_slice(),
             )),
-            ParsedAnnotation::Retrace(RetraceKindParsed::Complete, "[//]"),
+            ParsedAnnotation::Retrace(
+                RetraceKindParsed::Complete,
+                crate::ast::RetraceMarker::new(SourceText::new("[//]").whole_slice()),
+            ),
         ] {
             assert!(BaseAnnotation::admit(annotation).is_some());
         }
     }
 }
+
+#[cfg(test)]
+#[path = "chain_atom_tests.rs"]
+mod chain_atom_tests;

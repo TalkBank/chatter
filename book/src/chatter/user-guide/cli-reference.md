@@ -278,6 +278,13 @@ This command overhaul makes a clean break: old spellings are not aliases.
 
 ## Exit codes and output
 
+`chatter --help` and the `exit_codes` array in
+`chatter commands list --format json` expose the same process contract used
+by the executable. The array describes possible process outcomes, not a claim
+that every command produces every outcome. Code 0 reflects the selected
+operation and policy; suppressed diagnostics and previewed changes are not
+proof of an independently clean or rewritten transcript.
+
 | Exit | Meaning |
 | --- | --- |
 | 0 | Command completed successfully under its selected policy |

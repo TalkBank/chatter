@@ -24,6 +24,167 @@ const ARTIFACTS: [Artifact; 7] = [
     Artifact::Rediarized,
 ];
 
+#[test]
+fn invalid_custom_form_json_refuses_chat_publication_without_touching_the_destination() {
+    let harness = CliHarness::new().expect("isolated CLI");
+    let root = tempfile::tempdir().expect("artifact directory");
+    let source =
+        crate::common::reference_fixture("corpus/reference/content/words-special-forms.cha");
+    let exported = harness
+        .streaming_command()
+        .args(["convert", "to-json"])
+        .arg(source)
+        .output()
+        .expect("export reference JSON");
+    assert!(
+        exported.status.success(),
+        "{}",
+        String::from_utf8_lossy(&exported.stderr)
+    );
+    let original: serde_json::Value =
+        serde_json::from_slice(&exported.stdout).expect("reference JSON");
+    let input = root.path().join("input.json");
+    let destination = root.path().join("output.cha");
+    for label in ["", "two words", "x\ty", "x\n@End", "x@f", "x$n", "x:y"] {
+        let mut wire = original.clone();
+        let marker = wire["lines"]
+            .as_array_mut()
+            .expect("line array")
+            .iter_mut()
+            .find_map(|line| line.pointer_mut("/main/content/content/0/form_type"))
+            .expect("reference form marker");
+        assert!(marker.as_str().is_some(), "existing declared marker");
+        *marker = serde_json::json!({ "z": label });
+        fs::write(
+            &input,
+            serde_json::to_vec(&wire).expect("malformed label JSON"),
+        )
+        .expect("input");
+        fs::write(&destination, b"retained destination bytes").expect("existing destination");
+        let refused = harness
+            .streaming_command()
+            .args(["convert", "from-json"])
+            .arg(&input)
+            .arg("--output")
+            .arg(&destination)
+            .output()
+            .expect("JSON import");
+        assert_eq!(refused.status.code(), Some(1));
+        assert!(refused.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&refused.stderr).contains("custom form label"));
+        assert_eq!(
+            fs::read(&destination).expect("retained destination"),
+            b"retained destination bytes"
+        );
+    }
+}
+
+#[test]
+fn invalid_pos_hint_json_refuses_chat_publication_without_touching_the_destination() {
+    let harness = CliHarness::new().expect("isolated CLI");
+    let root = tempfile::tempdir().expect("artifact directory");
+    let source = crate::common::reference_fixture("corpus/reference/word/pos-hint-vocabulary.cha");
+    let exported = harness
+        .streaming_command()
+        .args(["convert", "to-json"])
+        .arg(source)
+        .output()
+        .expect("export reference JSON");
+    assert!(
+        exported.status.success(),
+        "{}",
+        String::from_utf8_lossy(&exported.stderr)
+    );
+    let original: serde_json::Value =
+        serde_json::from_slice(&exported.stdout).expect("reference JSON");
+    let input = root.path().join("input.json");
+    let destination = root.path().join("output.cha");
+    for payload in ["", "n\tv", "n\n@End", "n$adj"] {
+        let mut wire = original.clone();
+        let tag = wire["lines"]
+            .as_array_mut()
+            .expect("line array")
+            .iter_mut()
+            .find_map(|line| line.pointer_mut("/main/content/content/0/part_of_speech"))
+            .expect("reference POS hint");
+        assert!(tag.as_str().is_some(), "existing hint is a string");
+        *tag = serde_json::json!(payload);
+        fs::write(
+            &input,
+            serde_json::to_vec(&wire).expect("malformed payload JSON"),
+        )
+        .expect("input");
+        fs::write(&destination, b"retained destination bytes").expect("existing destination");
+        let refused = harness
+            .streaming_command()
+            .args(["convert", "from-json"])
+            .arg(&input)
+            .arg("--output")
+            .arg(&destination)
+            .output()
+            .expect("JSON import");
+        assert_eq!(refused.status.code(), Some(1));
+        assert!(refused.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&refused.stderr).contains("word POS tag"));
+        assert_eq!(
+            fs::read(&destination).expect("retained destination"),
+            b"retained destination bytes"
+        );
+    }
+}
+
+#[test]
+fn conflicting_word_suffix_json_refuses_chat_publication_without_touching_the_destination() {
+    let harness = CliHarness::new().expect("isolated CLI");
+    let root = tempfile::tempdir().expect("artifact directory");
+    let source =
+        crate::common::reference_fixture("corpus/reference/content/words-special-forms.cha");
+    let exported = harness
+        .streaming_command()
+        .args(["convert", "to-json"])
+        .arg(source)
+        .output()
+        .expect("export reference JSON");
+    assert!(
+        exported.status.success(),
+        "{}",
+        String::from_utf8_lossy(&exported.stderr)
+    );
+    let mut wire: serde_json::Value =
+        serde_json::from_slice(&exported.stdout).expect("reference JSON");
+    let word = wire["lines"]
+        .as_array_mut()
+        .expect("line array")
+        .iter_mut()
+        .filter_map(|line| line.pointer_mut("/main/content/content/0"))
+        .find(|word| word.get("form_type").is_some())
+        .expect("reference form word");
+    word["lang"] = serde_json::json!({"type": "explicit", "code": "eng"});
+    let input = root.path().join("input.json");
+    let destination = root.path().join("output.cha");
+    fs::write(
+        &input,
+        serde_json::to_vec(&wire).expect("conflicting suffix JSON"),
+    )
+    .expect("input");
+    fs::write(&destination, b"retained destination bytes").expect("existing destination");
+    let refused = harness
+        .streaming_command()
+        .args(["convert", "from-json"])
+        .arg(&input)
+        .arg("--output")
+        .arg(&destination)
+        .output()
+        .expect("JSON import");
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(refused.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("only one '@' suffix"));
+    assert_eq!(
+        fs::read(&destination).expect("retained destination"),
+        b"retained destination bytes"
+    );
+}
+
 fn command(harness: &CliHarness, artifact: Artifact, root: &Path) -> Command {
     let mut command = harness.streaming_command();
     let input = root.join("inputs/media-bullets.cha");

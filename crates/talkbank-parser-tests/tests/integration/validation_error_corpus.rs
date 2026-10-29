@@ -56,8 +56,14 @@ mod word_body_recovery_contracts;
 #[path = "retained_recovery_corpus.rs"]
 mod retained_recovery_contracts;
 
+#[path = "retained_tier_recovery_corpus.rs"]
+mod retained_tier_recovery_contracts;
+
 #[path = "language_declaration_corpus.rs"]
 mod language_declaration_contracts;
+
+#[path = "shortened_marker_corpus.rs"]
+mod shortened_marker_contracts;
 
 #[path = "participant_recovery_corpus.rs"]
 mod participant_recovery_contracts;

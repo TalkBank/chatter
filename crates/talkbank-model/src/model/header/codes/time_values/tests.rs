@@ -99,6 +99,46 @@ fn duration_unsupported() {
 }
 
 #[test]
+fn duration_admission_requires_every_segment_and_preserves_rejected_text() {
+    use crate::model::{SemanticEq, WriteChat};
+
+    let clock = TimeDurationValue::from_text("00:00:00");
+    for text in [
+        " ",
+        ",",
+        " , ",
+        ",00:00:00",
+        "00:00:00,",
+        "00:00:00, ,01:00:00",
+        "00:00:00,broken",
+        "broken,00:00:00",
+    ] {
+        let value = TimeDurationValue::from_text(text);
+        assert!(value.segments().is_empty(), "partial admission: {text:?}");
+        assert!(!value.semantic_eq(&clock), "recovery became a clock");
+        assert_eq!(value.invalidity().unwrap().into_text(), text);
+        assert_eq!(value.to_chat_string(), text);
+        let wire = serde_json::to_string(&value).unwrap();
+        assert_eq!(wire, serde_json::to_string(text).unwrap());
+        let restored: TimeDurationValue = serde_json::from_str(&wire).unwrap();
+        assert_eq!(restored, value);
+        assert!(restored.segments().is_empty());
+    }
+    // Complete permissive shapes remain inspectable; admission is not validity.
+    for text in [
+        "00:00:00,01:00:00",
+        " 00:00:00 , 01:00:00 ",
+        "00:00-01:00,02:00;03:00",
+    ] {
+        let value = TimeDurationValue::from_text(text);
+        assert_eq!(value.segments().len(), 2);
+        assert_eq!(value.to_chat_string(), text);
+        assert!(value.invalidity().is_some());
+    }
+    assert!(TimeDurationValue::from_text("").invalidity().is_none());
+}
+
+#[test]
 fn duration_roundtrip() {
     for input in &["01:23:45", "00:00:00-01:30:00", "01:00:00, 02:00:00"] {
         let d = TimeDurationValue::from_text(input);

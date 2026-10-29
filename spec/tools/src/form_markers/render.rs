@@ -148,7 +148,7 @@ fn render_variants(registry: &FormMarkerRegistry) -> String {
             // than silently dropped.
             let body = match row.label {
                 LabelPolicy::Forbidden => format!("{},", row.variant),
-                LabelPolicy::Required { .. } => format!("{}(String),", row.variant),
+                LabelPolicy::Required { .. } => format!("{}(FormLabel),", row.variant),
             };
             format!(
                 "{doc}\n    #[serde(rename = {})]\n    {body}",
@@ -175,7 +175,7 @@ fn render_from_payload(registry: &FormMarkerRegistry) -> String {
             LabelPolicy::Required { .. } => {
                 let _ = writeln!(
                     required_arms,
-                    "                {code} => Some(FormType::{}(label.to_owned())),",
+                    "                {code} => FormLabel::new(label).ok().map(FormType::{}),",
                     row.variant
                 );
             }
@@ -219,13 +219,11 @@ fn render_from_payload(registry: &FormMarkerRegistry) -> String {
 {forbidden_arms}                    _ => None,
                 }}
             }}
-            // An empty label is unreachable through either parser (both require
-            // at least one character after the colon) and is refused here so it
-            // cannot be reached another way.
-            Some(label) if !label.is_empty() => match payload.code() {{
+            // Labels are admitted once by their shared lexical type, including
+            // independently supplied payloads outside either parser's alphabet.
+            Some(label) => match payload.code() {{
 {required_arms}                _ => None,
             }},
-            Some(_) => None,
         }};
         declared.ok_or_else(|| UndeclaredFormMarker::new(payload))
     }}"#
@@ -312,6 +310,7 @@ pub fn render_rust(registry: &FormMarkerRegistry) -> Result<String, RenderError>
 //! `UndeclaredFormMarker`, the `WriteChat` impl) are hand-written and live in
 //! `crate::model::content::word::form`.
 
+use crate::model::content::word::FormLabel;
 use crate::model::content::word::form::FormMarkerPayload;
 use crate::model::content::word::form::UndeclaredFormMarker;
 use schemars::JsonSchema;
@@ -345,8 +344,8 @@ pub enum FormType {{
     /// rather than a safe one. The re2c parser stored nothing at all, so the
     /// two parsers disagreed on the same input.
     ///
-    /// [`FormType::from_payload`] never returns this: it is reachable only
-    /// from a parser that has already reported the marker undeclared.
+    /// [`FormType::from_payload`] never returns this. Parsers use it after
+    /// reporting an undeclared marker; JSON may retain the same recovery state.
     #[serde(rename = "undeclared")]
     Undeclared(String),
 }}

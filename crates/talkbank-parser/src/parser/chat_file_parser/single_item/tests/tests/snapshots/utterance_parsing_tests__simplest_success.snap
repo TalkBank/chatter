@@ -40,8 +40,7 @@ Ok(
                                     ],
                                 ),
                                 category: None,
-                                form_type: None,
-                                lang: None,
+                                suffix: None,
                                 part_of_speech: None,
                                 inline_bullet: None,
                                 cached_cleaned_text: CachedStr(

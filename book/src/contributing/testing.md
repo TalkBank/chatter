@@ -104,9 +104,28 @@ Derive-generated methods need independent evidence too. A compiler-expansion
 and executable-symbol audit found the `SemanticEq`, `SemanticDiff` and
 `SpanShift` implementations for both `ActTier` and `UtteranceContent` in the
 runner but not in its LLVM function records. Instrumented collection helpers
-do not substitute for the missing element-method records. This is a measured
-attribution limit for those six methods, not a claim about every compiler or
-every derive. Keep generated behavior separate from handwritten source totals:
+do not substitute for the missing element-method records. A focused compiler
+probe also finds early coverage points but no final mappings or virtual counters
+for these methods immediately after `InstrumentCoverage`, while a handwritten
+equality control has both. Their absence from raw profiles precedes sparse
+profile merging. More test executions cannot supply instrumentation that the
+compiler did not emit.
+
+Inspect expansion spans when diagnosing this boundary. In the sampled methods,
+the function bodies occupy the source token naming their derive, rather than
+distinct written function bodies. The inspected compiler's
+[span refiner](https://github.com/rust-lang/rust/blob/7df81381d027710708209f36b98d11b1c88f8d2e/compiler/rustc_mir_transform/src/coverage/spans.rs)
+discards code spans equal to the whole body and only enlarges empty spans beside
+braces; its
+[branch mapper](https://github.com/rust-lang/rust/blob/7df81381d027710708209f36b98d11b1c88f8d2e/compiler/rustc_mir_transform/src/coverage/mappings.rs)
+excludes expanded branch spans. Early MIR coverage points and branch descriptions
+are not final mapping records. An absent mapping is not an execution count of
+zero, and changing source spans merely to obtain a percentage would not provide
+honest attribution.
+
+This is a measured attribution limit for those six methods on the inspected
+compiler, not a claim about every compiler or every derive. Keep generated
+behavior separate from handwritten source totals:
 use derive-owner shape tests and reference-backed model workflows, and retain
 the broader expansion-completeness obligation. Do not modify runtime code just
 to manufacture coverage mappings or silently adjust the denominator.
@@ -1197,9 +1216,16 @@ APIs must return `AsyncValidationError::Join` carrying that panic, not successfu
 completion, a document-validity refusal, or a `ValidChatFile` proof. This tests
 the task boundary; it introduces neither a new CHAT rule nor a production panic.
 
+Legacy level checks accept only `CompletedDiagnostics`; the canonical source
+loader admits parser findings before requesting a level. Internal failures
+remain separate from data-validation findings, while the existing L0 diagnostic
+code, context and location assertions remain intact.
+
 The legacy output-check contract uses canonical E243 and E362 control/error
 pairs to demonstrate a different boundary: `validate_output` can succeed on
-invalid CHAT because it checks only selected command invariants. A standalone
+invalid CHAT because it checks only the explicitly selected `OutputChecks`
+policy. Separate E705 and E362 controls distinguish morphology-count checks
+from terminal-timing checks and terminator-only checks. A standalone
 slash and backwards turn ordering are not covered by those limited checks.
 Consuming full validation must refuse those documents with their authored
 diagnostics, while issuing `ValidChatFile` proofs for the corresponding valid

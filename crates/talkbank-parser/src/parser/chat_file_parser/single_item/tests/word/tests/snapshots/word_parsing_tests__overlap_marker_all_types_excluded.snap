@@ -1,5 +1,6 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
+assertion_line: 12
 expression: result
 ---
 Ok(
@@ -109,8 +110,7 @@ Ok(
             ],
         ),
         category: None,
-        form_type: None,
-        lang: None,
+        suffix: None,
         part_of_speech: None,
         inline_bullet: None,
         cached_cleaned_text: CachedStr(

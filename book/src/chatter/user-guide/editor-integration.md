@@ -85,6 +85,10 @@ their own LSP client's configuration rather than pasting Lua into their settings
    with `chatter --tui-mode disable validate practice.cha`.
 
 The language server sees the editor's current buffer; the CLI sees saved bytes.
+Incremental edit endpoints must fall between complete UTF-16 characters on
+existing lines. Columns past an existing line clamp to its end. A malformed
+edit batch is discarded and the server asks the client for full text or a
+reopen; it withholds document-dependent results until synchronization returns.
 That difference explains many apparent disagreements. Errors, warnings and
 available features also depend on the selected validation policy and client
 capabilities. A quiet editor is not proof that a language server is attached.

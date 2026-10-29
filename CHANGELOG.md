@@ -9,6 +9,79 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-10-29
+
+This pre-1.0 minor release strengthens model admission, parser failure handling
+and source ownership. See the [0.33 migration guide](https://talkbank.github.io/chatter/contributing/migration-0.33.html)
+for replacements when upgrading from 0.32.1; older consumers should apply the
+[0.32 guide](https://talkbank.github.io/chatter/contributing/migration-0.32.html)
+first.
+
+### Changed
+
+- **Breaking model APIs:** `Word::suffix: Option<WordSuffix>` replaces the
+  independently mutable form/language fields and their builders. User-defined
+  forms carry checked `FormLabel` values, and POS hints carry `WordPosTag`.
+  JSON retains accepted spelling and property names but rejects conflicting
+  suffix fields and malformed labels/hints. Recovery remains explicitly invalid.
+- **Breaking transform APIs:** `validate_to_level` requires admitted
+  `CompletedDiagnostics`; `validate_output` takes a closed `OutputChecks` policy
+  instead of a command string. `SanitizedDocument::write_chat` preserves the
+  destination's associated error type. Owned-string roundtrips remove
+  `SerializationPass` and `RoundtripFailure::Serialization`.
+- **Breaking low-level parser APIs:** WOR lowering consumes `HealthyTier`
+  evidence. Native marker-chain, enclosure and retrace carriers own admitted
+  source extents. Native word-token language suffixes distinguish shortcut and
+  explicit-code payloads; their debugging JSON uses tagged objects. See the
+  migration guide for constructors, accessors and wire distinctions.
+- Generated traversal retains successful selected terminal-sequence decisions;
+  fixed members of those selected sequences cannot acquire an absent state.
+  MISSING/ERROR recovery remains distinct. Freecode/postcode payloads similarly
+  separate classified text from retained unparsed source.
+- Command discovery JSON adds `exit_codes`, sharing execution's typed status
+  definitions. Help names internal failure (3), required review (4) and forced
+  interruption (130), and distinguishes stderr log format from result encoding.
+- Shortening-only `(xxx)`, `(yyy)` and `(www)` report E209 in standard CHAT.
+  MOR mismatch previews display terminators separately from lexical positions.
+- Duration headers with empty comma-separated segments retain unsupported text
+  instead of exposing a partial clock list; valid duration spelling and policy
+  remain unchanged. Spec tooling uses Tera 2 with explicit template loading.
+
+### Fixed
+
+- Update the desktop E2E serializer dependency to exclude versions affected by
+  GHSA-m5mm-p8h7-m29v.
+- Text and JSON trace logs use stderr when enabled by verbosity or `RUST_LOG`,
+  preserving machine-readable command results on stdout.
+- Strict/lenient transform parsing and corpus divergence reports admit complete
+  diagnostic batches before accepting recovery models or classifying rejection.
+  Internal failures, including warning-severity findings, cannot become ordinary
+  input errors, successful recovery or a published comparison report.
+- Undeclared and repeated form-marker recovery remains E203-invalid after model
+  JSON readback, even without the original parser diagnostics. The shared model
+  owns this diagnostic, avoiding duplicate parser/model reports; repeated runs
+  name the one-suffix restriction.
+- Tree-sitter MOR payload rejection propagates to its owning word/item; rejected
+  picture payloads cannot disappear from successful segment assembly. Header
+  refusals retain their selected source text, and WOR cannot bypass tier admission.
+- LSP incremental edits refuse nonexistent lines and endpoints inside UTF-16
+  surrogate pairs. Refused batches lose synchronization until full text arrives;
+  columns beyond an existing line still clamp to its end.
+- File-location admission rejects directory tails and `.` components rather than
+  normalizing them into transcript names. Deleted-directory cache prefixes retain
+  their existing spelling and scope.
+- Derives and model macros preserve their generated API under raw identifiers,
+  colliding generic/const names and caller-defined prelude names or macros.
+  Empty `non_empty_literal!` input cannot bypass admission through a caller macro.
+
+### Known limits
+
+This release does not declare parser completeness, crates.io publication or
+acceptance of every packaged platform. Ordinary builds use committed generated
+artifacts; reproducing the typed traversal and metadata bridge still needs the
+exact maintainer-provided generator source, which is not yet publicly available.
+See the contributor grammar workflow and candidate-bound release checks.
+
 ## [0.32.1] - 2026-10-27
 
 This is the first published release in the 0.32 series. It includes the CLI
@@ -5930,7 +6003,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.32.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/TalkBank/chatter/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/TalkBank/chatter/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/TalkBank/chatter/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/TalkBank/chatter/compare/v0.30.0...v0.31.0

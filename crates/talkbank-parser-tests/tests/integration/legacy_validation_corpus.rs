@@ -1,15 +1,17 @@
 //! Limited compatibility checks are not full document-validity proofs.
 
 use talkbank_model::model::{ChatFile, SemanticEq, TranscriptName};
-use talkbank_model::{ErrorCollector, ParseError};
+use talkbank_model::{CompletedDiagnostics, ErrorCollector};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::repo_paths::workspace_root;
-use talkbank_transform::validate::{ValidityLevel, validate_output, validate_to_level};
+use talkbank_transform::validate::{
+    OutputChecks, ValidityLevel, validate_output, validate_to_level,
+};
 
 /// Keep the model and diagnostics from one parse together at this test boundary.
 struct ParsedSpec {
     file: ChatFile,
-    diagnostics: Vec<ParseError>,
+    diagnostics: CompletedDiagnostics,
 }
 
 impl ParsedSpec {
@@ -22,7 +24,8 @@ impl ParsedSpec {
         let file = parser.parse_chat_file_streaming(&source, &errors);
         Self {
             file,
-            diagnostics: errors.into_vec(),
+            diagnostics: CompletedDiagnostics::admit(errors.into_vec())
+                .expect("authored source must not cause internal failure"),
         }
     }
 }
@@ -32,7 +35,7 @@ fn spec_legacy_admission_preserves_parse_provenance_and_structural_policy() {
     let parser = TreeSitterParser::new().expect("parser");
     for fixture in ["E504_3", "E305_2", "E305_3"] {
         let parsed = ParsedSpec::load(&parser, fixture);
-        assert!(parsed.diagnostics.is_empty(), "{fixture}");
+        assert!(parsed.diagnostics.diagnostics().is_empty(), "{fixture}");
         for level in [
             ValidityLevel::Parseable,
             ValidityLevel::StructurallyComplete,
@@ -71,6 +74,7 @@ fn spec_legacy_admission_preserves_parse_provenance_and_structural_policy() {
     let malformed = ParsedSpec::load(&parser, "E702_1");
     let first = malformed
         .diagnostics
+        .diagnostics()
         .first()
         .expect("parse refusal witness");
     let errors = validate_to_level(
@@ -100,6 +104,7 @@ fn spec_legacy_admission_preserves_parse_provenance_and_structural_policy() {
     );
     let first = empty
         .diagnostics
+        .diagnostics()
         .first()
         .expect("empty-tier recovery witness");
     let errors = validate_to_level(
@@ -122,22 +127,34 @@ fn spec_legacy_admission_preserves_parse_provenance_and_structural_policy() {
 #[test]
 fn spec_legacy_output_checks_preserve_morphology_timing_and_ca_boundaries() {
     let parser = TreeSitterParser::new().expect("parser");
-    for (fixture, command, expected) in [
+    for (fixture, checks, expected) in [
         (
             "E705_2",
-            "morphotag",
+            OutputChecks::MorphologyCounts,
             Some("has 3 words but %mor has 2 items"),
         ),
-        ("E362_1", "align", Some("backwards timing")),
-        ("E362_3", "align", None),
-        ("E305_1", "align", Some("lost its terminator")),
-        ("E305_2", "align", None),
-        ("E305_3", "align", None),
+        ("E705_2", OutputChecks::Terminators, None),
+        ("E705_2", OutputChecks::UtteranceTiming, None),
+        ("E362_1", OutputChecks::MorphologyCounts, None),
+        ("E362_1", OutputChecks::Terminators, None),
+        (
+            "E362_1",
+            OutputChecks::UtteranceTiming,
+            Some("backwards timing"),
+        ),
+        ("E362_3", OutputChecks::UtteranceTiming, None),
+        (
+            "E305_1",
+            OutputChecks::UtteranceTiming,
+            Some("lost its terminator"),
+        ),
+        ("E305_2", OutputChecks::UtteranceTiming, None),
+        ("E305_3", OutputChecks::UtteranceTiming, None),
     ] {
         let parsed = ParsedSpec::load(&parser, fixture);
-        assert!(parsed.diagnostics.is_empty(), "{fixture}");
+        assert!(parsed.diagnostics.diagnostics().is_empty(), "{fixture}");
         let original = parsed.file.clone();
-        let result = validate_output(&parsed.file, command);
+        let result = validate_output(&parsed.file, checks);
         match expected {
             Some(message) => assert!(
                 result
@@ -156,7 +173,7 @@ fn spec_legacy_output_checks_preserve_morphology_timing_and_ca_boundaries() {
     let file = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&source))
         .expect("reference parses cleanly");
     assert!(
-        validate_output(&file, "morphotag").is_ok(),
+        validate_output(&file, OutputChecks::MorphologyCounts).is_ok(),
         "aligned morphology control"
     );
 }
@@ -175,13 +192,17 @@ fn spec_legacy_output_success_is_not_document_admission() {
     ] {
         let parsed = ParsedSpec::load(&parser, fixture);
         assert!(
-            parsed.diagnostics.is_empty(),
+            parsed.diagnostics.diagnostics().is_empty(),
             "{fixture}: clean syntax required"
         );
-        for command in ["align", "morphotag", "other"] {
+        for checks in [
+            OutputChecks::UtteranceTiming,
+            OutputChecks::MorphologyCounts,
+            OutputChecks::Terminators,
+        ] {
             assert!(
-                validate_output(&parsed.file, command).is_ok(),
-                "{fixture}: {command} is only a limited compatibility check",
+                validate_output(&parsed.file, checks).is_ok(),
+                "{fixture}: {checks:?} is only a limited compatibility check",
             );
         }
         let original = parsed.file.clone();

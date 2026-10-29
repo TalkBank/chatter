@@ -30,13 +30,17 @@ pub(crate) fn token_to_parsed_annotation<'a>(
             source.bind_slice(lexeme)?,
         )))
     };
+    let retrace = |kind, lexeme| {
+        Some(ParsedAnnotation::Retrace(
+            kind,
+            crate::ast::RetraceMarker::new(source.bind_slice(lexeme)?),
+        ))
+    };
     Some(match tok {
-        Token::RetracePartial(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Partial, s),
-        Token::RetraceComplete(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Complete, s),
-        Token::RetraceMultiple(s) => ParsedAnnotation::Retrace(RetraceKindParsed::Multiple, s),
-        Token::RetraceReformulation(s) => {
-            ParsedAnnotation::Retrace(RetraceKindParsed::Reformulation, s)
-        }
+        Token::RetracePartial(s) => retrace(RetraceKindParsed::Partial, s)?,
+        Token::RetraceComplete(s) => retrace(RetraceKindParsed::Complete, s)?,
+        Token::RetraceMultiple(s) => retrace(RetraceKindParsed::Multiple, s)?,
+        Token::RetraceReformulation(s) => retrace(RetraceKindParsed::Reformulation, s)?,
         Token::ScopedStressing(s) => scoped(A::Stressing, s)?,
         Token::ScopedContrastiveStressing(s) => scoped(A::ContrastiveStressing, s)?,
         Token::ScopedUncertain(s) => scoped(A::Uncertain, s)?,
@@ -184,6 +188,48 @@ mod tests {
     use super::*;
     use crate::source_text::SourceText;
     use talkbank_model::Span;
+
+    #[test]
+    fn retrace_admission_retains_coordinates_and_rejects_foreign_bytes() {
+        fn token(kind: RetraceKindParsed, text: &str) -> Token<'_> {
+            match kind {
+                RetraceKindParsed::Partial => Token::RetracePartial(text),
+                RetraceKindParsed::Complete => Token::RetraceComplete(text),
+                RetraceKindParsed::Multiple => Token::RetraceMultiple(text),
+                RetraceKindParsed::Reformulation => Token::RetraceReformulation(text),
+            }
+        }
+        let cases = [
+            ("[/]", RetraceKindParsed::Partial),
+            ("[//]", RetraceKindParsed::Complete),
+            ("[///]", RetraceKindParsed::Multiple),
+            ("[/-]", RetraceKindParsed::Reformulation),
+        ];
+        for (text, kind) in cases {
+            let input = format!("prefix {text}");
+            let source = SourceText::new(&input);
+            let lexeme = &input[7..];
+            let parsed = token_to_parsed_annotation(token(kind, lexeme), source)
+                .expect("source-owned retrace");
+            let ParsedAnnotation::Retrace(_, marker) = &parsed else {
+                panic!("expected retrace");
+            };
+            assert_eq!(marker.span(), Span::new(7, input.len()));
+            assert_eq!(marker.lexeme(), text);
+            assert_eq!(parsed.source_text(source), Some(lexeme));
+            assert_eq!(parsed.chat_text(), text);
+            let foreign = String::from(text);
+            assert!(token_to_parsed_annotation(token(kind, &foreign), source).is_none());
+            assert_eq!(parsed.span_in(SourceText::new(&foreign)), None);
+            assert_eq!(parsed.source_text(SourceText::new(&foreign)), None);
+            let at_zero =
+                token_to_parsed_annotation(token(kind, &foreign), SourceText::new(&foreign))
+                    .expect("independently admitted retrace");
+            assert_eq!(parsed, at_zero, "equality remains independent of location");
+            let encoded = serde_json::to_value(&parsed).expect("annotation serialization");
+            assert_eq!(encoded["Retrace"][1], text);
+        }
+    }
 
     #[test]
     fn scoped_admission_retains_coordinates_and_rejects_foreign_bytes() {

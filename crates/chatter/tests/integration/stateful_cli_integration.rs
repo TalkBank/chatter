@@ -54,32 +54,13 @@ const CHAT_WITH_ALIGNMENT_ERROR: &str = "@UTF8
 ";
 
 fn parse_json_lines_file(path: &Path) -> Result<Vec<Value>, TestError> {
-    fs::read_to_string(path)?
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            serde_json::from_str(line).map_err(|error| {
-                TestError::Failure(format!("expected audit JSONL output: {error}"))
-            })
-        })
-        .collect()
+    crate::common::parse_json_lines(&fs::read(path)?)
 }
 
 fn cache_stats_json(harness: &CliHarness) -> Result<Value, TestError> {
     let stats = harness.run_output(&["cache", "stats", "--format", "json"])?;
     assert_success(&stats, "cache stats --format json");
     parse_json(&stats)
-}
-
-fn parse_json_events(output: &std::process::Output) -> Result<Vec<Value>, TestError> {
-    stdout_string(output)
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            serde_json::from_str(line)
-                .map_err(|error| TestError::Failure(format!("expected JSONL output: {error}")))
-        })
-        .collect()
 }
 
 fn first_file_event(events: &[Value]) -> Result<&Value, TestError> {
@@ -281,10 +262,7 @@ fn unavailable_cache_preserves_json_validation_results() -> Result<(), TestError
             .output()?;
         assert_eq!(output.status.success(), valid, "{:?}", output);
         assert!(output.stderr.is_empty(), "{:?}", output);
-        let records: Vec<Value> = stdout_string(&output)
-            .lines()
-            .map(serde_json::from_str)
-            .collect::<Result<_, _>>()?;
+        let records: Vec<Value> = crate::common::parse_json_lines(&output.stdout)?;
         let warnings: Vec<_> = records
             .iter()
             .filter(|record| record["type"] == "cache" && record["action"] == "warning")
@@ -344,9 +322,8 @@ fn validate_force_respects_directory_boundaries_for_cache_clears() -> Result<(),
     // empty: two contradictory contracts, both green, because the sibling only
     // failed when a cache prune happened to fire.
     let forced_stdout = String::from_utf8_lossy(&forced.stdout);
-    let cleared: Vec<serde_json::Value> = forced_stdout
-        .lines()
-        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+    let cleared: Vec<serde_json::Value> = crate::common::parse_json_lines(&forced.stdout)?
+        .into_iter()
         .filter(|record| record["type"] == "cache" && record["action"] == "clear")
         .collect();
     assert_eq!(
@@ -373,7 +350,7 @@ fn validate_force_respects_directory_boundaries_for_cache_clears() -> Result<(),
         &shadow_after_force,
         "shadow file should stay cached after unrelated --force",
     );
-    let shadow_events = parse_json_events(&shadow_after_force)?;
+    let shadow_events = crate::common::parse_json_lines(&shadow_after_force.stdout)?;
     let shadow_file = first_file_event(&shadow_events)?;
     assert_eq!(shadow_file["status"].as_str(), Some("valid"));
     assert_eq!(shadow_file["cache_hit"].as_bool(), Some(true));
@@ -383,7 +360,7 @@ fn validate_force_respects_directory_boundaries_for_cache_clears() -> Result<(),
         &corpus_after_force,
         "forced directory should repopulate its cache entry",
     );
-    let corpus_events = parse_json_events(&corpus_after_force)?;
+    let corpus_events = crate::common::parse_json_lines(&corpus_after_force.stdout)?;
     let corpus_file = first_file_event(&corpus_events)?;
     assert_eq!(corpus_file["status"].as_str(), Some("valid"));
     assert_eq!(corpus_file["cache_hit"].as_bool(), Some(true));
@@ -400,7 +377,7 @@ fn skip_alignment_uses_distinct_cache_entries() -> Result<(), TestError> {
     let skip_alignment =
         harness.run_validate(&file_path, &["--skip-alignment", "--format", "json"])?;
     assert_success(&skip_alignment, "validate --skip-alignment --format json");
-    let skip_alignment_events = parse_json_events(&skip_alignment)?;
+    let skip_alignment_events = crate::common::parse_json_lines(&skip_alignment.stdout)?;
     let skip_alignment_file = first_file_event(&skip_alignment_events)?;
     assert_eq!(skip_alignment_file["status"].as_str(), Some("valid"));
     assert_eq!(skip_alignment_file["cache_hit"].as_bool(), Some(false));
@@ -410,7 +387,7 @@ fn skip_alignment_uses_distinct_cache_entries() -> Result<(), TestError> {
 
     let aligned = harness.run_validate(&file_path, &["--format", "json"])?;
     assert_failure(&aligned, "validate with alignment should still fail");
-    let aligned_events = parse_json_events(&aligned)?;
+    let aligned_events = crate::common::parse_json_lines(&aligned.stdout)?;
     let aligned_file = first_file_event(&aligned_events)?;
     assert_eq!(aligned_file["status"].as_str(), Some("invalid"));
 
@@ -423,7 +400,8 @@ fn skip_alignment_uses_distinct_cache_entries() -> Result<(), TestError> {
         &skip_alignment_again,
         "skip-alignment should reuse its own cached validation entry",
     );
-    let skip_alignment_again_events = parse_json_events(&skip_alignment_again)?;
+    let skip_alignment_again_events =
+        crate::common::parse_json_lines(&skip_alignment_again.stdout)?;
     let skip_alignment_again_file = first_file_event(&skip_alignment_again_events)?;
     assert_eq!(skip_alignment_again_file["status"].as_str(), Some("valid"));
     assert_eq!(skip_alignment_again_file["cache_hit"].as_bool(), Some(true));

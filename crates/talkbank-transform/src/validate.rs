@@ -9,7 +9,7 @@
 //!
 //! | Level | Name | Checks |
 //! |-------|------|--------|
-//! | L0 | Parseable | Supplied diagnostic slice is empty; no parsing occurs |
+//! | L0 | Parseable | Supplied completed diagnostic batch is empty; no parsing occurs |
 //! | L1 | StructurallyComplete | Declared speakers and languages present, utterance speakers declared, terminators present unless CA waives them |
 //! | L2 | MainTierValid | L1 plus rejection of a main tier with no content, linkers or language precode |
 //!
@@ -19,28 +19,41 @@
 //! partial model check, not an output-admission API.
 
 use talkbank_model::model::{CaOptionEffect, ChatFile, Line};
-use talkbank_model::{DiagnosticLocation, ParseError};
+use talkbank_model::{CompletedDiagnostics, DiagnosticLocation, ParseError};
 pub use talkbank_model::{GateValidationError as ValidationError, ValidityLevel};
 
 /// Run the selected cumulative legacy checks on an existing CHAT model.
 ///
 /// Returns `Ok(())` if these checks report nothing, or `Err` with all findings
 /// from levels up to the requested one. Success does not certify full CHAT
-/// validity, and the helper neither parses nor authenticates `parse_errors`.
+/// validity, and the helper neither parses nor binds the diagnostics to the model.
 ///
-/// Supply the producing parser's diagnostics (for example, from
-/// [`crate::parse::parse_lenient`]); any nonempty slice fails L0, without a
-/// severity filter. Its first diagnostic contributes the code, message,
-/// optional context text and location to the summary. Supplying an empty slice
-/// for a recovered model does not establish clean parser provenance.
+/// First admit the producing parser's full diagnostic batch through
+/// [`CompletedDiagnostics::admit`]. Internal failure must be handled separately,
+/// not summarized as an input-validation finding. Any nonempty completed batch
+/// fails L0, without a severity filter. Its first diagnostic contributes the
+/// code, message, optional context and location to the summary. Supplying an
+/// empty completed batch for a recovered model does not establish clean parser
+/// provenance.
+///
+/// Raw diagnostic slices cannot enter the partial-check boundary:
+///
+/// ```compile_fail
+/// use talkbank_model::ChatFile;
+/// use talkbank_transform::validate::{ValidityLevel, validate_to_level};
+/// fn unchecked(file: &ChatFile) {
+///     let _ = validate_to_level(file, &[], ValidityLevel::Parseable);
+/// }
+/// ```
 pub fn validate_to_level(
     file: &ChatFile,
-    parse_errors: &[ParseError],
+    parse_errors: &CompletedDiagnostics,
     level: ValidityLevel,
 ) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
 
-    // L0: Parseable, no parse errors
+    // L0: a completed diagnostic batch with no findings.
+    let parse_errors = parse_errors.diagnostics();
     if let Some(first) = parse_errors.first() {
         errors.push(ValidationError {
             message: format_l0_message(first, parse_errors.len()),
@@ -182,14 +195,27 @@ fn check_main_tier_valid(file: &ChatFile, errors: &mut Vec<ValidationError>) {
     }
 }
 
-/// Check selected output invariants for a legacy command integration.
+/// Explicit selection of partial output checks, not complete CHAT admission.
+/// Every selection checks terminator presence with the CA exemption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputChecks {
+    /// Terminator presence only.
+    Terminators,
+    /// Also compare existing MOR tier counts with main-tier positions.
+    MorphologyCounts,
+    /// Also reject unparsed or backwards terminal utterance timing.
+    UtteranceTiming,
+}
+
+/// Check explicitly selected partial output invariants.
 ///
 /// This receives no input document and therefore cannot prove preservation or
 /// absence of degradation. It checks required terminators, existing morphology
-/// tier counts for `morphotag`, and backwards utterance timing for `align`.
+/// tier counts for [`OutputChecks::MorphologyCounts`], and terminal utterance
+/// timing for [`OutputChecks::UtteranceTiming`].
 /// Success is not a full document-validity proof. The caller remains responsible
 /// for parse diagnostics and the stronger validation required by its workflow.
-pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<ValidationError>> {
+pub fn validate_output(file: &ChatFile, checks: OutputChecks) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
 
     // Check every utterance still has a terminator, unless `@Options: CA` has
@@ -205,20 +231,18 @@ pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<Validat
             {
                 let speaker = utt.main.speaker.as_str();
                 errors.push(ValidationError {
-                    message: format!(
-                        "After {command}: utterance by *{speaker} lost its terminator"
-                    ),
+                    message: format!("Output utterance by *{speaker} lost its terminator"),
                     level: ValidityLevel::StructurallyComplete,
                 });
             }
         }
     }
 
-    // Command-specific checks
-    match command {
-        "morphotag" => validate_morphotag_output(file, &mut errors),
-        "align" => validate_align_output(file, &mut errors),
-        _ => {}
+    // The caller must select a policy; unknown command strings cannot weaken it.
+    match checks {
+        OutputChecks::Terminators => {}
+        OutputChecks::MorphologyCounts => validate_morphology_counts(file, &mut errors),
+        OutputChecks::UtteranceTiming => validate_utterance_timing(file, &mut errors),
     }
 
     if errors.is_empty() {
@@ -228,8 +252,8 @@ pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<Validat
     }
 }
 
-/// Post-validation for morphotag: %mor word count must match main tier.
-fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
+/// Compare existing %mor tier counts with main-tier positions.
+fn validate_morphology_counts(file: &ChatFile, errors: &mut Vec<ValidationError>) {
     use talkbank_model::alignment::helpers::{PositionalDomain, count_tier_positions};
 
     for line in &file.lines {
@@ -252,7 +276,7 @@ fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>)
                         let speaker = utt.main.speaker.as_str();
                         errors.push(ValidationError {
                             message: format!(
-                                "After morphotag: *{speaker} has {word_count} words \
+                                "Output *{speaker} has {word_count} words \
                                  but %mor has {mor_count} items"
                             ),
                             level: ValidityLevel::MainTierValid,
@@ -264,20 +288,20 @@ fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>)
     }
 }
 
-/// Post-validation for align: check for backwards timing only.
+/// Check terminal utterance bullets for unparsed or backwards timing.
 ///
 /// Cross-speaker overlap is **normal** in conversation data (speakers talk
 /// over each other) and is valid CHAT. The real validator in `talkbank-model`
 /// handles all E362/E704 checks. We only flag clearly broken output here
 /// (end < start within a single utterance).
-fn validate_align_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
+fn validate_utterance_timing(file: &ChatFile, errors: &mut Vec<ValidationError>) {
     for line in &file.lines {
         if let Line::Utterance(utt) = line
             && let Some(ref bullet) = utt.main.content.bullet
         {
             let Some(bullet) = bullet.as_parsed() else {
                 errors.push(ValidationError {
-                    message: "After align: unparsed terminal timing".to_owned(),
+                    message: "Output has unparsed terminal timing".to_owned(),
                     level: ValidityLevel::MainTierValid,
                 });
                 continue;
@@ -289,7 +313,7 @@ fn validate_align_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
                 let speaker = utt.main.speaker.as_str();
                 errors.push(ValidationError {
                     message: format!(
-                        "After align: *{speaker} has backwards timing \
+                        "Output *{speaker} has backwards timing \
                          ({start} > {end})"
                     ),
                     level: ValidityLevel::MainTierValid,
@@ -303,26 +327,29 @@ fn validate_align_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
 mod tests {
     use super::*;
     use talkbank_parser::TreeSitterParser;
-    use talkbank_parser_tests::test_error::ParseProductTestExt;
+    use talkbank_parser_tests::test_error::strict_parse;
 
     const MOR_GRA_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
 @ID:\teng|test|CHI|3;|male|||Target_Child|||\n*CHI:\thello world .\n\
 %mor:\tn|hello n|world .\n%gra:\t1|2|SUBJ 2|0|ROOT 3|2|PUNCT\n@End\n";
 
-    /// `MOR_GRA_CHAT` below is a known-clean fixture, so `expect_built`'s
-    /// "was a model built" question is equivalent here to the old strict
-    /// "did it parse without error diagnostics" contract; this helper drops
-    /// the `Result` wrapper the pre-`ParseProduct` version needed, since
-    /// `expect_built` already panics on a bad fixture.
+    /// Require a built fixture without errors or internal failures before mutation.
     fn parse_chat_file(text: &str) -> talkbank_model::ChatFile {
         let parser = TreeSitterParser::new().expect("grammar loads");
-        parser.parse_chat_file(text).expect_built()
+        strict_parse(parser.parse_chat_file(text)).expect("fixture parses cleanly")
     }
 
     #[test]
     fn test_valid_file_passes_all_levels() {
         let chat = parse_chat_file(MOR_GRA_CHAT);
-        assert!(validate_to_level(&chat, &[], ValidityLevel::MainTierValid).is_ok());
+        assert!(
+            validate_to_level(
+                &chat,
+                &CompletedDiagnostics::admit(Vec::new()).expect("empty completed batch"),
+                ValidityLevel::MainTierValid
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -340,7 +367,8 @@ mod tests {
                 )
             })
             .collect();
-        let result = validate_to_level(&chat, &synthetic, ValidityLevel::Parseable);
+        let completed = CompletedDiagnostics::admit(synthetic).expect("input diagnostics");
+        let result = validate_to_level(&chat, &completed, ValidityLevel::Parseable);
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert_eq!(errors.len(), 1);
@@ -362,7 +390,7 @@ mod tests {
     fn test_morphotag_output_validates_alignment() {
         let chat = parse_chat_file(MOR_GRA_CHAT);
         // Valid morphotag output should pass
-        assert!(validate_output(&chat, "morphotag").is_ok());
+        assert!(validate_output(&chat, OutputChecks::MorphologyCounts).is_ok());
     }
 
     /// CA files with `@Options: CA` should not fail L1 validation for
@@ -393,7 +421,11 @@ mod tests {
         }
 
         // Should pass L1 because CA files skip the terminator check
-        let result = validate_to_level(&chat, &[], ValidityLevel::StructurallyComplete);
+        let result = validate_to_level(
+            &chat,
+            &CompletedDiagnostics::admit(Vec::new()).expect("empty completed batch"),
+            ValidityLevel::StructurallyComplete,
+        );
         assert!(
             result.is_ok(),
             "CA files should pass L1 even without terminators: {result:?}"
@@ -414,7 +446,11 @@ mod tests {
             }
         }
 
-        let result = validate_to_level(&chat, &[], ValidityLevel::StructurallyComplete);
+        let result = validate_to_level(
+            &chat,
+            &CompletedDiagnostics::admit(Vec::new()).expect("empty completed batch"),
+            ValidityLevel::StructurallyComplete,
+        );
         assert!(
             result.is_err(),
             "Non-CA files should fail without terminators"
@@ -434,7 +470,7 @@ mod tests {
             }
         }
 
-        let result = validate_output(&chat, "morphotag");
+        let result = validate_output(&chat, OutputChecks::MorphologyCounts);
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert!(errors[0].message.contains("lost its terminator"));
@@ -471,8 +507,8 @@ mod tests {
     #[test]
     fn red_fund_c_validate_to_level_preserves_parse_error_provenance() {
         let parser = TreeSitterParser::new().expect("grammar loads");
-        // Minimal CHAT with `%` on the main tier (line 6). Same parse
-        // failure The reporter's job hit on line 904 of her intermediate CHAT.
+        // The retained `%`-on-main-tier case exercises diagnostic provenance
+        // rather than a location-only summary.
         let malformed = "\
 @UTF8
 @Begin
@@ -483,6 +519,8 @@ mod tests {
 @End
 ";
         let (chat, parse_errors) = crate::parse::parse_lenient(&parser, malformed);
+        let completed = CompletedDiagnostics::admit(parse_errors).expect("input diagnostics");
+        let parse_errors = completed.diagnostics();
 
         // Precondition: the parser must actually produce at least one
         // structured parse error with the three pieces of provenance we
@@ -506,7 +544,7 @@ mod tests {
              {first:#?}"
         );
 
-        let result = validate_to_level(&chat, &parse_errors, ValidityLevel::Parseable);
+        let result = validate_to_level(&chat, &completed, ValidityLevel::Parseable);
         let errs = result.expect_err("malformed CHAT must fail L0");
         assert_eq!(errs.len(), 1, "expected exactly one L0 ValidationError");
         let msg = &errs[0].message;
@@ -550,22 +588,36 @@ mod tests {
     #[test]
     fn a_speaker_declared_without_an_id_is_not_reported_as_undeclared() {
         // MOT is declared and speaks; only its @ID is missing.
-        let chat = parse_chat_file(
+        let parser = TreeSitterParser::new().expect("grammar loads");
+        let (chat, findings) = crate::parse::parse_lenient(
+            &parser,
             "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tCHI Target_Child, MOT Mother\n\
 @ID:\teng|test|CHI|3;|male|||Target_Child|||\n\
 *CHI:\thello .\n*MOT:\thi .\n@End\n",
         );
 
+        let completed =
+            CompletedDiagnostics::admit(findings).expect("missing ID is a data finding");
+        let [missing_id] = completed.diagnostics() else {
+            panic!("expected exactly the missing-ID diagnostic");
+        };
+        assert_eq!(
+            missing_id.code,
+            talkbank_model::ErrorCode::SpeakerNotDefined
+        );
+        assert!(missing_id.message.contains("no matching @ID header"));
+
         assert!(
             chat.get_participant("MOT").is_none(),
             "precondition: the @ID join drops MOT, which is why the old check was wrong"
         );
 
-        let errors = match validate_to_level(&chat, &[], ValidityLevel::StructurallyComplete) {
-            Ok(()) => Vec::new(),
-            Err(errors) => errors,
-        };
+        let errors = validate_to_level(&chat, &completed, ValidityLevel::StructurallyComplete)
+            .expect_err("the retained missing-ID finding must fail L0");
+        assert_eq!(errors.len(), 1, "no additional structural finding");
+        assert_eq!(errors[0].level, ValidityLevel::Parseable);
+        assert!(errors[0].message.contains("E522"));
         let undeclared: Vec<&str> = errors
             .iter()
             .map(|e| e.message.as_str())
@@ -588,8 +640,12 @@ mod tests {
 *CHI:\thello .\n*XXX:\thi .\n@End\n",
         );
 
-        let errors = validate_to_level(&chat, &[], ValidityLevel::StructurallyComplete)
-            .expect_err("an undeclared speaker must fail the structural gate");
+        let errors = validate_to_level(
+            &chat,
+            &CompletedDiagnostics::admit(Vec::new()).expect("empty completed batch"),
+            ValidityLevel::StructurallyComplete,
+        )
+        .expect_err("an undeclared speaker must fail the structural gate");
         assert!(
             errors
                 .iter()

@@ -116,19 +116,60 @@ pub fn offset_to_position(text: &str, offset: usize) -> Position {
 /// Columns beyond a line clamp before its LF/CRLF/CR terminator. A column between
 /// surrogate units clamps to the character's start. Missing lines clamp to EOF.
 pub fn position_to_offset(text: &str, position: Position) -> usize {
+    match resolve_position(text, position) {
+        ResolvedPosition::Boundary(offset)
+        | ResolvedPosition::SplitCharacter(offset)
+        | ResolvedPosition::MissingLine(offset) => offset,
+    }
+}
+
+/// Resolution retains whether a byte boundary required lossy rounding.
+enum ResolvedPosition {
+    Boundary(usize),
+    SplitCharacter(usize),
+    MissingLine(usize),
+}
+
+/// Input edits may clamp past a line's end, but cannot split a character or
+/// refer to a line absent from the source revision.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum EditPositionError {
+    #[error("edit position {0:?} splits a UTF-16 character")]
+    SplitCharacter(Position),
+    #[error("edit position {0:?} names a nonexistent line")]
+    MissingLine(Position),
+}
+
+pub(crate) fn edit_position_to_offset(
+    text: &str,
+    position: Position,
+) -> Result<usize, EditPositionError> {
+    match resolve_position(text, position) {
+        ResolvedPosition::Boundary(offset) => Ok(offset),
+        ResolvedPosition::SplitCharacter(_) => Err(EditPositionError::SplitCharacter(position)),
+        ResolvedPosition::MissingLine(_) => Err(EditPositionError::MissingLine(position)),
+    }
+}
+
+fn resolve_position(text: &str, position: Position) -> ResolvedPosition {
     for (line, content) in protocol_lines(text).enumerate() {
         if line == position.line as usize {
             let mut units = 0;
             for (byte, ch) in content.text().char_indices() {
                 if units + ch.len_utf16() > position.character as usize {
-                    return content.start() + byte;
+                    let offset = content.start() + byte;
+                    return if units == position.character as usize {
+                        ResolvedPosition::Boundary(offset)
+                    } else {
+                        ResolvedPosition::SplitCharacter(offset)
+                    };
                 }
                 units += ch.len_utf16();
             }
-            return content.end();
+            return ResolvedPosition::Boundary(content.end());
         }
     }
-    text.len()
+    ResolvedPosition::MissingLine(text.len())
 }
 
 /// Finds the utterance at a cursor position.
@@ -152,6 +193,31 @@ pub fn find_utterance_at_position<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn edit_positions_preserve_line_end_clamping_without_surrogate_rounding() {
+        for ending in ["\n", "\r\n", "\r"] {
+            let source = format!("a😀{ending}b{ending}");
+            for (column, offset) in [(0, 0), (1, 1), (3, 5), (4, 5), (u32::MAX, 5)] {
+                assert_eq!(
+                    edit_position_to_offset(&source, Position::new(0, column)).unwrap(),
+                    offset
+                );
+            }
+            assert!(matches!(
+                edit_position_to_offset(&source, Position::new(0, 2)),
+                Err(EditPositionError::SplitCharacter(_))
+            ));
+            assert_eq!(
+                edit_position_to_offset(&source, Position::new(2, 0)).unwrap(),
+                source.len()
+            );
+            assert!(matches!(
+                edit_position_to_offset(&source, Position::new(3, 0)),
+                Err(EditPositionError::MissingLine(_))
+            ));
+        }
+    }
 
     #[test]
     fn line_index_and_standalone_offset_conversion_match() {

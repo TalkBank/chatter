@@ -322,6 +322,24 @@ fn file_identity_recovery_deleted_subtree_retains_exact_cache_scope() {
     std::fs::remove_dir(&removed).expect("empty parent test directory");
     let after = ResolvedPrefix::of(&removed).expect("deleted directory prefix");
     assert_eq!(prefix, after);
+    for suffix in ["/", "//", "/."] {
+        let mut spelling = removed.clone().into_os_string();
+        spelling.push(suffix);
+        assert_eq!(
+            ResolvedPrefix::of(std::path::Path::new(&spelling))
+                .expect("deleted directory spelling"),
+            after
+        );
+    }
+    let mut nested_spelling = nested.into_os_string();
+    nested_spelling.push("/");
+    let nested_scope = CacheScope::Under(
+        ResolvedPrefix::of(std::path::Path::new(&nested_spelling)).expect("deleted nested prefix"),
+    );
+    assert_eq!(
+        cache.count(&nested_scope).expect("nested transcript only"),
+        1
+    );
     let scope = CacheScope::Under(after);
     for _ in 0..2 {
         assert_eq!(cache.count(&scope).expect("read-only preview"), 2);

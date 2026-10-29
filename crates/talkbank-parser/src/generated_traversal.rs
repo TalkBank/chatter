@@ -1,4 +1,4 @@
-//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source bb523225b02c
+//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 506d72962267
 //! Source grammar digest (sha256): grammar.json=f5f0c4787d4fc519ea69b61baa84c71e4a2a63769ac066ddfce004ddf00e6c84 node-types.json=3b9f516962054661b567348f5247845c7d341f50c44f574f3a0ddf8e65cf9bb6
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
@@ -811,12 +811,13 @@ pub type ChildSlot<'tree, T, R = Raw> = <R as RangePhase<'tree>>::Slot<
 ///
 /// Its kind is not one the compiled grammar can prove never MISSING, so its
 /// `Missing` payload is `KindMissing<T>` under every kind proof.
-pub type KindSlot<'tree, T, R = Raw> = <R as RangePhase<'tree>>::Slot<
+/// `A` retains the caller's absence evidence; the default permits absence.
+pub type KindSlot<'tree, T, R = Raw, A = NoChild> = <R as RangePhase<'tree>>::Slot<
     T,
     <R as RangePhase<'tree>>::KindMissing<T>,
     <R as RangePhase<'tree>>::Node,
     Never,
-    NoChild,
+    A,
 >;
 /// A retained repeat or present-optional child with a proven concrete kind.
 /// Selection rules out absence, not MISSING or ERROR recovery.
@@ -830,13 +831,14 @@ pub type SelectedKindSlot<'tree, T, R = Raw> = <R as RangePhase<'tree>>::Slot<
 /// A [`KindSlot`] whose kind the compiled grammar can prove never MISSING: a
 /// NARROWED slot. Its `Missing` payload is a [`NarrowedMissing`] under the
 /// carrier's kind proof `K`, uninhabited under [`KindAdmitted`].
-pub type NarrowedKindSlot<'tree, T, R = Raw, K = Broad> = <R as RangePhase<'tree>>::Slot<
-    T,
-    NarrowedMissing<K, <R as RangePhase<'tree>>::KindMissing<T>>,
-    <R as RangePhase<'tree>>::Node,
-    Never,
-    NoChild,
->;
+pub type NarrowedKindSlot<'tree, T, R = Raw, K = Broad, A = NoChild> =
+    <R as RangePhase<'tree>>::Slot<
+        T,
+        NarrowedMissing<K, <R as RangePhase<'tree>>::KindMissing<T>>,
+        <R as RangePhase<'tree>>::Node,
+        Never,
+        A,
+    >;
 /// A [`SelectedKindSlot`] whose kind is narrowed, as for [`NarrowedKindSlot`].
 pub type SelectedNarrowedKindSlot<'tree, T, R = Raw, K = Broad> = <R as RangePhase<'tree>>::Slot<
     T,
@@ -846,7 +848,8 @@ pub type SelectedNarrowedKindSlot<'tree, T, R = Raw, K = Broad> = <R as RangePha
     Never,
 >;
 /// A narrowed kind slot under the admitted kind proof: never MISSING.
-pub type NonMissingKindSlot<'tree, T, R = Raw> = NarrowedKindSlot<'tree, T, R, KindAdmitted>;
+pub type NonMissingKindSlot<'tree, T, R = Raw, A = NoChild> =
+    NarrowedKindSlot<'tree, T, R, KindAdmitted, A>;
 /// A narrowed retained repeat/optional kind under the admitted kind proof:
 /// never MISSING, and absence is impossible.
 pub type SelectedNonMissingKindSlot<'tree, T, R = Raw> =
@@ -3391,6 +3394,61 @@ impl<'tree, C: Classify> Position<'tree> for Terminal<C> {
     }
     fn absorbed(error: tree_sitter::Node<'tree>) -> Self::Placed {
         TerminalPlaced::Error(error)
+    }
+}
+/// Successful terminal selection owns one actual decision per member.
+/// Construction consumes this array; it neither re-matches a member nor
+/// has an unmatched case from which to manufacture an Absent slot.
+struct SelectedTerminals<'tree, const N: usize> {
+    decisions: [Decided<'tree, (Taken<'tree>, ())>; N],
+}
+/// A terminal-only sequence and its generated, arity-bound selector.
+#[derive(Clone, Copy)]
+struct TerminalSequence<'tree, const N: usize> {
+    shape: &'static ReconShape,
+    select:
+        for<'p> fn(&ChoiceProbe<'p, 'tree>) -> Option<(SelectedTerminals<'tree, N>, ChildIndex)>,
+}
+enum TerminalSequencePlaced<'tree, const N: usize> {
+    Selected(SelectedTerminals<'tree, N>),
+    Error(tree_sitter::Node<'tree>),
+}
+impl<'tree, const N: usize> Position<'tree> for TerminalSequence<'tree, N> {
+    type Decision = Decided<'tree, (ChildIndex, SelectedTerminals<'tree, N>)>;
+    type Placed = TerminalSequencePlaced<'tree, N>;
+    fn decide(
+        self,
+        cont: &Cont,
+        children: &[tree_sitter::Node<'tree>],
+        start: ChildIndex,
+        memo: &Memo,
+    ) -> Option<(Self::Decision, ChildIndex)> {
+        position_decide(self.shape, cont, children, start, memo, |at| {
+            let probe = ChoiceProbe {
+                children,
+                cont,
+                start: at,
+                memo,
+                head: Taken::at(children, skip_extras(children, at)),
+            };
+            (self.select)(&probe).map(|(selected, end)| ((at, selected), end))
+        })
+    }
+    fn place(
+        decision: Self::Decision,
+        cursor: &mut Cursor<'_, 'tree>,
+        extras: &mut Vec<Extra<'tree>>,
+    ) -> Self::Placed {
+        match decision {
+            Decided::Error(error) => TerminalSequencePlaced::Error(cursor.take(error, extras)),
+            Decided::Value((at, selected)) => {
+                cursor.sweep(at, extras);
+                TerminalSequencePlaced::Selected(selected)
+            }
+        }
+    }
+    fn absorbed(error: tree_sitter::Node<'tree>) -> Self::Placed {
+        TerminalSequencePlaced::Error(error)
     }
 }
 /// A sequence position: the sequence's members are built at the cursor
@@ -18499,12 +18557,12 @@ static SHAPE_310: ReconShape = ReconShape::Kind(KindIdentity::Named("tier_body")
 static SHAPE_311: ReconShape = ReconShape::Positioned(&SHAPE_310);
 static SHAPE_312: ReconShape = ReconShape::Kind(KindIdentity::Named("star"));
 static SHAPE_313: ReconShape = ReconShape::Positioned(&SHAPE_312);
-static SHAPE_314: ReconShape = ReconShape::Kind(KindIdentity::Named("media_type"));
+static SHAPE_314: ReconShape = ReconShape::Kind(KindIdentity::Named("media_status"));
 static SHAPE_315: ReconShape = ReconShape::Positioned(&SHAPE_314);
-static SHAPE_316: ReconShape = ReconShape::Kind(KindIdentity::Named("media_status"));
-static SHAPE_317: ReconShape = ReconShape::Positioned(&SHAPE_316);
-static SHAPE_318: ReconShape = ReconShape::Seq(&SHAPES_114);
-static SHAPE_319: ReconShape = ReconShape::Positioned(&SHAPE_318);
+static SHAPE_316: ReconShape = ReconShape::Seq(&SHAPES_114);
+static SHAPE_317: ReconShape = ReconShape::Kind(KindIdentity::Named("media_type"));
+static SHAPE_318: ReconShape = ReconShape::Positioned(&SHAPE_317);
+static SHAPE_319: ReconShape = ReconShape::Positioned(&SHAPE_316);
 static SHAPE_320: ReconShape = ReconShape::Optional(&SHAPE_319);
 static SHAPE_321: ReconShape = ReconShape::Kind(KindIdentity::Named("media_filename"));
 static SHAPE_322: ReconShape = ReconShape::Positioned(&SHAPE_321);
@@ -18662,13 +18720,13 @@ static SHAPE_473: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("[%"));
 static SHAPE_474: ReconShape = ReconShape::Positioned(&SHAPE_473);
 static SHAPE_475: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_tier_prefix"));
 static SHAPE_476: ReconShape = ReconShape::Positioned(&SHAPE_475);
-static SHAPE_477: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_words"));
-static SHAPE_478: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_grouped_content"));
-static SHAPE_479: ReconShape = ReconShape::Positioned(&SHAPE_478);
-static SHAPE_480: ReconShape = ReconShape::Seq(&SHAPES_169);
+static SHAPE_477: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_grouped_content"));
+static SHAPE_478: ReconShape = ReconShape::Positioned(&SHAPE_477);
+static SHAPE_479: ReconShape = ReconShape::Seq(&SHAPES_169);
+static SHAPE_480: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_words"));
 static SHAPE_481: ReconShape = ReconShape::Choice(&SHAPES_170, MissingHeads::Kinds(&KINDS_32));
 static SHAPE_482: ReconShape = ReconShape::Positioned(&SHAPE_481);
-static SHAPE_483: ReconShape = ReconShape::Positioned(&SHAPE_477);
+static SHAPE_483: ReconShape = ReconShape::Positioned(&SHAPE_480);
 static SHAPE_484: ReconShape = ReconShape::Seq(&SHAPES_172);
 static SHAPE_485: ReconShape = ReconShape::Positioned(&SHAPE_484);
 static SHAPE_486: ReconShape = ReconShape::Repeat(&SHAPE_485);
@@ -18729,13 +18787,13 @@ static SHAPE_540: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_groups"
 static SHAPE_541: ReconShape = ReconShape::Positioned(&SHAPE_540);
 static SHAPE_542: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_tier_prefix"));
 static SHAPE_543: ReconShape = ReconShape::Positioned(&SHAPE_542);
-static SHAPE_544: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_word"));
-static SHAPE_545: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_grouped_content"));
-static SHAPE_546: ReconShape = ReconShape::Positioned(&SHAPE_545);
-static SHAPE_547: ReconShape = ReconShape::Seq(&SHAPES_197);
+static SHAPE_544: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_grouped_content"));
+static SHAPE_545: ReconShape = ReconShape::Positioned(&SHAPE_544);
+static SHAPE_546: ReconShape = ReconShape::Seq(&SHAPES_197);
+static SHAPE_547: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_word"));
 static SHAPE_548: ReconShape = ReconShape::Choice(&SHAPES_198, MissingHeads::Kinds(&KINDS_35));
 static SHAPE_549: ReconShape = ReconShape::Positioned(&SHAPE_548);
-static SHAPE_550: ReconShape = ReconShape::Positioned(&SHAPE_544);
+static SHAPE_550: ReconShape = ReconShape::Positioned(&SHAPE_547);
 static SHAPE_551: ReconShape = ReconShape::Seq(&SHAPES_200);
 static SHAPE_552: ReconShape = ReconShape::Positioned(&SHAPE_551);
 static SHAPE_553: ReconShape = ReconShape::Repeat(&SHAPE_552);
@@ -18778,10 +18836,10 @@ static SHAPE_589: ReconShape = ReconShape::Kind(KindIdentity::Named("t_prefix"))
 static SHAPE_590: ReconShape = ReconShape::Positioned(&SHAPE_589);
 static SHAPE_591: ReconShape = ReconShape::Kind(KindIdentity::Named("tape_location_prefix"));
 static SHAPE_592: ReconShape = ReconShape::Positioned(&SHAPE_591);
-static SHAPE_593: ReconShape = ReconShape::Kind(KindIdentity::Named("text_segment"));
-static SHAPE_594: ReconShape = ReconShape::Positioned(&SHAPE_43);
-static SHAPE_595: ReconShape = ReconShape::Repeat(&SHAPE_18);
-static SHAPE_596: ReconShape = ReconShape::Seq(&SHAPES_219);
+static SHAPE_593: ReconShape = ReconShape::Positioned(&SHAPE_43);
+static SHAPE_594: ReconShape = ReconShape::Repeat(&SHAPE_18);
+static SHAPE_595: ReconShape = ReconShape::Seq(&SHAPES_219);
+static SHAPE_596: ReconShape = ReconShape::Kind(KindIdentity::Named("text_segment"));
 static SHAPE_597: ReconShape = ReconShape::Choice(&SHAPES_220, MissingHeads::Kinds(&KINDS_41));
 static SHAPE_598: ReconShape = ReconShape::Positioned(&SHAPE_597);
 static SHAPE_599: ReconShape = ReconShape::Repeat(&SHAPE_598);
@@ -18850,11 +18908,11 @@ static SHAPE_661: ReconShape = ReconShape::Positioned(&SHAPE_660);
 static SHAPE_662: ReconShape = ReconShape::Positioned(&SHAPE_567);
 static SHAPE_663: ReconShape = ReconShape::Repeat(&SHAPE_662);
 static SHAPE_664: ReconShape = ReconShape::Positioned(&SHAPE_566);
-static SHAPE_665: ReconShape = ReconShape::Kind(KindIdentity::Named("final_codes"));
-static SHAPE_666: ReconShape = ReconShape::Positioned(&SHAPE_665);
-static SHAPE_667: ReconShape = ReconShape::Optional(&SHAPE_666);
-static SHAPE_668: ReconShape = ReconShape::Seq(&SHAPES_251);
-static SHAPE_669: ReconShape = ReconShape::Positioned(&SHAPE_668);
+static SHAPE_665: ReconShape = ReconShape::Seq(&SHAPES_251);
+static SHAPE_666: ReconShape = ReconShape::Kind(KindIdentity::Named("final_codes"));
+static SHAPE_667: ReconShape = ReconShape::Positioned(&SHAPE_666);
+static SHAPE_668: ReconShape = ReconShape::Optional(&SHAPE_667);
+static SHAPE_669: ReconShape = ReconShape::Positioned(&SHAPE_665);
 static SHAPE_670: ReconShape = ReconShape::Optional(&SHAPE_669);
 static SHAPE_671: ReconShape = ReconShape::Optional(&SHAPE_360);
 static SHAPE_672: ReconShape = ReconShape::Kind(KindIdentity::Named("videos_prefix"));
@@ -18876,17 +18934,17 @@ static SHAPE_687: ReconShape = ReconShape::Repeat(&SHAPE_686);
 static SHAPE_688: ReconShape = ReconShape::Kind(KindIdentity::Named("shortening"));
 static SHAPE_689: ReconShape = ReconShape::Kind(KindIdentity::Named("stress_marker"));
 static SHAPE_690: ReconShape = ReconShape::Choice(&SHAPES_266, MissingHeads::Kinds(&KINDS_45));
-static SHAPE_691: ReconShape = ReconShape::Kind(KindIdentity::Named("lengthening"));
-static SHAPE_692: ReconShape = ReconShape::Kind(KindIdentity::Named("ca_element"));
-static SHAPE_693: ReconShape = ReconShape::Kind(KindIdentity::Named("ca_delimiter"));
-static SHAPE_694: ReconShape = ReconShape::Kind(KindIdentity::Named("syllable_pause"));
-static SHAPE_695: ReconShape = ReconShape::Choice(&SHAPES_267, MissingHeads::Kinds(&KINDS_46));
-static SHAPE_696: ReconShape = ReconShape::Choice(&SHAPES_268, MissingHeads::Kinds(&KINDS_47));
-static SHAPE_697: ReconShape = ReconShape::Positioned(&SHAPE_690);
-static SHAPE_698: ReconShape = ReconShape::Positioned(&SHAPE_695);
-static SHAPE_699: ReconShape = ReconShape::Repeat(&SHAPE_698);
-static SHAPE_700: ReconShape = ReconShape::Seq(&SHAPES_269);
-static SHAPE_701: ReconShape = ReconShape::Positioned(&SHAPE_696);
+static SHAPE_691: ReconShape = ReconShape::Positioned(&SHAPE_690);
+static SHAPE_692: ReconShape = ReconShape::Kind(KindIdentity::Named("lengthening"));
+static SHAPE_693: ReconShape = ReconShape::Kind(KindIdentity::Named("ca_element"));
+static SHAPE_694: ReconShape = ReconShape::Kind(KindIdentity::Named("ca_delimiter"));
+static SHAPE_695: ReconShape = ReconShape::Kind(KindIdentity::Named("syllable_pause"));
+static SHAPE_696: ReconShape = ReconShape::Choice(&SHAPES_267, MissingHeads::Kinds(&KINDS_46));
+static SHAPE_697: ReconShape = ReconShape::Positioned(&SHAPE_696);
+static SHAPE_698: ReconShape = ReconShape::Repeat(&SHAPE_697);
+static SHAPE_699: ReconShape = ReconShape::Seq(&SHAPES_268);
+static SHAPE_700: ReconShape = ReconShape::Choice(&SHAPES_269, MissingHeads::Kinds(&KINDS_47));
+static SHAPE_701: ReconShape = ReconShape::Positioned(&SHAPE_700);
 static SHAPE_702: ReconShape = ReconShape::Repeat(&SHAPE_701);
 static SHAPE_703: ReconShape = ReconShape::Seq(&SHAPES_270);
 static SHAPE_704: ReconShape = ReconShape::Choice(&SHAPES_271, MissingHeads::Never);
@@ -19055,10 +19113,10 @@ static SHAPES_112: [&ReconShape; 1] = [&SHAPE_311];
 static SHAPES_113: [&ReconShape; 6] = [
     &SHAPE_313, &SHAPE_59, &SHAPE_82, &SHAPE_204, &SHAPE_207, &SHAPE_311,
 ];
-static SHAPES_114: [&ReconShape; 3] = [&SHAPE_270, &SHAPE_28, &SHAPE_317];
-static SHAPES_115: [&ReconShape; 4] = [&SHAPE_270, &SHAPE_28, &SHAPE_315, &SHAPE_320];
+static SHAPES_114: [&ReconShape; 3] = [&SHAPE_270, &SHAPE_28, &SHAPE_315];
+static SHAPES_115: [&ReconShape; 4] = [&SHAPE_270, &SHAPE_28, &SHAPE_318, &SHAPE_320];
 static SHAPES_116: [&ReconShape; 6] = [
-    &SHAPE_322, &SHAPE_269, &SHAPE_270, &SHAPE_28, &SHAPE_315, &SHAPE_320,
+    &SHAPE_322, &SHAPE_269, &SHAPE_270, &SHAPE_28, &SHAPE_318, &SHAPE_320,
 ];
 static SHAPES_117: [&ReconShape; 3] = [&SHAPE_324, &SHAPE_209, &SHAPE_324];
 static SHAPES_118: [&ReconShape; 2] = [&SHAPE_325, &SHAPE_209];
@@ -19117,8 +19175,8 @@ static SHAPES_165: [&ReconShape; 2] = [&SHAPE_465, &SHAPE_468];
 static SHAPES_166: [&ReconShape; 4] = [&SHAPE_472, &SHAPE_10, &SHAPE_470, &SHAPE_6];
 static SHAPES_167: [&ReconShape; 4] = [&SHAPE_474, &SHAPE_18, &SHAPE_20, &SHAPE_22];
 static SHAPES_168: [&ReconShape; 4] = [&SHAPE_476, &SHAPE_1, &SHAPE_344, &SHAPE_6];
-static SHAPES_169: [&ReconShape; 3] = [&SHAPE_305, &SHAPE_479, &SHAPE_303];
-static SHAPES_170: [&ReconShape; 2] = [&SHAPE_477, &SHAPE_480];
+static SHAPES_169: [&ReconShape; 3] = [&SHAPE_305, &SHAPE_478, &SHAPE_303];
+static SHAPES_170: [&ReconShape; 2] = [&SHAPE_480, &SHAPE_479];
 static SHAPES_171: [&ReconShape; 1] = [&SHAPE_482];
 static SHAPES_172: [&ReconShape; 2] = [&SHAPE_28, &SHAPE_483];
 static SHAPES_173: [&ReconShape; 2] = [&SHAPE_483, &SHAPE_486];
@@ -19147,8 +19205,8 @@ static SHAPES_193: [&ReconShape; 2] = [&SHAPE_531, &SHAPE_81];
 static SHAPES_194: [&ReconShape; 1] = [&SHAPE_533];
 static SHAPES_195: [&ReconShape; 3] = [&SHAPE_539, &SHAPE_535, &SHAPE_537];
 static SHAPES_196: [&ReconShape; 4] = [&SHAPE_543, &SHAPE_1, &SHAPE_541, &SHAPE_6];
-static SHAPES_197: [&ReconShape; 3] = [&SHAPE_309, &SHAPE_546, &SHAPE_307];
-static SHAPES_198: [&ReconShape; 2] = [&SHAPE_544, &SHAPE_547];
+static SHAPES_197: [&ReconShape; 3] = [&SHAPE_309, &SHAPE_545, &SHAPE_307];
+static SHAPES_198: [&ReconShape; 2] = [&SHAPE_547, &SHAPE_546];
 static SHAPES_199: [&ReconShape; 1] = [&SHAPE_549];
 static SHAPES_200: [&ReconShape; 2] = [&SHAPE_28, &SHAPE_550];
 static SHAPES_201: [&ReconShape; 2] = [&SHAPE_550, &SHAPE_553];
@@ -19171,12 +19229,12 @@ static SHAPES_215: [&ReconShape; 1] = [&SHAPE_586];
 static SHAPES_216: [&ReconShape; 5] = [&SHAPE_588, &SHAPE_578, &SHAPE_580, &SHAPE_583, &SHAPE_586];
 static SHAPES_217: [&ReconShape; 4] = [&SHAPE_590, &SHAPE_10, &SHAPE_12, &SHAPE_6];
 static SHAPES_218: [&ReconShape; 4] = [&SHAPE_592, &SHAPE_10, &SHAPE_12, &SHAPE_6];
-static SHAPES_219: [&ReconShape; 2] = [&SHAPE_594, &SHAPE_595];
-static SHAPES_220: [&ReconShape; 3] = [&SHAPE_593, &SHAPE_596, &SHAPE_152];
+static SHAPES_219: [&ReconShape; 2] = [&SHAPE_593, &SHAPE_594];
+static SHAPES_220: [&ReconShape; 3] = [&SHAPE_596, &SHAPE_595, &SHAPE_152];
 static SHAPES_221: [&ReconShape; 1] = [&SHAPE_599];
 static SHAPES_222: [&ReconShape; 2] = [&SHAPE_598, &SHAPE_599];
-static SHAPES_223: [&ReconShape; 2] = [&SHAPE_601, &SHAPE_595];
-static SHAPES_224: [&ReconShape; 4] = [&SHAPE_593, &SHAPE_596, &SHAPE_602, &SHAPE_152];
+static SHAPES_223: [&ReconShape; 2] = [&SHAPE_601, &SHAPE_594];
+static SHAPES_224: [&ReconShape; 4] = [&SHAPE_596, &SHAPE_595, &SHAPE_602, &SHAPE_152];
 static SHAPES_225: [&ReconShape; 1] = [&SHAPE_605];
 static SHAPES_226: [&ReconShape; 2] = [&SHAPE_604, &SHAPE_605];
 static SHAPES_227: [&ReconShape; 4] = [&SHAPE_607, &SHAPE_10, &SHAPE_12, &SHAPE_6];
@@ -19212,11 +19270,11 @@ static SHAPES_247: [&ReconShape; 4] = [&SHAPE_659, &SHAPE_10, &SHAPE_657, &SHAPE
 static SHAPES_248: [&ReconShape; 2] = [&SHAPE_209, &SHAPE_6];
 static SHAPES_249: [&ReconShape; 2] = [&SHAPE_661, &SHAPE_6];
 static SHAPES_250: [&ReconShape; 2] = [&SHAPE_664, &SHAPE_663];
-static SHAPES_251: [&ReconShape; 2] = [&SHAPE_269, &SHAPE_594];
-static SHAPES_252: [&ReconShape; 4] = [&SHAPE_667, &SHAPE_670, &SHAPE_269, &SHAPE_6];
+static SHAPES_251: [&ReconShape; 2] = [&SHAPE_269, &SHAPE_593];
+static SHAPES_252: [&ReconShape; 4] = [&SHAPE_668, &SHAPE_670, &SHAPE_269, &SHAPE_6];
 static SHAPES_253: [&ReconShape; 3] = [&SHAPE_670, &SHAPE_269, &SHAPE_6];
 static SHAPES_254: [&ReconShape; 2] = [&SHAPE_269, &SHAPE_6];
-static SHAPES_255: [&ReconShape; 5] = [&SHAPE_671, &SHAPE_667, &SHAPE_670, &SHAPE_269, &SHAPE_6];
+static SHAPES_255: [&ReconShape; 5] = [&SHAPE_671, &SHAPE_668, &SHAPE_670, &SHAPE_269, &SHAPE_6];
 static SHAPES_256: [&ReconShape; 4] = [&SHAPE_673, &SHAPE_10, &SHAPE_12, &SHAPE_6];
 static SHAPES_257: [&ReconShape; 4] = [&SHAPE_675, &SHAPE_10, &SHAPE_12, &SHAPE_6];
 static SHAPES_258: [&ReconShape; 4] = [&SHAPE_677, &SHAPE_10, &SHAPE_12, &SHAPE_6];
@@ -19229,13 +19287,13 @@ static SHAPES_264: [&ReconShape; 4] = [&SHAPE_612, &SHAPE_687, &SHAPE_671, &SHAP
 static SHAPES_265: [&ReconShape; 1] = [&SHAPE_450];
 static SHAPES_266: [&ReconShape; 3] = [&SHAPE_534, &SHAPE_688, &SHAPE_689];
 static SHAPES_267: [&ReconShape; 12] = [
-    &SHAPE_534, &SHAPE_688, &SHAPE_689, &SHAPE_691, &SHAPE_112, &SHAPE_692, &SHAPE_693, &SHAPE_34,
-    &SHAPE_35, &SHAPE_694, &SHAPE_375, &SHAPE_505,
+    &SHAPE_534, &SHAPE_688, &SHAPE_689, &SHAPE_692, &SHAPE_112, &SHAPE_693, &SHAPE_694, &SHAPE_34,
+    &SHAPE_35, &SHAPE_695, &SHAPE_375, &SHAPE_505,
 ];
-static SHAPES_268: [&ReconShape; 5] = [&SHAPE_112, &SHAPE_692, &SHAPE_693, &SHAPE_34, &SHAPE_694];
-static SHAPES_269: [&ReconShape; 2] = [&SHAPE_697, &SHAPE_699];
-static SHAPES_270: [&ReconShape; 4] = [&SHAPE_701, &SHAPE_702, &SHAPE_697, &SHAPE_699];
-static SHAPES_271: [&ReconShape; 2] = [&SHAPE_700, &SHAPE_703];
+static SHAPES_268: [&ReconShape; 2] = [&SHAPE_691, &SHAPE_698];
+static SHAPES_269: [&ReconShape; 5] = [&SHAPE_112, &SHAPE_693, &SHAPE_694, &SHAPE_34, &SHAPE_695];
+static SHAPES_270: [&ReconShape; 4] = [&SHAPE_701, &SHAPE_702, &SHAPE_691, &SHAPE_698];
+static SHAPES_271: [&ReconShape; 2] = [&SHAPE_699, &SHAPE_703];
 static SHAPES_272: [&ReconShape; 1] = [&SHAPE_705];
 static SHAPES_273: [&ReconShape; 3] = [&SHAPE_706, &SHAPE_707, &SHAPE_708];
 static SHAPES_274: [&ReconShape; 1] = [&SHAPE_710];
@@ -21616,19 +21674,18 @@ fn choice_436<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
 }
 enum ChoicePick481<'tree> {
     A0(tree_sitter::Node<'tree>),
-    A1,
+    A1(SelectedTerminals<'tree, 3usize>),
 }
 fn choice_481<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick481<'tree>>> {
     let alternatives: [Alternative<'tree, ChoicePick481<'tree>>; 2] = [
         |probe| {
             probe
-                .terminal(&SHAPE_477)
+                .terminal(&SHAPE_480)
                 .map(|(head, ())| Tried::head(head, ChoicePick481::A0))
         },
         |probe| {
-            probe
-                .composite(&SHAPE_480)
-                .map(|end| Tried::Open(ChoicePick481::A1, end))
+            terminal_sequence_479(probe)
+                .map(|(selected, end)| Tried::Open(ChoicePick481::A1(selected), end))
         },
     ];
     choice_split(
@@ -21709,19 +21766,18 @@ fn choice_532<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
 }
 enum ChoicePick548<'tree> {
     A0(tree_sitter::Node<'tree>),
-    A1,
+    A1(SelectedTerminals<'tree, 3usize>),
 }
 fn choice_548<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick548<'tree>>> {
     let alternatives: [Alternative<'tree, ChoicePick548<'tree>>; 2] = [
         |probe| {
             probe
-                .terminal(&SHAPE_544)
+                .terminal(&SHAPE_547)
                 .map(|(head, ())| Tried::head(head, ChoicePick548::A0))
         },
         |probe| {
-            probe
-                .composite(&SHAPE_547)
-                .map(|end| Tried::Open(ChoicePick548::A1, end))
+            terminal_sequence_546(probe)
+                .map(|(selected, end)| Tried::Open(ChoicePick548::A1(selected), end))
         },
     ];
     choice_split(
@@ -21861,12 +21917,12 @@ fn choice_597<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
     let alternatives: [Alternative<'tree, ChoicePick597<'tree>>; 3] = [
         |probe| {
             probe
-                .terminal(&SHAPE_593)
+                .terminal(&SHAPE_596)
                 .map(|(head, ())| Tried::head(head, ChoicePick597::A0))
         },
         |probe| {
             probe
-                .composite(&SHAPE_596)
+                .composite(&SHAPE_595)
                 .map(|end| Tried::Open(ChoicePick597::A1, end))
         },
         |probe| {
@@ -21891,12 +21947,12 @@ fn choice_603<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
     let alternatives: [Alternative<'tree, ChoicePick603<'tree>>; 4] = [
         |probe| {
             probe
-                .terminal(&SHAPE_593)
+                .terminal(&SHAPE_596)
                 .map(|(head, ())| Tried::head(head, ChoicePick603::A0))
         },
         |probe| {
             probe
-                .composite(&SHAPE_596)
+                .composite(&SHAPE_595)
                 .map(|end| Tried::Open(ChoicePick603::A1, end))
         },
         |probe| {
@@ -22068,7 +22124,7 @@ fn choice_690<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
         probe,
     )
 }
-enum ChoicePick695<'tree> {
+enum ChoicePick696<'tree> {
     A0(tree_sitter::Node<'tree>),
     A1(tree_sitter::Node<'tree>),
     A2(tree_sitter::Node<'tree>),
@@ -22082,67 +22138,67 @@ enum ChoicePick695<'tree> {
     A10(tree_sitter::Node<'tree>),
     A11(tree_sitter::Node<'tree>),
 }
-fn choice_695<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick695<'tree>>> {
-    let alternatives: [Alternative<'tree, ChoicePick695<'tree>>; 12] = [
+fn choice_696<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick696<'tree>>> {
+    let alternatives: [Alternative<'tree, ChoicePick696<'tree>>; 12] = [
         |probe| {
             probe
                 .terminal(&SHAPE_534)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A0))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A0))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_688)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A1))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A1))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_689)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A2))
-        },
-        |probe| {
-            probe
-                .terminal(&SHAPE_691)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A3))
-        },
-        |probe| {
-            probe
-                .terminal(&SHAPE_112)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A4))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A2))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_692)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A5))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A3))
+        },
+        |probe| {
+            probe
+                .terminal(&SHAPE_112)
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A4))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_693)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A6))
-        },
-        |probe| {
-            probe
-                .terminal(&SHAPE_34)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A7))
-        },
-        |probe| {
-            probe
-                .terminal(&SHAPE_35)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A8))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A5))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_694)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A9))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A6))
+        },
+        |probe| {
+            probe
+                .terminal(&SHAPE_34)
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A7))
+        },
+        |probe| {
+            probe
+                .terminal(&SHAPE_35)
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A8))
+        },
+        |probe| {
+            probe
+                .terminal(&SHAPE_695)
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A9))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_375)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A10))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A10))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_505)
-                .map(|(head, ())| Tried::head(head, ChoicePick695::A11))
+                .map(|(head, ())| Tried::head(head, ChoicePick696::A11))
         },
     ];
     choice_split(
@@ -22151,39 +22207,39 @@ fn choice_695<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
         probe,
     )
 }
-enum ChoicePick696<'tree> {
+enum ChoicePick700<'tree> {
     A0(tree_sitter::Node<'tree>),
     A1(tree_sitter::Node<'tree>),
     A2(tree_sitter::Node<'tree>),
     A3(tree_sitter::Node<'tree>),
     A4(tree_sitter::Node<'tree>),
 }
-fn choice_696<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick696<'tree>>> {
-    let alternatives: [Alternative<'tree, ChoicePick696<'tree>>; 5] = [
+fn choice_700<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick700<'tree>>> {
+    let alternatives: [Alternative<'tree, ChoicePick700<'tree>>; 5] = [
         |probe| {
             probe
                 .terminal(&SHAPE_112)
-                .map(|(head, ())| Tried::head(head, ChoicePick696::A0))
-        },
-        |probe| {
-            probe
-                .terminal(&SHAPE_692)
-                .map(|(head, ())| Tried::head(head, ChoicePick696::A1))
+                .map(|(head, ())| Tried::head(head, ChoicePick700::A0))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_693)
-                .map(|(head, ())| Tried::head(head, ChoicePick696::A2))
-        },
-        |probe| {
-            probe
-                .terminal(&SHAPE_34)
-                .map(|(head, ())| Tried::head(head, ChoicePick696::A3))
+                .map(|(head, ())| Tried::head(head, ChoicePick700::A1))
         },
         |probe| {
             probe
                 .terminal(&SHAPE_694)
-                .map(|(head, ())| Tried::head(head, ChoicePick696::A4))
+                .map(|(head, ())| Tried::head(head, ChoicePick700::A2))
+        },
+        |probe| {
+            probe
+                .terminal(&SHAPE_34)
+                .map(|(head, ())| Tried::head(head, ChoicePick700::A3))
+        },
+        |probe| {
+            probe
+                .terminal(&SHAPE_695)
+                .map(|(head, ())| Tried::head(head, ChoicePick700::A4))
         },
     ];
     choice_split(
@@ -22200,7 +22256,7 @@ fn choice_704<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
     let alternatives: [Alternative<'tree, ChoicePick704>; 2] = [
         |probe| {
             probe
-                .composite(&SHAPE_700)
+                .composite(&SHAPE_699)
                 .map(|end| Tried::Open(ChoicePick704::A0, end))
         },
         |probe| {
@@ -22243,6 +22299,491 @@ fn choice_709<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
         |alternative, probe| alternative(probe),
         probe,
     )
+}
+fn terminal_sequence_50<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_9).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_11).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_85<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_81).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_83).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_144<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_142).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_177<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_175).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_316<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 3usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_248).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_2, end) = Terminal::of(&SHAPE_314).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1, __selected_2],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_356<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_354).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_440<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 3usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_248).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_2, end) = Terminal::of(&SHAPE_438).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1, __selected_2],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_461<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_459).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_466<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 3usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_248).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_2, end) = Terminal::of(&SHAPE_464).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1, __selected_2],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_479<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 3usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_304).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_477).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_2, end) = Terminal::of(&SHAPE_302).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1, __selected_2],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_484<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_480).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_489<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_487).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_496<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_492).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_494).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_546<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 3usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_308).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_544).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_2, end) = Terminal::of(&SHAPE_306).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1, __selected_2],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_551<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_547).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_556<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_554).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_610<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_608).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
+}
+fn terminal_sequence_713<'tree>(
+    probe: &ChoiceProbe<'_, 'tree>,
+) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
+    let mut at = probe.start;
+    let (__selected_0, end) = Terminal::of(&SHAPE_27).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    let (__selected_1, end) = Terminal::of(&SHAPE_711).decide(
+        &Cont::NIL,
+        probe.children,
+        skip_extras(probe.children, at),
+        probe.memo,
+    )?;
+    at = end;
+    Some((
+        SelectedTerminals {
+            decisions: [__selected_0, __selected_1],
+        },
+        at,
+    ))
 }
 
 // Task 7 extract contract: pub fn extract_act_dependent_tier<'tree>(node: ActDependentTierNode<'tree>) -> ActDependentTierChildren<'tree>
@@ -28887,9 +29428,11 @@ pub fn extract_begin_header_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct BgHeaderChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<HeaderSepNode<'tree>>, R, K>>,
+    pub child_0:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<HeaderSepNode<'tree>>, R, K>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<FreeTextNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<FreeTextNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -28943,7 +29486,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_0,
@@ -28958,7 +29501,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -28995,7 +29538,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -29010,7 +29553,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -29237,15 +29780,29 @@ impl<'tree> Extract<'tree> for BgHeaderNode<'tree> {
                 };
                 let __f1 = {
                     let __c0 = __cur.tail(&SHAPES_0);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_50), &__c0);
+                    let (leading_extras, __placed) = __cur.optional(
+                        TerminalSequence {
+                            shape: &SHAPE_50,
+                            select: terminal_sequence_50,
+                        },
+                        &__c0,
+                    );
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_9), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(HeaderSepNode(node))
                                             }
@@ -29254,15 +29811,18 @@ impl<'tree> Extract<'tree> for BgHeaderNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_11), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(FreeTextNode(node))
                                             }
@@ -29271,9 +29831,7 @@ impl<'tree> Extract<'tree> for BgHeaderNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 BgHeaderChild1Children {
                                     child_0: __f0,
@@ -29282,7 +29840,7 @@ impl<'tree> Extract<'tree> for BgHeaderNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         }),
                         None => None,
                     };
@@ -32182,9 +32740,9 @@ pub fn extract_cod_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct CodeSwitchAnnotationChild1Children<'tree, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<ColonNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<ColonNode<'tree>>, R>>,
     /// Positional member 1.
-    pub code: R::Positioned<KindSlot<'tree, R::Wrapper<LanguageCodeNode<'tree>>, R>>,
+    pub code: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<LanguageCodeNode<'tree>>, R>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32224,7 +32782,8 @@ impl<'tree, 'source> SourceChildren<'tree, 'source, CodeSwitchAnnotationChild1Ch
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, ColonNode<'tree>>>> {
+    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, SelectedKindSlot<'tree, ColonNode<'tree>>>>
+    {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -32234,8 +32793,12 @@ impl<'tree, 'source> SourceChildren<'tree, 'source, CodeSwitchAnnotationChild1Ch
     #[must_use]
     pub fn field_code(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, LanguageCodeNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, LanguageCodeNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.code,
             parent: self.parent,
@@ -32267,8 +32830,12 @@ impl<'value, 'tree, 'source>
     #[must_use]
     pub fn field_child_0(
         self,
-    ) -> SourceField<'value, 'tree, 'source, Positioned<'tree, KindSlot<'tree, ColonNode<'tree>>>>
-    {
+    ) -> SourceField<
+        'value,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, ColonNode<'tree>>>,
+    > {
         SourceField {
             value: &self.value.child_0,
             parent: self.parent,
@@ -32282,7 +32849,7 @@ impl<'value, 'tree, 'source>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, LanguageCodeNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, LanguageCodeNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.code,
@@ -32311,7 +32878,9 @@ impl<'value, 'tree, 'source>
 impl<'tree, R: RangePhase<'tree>> CodeSwitchAnnotationChild1Children<'tree, R> {
     /// The `code` grammar field (accessor method `code`).
     #[must_use]
-    pub fn code(&self) -> &R::Positioned<KindSlot<'tree, R::Wrapper<LanguageCodeNode<'tree>>, R>> {
+    pub fn code(
+        &self,
+    ) -> &R::Positioned<SelectedKindSlot<'tree, R::Wrapper<LanguageCodeNode<'tree>>, R>> {
         &self.code
     }
 }
@@ -32512,15 +33081,29 @@ pub fn extract_code_switch_annotation<'tree>(
         };
         let __f1 = {
             let __c0 = __cur.tail(&SHAPES_25);
-            let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_85), &__c0);
+            let (leading_extras, __placed) = __cur.optional(
+                TerminalSequence {
+                    shape: &SHAPE_85,
+                    select: terminal_sequence_85,
+                },
+                &__c0,
+            );
             let slot = match __placed {
                 Some(__placed) => Some(match __placed {
-                    SequencePlaced::Value => NodeSlot::Present({
+                    TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                        let SelectedTerminals {
+                            decisions: [__selected_0, __selected_1],
+                        } = __selected;
                         let __f0 = {
-                            let (leading_extras, __placed) =
-                                __cur.fixed(Terminal::of(&SHAPE_81), &Cont::NIL);
-                            let slot = match __placed {
-                                Some(__placed) => match __placed {
+                            let mut leading_extras = Vec::new();
+                            let __placed = Terminal::<&'static ReconShape>::place(
+                                __selected_0,
+                                &mut __cur,
+                                &mut leading_extras,
+                            );
+                            Positioned::new(
+                                leading_extras,
+                                match __placed {
                                     TerminalPlaced::Present(node, ()) => {
                                         NodeSlot::Present(ColonNode(node))
                                     }
@@ -32529,15 +33112,18 @@ pub fn extract_code_switch_annotation<'tree>(
                                     }
                                     TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                 },
-                                None => NodeSlot::Absent(NoChild),
-                            };
-                            Positioned::new(leading_extras, slot)
+                            )
                         };
                         let __f1 = {
-                            let (leading_extras, __placed) =
-                                __cur.fixed(Terminal::of(&SHAPE_83), &Cont::NIL);
-                            let slot = match __placed {
-                                Some(__placed) => match __placed {
+                            let mut leading_extras = Vec::new();
+                            let __placed = Terminal::<&'static ReconShape>::place(
+                                __selected_1,
+                                &mut __cur,
+                                &mut leading_extras,
+                            );
+                            Positioned::new(
+                                leading_extras,
+                                match __placed {
                                     TerminalPlaced::Present(node, ()) => {
                                         NodeSlot::Present(LanguageCodeNode(node))
                                     }
@@ -32546,9 +33132,7 @@ pub fn extract_code_switch_annotation<'tree>(
                                     }
                                     TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                 },
-                                None => NodeSlot::Absent(NoChild),
-                            };
-                            Positioned::new(leading_extras, slot)
+                            )
                         };
                         CodeSwitchAnnotationChild1Children {
                             child_0: __f0,
@@ -32557,7 +33141,7 @@ pub fn extract_code_switch_annotation<'tree>(
                             unexpected: Vec::new(),
                         }
                     }),
-                    SequencePlaced::Error(node) => NodeSlot::Error(node),
+                    TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                 }),
                 None => None,
             };
@@ -39868,9 +40452,11 @@ pub fn extract_dependent_tier<'tree>(
 #[derive(Debug)]
 pub struct EgHeaderChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<HeaderSepNode<'tree>>, R, K>>,
+    pub child_0:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<HeaderSepNode<'tree>>, R, K>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<FreeTextNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<FreeTextNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39924,7 +40510,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_0,
@@ -39939,7 +40525,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -39976,7 +40562,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -39991,7 +40577,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -40218,15 +40804,29 @@ impl<'tree> Extract<'tree> for EgHeaderNode<'tree> {
                 };
                 let __f1 = {
                     let __c0 = __cur.tail(&SHAPES_0);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_50), &__c0);
+                    let (leading_extras, __placed) = __cur.optional(
+                        TerminalSequence {
+                            shape: &SHAPE_50,
+                            select: terminal_sequence_50,
+                        },
+                        &__c0,
+                    );
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_9), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(HeaderSepNode(node))
                                             }
@@ -40235,15 +40835,18 @@ impl<'tree> Extract<'tree> for EgHeaderNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_11), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(FreeTextNode(node))
                                             }
@@ -40252,9 +40855,7 @@ impl<'tree> Extract<'tree> for EgHeaderNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 EgHeaderChild1Children {
                                     child_0: __f0,
@@ -40263,7 +40864,7 @@ impl<'tree> Extract<'tree> for EgHeaderNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         }),
                         None => None,
                     };
@@ -43186,9 +43787,10 @@ pub fn extract_fac_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct FinalCodesChild0Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<PostcodeNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<PostcodeNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -43238,8 +43840,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -43253,7 +43859,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -43290,7 +43896,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -43305,7 +43911,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -43334,9 +43940,10 @@ impl<'value, 'tree, 'source, K: KindProof>
 #[derive(Debug)]
 pub struct FinalCodesChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<PostcodeNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<PostcodeNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -43386,8 +43993,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -43401,7 +44012,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -43438,7 +44049,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -43453,7 +44064,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PostcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -43652,15 +44263,29 @@ impl<'tree> Extract<'tree> for FinalCodesNode<'tree> {
             {
                 let __f0 = {
                     let __c0 = __cur.tail(&SHAPES_49);
-                    let (leading_extras, __placed) = __cur.fixed(Sequence(&SHAPE_144), &__c0);
+                    let (leading_extras, __placed) = __cur.fixed(
+                        TerminalSequence {
+                            shape: &SHAPE_144,
+                            select: terminal_sequence_144,
+                        },
+                        &__c0,
+                    );
                     let slot = match __placed {
                         Some(__placed) => match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(WhitespacesNode(node))
                                             }
@@ -43669,15 +44294,18 @@ impl<'tree> Extract<'tree> for FinalCodesNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_142), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(PostcodeNode(node))
                                             }
@@ -43686,9 +44314,7 @@ impl<'tree> Extract<'tree> for FinalCodesNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 FinalCodesChild0Children {
                                     child_0: __f0,
@@ -43697,7 +44323,7 @@ impl<'tree> Extract<'tree> for FinalCodesNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         },
                         None => NodeSlot::Absent(NoChild),
                     };
@@ -43707,63 +44333,78 @@ impl<'tree> Extract<'tree> for FinalCodesNode<'tree> {
                     let __c1 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_145, &__c1);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c2)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_144))
-                    {
+                    while let Some((leading_extras, __placed, __c2)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_144,
+                            select: terminal_sequence_144,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_142), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(PostcodeNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        PostcodeNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(PostcodeNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            PostcodeNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    FinalCodesChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        FinalCodesChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -46312,9 +46953,11 @@ pub fn extract_full_document_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct GHeaderChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<HeaderSepNode<'tree>>, R, K>>,
+    pub child_0:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<HeaderSepNode<'tree>>, R, K>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<FreeTextNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<FreeTextNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -46364,7 +47007,7 @@ impl<'tree, 'source, K: KindProof> SourceChildren<'tree, 'source, GHeaderChild1C
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_0,
@@ -46379,7 +47022,7 @@ impl<'tree, 'source, K: KindProof> SourceChildren<'tree, 'source, GHeaderChild1C
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -46416,7 +47059,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, HeaderSepNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -46431,7 +47074,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, FreeTextNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -46661,15 +47304,29 @@ impl<'tree> Extract<'tree> for GHeaderNode<'tree> {
                 };
                 let __f1 = {
                     let __c0 = __cur.tail(&SHAPES_0);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_50), &__c0);
+                    let (leading_extras, __placed) = __cur.optional(
+                        TerminalSequence {
+                            shape: &SHAPE_50,
+                            select: terminal_sequence_50,
+                        },
+                        &__c0,
+                    );
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_9), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(HeaderSepNode(node))
                                             }
@@ -46678,15 +47335,18 @@ impl<'tree> Extract<'tree> for GHeaderNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_11), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(FreeTextNode(node))
                                             }
@@ -46695,9 +47355,7 @@ impl<'tree> Extract<'tree> for GHeaderNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 GHeaderChild1Children {
                                     child_0: __f0,
@@ -46706,7 +47364,7 @@ impl<'tree> Extract<'tree> for GHeaderNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         }),
                         None => None,
                     };
@@ -47759,9 +48417,10 @@ pub fn extract_gpx_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct GraContentsChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<GraRelationNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<GraRelationNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -47811,8 +48470,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -47826,7 +48489,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, GraRelationNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, GraRelationNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -47863,7 +48526,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -47878,7 +48541,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, GraRelationNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, GraRelationNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -48098,63 +48761,78 @@ impl<'tree> Extract<'tree> for GraContentsNode<'tree> {
                     let __c0 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_178, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c1)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_177))
-                    {
+                    while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_177,
+                            select: terminal_sequence_177,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_175), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(GraRelationNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        GraRelationNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(GraRelationNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            GraRelationNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    GraContentsChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        GraContentsChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -68423,11 +69101,12 @@ pub fn extract_main_tier_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct MediaContentsChild5Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<CommaNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<CommaNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_1: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 2.
-    pub child_2: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<MediaStatusNode<'tree>>, R, K>>,
+    pub child_2:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<MediaStatusNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -68479,7 +69158,8 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, CommaNode<'tree>>>> {
+    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, SelectedKindSlot<'tree, CommaNode<'tree>>>>
+    {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -68489,8 +69169,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_1(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_1,
             parent: self.parent,
@@ -68504,7 +69188,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, MediaStatusNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, MediaStatusNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_2,
@@ -68537,8 +69221,12 @@ impl<'value, 'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         self,
-    ) -> SourceField<'value, 'tree, 'source, Positioned<'tree, KindSlot<'tree, CommaNode<'tree>>>>
-    {
+    ) -> SourceField<
+        'value,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, CommaNode<'tree>>>,
+    > {
         SourceField {
             value: &self.value.child_0,
             parent: self.parent,
@@ -68552,7 +69240,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -68567,7 +69255,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, MediaStatusNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, MediaStatusNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_2,
@@ -68954,7 +69642,7 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
                 };
                 let __f4 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_314), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_317), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => {
@@ -68971,15 +69659,29 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
                 };
                 let __f5 = {
                     let __c1 = __cur.tail(&SHAPES_8);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_318), &__c1);
+                    let (leading_extras, __placed) = __cur.optional(
+                        TerminalSequence {
+                            shape: &SHAPE_316,
+                            select: terminal_sequence_316,
+                        },
+                        &__c1,
+                    );
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1, __selected_2],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_248), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(CommaNode(node))
                                             }
@@ -68988,15 +69690,18 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
                                             }
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(WhitespacesNode(node))
                                             }
@@ -69005,15 +69710,18 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f2 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_316), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_2,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(MediaStatusNode(node))
                                             }
@@ -69022,9 +69730,7 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 MediaContentsChild5Children {
                                     child_0: __f0,
@@ -69034,7 +69740,7 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         }),
                         None => None,
                     };
@@ -72614,9 +73320,10 @@ pub struct MorContentsChild0MorContentChild1Children<
     R: RangePhase<'tree> = Raw,
 > {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<MorContentNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<MorContentNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -72669,8 +73376,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -72684,7 +73395,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, MorContentNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, MorContentNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -72721,7 +73432,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -72736,7 +73447,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, MorContentNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, MorContentNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -74817,54 +75528,63 @@ impl<'tree> Extract<'tree> for MorContentsNode<'tree> {
                                                             .repeat(&SHAPE_357, &__c1);
                                                         let mut __items = Vec::with_capacity(__walk.capacity());
                                                         while let Some((leading_extras, __placed, __c2)) = __walk
-                                                            .next(&mut __cur, Sequence(&SHAPE_356))
+                                                            .next(
+                                                                &mut __cur,
+                                                                TerminalSequence {
+                                                                    shape: &SHAPE_356,
+                                                                    select: terminal_sequence_356,
+                                                                },
+                                                            )
                                                         {
                                                             __items
                                                                 .push(
                                                                     Positioned::new(
                                                                         leading_extras,
                                                                         match __placed {
-                                                                            SequencePlaced::Value => {
+                                                                            TerminalSequencePlaced::Selected(__selected) => {
                                                                                 NodeSlot::Present({
+                                                                                    let SelectedTerminals {
+                                                                                        decisions: [__selected_0,
+                                                                                        __selected_1,
+                                                                                        ],
+                                                                                    } = __selected;
                                                                                     let __f0 = {
-                                                                                        let (leading_extras, __placed) = __cur
-                                                                                            .fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                                                                        let slot = match __placed {
-                                                                                            Some(__placed) => {
-                                                                                                match __placed {
-                                                                                                    TerminalPlaced::Present(node, ()) => {
-                                                                                                        NodeSlot::Present(WhitespacesNode(node))
-                                                                                                    }
-                                                                                                    TerminalPlaced::Missing(node, ()) => {
-                                                                                                        NodeSlot::Missing(KindMissing(WhitespacesNode(node)))
-                                                                                                    }
-                                                                                                    TerminalPlaced::Error(node) => NodeSlot::Error(node),
+                                                                                        let mut leading_extras = Vec::new();
+                                                                                        let __placed = Terminal::<
+                                                                                            &'static ReconShape,
+                                                                                        >::place(__selected_0, &mut __cur, &mut leading_extras);
+                                                                                        Positioned::new(
+                                                                                            leading_extras,
+                                                                                            match __placed {
+                                                                                                TerminalPlaced::Present(node, ()) => {
+                                                                                                    NodeSlot::Present(WhitespacesNode(node))
                                                                                                 }
-                                                                                            }
-                                                                                            None => NodeSlot::Absent(NoChild),
-                                                                                        };
-                                                                                        Positioned::new(leading_extras, slot)
+                                                                                                TerminalPlaced::Missing(node, ()) => {
+                                                                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(node)))
+                                                                                                }
+                                                                                                TerminalPlaced::Error(node) => NodeSlot::Error(node),
+                                                                                            },
+                                                                                        )
                                                                                     };
                                                                                     let __f1 = {
-                                                                                        let (leading_extras, __placed) = __cur
-                                                                                            .fixed(Terminal::of(&SHAPE_354), &Cont::NIL);
-                                                                                        let slot = match __placed {
-                                                                                            Some(__placed) => {
-                                                                                                match __placed {
-                                                                                                    TerminalPlaced::Present(node, ()) => {
-                                                                                                        NodeSlot::Present(MorContentNode(node))
-                                                                                                    }
-                                                                                                    TerminalPlaced::Missing(node, ()) => {
-                                                                                                        NodeSlot::Missing(
-                                                                                                            K::missing(KindMissing(MorContentNode(node)))?,
-                                                                                                        )
-                                                                                                    }
-                                                                                                    TerminalPlaced::Error(node) => NodeSlot::Error(node),
+                                                                                        let mut leading_extras = Vec::new();
+                                                                                        let __placed = Terminal::<
+                                                                                            &'static ReconShape,
+                                                                                        >::place(__selected_1, &mut __cur, &mut leading_extras);
+                                                                                        Positioned::new(
+                                                                                            leading_extras,
+                                                                                            match __placed {
+                                                                                                TerminalPlaced::Present(node, ()) => {
+                                                                                                    NodeSlot::Present(MorContentNode(node))
                                                                                                 }
-                                                                                            }
-                                                                                            None => NodeSlot::Absent(NoChild),
-                                                                                        };
-                                                                                        Positioned::new(leading_extras, slot)
+                                                                                                TerminalPlaced::Missing(node, ()) => {
+                                                                                                    NodeSlot::Missing(
+                                                                                                        K::missing(KindMissing(MorContentNode(node)))?,
+                                                                                                    )
+                                                                                                }
+                                                                                                TerminalPlaced::Error(node) => NodeSlot::Error(node),
+                                                                                            },
+                                                                                        )
                                                                                     };
                                                                                     MorContentsChild0MorContentChild1Children {
                                                                                         child_0: __f0,
@@ -74874,7 +75594,7 @@ impl<'tree> Extract<'tree> for MorContentsNode<'tree> {
                                                                                     }
                                                                                 })
                                                                             }
-                                                                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                                                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                                                                         },
                                                                     ),
                                                                 );
@@ -82952,11 +83672,12 @@ pub fn extract_option_name_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct OptionsContentsChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<CommaNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<CommaNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_1: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 2.
-    pub child_2: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<OptionNameNode<'tree>>, R, K>>,
+    pub child_2:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<OptionNameNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -83008,7 +83729,8 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, CommaNode<'tree>>>> {
+    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, SelectedKindSlot<'tree, CommaNode<'tree>>>>
+    {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -83018,8 +83740,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_1(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_1,
             parent: self.parent,
@@ -83033,7 +83759,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, OptionNameNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, OptionNameNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_2,
@@ -83066,8 +83792,12 @@ impl<'value, 'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         self,
-    ) -> SourceField<'value, 'tree, 'source, Positioned<'tree, KindSlot<'tree, CommaNode<'tree>>>>
-    {
+    ) -> SourceField<
+        'value,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, CommaNode<'tree>>>,
+    > {
         SourceField {
             value: &self.value.child_0,
             parent: self.parent,
@@ -83081,7 +83811,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -83096,7 +83826,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, OptionNameNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, OptionNameNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_2,
@@ -83321,83 +84051,103 @@ impl<'tree> Extract<'tree> for OptionsContentsNode<'tree> {
                     let __c0 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_441, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c1)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_440))
-                    {
+                    while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_440,
+                            select: terminal_sequence_440,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_248), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(CommaNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(CommaNode(node)))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1, __selected_2],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(CommaNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(CommaNode(
+                                                            node,
+                                                        )))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f2 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_438), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(OptionNameNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        OptionNameNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f2 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_2,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(OptionNameNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            OptionNameNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    OptionsContentsChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        child_2: __f2,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        OptionsContentsChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            child_2: __f2,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -86365,9 +87115,9 @@ pub fn extract_para_annotation_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct ParticipantChild1Children<'tree, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<KindSlot<'tree, R::Wrapper<ParticipantWordNode<'tree>>, R>>,
+    pub child_1: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<ParticipantWordNode<'tree>>, R>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -86407,8 +87157,12 @@ impl<'tree, 'source> SourceChildren<'tree, 'source, ParticipantChild1Children<'t
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -86422,7 +87176,7 @@ impl<'tree, 'source> SourceChildren<'tree, 'source, ParticipantChild1Children<'t
         '_,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, ParticipantWordNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, ParticipantWordNode<'tree>>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -86457,7 +87211,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, ParticipantChil
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -86472,7 +87226,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, ParticipantChil
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, ParticipantWordNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, ParticipantWordNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -86705,18 +87459,30 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
             let __c0 = __cur.tail(&SHAPES_132);
             let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_462, &__c0);
             let mut __items = Vec::with_capacity(__walk.capacity());
-            while let Some((leading_extras, __placed, __c1)) =
-                __walk.next(&mut __cur, Sequence(&SHAPE_461))
-            {
+            while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                &mut __cur,
+                TerminalSequence {
+                    shape: &SHAPE_461,
+                    select: terminal_sequence_461,
+                },
+            ) {
                 __items.push(Positioned::new(
                     leading_extras,
                     match __placed {
-                        SequencePlaced::Value => NodeSlot::Present({
+                        TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                            let SelectedTerminals {
+                                decisions: [__selected_0, __selected_1],
+                            } = __selected;
                             let __f0 = {
-                                let (leading_extras, __placed) =
-                                    __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                let slot = match __placed {
-                                    Some(__placed) => match __placed {
+                                let mut leading_extras = Vec::new();
+                                let __placed = Terminal::<&'static ReconShape>::place(
+                                    __selected_0,
+                                    &mut __cur,
+                                    &mut leading_extras,
+                                );
+                                Positioned::new(
+                                    leading_extras,
+                                    match __placed {
                                         TerminalPlaced::Present(node, ()) => {
                                             NodeSlot::Present(WhitespacesNode(node))
                                         }
@@ -86725,15 +87491,18 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                         }
                                         TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                     },
-                                    None => NodeSlot::Absent(NoChild),
-                                };
-                                Positioned::new(leading_extras, slot)
+                                )
                             };
                             let __f1 = {
-                                let (leading_extras, __placed) =
-                                    __cur.fixed(Terminal::of(&SHAPE_459), &Cont::NIL);
-                                let slot = match __placed {
-                                    Some(__placed) => match __placed {
+                                let mut leading_extras = Vec::new();
+                                let __placed = Terminal::<&'static ReconShape>::place(
+                                    __selected_1,
+                                    &mut __cur,
+                                    &mut leading_extras,
+                                );
+                                Positioned::new(
+                                    leading_extras,
+                                    match __placed {
                                         TerminalPlaced::Present(node, ()) => {
                                             NodeSlot::Present(ParticipantWordNode(node))
                                         }
@@ -86742,9 +87511,7 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                         ),
                                         TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                     },
-                                    None => NodeSlot::Absent(NoChild),
-                                };
-                                Positioned::new(leading_extras, slot)
+                                )
                             };
                             ParticipantChild1Children {
                                 child_0: __f0,
@@ -86753,7 +87520,7 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                 unexpected: Vec::new(),
                             }
                         }),
-                        SequencePlaced::Error(node) => NodeSlot::Error(node),
+                        TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                     },
                 ));
             }
@@ -86842,11 +87609,12 @@ pub struct ParticipantsContentsChild1Children<
     R: RangePhase<'tree> = Raw,
 > {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<CommaNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<CommaNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_1: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 2.
-    pub child_2: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<ParticipantNode<'tree>>, R, K>>,
+    pub child_2:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<ParticipantNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -86898,7 +87666,8 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, CommaNode<'tree>>>> {
+    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, SelectedKindSlot<'tree, CommaNode<'tree>>>>
+    {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -86908,8 +87677,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_1(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_1,
             parent: self.parent,
@@ -86923,7 +87696,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, ParticipantNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, ParticipantNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_2,
@@ -86956,8 +87729,12 @@ impl<'value, 'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         self,
-    ) -> SourceField<'value, 'tree, 'source, Positioned<'tree, KindSlot<'tree, CommaNode<'tree>>>>
-    {
+    ) -> SourceField<
+        'value,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, CommaNode<'tree>>>,
+    > {
         SourceField {
             value: &self.value.child_0,
             parent: self.parent,
@@ -86971,7 +87748,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -86986,7 +87763,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, ParticipantNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, ParticipantNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_2,
@@ -87225,83 +88002,103 @@ impl<'tree> Extract<'tree> for ParticipantsContentsNode<'tree> {
                     let __c0 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_467, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c1)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_466))
-                    {
+                    while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_466,
+                            select: terminal_sequence_466,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_248), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(CommaNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(CommaNode(node)))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1, __selected_2],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(CommaNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(CommaNode(
+                                                            node,
+                                                        )))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f2 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_464), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(ParticipantNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        ParticipantNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f2 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_2,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(ParticipantNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            ParticipantNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    ParticipantsContentsChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        child_2: __f2,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        ParticipantsContentsChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            child_2: __f2,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -88733,12 +89530,13 @@ pub fn extract_pho_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct PhoGroupPhoBeginGroupChildren<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<PhoBeginGroupNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<PhoBeginGroupNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1:
-        R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<PhoGroupedContentNode<'tree>>, R, K>>,
+    pub child_1: R::Positioned<
+        SelectedNarrowedKindSlot<'tree, R::Wrapper<PhoGroupedContentNode<'tree>>, R, K>,
+    >,
     /// Positional member 2.
-    pub child_2: R::Positioned<KindSlot<'tree, R::Wrapper<PhoEndGroupNode<'tree>>, R>>,
+    pub child_2: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<PhoEndGroupNode<'tree>>, R>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -88790,8 +89588,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, PhoBeginGroupNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, PhoBeginGroupNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -88805,7 +89607,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PhoGroupedContentNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PhoGroupedContentNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -88816,8 +89618,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_2(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, PhoEndGroupNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, PhoEndGroupNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_2,
             parent: self.parent,
@@ -88853,7 +89659,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, PhoBeginGroupNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, PhoBeginGroupNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -88868,7 +89674,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PhoGroupedContentNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PhoGroupedContentNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -88883,7 +89689,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, PhoEndGroupNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, PhoEndGroupNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_2,
@@ -89286,12 +90092,20 @@ impl<'tree> Extract<'tree> for PhoGroupNode<'tree> {
                     Some(__placed) => match __placed {
                         ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
                             ChoicePick481::A0(node) => PhoGroupChoice::PhoWords(PhoWordsNode(node)),
-                            ChoicePick481::A1 => PhoGroupChoice::PhoBeginGroup({
+                            ChoicePick481::A1(__selected) => PhoGroupChoice::PhoBeginGroup({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1, __selected_2],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_304), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(PhoBeginGroupNode(node))
                                             }
@@ -89300,15 +90114,18 @@ impl<'tree> Extract<'tree> for PhoGroupNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_478), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(PhoGroupedContentNode(node))
                                             }
@@ -89319,15 +90136,18 @@ impl<'tree> Extract<'tree> for PhoGroupNode<'tree> {
                                             }
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f2 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_302), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_2,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(PhoEndGroupNode(node))
                                             }
@@ -89336,9 +90156,7 @@ impl<'tree> Extract<'tree> for PhoGroupNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 PhoGroupPhoBeginGroupChildren {
                                     child_0: __f0,
@@ -89417,9 +90235,10 @@ pub fn extract_pho_group_from_error_recovery<'tree>(
 pub struct PhoGroupedContentChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw>
 {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<PhoWordsNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<PhoWordsNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -89469,8 +90288,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -89484,7 +90307,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PhoWordsNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PhoWordsNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -89521,7 +90344,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -89536,7 +90359,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PhoWordsNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PhoWordsNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -89752,7 +90575,7 @@ impl<'tree> Extract<'tree> for PhoGroupedContentNode<'tree> {
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_477), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_480), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => {
@@ -89771,63 +90594,78 @@ impl<'tree> Extract<'tree> for PhoGroupedContentNode<'tree> {
                     let __c0 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_485, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c1)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_484))
-                    {
+                    while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_484,
+                            select: terminal_sequence_484,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_477), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(PhoWordsNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        PhoWordsNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(PhoWordsNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            PhoWordsNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    PhoGroupedContentChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        PhoGroupedContentChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -89894,9 +90732,10 @@ pub fn extract_pho_grouped_content_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct PhoGroupsChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<PhoGroupNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<PhoGroupNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -89946,8 +90785,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -89961,7 +90804,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PhoGroupNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PhoGroupNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -89998,7 +90841,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -90013,7 +90856,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, PhoGroupNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, PhoGroupNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -90231,63 +91074,78 @@ impl<'tree> Extract<'tree> for PhoGroupsNode<'tree> {
                     let __c0 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_490, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c1)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_489))
-                    {
+                    while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_489,
+                            select: terminal_sequence_489,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_487), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(PhoGroupNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        PhoGroupNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(PhoGroupNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            PhoGroupNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    PhoGroupsChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        PhoGroupsChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -90351,9 +91209,9 @@ pub fn extract_pho_groups_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct PhoWordsChild1Children<'tree, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<Plus_2Node<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<Plus_2Node<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<KindSlot<'tree, R::Wrapper<PhoWordNode<'tree>>, R>>,
+    pub child_1: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<PhoWordNode<'tree>>, R>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -90393,8 +91251,12 @@ impl<'tree, 'source> SourceChildren<'tree, 'source, PhoWordsChild1Children<'tree
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, Plus_2Node<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, Plus_2Node<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -90404,8 +91266,12 @@ impl<'tree, 'source> SourceChildren<'tree, 'source, PhoWordsChild1Children<'tree
     #[must_use]
     pub fn field_child_1(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, PhoWordNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, PhoWordNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_1,
             parent: self.parent,
@@ -90435,8 +91301,12 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, PhoWordsChild1C
     #[must_use]
     pub fn field_child_0(
         self,
-    ) -> SourceField<'value, 'tree, 'source, Positioned<'tree, KindSlot<'tree, Plus_2Node<'tree>>>>
-    {
+    ) -> SourceField<
+        'value,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, Plus_2Node<'tree>>>,
+    > {
         SourceField {
             value: &self.value.child_0,
             parent: self.parent,
@@ -90446,8 +91316,12 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, PhoWordsChild1C
     #[must_use]
     pub fn field_child_1(
         self,
-    ) -> SourceField<'value, 'tree, 'source, Positioned<'tree, KindSlot<'tree, PhoWordNode<'tree>>>>
-    {
+    ) -> SourceField<
+        'value,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, PhoWordNode<'tree>>>,
+    > {
         SourceField {
             value: &self.value.child_1,
             parent: self.parent,
@@ -90636,18 +91510,30 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
             let __c0 = __cur.tail(&SHAPES_8);
             let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_497, &__c0);
             let mut __items = Vec::with_capacity(__walk.capacity());
-            while let Some((leading_extras, __placed, __c1)) =
-                __walk.next(&mut __cur, Sequence(&SHAPE_496))
-            {
+            while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                &mut __cur,
+                TerminalSequence {
+                    shape: &SHAPE_496,
+                    select: terminal_sequence_496,
+                },
+            ) {
                 __items.push(Positioned::new(
                     leading_extras,
                     match __placed {
-                        SequencePlaced::Value => NodeSlot::Present({
+                        TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                            let SelectedTerminals {
+                                decisions: [__selected_0, __selected_1],
+                            } = __selected;
                             let __f0 = {
-                                let (leading_extras, __placed) =
-                                    __cur.fixed(Terminal::of(&SHAPE_492), &Cont::NIL);
-                                let slot = match __placed {
-                                    Some(__placed) => match __placed {
+                                let mut leading_extras = Vec::new();
+                                let __placed = Terminal::<&'static ReconShape>::place(
+                                    __selected_0,
+                                    &mut __cur,
+                                    &mut leading_extras,
+                                );
+                                Positioned::new(
+                                    leading_extras,
+                                    match __placed {
                                         TerminalPlaced::Present(node, ()) => {
                                             NodeSlot::Present(Plus_2Node(node))
                                         }
@@ -90656,15 +91542,18 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                         }
                                         TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                     },
-                                    None => NodeSlot::Absent(NoChild),
-                                };
-                                Positioned::new(leading_extras, slot)
+                                )
                             };
                             let __f1 = {
-                                let (leading_extras, __placed) =
-                                    __cur.fixed(Terminal::of(&SHAPE_494), &Cont::NIL);
-                                let slot = match __placed {
-                                    Some(__placed) => match __placed {
+                                let mut leading_extras = Vec::new();
+                                let __placed = Terminal::<&'static ReconShape>::place(
+                                    __selected_1,
+                                    &mut __cur,
+                                    &mut leading_extras,
+                                );
+                                Positioned::new(
+                                    leading_extras,
+                                    match __placed {
                                         TerminalPlaced::Present(node, ()) => {
                                             NodeSlot::Present(PhoWordNode(node))
                                         }
@@ -90673,9 +91562,7 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                         }
                                         TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                     },
-                                    None => NodeSlot::Absent(NoChild),
-                                };
-                                Positioned::new(leading_extras, slot)
+                                )
                             };
                             PhoWordsChild1Children {
                                 child_0: __f0,
@@ -90684,7 +91571,7 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                 unexpected: Vec::new(),
                             }
                         }),
-                        SequencePlaced::Error(node) => NodeSlot::Error(node),
+                        TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                     },
                 ));
             }
@@ -97944,12 +98831,13 @@ pub fn extract_sin_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct SinGroupSinBeginGroupChildren<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<SinBeginGroupNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<SinBeginGroupNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1:
-        R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<SinGroupedContentNode<'tree>>, R, K>>,
+    pub child_1: R::Positioned<
+        SelectedNarrowedKindSlot<'tree, R::Wrapper<SinGroupedContentNode<'tree>>, R, K>,
+    >,
     /// Positional member 2.
-    pub child_2: R::Positioned<KindSlot<'tree, R::Wrapper<SinEndGroupNode<'tree>>, R>>,
+    pub child_2: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<SinEndGroupNode<'tree>>, R>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -98001,8 +98889,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, SinBeginGroupNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, SinBeginGroupNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -98016,7 +98908,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, SinGroupedContentNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, SinGroupedContentNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -98027,8 +98919,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_2(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, SinEndGroupNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, SinEndGroupNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_2,
             parent: self.parent,
@@ -98064,7 +98960,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, SinBeginGroupNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, SinBeginGroupNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -98079,7 +98975,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, SinGroupedContentNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, SinGroupedContentNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -98094,7 +98990,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, SinEndGroupNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, SinEndGroupNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_2,
@@ -98497,12 +99393,20 @@ impl<'tree> Extract<'tree> for SinGroupNode<'tree> {
                     Some(__placed) => match __placed {
                         ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
                             ChoicePick548::A0(node) => SinGroupChoice::SinWord(SinWordNode(node)),
-                            ChoicePick548::A1 => SinGroupChoice::SinBeginGroup({
+                            ChoicePick548::A1(__selected) => SinGroupChoice::SinBeginGroup({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1, __selected_2],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_308), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(SinBeginGroupNode(node))
                                             }
@@ -98511,15 +99415,18 @@ impl<'tree> Extract<'tree> for SinGroupNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_545), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(SinGroupedContentNode(node))
                                             }
@@ -98530,15 +99437,18 @@ impl<'tree> Extract<'tree> for SinGroupNode<'tree> {
                                             }
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f2 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_306), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_2,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(SinEndGroupNode(node))
                                             }
@@ -98547,9 +99457,7 @@ impl<'tree> Extract<'tree> for SinGroupNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 SinGroupSinBeginGroupChildren {
                                     child_0: __f0,
@@ -98628,9 +99536,10 @@ pub fn extract_sin_group_from_error_recovery<'tree>(
 pub struct SinGroupedContentChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw>
 {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<SinWordNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<SinWordNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -98680,8 +99589,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -98695,7 +99608,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, SinWordNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, SinWordNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -98732,7 +99645,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -98747,7 +99660,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, SinWordNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, SinWordNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -98963,7 +99876,7 @@ impl<'tree> Extract<'tree> for SinGroupedContentNode<'tree> {
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_544), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_547), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => {
@@ -98982,63 +99895,78 @@ impl<'tree> Extract<'tree> for SinGroupedContentNode<'tree> {
                     let __c0 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_552, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c1)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_551))
-                    {
+                    while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_551,
+                            select: terminal_sequence_551,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_544), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(SinWordNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        SinWordNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(SinWordNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            SinWordNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    SinGroupedContentChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        SinGroupedContentChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -99105,9 +100033,10 @@ pub fn extract_sin_grouped_content_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct SinGroupsChild1Children<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<SinGroupNode<'tree>>, R, K>>,
+    pub child_1:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<SinGroupNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -99157,8 +100086,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -99172,7 +100105,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, SinGroupNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, SinGroupNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_1,
@@ -99209,7 +100142,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -99224,7 +100157,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, SinGroupNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, SinGroupNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -99442,63 +100375,78 @@ impl<'tree> Extract<'tree> for SinGroupsNode<'tree> {
                     let __c0 = __cur.tail(&SHAPES_8);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_557, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
-                    while let Some((leading_extras, __placed, __c1)) =
-                        __walk.next(&mut __cur, Sequence(&SHAPE_556))
-                    {
+                    while let Some((leading_extras, __placed, __c1)) = __walk.next(
+                        &mut __cur,
+                        TerminalSequence {
+                            shape: &SHAPE_556,
+                            select: terminal_sequence_556,
+                        },
+                    ) {
                         __items.push(Positioned::new(
                             leading_extras,
                             match __placed {
-                                SequencePlaced::Value => NodeSlot::Present({
-                                    let __f0 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(WhitespacesNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(KindMissing(WhitespacesNode(
-                                                        node,
-                                                    )))
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                TerminalSequencePlaced::Selected(__selected) => {
+                                    NodeSlot::Present({
+                                        let SelectedTerminals {
+                                            decisions: [__selected_0, __selected_1],
+                                        } = __selected;
+                                        let __f0 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_0,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(WhitespacesNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(KindMissing(
+                                                            WhitespacesNode(node),
+                                                        ))
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    let __f1 = {
-                                        let (leading_extras, __placed) =
-                                            __cur.fixed(Terminal::of(&SHAPE_554), &Cont::NIL);
-                                        let slot = match __placed {
-                                            Some(__placed) => match __placed {
-                                                TerminalPlaced::Present(node, ()) => {
-                                                    NodeSlot::Present(SinGroupNode(node))
-                                                }
-                                                TerminalPlaced::Missing(node, ()) => {
-                                                    NodeSlot::Missing(K::missing(KindMissing(
-                                                        SinGroupNode(node),
-                                                    ))?)
-                                                }
-                                                TerminalPlaced::Error(node) => {
-                                                    NodeSlot::Error(node)
-                                                }
-                                            },
-                                            None => NodeSlot::Absent(NoChild),
+                                        let __f1 = {
+                                            let mut leading_extras = Vec::new();
+                                            let __placed = Terminal::<&'static ReconShape>::place(
+                                                __selected_1,
+                                                &mut __cur,
+                                                &mut leading_extras,
+                                            );
+                                            Positioned::new(
+                                                leading_extras,
+                                                match __placed {
+                                                    TerminalPlaced::Present(node, ()) => {
+                                                        NodeSlot::Present(SinGroupNode(node))
+                                                    }
+                                                    TerminalPlaced::Missing(node, ()) => {
+                                                        NodeSlot::Missing(K::missing(KindMissing(
+                                                            SinGroupNode(node),
+                                                        ))?)
+                                                    }
+                                                    TerminalPlaced::Error(node) => {
+                                                        NodeSlot::Error(node)
+                                                    }
+                                                },
+                                            )
                                         };
-                                        Positioned::new(leading_extras, slot)
-                                    };
-                                    SinGroupsChild1Children {
-                                        child_0: __f0,
-                                        child_1: __f1,
-                                        trailing_extras: Vec::new(),
-                                        unexpected: Vec::new(),
-                                    }
-                                }),
-                                SequencePlaced::Error(node) => NodeSlot::Error(node),
+                                        SinGroupsChild1Children {
+                                            child_0: __f0,
+                                            child_1: __f1,
+                                            trailing_extras: Vec::new(),
+                                            unexpected: Vec::new(),
+                                        }
+                                    })
+                                }
+                                TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                             },
                         ));
                     }
@@ -114169,9 +115117,10 @@ pub fn extract_thumbnail_header_from_error_recovery<'tree>(
 #[derive(Debug)]
 pub struct TierBodyLanguageCodeChildren<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw> {
     /// Positional member 0.
-    pub child_0: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<LangcodeNode<'tree>>, R, K>>,
+    pub child_0:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<LangcodeNode<'tree>>, R, K>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_1: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -114225,7 +115174,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_0,
@@ -114236,8 +115185,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_1(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_1,
             parent: self.parent,
@@ -114273,7 +115226,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -114288,7 +115241,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -114600,15 +115553,29 @@ impl<'tree> Extract<'tree> for TierBodyNode<'tree> {
                 };
                 let __f1 = {
                     let __c1 = __cur.tail(&SHAPES_230);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_610), &__c1);
+                    let (leading_extras, __placed) = __cur.optional(
+                        TerminalSequence {
+                            shape: &SHAPE_610,
+                            select: terminal_sequence_610,
+                        },
+                        &__c1,
+                    );
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_608), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(LangcodeNode(node))
                                             }
@@ -114617,15 +115584,18 @@ impl<'tree> Extract<'tree> for TierBodyNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(WhitespacesNode(node))
                                             }
@@ -114634,9 +115604,7 @@ impl<'tree> Extract<'tree> for TierBodyNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 TierBodyLanguageCodeChildren {
                                     child_0: __f0,
@@ -114645,7 +115613,7 @@ impl<'tree> Extract<'tree> for TierBodyNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         }),
                         None => None,
                     };
@@ -123248,7 +124216,7 @@ impl<'tree> Extract<'tree> for UtteranceEndNode<'tree> {
                 let __f1 = {
                     let __c1 = __cur.tail(&SHAPES_253);
                     let (leading_extras, __placed) =
-                        __cur.optional(Terminal::of(&SHAPE_665), &__c1);
+                        __cur.optional(Terminal::of(&SHAPE_666), &__c1);
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
                             TerminalPlaced::Present(node, ()) => {
@@ -123265,7 +124233,7 @@ impl<'tree> Extract<'tree> for UtteranceEndNode<'tree> {
                 };
                 let __f2 = {
                     let __c2 = __cur.tail(&SHAPES_254);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_668), &__c2);
+                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_665), &__c2);
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
                             SequencePlaced::Value => NodeSlot::Present({
@@ -125360,9 +126328,10 @@ pub fn extract_wor_dependent_tier_from_error_recovery<'tree>(
 pub struct WorTierBodyLanguageCodeChildren<'tree, K: KindProof = Broad, R: RangePhase<'tree> = Raw>
 {
     /// Positional member 0.
-    pub child_0: R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<LangcodeNode<'tree>>, R, K>>,
+    pub child_0:
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<LangcodeNode<'tree>>, R, K>>,
     /// Positional member 1.
-    pub child_1: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_1: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -125416,7 +126385,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.child_0,
@@ -125427,8 +126396,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_1(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_1,
             parent: self.parent,
@@ -125464,7 +126437,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, LangcodeNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -125479,7 +126452,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_1,
@@ -126823,15 +127796,29 @@ impl<'tree> Extract<'tree> for WorTierBodyNode<'tree> {
             {
                 let __f0 = {
                     let __c0 = __cur.tail(&SHAPES_262);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_610), &__c0);
+                    let (leading_extras, __placed) = __cur.optional(
+                        TerminalSequence {
+                            shape: &SHAPE_610,
+                            select: terminal_sequence_610,
+                        },
+                        &__c0,
+                    );
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_608), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(LangcodeNode(node))
                                             }
@@ -126840,15 +127827,18 @@ impl<'tree> Extract<'tree> for WorTierBodyNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(WhitespacesNode(node))
                                             }
@@ -126857,9 +127847,7 @@ impl<'tree> Extract<'tree> for WorTierBodyNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 WorTierBodyLanguageCodeChildren {
                                     child_0: __f0,
@@ -126868,7 +127856,7 @@ impl<'tree> Extract<'tree> for WorTierBodyNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         }),
                         None => None,
                     };
@@ -131430,7 +132418,7 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                     Some(__placed) => match __placed {
                         ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
                             ChoicePick704::A0 => WordBodyChoice::WordSegment({
-                                let [__c1, __c2] = __cur.member_conts(&SHAPES_269, &__c0);
+                                let [__c1, __c2] = __cur.member_conts(&SHAPES_268, &__c0);
                                 let __f0 = {
                                     let (leading_extras, __placed) = __cur.fixed(
                                         ChoiceAt {
@@ -131494,13 +132482,13 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                 };
                                 let __f1 = {
                                     let (leading_extras, mut __walk) =
-                                        __cur.repeat(&SHAPE_698, &__c2);
+                                        __cur.repeat(&SHAPE_697, &__c2);
                                     let mut __items = Vec::with_capacity(__walk.capacity());
                                     while let Some((leading_extras, __placed, __c3)) = __walk.next(
                                         &mut __cur,
                                         ChoiceAt {
-                                            shape: &SHAPE_695,
-                                            select: choice_695,
+                                            shape: &SHAPE_696,
+                                            select: choice_696,
                                             missing: &TAGS_46,
                                         },
                                     ) {
@@ -131512,60 +132500,60 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                                                         ChoicePlaced::Value(__pick) => {
                                                                             NodeSlot::Present(
                                                                                 match __pick {
-                                                                                    ChoicePick695::A0(node) => {
+                                                                                    ChoicePick696::A0(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::WordSegment(
                                                                                             WordSegmentNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A1(node) => {
+                                                                                    ChoicePick696::A1(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::Shortening(
                                                                                             ShorteningNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A2(node) => {
+                                                                                    ChoicePick696::A2(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::StressMarker(
                                                                                             StressMarkerNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A3(node) => {
+                                                                                    ChoicePick696::A3(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::Lengthening(
                                                                                             LengtheningNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A4(node) => {
+                                                                                    ChoicePick696::A4(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::OverlapPoint(
                                                                                             OverlapPointNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A5(node) => {
+                                                                                    ChoicePick696::A5(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::CaElement(
                                                                                             CaElementNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A6(node) => {
+                                                                                    ChoicePick696::A6(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::CaDelimiter(
                                                                                             CaDelimiterNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A7(node) => {
+                                                                                    ChoicePick696::A7(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::UnderlineBegin(
                                                                                             UnderlineBeginNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A8(node) => {
+                                                                                    ChoicePick696::A8(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::UnderlineEnd(
                                                                                             UnderlineEndNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A9(node) => {
+                                                                                    ChoicePick696::A9(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::SyllablePause(
                                                                                             SyllablePauseNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A10(node) => {
+                                                                                    ChoicePick696::A10(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::Tilde(TildeNode(node))
                                                                                     }
-                                                                                    ChoicePick695::A11(node) => {
+                                                                                    ChoicePick696::A11(node) => {
                                                                                         WordBodyWordSegmentChild1Choice::Variant11(PlusNode(node))
                                                                                     }
                                                                                 },
@@ -131657,8 +132645,8 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                 let __f0 = {
                                     let (leading_extras, __placed) = __cur.fixed(
                                         ChoiceAt {
-                                            shape: &SHAPE_696,
-                                            select: choice_696,
+                                            shape: &SHAPE_700,
+                                            select: choice_700,
                                             missing: &TAGS_47,
                                         },
                                         &__c4,
@@ -131669,27 +132657,27 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                                                 ChoicePlaced::Value(__pick) => {
                                                                     NodeSlot::Present(
                                                                         match __pick {
-                                                                            ChoicePick696::A0(node) => {
+                                                                            ChoicePick700::A0(node) => {
                                                                                 WordBodyOverlapPointChild0Choice::OverlapPoint(
                                                                                     OverlapPointNode(node),
                                                                                 )
                                                                             }
-                                                                            ChoicePick696::A1(node) => {
+                                                                            ChoicePick700::A1(node) => {
                                                                                 WordBodyOverlapPointChild0Choice::CaElement(
                                                                                     CaElementNode(node),
                                                                                 )
                                                                             }
-                                                                            ChoicePick696::A2(node) => {
+                                                                            ChoicePick700::A2(node) => {
                                                                                 WordBodyOverlapPointChild0Choice::CaDelimiter(
                                                                                     CaDelimiterNode(node),
                                                                                 )
                                                                             }
-                                                                            ChoicePick696::A3(node) => {
+                                                                            ChoicePick700::A3(node) => {
                                                                                 WordBodyOverlapPointChild0Choice::UnderlineBegin(
                                                                                     UnderlineBeginNode(node),
                                                                                 )
                                                                             }
-                                                                            ChoicePick696::A4(node) => {
+                                                                            ChoicePick700::A4(node) => {
                                                                                 WordBodyOverlapPointChild0Choice::SyllablePause(
                                                                                     SyllablePauseNode(node),
                                                                                 )
@@ -131742,8 +132730,8 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                     while let Some((leading_extras, __placed, __c6)) = __walk.next(
                                         &mut __cur,
                                         ChoiceAt {
-                                            shape: &SHAPE_696,
-                                            select: choice_696,
+                                            shape: &SHAPE_700,
+                                            select: choice_700,
                                             missing: &TAGS_47,
                                         },
                                     ) {
@@ -131755,27 +132743,27 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                                                         ChoicePlaced::Value(__pick) => {
                                                                             NodeSlot::Present(
                                                                                 match __pick {
-                                                                                    ChoicePick696::A0(node) => {
+                                                                                    ChoicePick700::A0(node) => {
                                                                                         WordBodyOverlapPointChild1Choice::OverlapPoint(
                                                                                             OverlapPointNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick696::A1(node) => {
+                                                                                    ChoicePick700::A1(node) => {
                                                                                         WordBodyOverlapPointChild1Choice::CaElement(
                                                                                             CaElementNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick696::A2(node) => {
+                                                                                    ChoicePick700::A2(node) => {
                                                                                         WordBodyOverlapPointChild1Choice::CaDelimiter(
                                                                                             CaDelimiterNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick696::A3(node) => {
+                                                                                    ChoicePick700::A3(node) => {
                                                                                         WordBodyOverlapPointChild1Choice::UnderlineBegin(
                                                                                             UnderlineBeginNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick696::A4(node) => {
+                                                                                    ChoicePick700::A4(node) => {
                                                                                         WordBodyOverlapPointChild1Choice::SyllablePause(
                                                                                             SyllablePauseNode(node),
                                                                                         )
@@ -131884,13 +132872,13 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                 };
                                 let __f3 = {
                                     let (leading_extras, mut __walk) =
-                                        __cur.repeat(&SHAPE_698, &__c8);
+                                        __cur.repeat(&SHAPE_697, &__c8);
                                     let mut __items = Vec::with_capacity(__walk.capacity());
                                     while let Some((leading_extras, __placed, __c9)) = __walk.next(
                                         &mut __cur,
                                         ChoiceAt {
-                                            shape: &SHAPE_695,
-                                            select: choice_695,
+                                            shape: &SHAPE_696,
+                                            select: choice_696,
                                             missing: &TAGS_46,
                                         },
                                     ) {
@@ -131902,60 +132890,60 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                                                                         ChoicePlaced::Value(__pick) => {
                                                                             NodeSlot::Present(
                                                                                 match __pick {
-                                                                                    ChoicePick695::A0(node) => {
+                                                                                    ChoicePick696::A0(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::WordSegment(
                                                                                             WordSegmentNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A1(node) => {
+                                                                                    ChoicePick696::A1(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::Shortening(
                                                                                             ShorteningNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A2(node) => {
+                                                                                    ChoicePick696::A2(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::StressMarker(
                                                                                             StressMarkerNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A3(node) => {
+                                                                                    ChoicePick696::A3(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::Lengthening(
                                                                                             LengtheningNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A4(node) => {
+                                                                                    ChoicePick696::A4(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::OverlapPoint(
                                                                                             OverlapPointNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A5(node) => {
+                                                                                    ChoicePick696::A5(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::CaElement(
                                                                                             CaElementNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A6(node) => {
+                                                                                    ChoicePick696::A6(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::CaDelimiter(
                                                                                             CaDelimiterNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A7(node) => {
+                                                                                    ChoicePick696::A7(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::UnderlineBegin(
                                                                                             UnderlineBeginNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A8(node) => {
+                                                                                    ChoicePick696::A8(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::UnderlineEnd(
                                                                                             UnderlineEndNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A9(node) => {
+                                                                                    ChoicePick696::A9(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::SyllablePause(
                                                                                             SyllablePauseNode(node),
                                                                                         )
                                                                                     }
-                                                                                    ChoicePick695::A10(node) => {
+                                                                                    ChoicePick696::A10(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::Tilde(TildeNode(node))
                                                                                     }
-                                                                                    ChoicePick695::A11(node) => {
+                                                                                    ChoicePick696::A11(node) => {
                                                                                         WordBodyOverlapPointChild3Choice::Variant11(PlusNode(node))
                                                                                     }
                                                                                 },
@@ -132610,10 +133598,10 @@ pub struct WordWithOptionalAnnotationsChild1Children<
     R: RangePhase<'tree> = Raw,
 > {
     /// Positional member 0.
-    pub child_0: R::Positioned<KindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
+    pub child_0: R::Positioned<SelectedKindSlot<'tree, R::Wrapper<WhitespacesNode<'tree>>, R>>,
     /// Positional member 1.
     pub replacement:
-        R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<ReplacementNode<'tree>>, R, K>>,
+        R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<ReplacementNode<'tree>>, R, K>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<R::Extra>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -132666,8 +133654,12 @@ impl<'tree, 'source, K: KindProof>
     #[must_use]
     pub fn field_child_0(
         &self,
-    ) -> SourceField<'_, 'tree, 'source, Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>>
-    {
+    ) -> SourceField<
+        '_,
+        'tree,
+        'source,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
+    > {
         SourceField {
             value: &self.children.child_0,
             parent: self.parent,
@@ -132681,7 +133673,7 @@ impl<'tree, 'source, K: KindProof>
         '_,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, ReplacementNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, ReplacementNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.children.replacement,
@@ -132718,7 +133710,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, KindSlot<'tree, WhitespacesNode<'tree>>>,
+        Positioned<'tree, SelectedKindSlot<'tree, WhitespacesNode<'tree>>>,
     > {
         SourceField {
             value: &self.value.child_0,
@@ -132733,7 +133725,7 @@ impl<'value, 'tree, 'source, K: KindProof>
         'value,
         'tree,
         'source,
-        Positioned<'tree, NarrowedKindSlot<'tree, ReplacementNode<'tree>, Raw, K>>,
+        Positioned<'tree, SelectedNarrowedKindSlot<'tree, ReplacementNode<'tree>, Raw, K>>,
     > {
         SourceField {
             value: &self.value.replacement,
@@ -132766,7 +133758,8 @@ impl<'tree, K: KindProof, R: RangePhase<'tree>>
     #[must_use]
     pub fn replacement(
         &self,
-    ) -> &R::Positioned<NarrowedKindSlot<'tree, R::Wrapper<ReplacementNode<'tree>>, R, K>> {
+    ) -> &R::Positioned<SelectedNarrowedKindSlot<'tree, R::Wrapper<ReplacementNode<'tree>>, R, K>>
+    {
         &self.replacement
     }
 }
@@ -133033,15 +134026,29 @@ impl<'tree> Extract<'tree> for WordWithOptionalAnnotationsNode<'tree> {
                 };
                 let __f1 = {
                     let __c0 = __cur.tail(&SHAPES_276);
-                    let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_713), &__c0);
+                    let (leading_extras, __placed) = __cur.optional(
+                        TerminalSequence {
+                            shape: &SHAPE_713,
+                            select: terminal_sequence_713,
+                        },
+                        &__c0,
+                    );
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
-                            SequencePlaced::Value => NodeSlot::Present({
+                            TerminalSequencePlaced::Selected(__selected) => NodeSlot::Present({
+                                let SelectedTerminals {
+                                    decisions: [__selected_0, __selected_1],
+                                } = __selected;
                                 let __f0 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_27), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_0,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(WhitespacesNode(node))
                                             }
@@ -133050,15 +134057,18 @@ impl<'tree> Extract<'tree> for WordWithOptionalAnnotationsNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 let __f1 = {
-                                    let (leading_extras, __placed) =
-                                        __cur.fixed(Terminal::of(&SHAPE_711), &Cont::NIL);
-                                    let slot = match __placed {
-                                        Some(__placed) => match __placed {
+                                    let mut leading_extras = Vec::new();
+                                    let __placed = Terminal::<&'static ReconShape>::place(
+                                        __selected_1,
+                                        &mut __cur,
+                                        &mut leading_extras,
+                                    );
+                                    Positioned::new(
+                                        leading_extras,
+                                        match __placed {
                                             TerminalPlaced::Present(node, ()) => {
                                                 NodeSlot::Present(ReplacementNode(node))
                                             }
@@ -133067,9 +134077,7 @@ impl<'tree> Extract<'tree> for WordWithOptionalAnnotationsNode<'tree> {
                                             ),
                                             TerminalPlaced::Error(node) => NodeSlot::Error(node),
                                         },
-                                        None => NodeSlot::Absent(NoChild),
-                                    };
-                                    Positioned::new(leading_extras, slot)
+                                    )
                                 };
                                 WordWithOptionalAnnotationsChild1Children {
                                     child_0: __f0,
@@ -133078,7 +134086,7 @@ impl<'tree> Extract<'tree> for WordWithOptionalAnnotationsNode<'tree> {
                                     unexpected: Vec::new(),
                                 }
                             }),
-                            SequencePlaced::Error(node) => NodeSlot::Error(node),
+                            TerminalSequencePlaced::Error(node) => NodeSlot::Error(node),
                         }),
                         None => None,
                     };

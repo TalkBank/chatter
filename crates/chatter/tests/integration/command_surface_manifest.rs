@@ -230,6 +230,42 @@ fn machine_discovery_covers_executable_leaves_and_their_help() {
     let catalog: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("one complete JSON document");
     assert_eq!(catalog["schema"], "chatter.commands.v1");
+    let statuses = catalog["exit_codes"]
+        .as_array()
+        .expect("process exit contract");
+    let observed: Vec<_> = statuses
+        .iter()
+        .map(|status| {
+            (
+                status["code"].as_u64().expect("numeric code"),
+                status["status"].as_str().expect("status name"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        observed,
+        vec![
+            (0, "success"),
+            (1, "failed"),
+            (2, "usage"),
+            (3, "internal"),
+            (4, "needs_review"),
+            (130, "interrupted")
+        ]
+    );
+    let help = help_output(&["--help"]);
+    for status in statuses {
+        let code = status["code"].as_u64().expect("numeric status");
+        let meaning = status["meaning"].as_str().expect("meaning");
+        assert!(
+            help.lines().any(|line| {
+                line.trim()
+                    .strip_prefix(&format!("{code} "))
+                    .is_some_and(|tail| tail.trim() == meaning)
+            }),
+            "help must publish exit {code}: {meaning}"
+        );
+    }
     let entries = catalog["commands"].as_array().expect("command array");
     let expected: BTreeSet<&str> = [
         "validate",
@@ -353,41 +389,70 @@ fn namespaces_are_successful_help_and_invalid_modes_are_usage_errors() {
         );
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage:"));
     }
-    for args in [
-        vec!["validate"],
-        vec!["validate", "--list-checks"],
-        vec!["schema", "--tui-mode", "disable"],
-        vec![
-            "experimental",
-            "speakers",
-            "map",
-            "missing.cha",
-            "--mapping",
-            "PAR=CHI:Target_Child",
-            "--reference",
-            "missing.cha",
-        ],
-        vec![
-            "experimental",
-            "speakers",
-            "replay",
-            "missing.cha",
-            "--override-file",
-            "missing.toml",
-        ],
-        vec![
-            "experimental",
-            "review",
-            "scripted",
-            "missing.toml",
-            "--override-file",
-            "out.toml",
-            "--operator",
-            "fixture",
-        ],
+    // Each refusal carries its reason so another usage error cannot satisfy it.
+    enum UsageRefusal {
+        Missing(&'static str),
+        Unexpected(&'static str),
+    }
+    for (args, refusal) in [
+        (vec!["validate"], UsageRefusal::Missing("<PATH>")),
+        (
+            vec!["validate", "missing.cha", "--list-checks"],
+            UsageRefusal::Unexpected("--list-checks"),
+        ),
+        (
+            vec!["schema", "--tui-mode", "disable"],
+            UsageRefusal::Unexpected("--tui-mode"),
+        ),
+        (
+            vec![
+                "experimental",
+                "speakers",
+                "map",
+                "missing.cha",
+                "--mapping",
+                "PAR=CHI:Target_Child",
+                "--reference",
+                "missing.cha",
+            ],
+            UsageRefusal::Unexpected("--reference"),
+        ),
+        (
+            vec![
+                "experimental",
+                "speakers",
+                "replay",
+                "missing.cha",
+                "--override-file",
+                "missing.toml",
+            ],
+            UsageRefusal::Missing("--session-id"),
+        ),
+        (
+            vec![
+                "experimental",
+                "review",
+                "scripted",
+                "missing.toml",
+                "--override-file",
+                "out.toml",
+                "--operator",
+                "fixture",
+            ],
+            UsageRefusal::Missing("--script"),
+        ),
     ] {
         let output = harness.run_output(&args).expect("usage refusal");
         assert_eq!(output.status.code(), Some(2), "{args:?}");
+        let stderr = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+        let expected = match refusal {
+            UsageRefusal::Missing(argument) => {
+                assert!(stderr.contains("required arguments"), "{args:?}: {stderr}");
+                argument.to_owned()
+            }
+            UsageRefusal::Unexpected(argument) => format!("unexpected argument '{argument}'"),
+        };
+        assert!(stderr.contains(&expected), "{args:?}: {stderr}");
     }
     for old in [
         "normalize",

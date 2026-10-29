@@ -9,6 +9,8 @@
     clippy::todo,
     clippy::unimplemented
 )]
+// Deliberately shadow primitive names to verify generated paths.
+#![allow(clippy::builtin_type_shadow)]
 
 // Integration tests for the SpanShift derive macro.
 //
@@ -27,6 +29,57 @@ use talkbank_model::{Span, SpanShift as SpanShiftTrait};
 struct Located {
     span: Span,
     value: String,
+}
+
+/// User const parameters must not become generated argument or pattern names.
+#[allow(non_upper_case_globals)]
+#[derive(SpanShift)]
+struct ConstNames<
+    const r#offset: usize,
+    const delta: usize,
+    const __tb_map: usize,
+    const offset_: usize = 0,
+    const __tb_left_0: usize = 0,
+    const Ok: usize = 0,
+> {
+    span: Span,
+    #[span_shift(skip)]
+    payload: ([u8; offset], [u8; delta], [u8; __tb_map]),
+}
+
+#[test]
+fn const_generic_names_do_not_capture_shift_arguments() {
+    let mut value = ConstNames::<1, 2, 3> {
+        span: Span::new(10, 20),
+        payload: ([1], [2; 2], [3; 3]),
+    };
+    value.shift_spans_after(10, 5);
+    assert_eq!(value.span, Span::new(15, 25));
+    let mapped = value
+        .try_map_spans(&mut |span| Ok::<_, ()>(Span::new(span.start() + 1, span.end() + 1)))
+        .unwrap();
+    assert_eq!(mapped.span, Span::new(16, 26));
+    assert_eq!(mapped.payload, ([1], [2; 2], [3; 3]));
+}
+
+#[allow(non_camel_case_types)]
+#[derive(SpanShift)]
+struct PreludeNames<Result, FnMut, usize, isize, talkbank_model> {
+    span: Span,
+    #[span_shift(skip)]
+    payload: (Result, FnMut, usize, isize, talkbank_model),
+}
+
+#[test]
+fn generic_names_do_not_capture_generated_type_paths() {
+    let mut value = PreludeNames {
+        span: Span::new(10, 20),
+        payload: (Frozen(Span::new(30, 40)), (), (), (), ()),
+    };
+    value.shift_spans_after(10, 5);
+    let mapped = value.try_map_spans(&mut Ok::<_, ()>).unwrap();
+    assert_eq!(mapped.span, Span::new(15, 25));
+    assert_eq!(mapped.payload.0, Frozen(Span::new(30, 40)));
 }
 
 /// Struct containing Option<Span>.
@@ -258,4 +311,32 @@ fn skip_field_not_shifted() {
     // Skipped span unchanged.
     assert_eq!(w.frozen_span.start(), 10);
     assert_eq!(w.frozen_span.end(), 20);
+}
+#[derive(talkbank_derive::SpanShift)]
+struct RawDeclaration<r#T> {
+    value: T,
+}
+
+#[derive(talkbank_derive::SpanShift)]
+struct RawOccurrence<T> {
+    value: r#T,
+}
+
+#[test]
+fn raw_parameter_spellings_share_inferred_bounds() {
+    use talkbank_model::SpanShift;
+    let mut declaration = RawDeclaration {
+        value: talkbank_model::Span::new(10, 12),
+    };
+    let mut occurrence = RawOccurrence {
+        value: talkbank_model::Span::new(10, 12),
+    };
+    declaration.shift_spans_after(10, 3);
+    occurrence.shift_spans_after(10, 3);
+    assert_eq!(declaration.value, talkbank_model::Span::new(13, 15));
+    assert_eq!(occurrence.value, declaration.value);
+    let mapped = occurrence
+        .try_map_spans(&mut |span| Ok::<_, ()>(span))
+        .unwrap();
+    assert_eq!(mapped.value, declaration.value);
 }

@@ -108,33 +108,10 @@ impl super::traits::TierAlignmentResult for MorAlignment {
 pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
     let mut alignment = MorAlignment::new();
 
-    // %mor terminator is type-enforced to always be present (see
-    // `MorTier.terminator: Terminator` on the model). Main-tier
-    // terminator remains `Option<Terminator>` because CA-mode files
-    // legitimately omit it (~0.16% of corpus utterances). When main
-    // has no terminator, the morphotag pipeline synthesizes one for
-    // %mor (typically `.`). That synthesis is intentional and not
-    // flagged here as a presence-mismatch, the prior E707
-    // ("presence-mismatch") check no longer fires because the
-    // Validate terminator value: %mor terminator must match the main
-    // tier terminator exactly.
-    if let Some(main_term) = &main.content.terminator {
-        let main_str = main_term.to_chat_string();
-        let mor_str = mor.terminator.to_chat_string();
-        if main_str != mor_str {
-            let error = build_alignment_error(
-                main,
-                mor,
-                ErrorCode::MorTerminatorValueMismatch,
-                format!(
-                    "Main tier terminator \"{}\" does not match %mor terminator \"{}\"",
-                    main_str, mor_str,
-                ),
-                "The %mor tier terminator must match the main tier terminator exactly",
-                mor.location,
-            );
-            alignment = alignment.with_error(error);
-        }
+    // Main-tier absence is permitted in CA mode; MOR always owns a terminator.
+    // Only two present, unequal spellings admit this diagnostic and its preview.
+    if let Some(mismatch) = TerminatorMismatch::between(main, mor) {
+        alignment = alignment.with_error(mismatch.into_error());
     }
 
     // Extract alignable content indices from main tier
@@ -207,85 +184,72 @@ fn append_position_alignment(
     alignment.errors.push(error);
 }
 
-/// Build a `%mor` alignment error with shared labeling and preview context.
-///
-/// Centralizing this keeps all mismatch variants consistent in span labels and
-/// suggestion formatting.
-fn build_alignment_error(
-    main: &MainTier,
-    mor: &MorTier,
-    error_code: ErrorCode,
-    message: String,
-    suggestion: &str,
-    location: crate::Location,
-) -> ParseError {
-    let alignment_context = build_alignment_preview(main, mor);
-
-    // The preview always contains its heading, including for empty tiers.
-    let suggestion_text = format!(
-        "{}\n\nAlignment preview:\n{}",
-        suggestion, alignment_context
-    );
-
-    ParseError::at_location(error_code, Severity::Error, location, message)
-        .with_suggestion(suggestion_text)
-        .with_label_at(main.location, "Main tier")
-        .with_label_at(mor.location, "%mor tier")
+/// Present, unequal terminators bound to the tiers that produced them.
+/// Lexical positions and terminator spellings remain separate through rendering.
+struct TerminatorMismatch<'a> {
+    main: &'a MainTier,
+    mor: &'a MorTier,
+    main_spelling: String,
+    mor_spelling: String,
 }
 
-/// Build a compact side-by-side preview of main vs `%mor` alignable units.
-///
-/// The preview is appended to diagnostic suggestions to make count/value
-/// mismatches easier to debug from one error message.
-fn build_alignment_preview(main: &MainTier, mor: &MorTier) -> String {
-    let main_items = collect_alignable_main_items(main);
-    let mor_items = render_mor_items(mor);
+impl<'a> TerminatorMismatch<'a> {
+    fn between(main: &'a MainTier, mor: &'a MorTier) -> Option<Self> {
+        let main_spelling = main.content.terminator.as_ref()?.to_chat_string();
+        let mor_spelling = mor.terminator.to_chat_string();
+        (main_spelling != mor_spelling).then_some(Self {
+            main,
+            mor,
+            main_spelling,
+            mor_spelling,
+        })
+    }
 
-    let mut out = String::new();
-    out.push_str("Alignment (index: main | mor)\n");
+    fn into_error(self) -> ParseError {
+        let suggestion = format!(
+            "The %mor tier terminator must match the main tier terminator exactly\n\nAlignment preview:\n{}",
+            self.preview(),
+        );
+        ParseError::at_location(
+            ErrorCode::MorTerminatorValueMismatch,
+            Severity::Error,
+            self.mor.location,
+            format!(
+                "Main tier terminator \"{}\" does not match %mor terminator \"{}\"",
+                self.main_spelling, self.mor_spelling,
+            ),
+        )
+        .with_suggestion(suggestion)
+        .with_label_at(self.main.location, "Main tier")
+        .with_label_at(self.mor.location, "%mor tier")
+    }
 
-    let max_len = main_items.len().max(mor_items.len());
-    for idx in 0..max_len {
-        let main_item = match main_items.get(idx) {
-            Some(item) => item.as_str(),
-            None => "<none>",
-        };
-        let mor_item = match mor_items.get(idx) {
-            Some(item) => item.as_str(),
-            None => "<none>",
-        };
-        let index = idx.to_string();
-        for _ in index.len()..3 {
-            out.push(' ');
+    fn preview(&self) -> String {
+        let main_items = collect_tier_items(&self.main.content.content, PositionalDomain::Mor);
+        let mut out = String::from("Alignment (index: main | mor)\n");
+        for idx in 0..main_items.len().max(self.mor.items.len()) {
+            let index = idx.to_string();
+            for _ in index.len()..3 {
+                out.push(' ');
+            }
+            out.push_str(&index);
+            out.push_str(": ");
+            out.push_str(match main_items.get(idx) {
+                Some(item) => &item.text,
+                None => "<none>",
+            });
+            out.push_str(" | ");
+            match self.mor.items.get(idx) {
+                Some(item) => out.push_str(&to_string(item)),
+                None => out.push_str("<none>"),
+            }
+            out.push('\n');
         }
-        out.push_str(&index);
-        out.push_str(": ");
-        out.push_str(main_item);
+        out.push_str("end: ");
+        out.push_str(&self.main_spelling);
         out.push_str(" | ");
-        out.push_str(mor_item);
+        out.push_str(&self.mor_spelling);
         out.push('\n');
+        out
     }
-
-    out
-}
-
-/// Render `%mor` items into display strings for alignment previews.
-fn render_mor_items(mor: &MorTier) -> Vec<String> {
-    mor.items.iter().map(to_string).collect()
-}
-
-/// Collect alignable main-tier units in `%mor` alignment order.
-///
-/// Delegates to [`collect_tier_items`] to avoid duplicating the
-/// exhaustive content traversal. Terminators are appended after lexical
-/// units to mirror alignment reporting.
-fn collect_alignable_main_items(main: &MainTier) -> Vec<String> {
-    let mut items: Vec<String> = collect_tier_items(&main.content.content, PositionalDomain::Mor)
-        .into_iter()
-        .map(|item| item.text)
-        .collect();
-    if let Some(term) = &main.content.terminator {
-        items.push(to_string(term));
-    }
-    items
 }

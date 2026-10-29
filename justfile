@@ -157,8 +157,8 @@ coverage-html:
 # does not get run: this one had been `#[ignore]`d with a retired default corpus
 # path, so the two ways to invoke it were "wrong" and "not at all".
 #
-# Not in `test-all`: it needs a corpus no CI runner has, and it reads about
-# 100,000 files with two parsers. Set TALKBANK_DATA to override the location.
+# Not in `test-all`: it needs an external corpus and reads every selected
+# file with two parsers. Set TALKBANK_DATA to supply the location.
 # It FAILS rather than skips when there is no corpus, since you only ever run it
 # on purpose.
 corpus-parse-equivalence:

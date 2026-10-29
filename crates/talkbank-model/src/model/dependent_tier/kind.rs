@@ -141,8 +141,8 @@ impl DependentTier {
     ///
     /// The match is exhaustive with no catch-all, so a tier variant added to
     /// [`DependentTier`] stops compiling here until someone decides which of
-    /// the two answers it gives. It deliberately does NOT return the span:
-    /// [`Self::span`] already owns the variant-to-span mapping, and a second
+    /// the two answers it gives. It deliberately does not return a location:
+    /// [`Self::location`] already owns the variant-to-location mapping, and a second
     /// copy of it here would be a list nothing keeps in step with the first.
     #[must_use]
     pub fn declares_nothing(&self) -> bool {
@@ -394,7 +394,7 @@ impl DependentTier {
     ///
     /// The two halves of the question are deliberately separate:
     /// [`Self::declares_nothing`] holds the exhaustive per-variant decision,
-    /// and [`Self::span`] holds the per-variant span. Composing them here means
+    /// and [`Self::location`] holds the per-variant location. Composing them here means
     /// there is exactly one of each to keep correct.
     #[must_use]
     pub fn empty_content_location(&self) -> Option<crate::Location> {

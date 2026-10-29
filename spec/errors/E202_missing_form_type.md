@@ -39,13 +39,14 @@ title = 'a doubled @ is ONE defect, named by E203'
 claim = { subsumed_by = 'E203' }
 notes = '''
 `word@@` ends with `@` AND carries a repeated `@` run, so it satisfies both
-this file's dangling-marker rule and E203's at-most-one-suffix rule. The parser
-names the repeated run as E203 with the run in hand, which is the specific
+this file's dangling-marker rule and E203's at-most-one-suffix rule. The shared
+model names the retained repeated run as E203, which is the specific
 answer; adding E202 for the same word reports one defect twice, the generic
 diagnostic buried under the specific one.
 
-The suppression that stops the double already existed for E203-against-E203
-and was never applied to the E202 branch four lines above it.
+Full-document parsing retains recovery for model validation. Standalone-word
+admission invokes the same model rule before exposing a word. Neither path
+adds a parser-local E202/E203 mirror for this suffix.
 '''
 chat = '''
 @UTF8

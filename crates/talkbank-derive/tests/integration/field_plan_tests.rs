@@ -1,11 +1,177 @@
 //! Native Rust boundary contracts, not canonical CHAT coverage.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Deliberately shadow primitive names to verify generated paths.
+#![allow(clippy::builtin_type_shadow)]
 
 use talkbank_derive::{SemanticEq as Equality, SpanShift as Shift};
 use talkbank_model::model::{
     SemanticDiff, SemanticDiffContext, SemanticDiffReport, SemanticEq, SemanticPath,
 };
 use talkbank_model::{Span, SpanShift};
+
+#[derive(Equality)]
+struct RawContext {
+    value: u32,
+    #[semantic_eq(skip)]
+    r#location: crate::r#Location,
+    #[semantic_eq(skip)]
+    fallback: Span,
+}
+
+#[derive(Equality)]
+enum RawOptionalContext {
+    Tuple(u32, #[semantic_eq(skip)] r#Option<r#Span>),
+}
+
+#[test]
+fn raw_context_names_preserve_location_selection() {
+    let value = |number| RawContext {
+        value: number,
+        location: crate::Location::Located(Span::new(10, 12)),
+        fallback: Span::new(30, 32),
+    };
+    let left = value(1);
+    let selected = left.semantic_diff(&value(2)).differences()[0].location;
+    assert_eq!(selected, crate::Location::Located(Span::new(10, 12)));
+    assert_ne!(selected, crate::Location::Located(left.fallback));
+    let left = RawOptionalContext::Tuple(1, Some(Span::new(10, 12)));
+    let right = RawOptionalContext::Tuple(2, None);
+    assert_eq!(
+        left.semantic_diff(&right).differences()[0].location,
+        crate::Location::Located(Span::new(10, 12))
+    );
+}
+
+mod macro_shadowing {
+    use super::*;
+
+    // A caller's macro must not rewrite generated variant descriptions.
+    macro_rules! stringify {
+        ($($tokens:tt)*) => {
+            "caller macro"
+        };
+    }
+
+    #[derive(Equality)]
+    enum Variants {
+        Named { value: u32 },
+        Tuple(u32),
+        Unit,
+    }
+
+    #[test]
+    fn variant_descriptions_do_not_resolve_caller_macros() {
+        assert_eq!(stringify!(control), "caller macro");
+        let values = [
+            (Variants::Named { value: 1 }, "Named"),
+            (Variants::Tuple(1), "Tuple"),
+            (Variants::Unit, "Unit"),
+        ];
+        for (left, left_name) in &values {
+            for (right, right_name) in &values {
+                let report = left.semantic_diff(right);
+                if left_name == right_name {
+                    assert!(report.is_empty());
+                } else {
+                    assert_eq!(report.differences().len(), 1);
+                    let difference = &report.differences()[0];
+                    assert_eq!(difference.left, *left_name);
+                    assert_eq!(difference.right, *right_name);
+                }
+            }
+        }
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Equality)]
+struct PrimitiveName<bool> {
+    value: u32,
+    #[semantic_eq(skip)]
+    opaque: bool,
+}
+
+#[test]
+fn generic_names_do_not_capture_equality_return_type() {
+    let value = PrimitiveName {
+        value: 1,
+        opaque: Frozen,
+    };
+    assert!(value.semantic_eq(&PrimitiveName {
+        value: 1,
+        opaque: Frozen
+    }));
+    assert!(!value.semantic_eq(&PrimitiveName {
+        value: 2,
+        opaque: Frozen
+    }));
+    let _ = value.opaque;
+}
+
+#[allow(non_upper_case_globals)]
+#[derive(Equality, Shift, talkbank_derive::ValidationTagged)]
+enum ConstBindings<
+    const r#other: usize = 0,
+    const other_: usize = 0,
+    const path: usize = 0,
+    const report: usize = 0,
+    const ctx: usize = 0,
+    const __prev_location: usize = 0,
+    const left_variant: usize = 0,
+    const right_variant: usize = 0,
+    const __tb_left_0: usize = 0,
+    const __tb_right_0: usize = 0,
+    const Ok: usize = 0,
+> {
+    Named {
+        value: u32,
+        #[semantic_eq(skip)]
+        span: Span,
+    },
+    Tuple(u32, #[semantic_eq(skip)] Span),
+}
+
+#[test]
+fn const_generic_names_cannot_capture_equality_diff_or_field_bindings() {
+    let named = |value| ConstBindings::Named {
+        value,
+        span: Span::new(10, 20),
+    };
+    let left: ConstBindings = named(1);
+    assert_eq!(
+        talkbank_model::model::ValidationTagged::validation_tag(&left),
+        talkbank_model::model::ValidationTag::Clean
+    );
+    assert!(left.semantic_eq(&named(1)));
+    assert!(!left.semantic_eq(&named(2)));
+    let report = left.semantic_diff(&named(2));
+    assert_eq!(report.differences().len(), 1);
+    assert_eq!(report.differences()[0].path, "value");
+    assert_eq!(
+        report.differences()[0].location,
+        crate::Location::Located(Span::new(10, 20))
+    );
+
+    let mut tuple: ConstBindings = ConstBindings::Tuple(1, Span::new(10, 20));
+    assert!(!left.semantic_eq(&tuple));
+    assert_eq!(left.semantic_diff(&tuple).differences().len(), 1);
+    assert_eq!(
+        tuple
+            .semantic_diff(&ConstBindings::Tuple(2, Span::new(10, 20)))
+            .differences()[0]
+            .path,
+        "[0]"
+    );
+    tuple.shift_spans_after(10, 5);
+    let mapped = tuple
+        .try_map_spans(&mut |span| Ok::<_, ()>(Span::new(span.start() + 1, span.end() + 1)))
+        .unwrap();
+    let ConstBindings::Tuple(value, span) = mapped else {
+        panic!("variant changed")
+    };
+    assert_eq!(value, 1);
+    assert_eq!(span, Span::new(16, 26));
+}
 
 // Inherent methods must never replace the generated trait's recursive calls.
 #[derive(Clone, Equality, Shift)]

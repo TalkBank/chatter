@@ -50,9 +50,8 @@ pub(super) fn extract_pho_group_items<'tree>(
                 SourceSlotView::Present(content) => build_group_from_words(
                     extract_pho_grouped_content_words(content.read()?, errors)?,
                 ),
-                SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
-                    fallback_group_as_text(typed)
-                }
+                SourceSlotView::Error(_) => fallback_group_as_text(typed),
+                SourceSlotView::Absent(never) => match never {},
             }
         }
     })
@@ -103,14 +102,19 @@ pub(super) fn extract_pho_grouped_content_words<'tree, 'source>(
 
 /// Separators carry no model content. Missing/Error retain their diagnostics;
 /// absence stays a no-op until the producer's types prove otherwise.
-pub(super) fn push_pho_separator<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, WhitespacesNode<'tree>>>,
+pub(super) fn push_pho_separator<'tree, A: crate::generated_traversal::Absence>(
+    slot: SourceField<
+        '_,
+        'tree,
+        '_,
+        KindSlot<'tree, WhitespacesNode<'tree>, crate::generated_traversal::Raw, A>,
+    >,
     errors: &impl ErrorSink,
     context: &str,
 ) {
     let source = slot.source();
     match slot.view() {
-        SourceSlotView::Present(_) | SourceSlotView::Absent(NoChild) => {}
+        SourceSlotView::Present(_) | SourceSlotView::Absent(_) => {}
         SourceSlotView::Missing(raw) => {
             check_not_missing(raw.raw_node(), source, errors, context);
         }
@@ -123,12 +127,17 @@ pub(super) fn push_pho_separator<'tree>(
 
 /// Preserve nonempty word text, diagnose Error, and omit absent slots.
 /// Compiled admission excludes MISSING at this composite word position.
-fn push_pho_word<'tree, 'source>(
+fn push_pho_word<'tree, 'source, A: crate::generated_traversal::Absence>(
     slot: SourceField<
         '_,
         'tree,
         'source,
-        crate::generated_traversal::NonMissingKindSlot<'tree, PhoWordsNode<'tree>>,
+        crate::generated_traversal::NonMissingKindSlot<
+            'tree,
+            PhoWordsNode<'tree>,
+            crate::generated_traversal::Raw,
+            A,
+        >,
     >,
     errors: &impl ErrorSink,
     words: &mut Vec<&'source str>,
@@ -148,7 +157,7 @@ fn push_pho_word<'tree, 'source>(
                 "pho_grouped_content",
             ));
         }
-        SourceSlotView::Absent(NoChild) => {}
+        SourceSlotView::Absent(_) => {}
         SourceSlotView::Unexpected(never) => match never {},
     }
     Ok(())

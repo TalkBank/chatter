@@ -1,5 +1,7 @@
 //! Shared malformed morphology remains source data, never parsed morphology.
 
+use super::completed;
+
 use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
 use talkbank_model::{
     ChatParser, DependentTier, ErrorCode, ErrorCollector, RuleSelection, TranscriptName, WriteChat,
@@ -65,8 +67,8 @@ fn both_backends_preserve_malformed_mor_source_and_wire_invalidity() {
                     );
                     assert!(result.is_err(), "JSON cannot certify raw morphology");
                     assert!(
-                        errors
-                            .into_vec()
+                        completed(errors)
+                            .into_diagnostics()
                             .iter()
                             .any(|error| error.code == ErrorCode::UnparsableContent)
                     );
@@ -91,7 +93,12 @@ fn parse(parser: &impl ChatParser, source: &str, offset: usize) -> talkbank_mode
         .parse_chat_file(source, offset, &errors)
         .into_option()
         .expect("recovered file");
-    assert!(errors.has_errors());
+    assert!(
+        completed(errors)
+            .diagnostics()
+            .iter()
+            .any(|error| error.severity == talkbank_model::Severity::Error)
+    );
     file
 }
 
@@ -151,7 +158,7 @@ fn recovered_slot_is_replaced_in_place_without_missing_mor_cascade() {
             &errors,
             TranscriptName::Anonymous,
         );
-        let diagnostics = errors.into_vec();
+        let diagnostics = completed(errors).into_diagnostics();
         assert!(
             diagnostics
                 .iter()
@@ -219,8 +226,8 @@ fn file_level_mor_recovery_retains_source_and_refuses_sanitization() {
                     let diagnostics = ErrorCollector::new();
                     model.validate(&diagnostics, TranscriptName::Anonymous);
                     assert!(
-                        diagnostics
-                            .into_vec()
+                        completed(diagnostics)
+                            .into_diagnostics()
                             .iter()
                             .any(|error| error.code == ErrorCode::UnparsableContent)
                     );
@@ -286,8 +293,8 @@ fn file_level_recovery_preserves_mor_and_gra_continuations() {
                             let diagnostics = ErrorCollector::new();
                             model.validate(&diagnostics, TranscriptName::Anonymous);
                             assert!(
-                                diagnostics
-                                    .into_vec()
+                                completed(diagnostics)
+                                    .into_diagnostics()
                                     .iter()
                                     .any(|error| error.code == ErrorCode::UnparsableContent)
                             );

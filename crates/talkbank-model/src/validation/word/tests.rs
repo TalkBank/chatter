@@ -83,7 +83,7 @@ fn imported_short_language_lists_are_not_resolved_or_validated_as_success() {
                 crate::Location::Unlocated,
                 WordText::from(non_empty_literal!("word")),
             );
-            word.lang = Some(marker);
+            word.suffix = Some(crate::WordSuffix::Language(marker));
             let errors = run_word_validation(&word, None, &[], false);
             assert!(
                 errors
@@ -103,7 +103,8 @@ fn imported_short_language_lists_are_not_resolved_or_validated_as_success() {
                 crate::validation::LanguageResolution::Unresolved
             );
             assert_eq!(
-                serde_json::to_value(word.lang.as_ref().expect("retained marker")).expect("wire"),
+                serde_json::to_value(word.language_marker().expect("retained marker"))
+                    .expect("wire"),
                 wire
             );
         }

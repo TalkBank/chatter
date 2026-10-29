@@ -11,7 +11,7 @@ expression: "(word, error_vec)"
             severity: Error,
             location: Known {
                 span: Span {
-                    start: 105,
+                    start: 100,
                     end: 107,
                 },
                 position: None,
@@ -20,11 +20,11 @@ expression: "(word, error_vec)"
                 ErrorContext {
                     source_text: "hello@@",
                     span: Span {
-                        start: 5,
+                        start: 0,
                         end: 7,
                     },
                     expected: [],
-                    found: "",
+                    found: "hello@@",
                     line_offset: None,
                 },
             ),

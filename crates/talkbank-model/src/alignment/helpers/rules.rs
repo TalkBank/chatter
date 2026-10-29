@@ -134,13 +134,12 @@ fn is_linguistic_content(word: &Word) -> bool {
     !is_fragment_like(word) && word.untranscribed().is_none()
 }
 
-/// Return whether a word token is `%wor` timing metadata (`start_end` digits).
+/// Return whether a word's complete spelling has the ASCII `digits_digits` shape.
 ///
-/// These tokens are alignment metadata rather than lexical items and therefore
-/// must be excluded from lexical alignment counts.
+/// The filtered lexical policy excludes this shape even for independently
+/// constructed or recovered words. This is not bullet parsing or interval
+/// validation: endpoint order and numeric range do not affect membership.
 fn is_wor_timing_token(word: &Word) -> bool {
-    // %wor tiers interleave lexical tokens with timing markers like `100_200`.
-    // Those markers are alignment metadata, not alignable lexical content.
     let spelling = word.raw_text();
     let raw = spelling.as_bytes();
     let Some(split_at) = raw.iter().position(|&byte| byte == b'_') else {
@@ -189,4 +188,48 @@ pub fn is_tag_marker_separator(sep: &Separator) -> bool {
         sep,
         Separator::Tag { .. } | Separator::Vocative { .. } | Separator::Comma { .. }
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Location;
+    use crate::alignment::WorSlotMembershipPolicy;
+    use crate::model::{Word, WordText};
+
+    enum SpellingControl {
+        TimingLike(&'static str),
+        Lexical(&'static str),
+    }
+
+    #[test]
+    fn wor_membership_classifies_spelling_without_admitting_timestamps() {
+        // These are independent model API inputs, not claims that a parser
+        // admits each spelling as valid CHAT or that any interval is valid.
+        for control in [
+            SpellingControl::TimingLike("100_200"),
+            SpellingControl::TimingLike("200_100"),
+            SpellingControl::TimingLike("999999999999999999999999999999_0"),
+            SpellingControl::Lexical("hello"),
+            SpellingControl::Lexical("_200"),
+            SpellingControl::Lexical("100_"),
+            SpellingControl::Lexical("100_200_300"),
+            SpellingControl::Lexical("a_200"),
+            SpellingControl::Lexical("100_b"),
+            SpellingControl::Lexical("١٠٠_٢٠٠"),
+        ] {
+            let (text, expected) = match control {
+                SpellingControl::TimingLike(text) => (text, false),
+                SpellingControl::Lexical(text) => (text, true),
+            };
+            let word = Word::new(
+                Location::Unlocated,
+                WordText::new(text).expect("nonempty input"),
+            );
+            assert_eq!(
+                WorSlotMembershipPolicy::FilteredLexicalV1.admits(&word),
+                expected,
+                "{text}"
+            );
+        }
+    }
 }

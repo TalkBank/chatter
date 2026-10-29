@@ -50,15 +50,10 @@ impl DocumentSession {
         let mut source = self.current().map(|document| document.source.to_string());
         for change in changes {
             if let Some(range) = change.range {
-                if range.start > range.end {
-                    return Err(DocumentChangeError::ReversedRange);
-                }
                 let source = source
                     .as_mut()
                     .ok_or(DocumentChangeError::ReplacementRequired)?;
-                let start = super::utils::position_to_offset(source, range.start);
-                let end = super::utils::position_to_offset(source, range.end);
-                source.replace_range(start..end, &change.text);
+                AdmittedDocumentEdit::new(source, range, &change.text)?.apply();
             } else {
                 source = Some(change.text);
             }
@@ -78,6 +73,39 @@ enum DocumentChangeError {
     ReversedRange,
     #[error("a full document replacement is required")]
     ReplacementRequired,
+    #[error(transparent)]
+    Position(#[from] super::utils::EditPositionError),
+}
+
+/// The mutable revision and its admitted UTF-8 edit range travel together.
+/// No caller can apply an unadmitted or differently sourced byte range.
+struct AdmittedDocumentEdit<'source, 'replacement> {
+    source: &'source mut String,
+    range: std::ops::Range<usize>,
+    replacement: &'replacement str,
+}
+
+impl<'source, 'replacement> AdmittedDocumentEdit<'source, 'replacement> {
+    fn new(
+        source: &'source mut String,
+        range: Range,
+        replacement: &'replacement str,
+    ) -> Result<Self, DocumentChangeError> {
+        if range.start > range.end {
+            return Err(DocumentChangeError::ReversedRange);
+        }
+        let start = super::utils::edit_position_to_offset(source, range.start)?;
+        let end = super::utils::edit_position_to_offset(source, range.end)?;
+        Ok(Self {
+            source,
+            range: start..end,
+            replacement,
+        })
+    }
+
+    fn apply(self) {
+        self.source.replace_range(self.range, self.replacement);
+    }
 }
 
 pub(super) fn get_document_text(backend: &Backend, uri: &Url) -> Option<String> {

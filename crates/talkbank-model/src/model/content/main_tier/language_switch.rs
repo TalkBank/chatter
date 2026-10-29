@@ -139,7 +139,7 @@ impl MainTier {
 
         let mut target_lang: Option<LanguageCode> = None;
         for (word, enclosing) in words {
-            word.lang.as_ref()?;
+            word.language_marker()?;
 
             // A word inside a `<...> [@s]` span is NOT a rewrite candidate, and
             // this guard is the whole reason the walk threads a scope here.

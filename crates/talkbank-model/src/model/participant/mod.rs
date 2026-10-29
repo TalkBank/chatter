@@ -5,8 +5,10 @@
 //! - `@ID`: language/corpus/age/sex plus optional study metadata
 //! - `@Birth of <CODE>`: optional birth date
 //!
-//! This module exposes a unified [`Participant`] view so downstream code does
-//! not need to re-join those headers manually.
+//! This module exposes a borrowed [`ParticipantView`] of current headers and
+//! an explicitly owned [`Participant`] snapshot so downstream code does not
+//! need to re-join those headers manually. A snapshot no longer tracks edits
+//! to the source document; serializing it does not certify header validity.
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Participants_Header>
@@ -16,7 +18,10 @@
 //! # CHAT Requirement
 //!
 //! Every participant listed in `@Participants` must have a corresponding `@ID`.
-//! Parsing/validation enforces this invariant.
+//! Validation diagnoses missing or inconsistent metadata. Readable participant
+//! views can still contain invalid field values, and a declared speaker without
+//! a readable matching ID has no joined view. Use the participant roster when
+//! the question is declaration rather than availability of joined metadata.
 //!
 //! # Example CHAT Structure
 //!

@@ -60,11 +60,11 @@ fn generate_word_description(input: &str) -> Result<String, DescriptionError> {
         }
     }
 
-    if word.form_type.is_some() {
+    if word.form_type().is_some() {
         features.push("form type marker".to_string());
     }
 
-    if word.lang.is_some() {
+    if word.language_marker().is_some() {
         features.push("language marker".to_string());
     }
 

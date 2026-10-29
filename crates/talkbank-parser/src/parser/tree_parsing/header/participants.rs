@@ -370,12 +370,17 @@ impl ParticipantPosition {
 /// stays outside entry conversion, and positional policy remains explicit.
 /// `contents` is the `participants_contents` node, where a producer fault
 /// with no node of its own is located.
-fn parse_participant_slot<'tree>(
+fn parse_participant_slot<'tree, A: crate::generated_traversal::Absence>(
     slot: SourceField<
         '_,
         'tree,
         '_,
-        crate::generated_traversal::NonMissingKindSlot<'tree, ParticipantNode<'tree>>,
+        crate::generated_traversal::NonMissingKindSlot<
+            'tree,
+            ParticipantNode<'tree>,
+            crate::generated_traversal::Raw,
+            A,
+        >,
     >,
     position: ParticipantPosition,
     contents: Node<'tree>,

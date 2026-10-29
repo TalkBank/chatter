@@ -7,7 +7,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use miette::{GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
-use std::fmt::Write as _;
 use std::sync::Arc;
 use talkbank_model::{ParseError, SourceDiagnostic, enhance_errors_with_source};
 
@@ -73,18 +72,18 @@ pub fn render_diagnostics(
 }
 
 /// Render an already checked diagnostic. Reusing it is safe and idempotent.
+/// A failed graphical render discards its partial output before returning the
+/// diagnostic's plain message.
 pub fn render_error_with_miette(error: &SourceDiagnostic) -> String {
     let mut output = String::new();
     let handler = GraphicalReportHandler::new_themed(GraphicalTheme::unicode())
         .with_links(false)
         .with_footer(String::new());
 
-    if let Err(_e) = handler.render_report(&mut output, error) {
-        // Fallback if miette rendering fails
-        write!(&mut output, "{}", error).ok();
+    match handler.render_report(&mut output, error) {
+        Ok(()) => output,
+        Err(_) => error.to_string(),
     }
-
-    output
 }
 
 /// Admit an absolute-source diagnostic, then render without mutating evidence.

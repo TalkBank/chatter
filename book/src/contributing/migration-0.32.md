@@ -7,6 +7,9 @@ representations. Update dependent code and regenerate model JSON from its
 source where practical. Recovery-bearing JSON remains subject to validation;
 a successful deserialization does not establish valid CHAT.
 
+This page describes the published 0.32 line. For changes after 0.32.1,
+continue with the [0.33 migration guide](migration-0.33.md).
+
 ## CLI users and automation
 
 Use the [CLI migration table](../chatter/user-guide/cli-reference.md#migration)
