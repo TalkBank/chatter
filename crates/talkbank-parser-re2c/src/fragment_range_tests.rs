@@ -2,6 +2,83 @@
 #![allow(clippy::unwrap_used)]
 use talkbank_model::{ChatParser, ErrorCode, ErrorCollector, Span};
 
+#[derive(Clone, Copy, Debug)]
+enum MorphosyntaxFragment {
+    MorTier,
+    MorWord,
+    GraTier,
+    GraRelation,
+}
+
+impl MorphosyntaxFragment {
+    fn reference_input(self) -> &'static str {
+        let reference = include_str!("../../../corpus/reference/tiers/pho.cha");
+        let prefix = match self {
+            Self::MorTier | Self::MorWord => "%mor:\t",
+            Self::GraTier | Self::GraRelation => "%gra:\t",
+        };
+        let body = reference
+            .lines()
+            .find_map(|line| line.strip_prefix(prefix))
+            .unwrap();
+        match self {
+            Self::MorTier | Self::GraTier => body,
+            Self::MorWord | Self::GraRelation => body.split_whitespace().next().unwrap(),
+        }
+    }
+
+    fn parse(
+        self,
+        input: &str,
+        offset: usize,
+        errors: &ErrorCollector,
+    ) -> talkbank_model::ParseOutcome<()> {
+        let parser = crate::Re2cParser::new();
+        match self {
+            Self::MorTier => parser.parse_mor_tier(input, offset, errors).map(|_| ()),
+            Self::MorWord => parser.parse_mor_word(input, offset, errors).map(|_| ()),
+            Self::GraTier => parser.parse_gra_tier(input, offset, errors).map(|_| ()),
+            Self::GraRelation => parser.parse_gra_relation(input, offset, errors).map(|_| ()),
+        }
+    }
+}
+
+#[test]
+fn morphosyntax_fragment_controls_have_one_located_diagnostic_per_character() {
+    let mut violations = Vec::new();
+    for kind in [
+        MorphosyntaxFragment::MorTier,
+        MorphosyntaxFragment::MorWord,
+        MorphosyntaxFragment::GraTier,
+        MorphosyntaxFragment::GraRelation,
+    ] {
+        let input = kind.reference_input();
+        let clean = ErrorCollector::new();
+        assert!(kind.parse(input, 31, &clean).is_parsed(), "{kind:?}");
+        assert!(clean.is_empty());
+        for control in ['\0', '\u{7}', '\u{7f}'] {
+            for offset in [0, 31, u32::MAX as usize + 1] {
+                let malformed = format!("{input}{control}");
+                let errors = ErrorCollector::new();
+                let outcome = kind.parse(&malformed, offset, &errors);
+                let diagnostics = errors.into_vec();
+                let expected = Span::new(offset + input.len(), offset + malformed.len());
+                if !outcome.is_rejected()
+                    || diagnostics.len() != 1
+                    || diagnostics[0].code != ErrorCode::InvalidControlCharacter
+                    || diagnostics[0].location.span() != Some(expected)
+                {
+                    violations.push(format!(
+                        "{kind:?}, offset {offset}, U+{:04X}: {diagnostics:?}",
+                        control as u32
+                    ));
+                }
+            }
+        }
+    }
+    assert!(violations.is_empty(), "{}", violations.join("\n"));
+}
+
 #[test]
 fn inline_zero_bullet_diagnostics_keep_fragment_origins() {
     let fixture = include_str!(concat!(

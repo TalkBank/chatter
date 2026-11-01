@@ -204,3 +204,26 @@ including the following requirements:
 - `@Languages` is required
 - `@ID` participant codes must match `@Participants` declarations
 - Age format validation in `@ID` lines
+
+### Headers written empty
+
+No header may be written with its colon and tab but nothing after them (or
+only spaces). An optional header with no information is omitted, not written
+empty: Chatter refuses the empty form with E553 for every colon-bearing
+header, including `@Date`, `@Media`, `@Options`, `@Comment`,
+`@Time Duration`, `@Time Start`, `@PID` and `@Birth of`. The exceptions keep
+more specific codes: an empty `@Languages` is E507, an empty `@Participants`
+is E506, an empty `@ID` is E316, and `@Thumbnail` is E525 whatever it holds.
+The gem headers have a legal bare form with no colon (`@Bg`, `@Eg`, `@G`);
+only `@G:` and its siblings written with a colon and nothing after it are
+refused. A colon with no tab after it is a malformed header (E303), not an
+empty one.
+
+### Header bodies that cannot be read in full
+
+When part of a header's body cannot be read, for example `1x` as an `@Page`
+number, an extra or trailing comma in `@Media`, or an empty position in an
+`@Options` list (`CA,,NoAlign`), the whole line is kept as an unknown header
+with its text. Chatter reports the unparsable content (E316) and the unknown
+header (E525) and builds no header from the readable part, under both of its
+parsers.

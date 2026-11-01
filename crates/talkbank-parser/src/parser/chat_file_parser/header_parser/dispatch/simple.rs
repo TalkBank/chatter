@@ -1,13 +1,15 @@
 //! Per-kind parsing for scalar/textual header forms.
 //!
-//! These headers can be decoded from a single content field without invoking
-//! multi-node structural parsers. Each function here is the LEVEL-2 entry for one
-//! `HeaderChoice` simple variant, and each is one call to [`simple_header`]: the
-//! source-associated content slot, the words for its recovery, and the
-//! constructor for the header it builds. Entry points consume `SourceBound`
-//! rather than independently supplied nodes and source. Payload text is borrowed
-//! after range admission. Shared recovery remains in `simple_header`; finite
-//! lack of a malformed-slot witness is not a proof that recovery is impossible.
+//! These headers are decoded from a single content field without invoking
+//! multi-node structural parsers. Each is one [`TextKind`] and one call to
+//! [`content_header`]: the parser maps the node to its kind and the model
+//! does the rest. The one emptiness decision ([`read_body`]) makes the empty
+//! state from the kind, and the kind's own constructor ([`TextKind::header`])
+//! makes the header from content, so pairing one header's empty form with
+//! another header's builder is not expressible. Entry points consume
+//! `SourceBound` rather than independently supplied nodes and source.
+//! Shared recovery remains in `content_header`; finite lack of a
+//! malformed-slot witness is not a proof that recovery is impossible.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Date_Header>
@@ -17,371 +19,136 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
     ActivitiesHeaderNode, BckHeaderNode, DateHeaderNode, LocationHeaderNode, NamedKind,
-    PageHeaderNode, RoomLayoutHeaderNode, SourceBound, SourceBoundKind, SourceField,
-    SourceRecovery, THeaderNode, TapeLocationHeaderNode, TimeDurationHeaderNode,
+    PageHeaderNode, RoomLayoutHeaderNode, SituationHeaderNode, SourceBound, SourceBoundKind,
+    SourceField, SourceRecovery, THeaderNode, TapeLocationHeaderNode, TimeDurationHeaderNode,
     TimeStartHeaderNode, TranscriberHeaderNode, VideosHeaderNode, WarningHeaderNode,
 };
-use crate::model::{self, Header};
+use crate::model::{Header, PlainKind, StructuredKind, TextKind};
 use crate::parser::tree_parsing::parser_helpers::{
-    ContentSlot, HeaderSite, read_optional_source_content, read_source_content, surface_displaced,
-    unknown_header_from_node,
+    Body, ContentSlot, HeaderSite, read_body, surface_displaced, unsupported_header_from_node,
 };
-use crate::parser::typed_cst::{AnyKindSlot, AnySelectedKindSlot};
+use crate::parser::typed_cst::AnySelectedKindSlot;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
-/// One header with one content slot: read the slot, build the header from
-/// its text with `build`, or hand back the recovery the slot produced, then
-/// surface the carrier's own unexpected sink. The one owner of the two arms
-/// every simple header used to write. Generic over the content slot's
-/// `Missing` payload, as [`read_source_content`] is.
-pub(super) fn simple_header<'value, 'tree: 'value, 'source, T, M, E, A>(
-    site: &HeaderSite<'tree, 'source>,
-    content_slot: SourceField<'value, 'tree, 'source, AnyKindSlot<T, M, E, A>>,
-    unexpected: &[Node<'tree>],
-    words: &ContentSlot<'_>,
-    errors: &impl ErrorSink,
-    build: impl FnOnce(&'source str) -> Header,
-) -> ParseOutcome<Header>
-where
-    T: SourceBoundKind<'tree> + NamedKind,
-    M: SourceRecovery<'value, 'tree, 'source>,
-    E: SourceRecovery<'value, 'tree, 'source>,
-    A: crate::generated_traversal::Absence,
-{
-    let header = read_source_content(site, content_slot, words, errors).map_or_else(
-        |failure| failure.into_outcome(site, errors),
-        |text| ParseOutcome::parsed(build(text)),
-    );
-    surface_displaced(unexpected, site.kind(), site.input(), errors);
-    header
-}
-
-/// Optional payloads preserve omission separately from recovery and source faults.
-/// The header-specific constructor owns how the model represents an omission.
-fn optional_header<'value, 'tree: 'value, 'source, T, M, E>(
+/// One text-kind header with one optional content slot: read the body once
+/// ([`read_body`]), and build the empty state or the kind's header from it;
+/// or hand back the recovery the slot produced. Then surface the carrier's
+/// own unexpected sink. The one owner of the arms every text header used to
+/// write. Generic over the content slot's recovery payloads, as
+/// [`read_body`] is.
+pub(crate) fn content_header<'value, 'tree: 'value, 'source, T, M, E>(
     site: &HeaderSite<'tree, 'source>,
     content_slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<T, M, E>>>,
     unexpected: &[Node<'tree>],
     words: &ContentSlot<'_>,
     errors: &impl ErrorSink,
-    build: impl FnOnce(Option<&'source str>) -> Header,
+    kind: TextKind,
 ) -> ParseOutcome<Header>
 where
     T: SourceBoundKind<'tree> + NamedKind,
     M: SourceRecovery<'value, 'tree, 'source>,
     E: SourceRecovery<'value, 'tree, 'source>,
 {
-    let header = read_optional_source_content(site, content_slot, words, errors).map_or_else(
-        |failure| failure.into_outcome(site, errors),
-        |text| ParseOutcome::parsed(build(text)),
-    );
+    let header = match read_body(site, content_slot, words, errors) {
+        Ok(Body::Empty(separator)) => ParseOutcome::parsed(PlainKind::Text(kind).empty(separator)),
+        Ok(Body::Written { text, .. }) => ParseOutcome::parsed(kind.header(text)),
+        Err(failure) => failure.into_outcome(site, errors),
+    };
     surface_displaced(unexpected, site.kind(), site.input(), errors);
     header
 }
 
-/// `@Date` -> `Header::Date`. `date_contents` is `choice(strict_date,
-/// generic_date)`; the text is kept and `ChatDate::new` classifies it, and the
-/// validator reports E518 for a malformed date.
-pub(super) fn date<'tree>(
-    typed: SourceBound<'tree, '_, DateHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
+/// One text-kind header entry point: admit the envelope, then
+/// [`content_header`] over its content slot (`child_2`) with the kind.
+macro_rules! text_header {
+    ($(#[$doc:meta])* $name:ident, $node:ident, $kind:expr, $missing:literal) => {
+        $(#[$doc])*
+        pub(super) fn $name<'tree>(
+            typed: SourceBound<'tree, '_, $node<'tree>>,
+            errors: &impl ErrorSink,
+        ) -> ParseOutcome<Header> {
+            let site = HeaderSite::bound(typed);
+            let Ok(children) = crate::parser::typed_cst::report_admission(
+                crate::parser::typed_cst::extract_envelope(typed),
+                site.actual(),
+                site.input(),
+                errors,
+            ) else {
+                return ParseOutcome::Rejected;
+            };
+            content_header(
+                &site,
+                children.field_child_2().slot(),
+                &children.children().unexpected,
+                &ContentSlot {
+                    missing: $missing,
+                    suggested_fix: None,
+                },
+                errors,
+                $kind,
+            )
+        }
     };
-    optional_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Date content",
-            suggested_fix: None,
-        },
-        errors,
-        |content| Header::Date {
-            date: match content {
-                Some(text) => model::ChatDate::new(text),
-                None => model::ChatDate::Unsupported(String::new()),
-            },
-        },
-    )
 }
 
-/// `@Tape Location` -> `Header::TapeLocation`.
-pub(super) fn tape_location<'tree>(
-    typed: SourceBound<'tree, '_, TapeLocationHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Tape Location content",
-            suggested_fix: None,
-        },
-        errors,
-        |location| Header::TapeLocation {
-            location: model::TapeLocationDescription::new(location),
-        },
-    )
-}
+text_header!(
+    /// `@Date` -> `Header::Date`. `date_contents` is `choice(strict_date,
+    /// generic_date)`; the text is kept and `ChatDate` classifies it, and the
+    /// validator reports E518 for a malformed date.
+    date, DateHeaderNode, TextKind::Date, "Missing @Date content"
+);
+text_header!(
+    /// `@Situation` -> `Header::Situation`.
+    situation, SituationHeaderNode, TextKind::Situation, "Missing @Situation content"
+);
+text_header!(
+    /// `@Tape Location` -> `Header::TapeLocation`.
+    tape_location, TapeLocationHeaderNode, TextKind::TapeLocation, "Missing @Tape Location content"
+);
+text_header!(
+    /// `@Time Duration` -> `Header::TimeDuration`.
+    time_duration, TimeDurationHeaderNode, TextKind::TimeDuration, "Missing @Time Duration content"
+);
+text_header!(
+    /// `@Time Start` -> `Header::TimeStart`.
+    time_start, TimeStartHeaderNode, TextKind::TimeStart, "Missing @Time Start content"
+);
+text_header!(
+    /// `@Location` -> `Header::Location`.
+    location, LocationHeaderNode, TextKind::Location, "Missing @Location content"
+);
+text_header!(
+    /// `@Room Layout` -> `Header::RoomLayout`.
+    room_layout, RoomLayoutHeaderNode, TextKind::RoomLayout, "Missing @Room Layout content"
+);
+text_header!(
+    /// `@Transcriber` -> `Header::Transcriber`.
+    transcriber, TranscriberHeaderNode, TextKind::Transcriber, "Missing @Transcriber content"
+);
+text_header!(
+    /// `@Warning` -> `Header::Warning`.
+    warning, WarningHeaderNode, TextKind::Warning, "Missing @Warning content"
+);
+text_header!(
+    /// `@Activities` -> `Header::Activities`.
+    activities, ActivitiesHeaderNode, TextKind::Activities, "Missing @Activities content"
+);
+text_header!(
+    /// `@Bck` -> `Header::Bck`.
+    bck, BckHeaderNode, TextKind::Bck, "Missing @Bck content"
+);
+text_header!(
+    /// `@Videos` -> `Header::Videos`.
+    videos, VideosHeaderNode, TextKind::Videos, "Missing @Videos content"
+);
+text_header!(
+    /// `@T` -> `Header::T`.
+    t, THeaderNode, TextKind::T, "Missing @T content"
+);
 
-/// `@Time Duration` -> `Header::TimeDuration`.
-pub(super) fn time_duration<'tree>(
-    typed: SourceBound<'tree, '_, TimeDurationHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    optional_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Time Duration content",
-            suggested_fix: None,
-        },
-        errors,
-        |duration| Header::TimeDuration {
-            duration: match duration {
-                Some(text) => model::TimeDurationValue::new(text),
-                None => model::TimeDurationValue::new(""),
-            },
-        },
-    )
-}
-
-/// `@Time Start` -> `Header::TimeStart`.
-pub(super) fn time_start<'tree>(
-    typed: SourceBound<'tree, '_, TimeStartHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    optional_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Time Start content",
-            suggested_fix: None,
-        },
-        errors,
-        |start| Header::TimeStart {
-            start: match start {
-                Some(text) => model::TimeStartValue::new(text),
-                None => model::TimeStartValue::new(""),
-            },
-        },
-    )
-}
-
-/// `@Location` -> `Header::Location`.
-pub(super) fn location<'tree>(
-    typed: SourceBound<'tree, '_, LocationHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Location content",
-            suggested_fix: None,
-        },
-        errors,
-        |location| Header::Location {
-            location: model::LocationDescription::new(location),
-        },
-    )
-}
-
-/// `@Room Layout` -> `Header::RoomLayout`.
-pub(super) fn room_layout<'tree>(
-    typed: SourceBound<'tree, '_, RoomLayoutHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Room Layout content",
-            suggested_fix: None,
-        },
-        errors,
-        |layout| Header::RoomLayout {
-            layout: model::RoomLayoutDescription::new(layout),
-        },
-    )
-}
-
-/// `@Transcriber` -> `Header::Transcriber`.
-pub(super) fn transcriber<'tree>(
-    typed: SourceBound<'tree, '_, TranscriberHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Transcriber content",
-            suggested_fix: None,
-        },
-        errors,
-        |transcriber| Header::Transcriber {
-            transcriber: model::TranscriberName::new(transcriber),
-        },
-    )
-}
-
-/// `@Warning` -> `Header::Warning`.
-pub(super) fn warning<'tree>(
-    typed: SourceBound<'tree, '_, WarningHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Warning content",
-            suggested_fix: None,
-        },
-        errors,
-        |text| Header::Warning {
-            text: model::WarningText::new(text),
-        },
-    )
-}
-
-/// `@Activities` -> `Header::Activities`.
-pub(super) fn activities<'tree>(
-    typed: SourceBound<'tree, '_, ActivitiesHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Activities content",
-            suggested_fix: None,
-        },
-        errors,
-        |activities| Header::Activities {
-            activities: model::ActivitiesDescription::new(activities),
-        },
-    )
-}
-
-/// `@Bck` -> `Header::Bck`.
-pub(super) fn bck<'tree>(
-    typed: SourceBound<'tree, '_, BckHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Bck content",
-            suggested_fix: None,
-        },
-        errors,
-        |bck| Header::Bck {
-            bck: model::BackgroundDescription::new(bck),
-        },
-    )
-}
-
-/// `@Page` -> `Header::Page`.
+/// `@Page` -> `Header::Page`. Its content is a page number, admitted by
+/// `PageNumber` when built; a malformed one is E316 and an unknown header.
 pub(super) fn page<'tree>(
     typed: SourceBound<'tree, '_, PageHeaderNode<'tree>>,
     errors: &impl ErrorSink,
@@ -395,86 +162,27 @@ pub(super) fn page<'tree>(
     ) else {
         return ParseOutcome::Rejected;
     };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
+    let words = ContentSlot {
+        missing: "Missing @Page number",
+        suggested_fix: None,
+    };
+    let header = match read_body(&site, children.field_child_2().slot(), &words, errors) {
+        Ok(Body::Empty(separator)) => {
+            ParseOutcome::parsed(PlainKind::Structured(StructuredKind::Page).empty(separator))
+        }
+        Ok(Body::Written { text, .. }) => match crate::model::PageNumber::new(text.as_str()) {
+            Ok(page) => ParseOutcome::parsed(Header::Page { page }),
+            Err(error) => ParseOutcome::parsed(site.refuse_content(&error.to_string(), errors)),
+        },
+        Err(failure) => failure.into_outcome(&site, errors),
+    };
+    surface_displaced(
         &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Page number",
-            suggested_fix: None,
-        },
-        errors,
-        |text| match model::PageNumber::new(text) {
-            Ok(page) => Header::Page { page },
-            Err(error) => {
-                errors.report(talkbank_model::ParseError::at_span(
-                    talkbank_model::ErrorCode::UnparsableContent,
-                    talkbank_model::Severity::Error,
-                    crate::parser::node_span::span_of(site.actual()),
-                    error.to_string(),
-                ));
-                site.unknown(error.to_string(), None)
-            }
-        },
-    )
-}
-
-/// `@Videos` -> `Header::Videos`.
-pub(super) fn videos<'tree>(
-    typed: SourceBound<'tree, '_, VideosHeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
+        site.kind(),
         site.input(),
         errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @Videos content",
-            suggested_fix: None,
-        },
-        errors,
-        |videos| Header::Videos {
-            videos: model::VideoSpec::new(videos),
-        },
-    )
-}
-
-/// `@T` -> `Header::T`.
-pub(super) fn t<'tree>(
-    typed: SourceBound<'tree, '_, THeaderNode<'tree>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Header> {
-    let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_admission(
-        crate::parser::typed_cst::extract_envelope(typed),
-        site.actual(),
-        site.input(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
-        &site,
-        children.field_child_2().slot(),
-        &children.children().unexpected,
-        &ContentSlot {
-            missing: "Missing @T content",
-            suggested_fix: None,
-        },
-        errors,
-        |text| Header::T {
-            text: model::TDescription::new(text),
-        },
-    )
+    );
+    header
 }
 
 /// An `unsupported_header` node: the grammar recognised a header the model
@@ -484,7 +192,7 @@ pub(super) fn unsupported(
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    match unknown_header_from_node(header_actual, input, "Unsupported header type", None) {
+    match unsupported_header_from_node(header_actual, input) {
         Ok(header) => ParseOutcome::parsed(header),
         Err(error) => {
             crate::parser::typed_cst::report_cst_failure(header_actual, input, error, errors);

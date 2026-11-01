@@ -263,8 +263,8 @@ just test                                         # the main workspace
 
 If your change touched the grammar, follow the full
 [Grammar Workflow](grammar-workflow.md) as well: a
-`grammar.js` edit needs `tree-sitter generate` before any parser behaviour can
-be trusted.
+`grammar.js` edit needs `just grammar-gen` before any parser behaviour can be
+trusted.
 
 ## Updating a registry
 

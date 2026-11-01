@@ -43,6 +43,15 @@ Architecture: [CHAT data model](../../book/src/architecture/chat-model/chat-mode
   admission from a constructor name: inspect serde and recovery paths too. `new_unchecked` and
   `from_checked_literal` are counted by the fabricated-AST ratchet; adding one
   is a reviewed exception, never a convenience.
+- A header's identity is its `HeaderKind` (`model/header/header_enum/kind.rs`),
+  which owns its label, its constructor from content and its empty form; match
+  on the kind, never on a label string. Header payloads are built only from
+  `HeaderText`, which only `HeaderContent::classify` (the one emptiness
+  decision both parsers make) mints; a colon-bearing header with nothing after
+  its colon is `Header::EmptyContent(EmptyHeader)`, never a payload holding
+  blank text. A new payload type uses `non_empty_string_newtype!`,
+  `header_content_admission!` or `closed_vocabulary!` (`model/macros.rs`),
+  never an infallible constructor from a raw string.
 - `ChatFile` is the mutable AST; `validate_into` consumes it into a read-only
   `ValidChatFile`. Nothing deserializes into the accepted type and nothing
   edits it without `into_unchecked()`. JSON import does not reconstruct parser

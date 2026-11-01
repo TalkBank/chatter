@@ -24,20 +24,24 @@
 //! `optional_field!` leaves to the whole-tree backstop) and the final pipe in
 //! `Missing` (a truncated `@ID`). The languages field was never `Missing` or
 //! `Error`, and nothing inside `id_languages` was either: `report_recovery`
-//! there is entered by no authored file. Those arms stay for the states the
-//! slot types admit; an `Absent` required position reports the producer
-//! fault.
+//! there is entered by no authored file. The contents are read under the
+//! admitted kind proof, which narrows the languages, speaker and role kinds,
+//! so none of those positions can be `Missing`; the `Error` arms stay for the
+//! state the slot types still admit, and an `Absent` required position
+//! reports the producer fault.
 
 use crate::generated_traversal::{
-    AsRawNode, IdContentsNode, IdHeaderNode, IdRoleNode, IdSpeakerNode, Never, NoChild,
-    ReadableSlot, SourceBound, SourceBoundKind, SourceSlotView,
+    AsRawNode, IdContentsNode, IdHeaderNode, IdRoleNode, IdSpeakerNode, KindAdmitted,
+    NarrowedMissing, Never, NoChild, ReadableSlot, SourceBound, SourceBoundKind, SourceSlotView,
 };
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::node_types::{ID_CONTENTS, ID_HEADER, ID_LANGUAGES};
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::{CstFailure, GeneratedPosition, report_cst_failure};
+use crate::parser::typed_cst::{
+    CstFailure, ExtractCanonical, GeneratedPosition, report_cst_failure,
+};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, LanguageCodes, Sex};
 
@@ -58,8 +62,10 @@ impl<'tree> RequiredIDField<'tree> for IdRoleNode<'tree> {
 
 /// Decode only a range-admitted required field; recovery rejects its payload.
 ///
-/// A MISSING or ERROR node at the position is reported by the document's
-/// whole-tree backstop, as `optional_field!` already relies on, and rejects
+/// The speaker and role kinds are narrowed under the admitted proof the
+/// contents are read with, so the position cannot be MISSING. An ERROR node
+/// at the position is reported by the document's whole-tree backstop, as
+/// `optional_field!` already relies on, and rejects
 /// the field, which makes the header `Unknown`. The header fragment route
 /// (`parse_header_fragment`) lowers a header without that backstop, so
 /// there the rejection is unreported, a gap the coverage drive records
@@ -72,7 +78,13 @@ impl<'tree> RequiredIDField<'tree> for IdRoleNode<'tree> {
 /// of that model rule at a recovery node nobody read, with the model's own
 /// wording. An `Absent` required position is the walk's fault.
 fn required_field<'tree, 'source, T, M, E>(
-    slot: &ReadableSlot<SourceBound<'tree, 'source, T>, M, E, Never, NoChild>,
+    slot: &ReadableSlot<
+        SourceBound<'tree, 'source, T>,
+        NarrowedMissing<KindAdmitted, M>,
+        E,
+        Never,
+        NoChild,
+    >,
     contents: SourceBound<'tree, '_, IdContentsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<String>
@@ -81,7 +93,8 @@ where
 {
     match slot {
         ReadableSlot::Present(value) => ParseOutcome::parsed(value.text().to_owned()),
-        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => ParseOutcome::rejected(),
+        ReadableSlot::Error(_) => ParseOutcome::rejected(),
+        ReadableSlot::Missing(NarrowedMissing(never)) => match *never {},
         ReadableSlot::Absent(NoChild) => {
             report_cst_failure(
                 contents.raw_node(),
@@ -132,8 +145,9 @@ pub fn parse_id_header<'tree>(
     // skip whitespace, so every `optional($.whitespaces)` between pipe-delimited
     // fields is its OWN position; the field indices below are wider than the OLD
     // module's (see the field-mapping table in the module doc comment) but the
-    // FIELDS THEMSELVES are unchanged.
-    let contents = id_contents.extract();
+    // FIELDS THEMSELVES are unchanged. Read under the admitted kind proof, so
+    // the narrowed languages, speaker and role positions cannot be MISSING.
+    let contents = id_contents.extract_canonical()?;
 
     // Retain only displaced evidence across consuming admission, not a cloned
     // payload. Unreadable selected ranges cannot enter field decoding.
@@ -161,7 +175,8 @@ pub fn parse_id_header<'tree>(
             ReadableSlot::Present(field) => {
                 super::super::metadata::parse_id_languages(*field, errors)?
             }
-            ReadableSlot::Missing(_) | ReadableSlot::Error(_) => {
+            ReadableSlot::Missing(NarrowedMissing(never)) => match *never {},
+            ReadableSlot::Error(_) => {
                 errors.report(ParseError::new(
                     ErrorCode::EmptyIDLanguage,
                     Severity::Error,

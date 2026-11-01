@@ -128,7 +128,7 @@ impl WriteChat for MediaHeader {
     /// Serializes canonical `@Media` text, including optional status.
     fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         {
-            w.write_str("@Media:\t")?;
+            crate::model::HeaderPrefix::from(crate::model::StructuredKind::Media).write_start(w)?;
             crate::model::WriteChat::write_chat(&self.filename, w)?;
             w.write_str(", ")?;
             crate::model::WriteChat::write_chat(&self.media_type.as_str(), w)
@@ -211,7 +211,7 @@ mod declared_recording_tests {
         assert_eq!(
             header(
                 MediaType::Audio,
-                Some(MediaStatus::Unsupported("wat".to_owned()))
+                Some(MediaStatus::try_new("wat").expect("nonblank"))
             )
             .declared_recording(),
             DeclaredRecording::Expected

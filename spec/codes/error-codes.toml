@@ -68,6 +68,22 @@ reason = "LetterFormMultipleLetters. Retired 2026-08-11: it required an `@l` let
 code = "E214"
 reason = "Empty scoped annotation content. Retired 2026-08-26, and it had drifted into TWO rules under one number, neither of which could fire. It began as \"bare [*] carries no error code\" and was deliberately DISABLED as leniency Decision 1, because reference files use bare [*] as valid CHAT; its spec file still documented that rule. The code was then reused for \"the scoped-annotation LIST is empty\", which no input reaches: an empty bracket is E316, and the only empty list in the model was the parser wrapping every bare 0, never validated because Action does not implement Validate. AnnotatedContentAnnotations is non-empty by construction now, so the second rule is unrepresentable and the first stays retired. The registry already recorded status = not_implemented."
 
+[[retired]]
+code = "E508"
+reason = "EmptyDateHeader. Retired 2026-10-31 into E553: a colon-bearing header with nothing after its colon is one model state (Header::EmptyContent) that validation always refuses with E553. E508 was never emitted; E516 reported the empty @Date instead."
+
+[[retired]]
+code = "E509"
+reason = "EmptyMediaHeader. Retired 2026-10-31 into E553 (Header::EmptyContent). It was never emitted: the empty @Media header was unstructured recovery (E316)."
+
+[[retired]]
+code = "E516"
+reason = "EmptyDate. Retired 2026-10-31 into E553: an empty @Date is Header::EmptyContent, refused by the one empty-header rule, and ChatDate can no longer hold empty text."
+
+[[retired]]
+code = "E533"
+reason = "EmptyOptionsHeader. Retired 2026-10-31 into E553: an empty @Options is Header::EmptyContent, refused by the one empty-header rule, and ChatOptionFlags can no longer hold an empty list."
+
 # ---------------------------------------------------------------------
 # Generic/Internal Errors (E0xx, E1xx)
 # ---------------------------------------------------------------------
@@ -889,20 +905,6 @@ kind = "Invalidity"
 status = "implemented"
 
 [[code]]
-code = "E508"
-variant = "EmptyDateHeader"
-summary = "Empty `@Date` header."
-kind = "Invalidity"
-status = "not_implemented"
-
-[[code]]
-code = "E509"
-variant = "EmptyMediaHeader"
-summary = "Empty `@Media` header."
-kind = "Invalidity"
-status = "implemented"
-
-[[code]]
 code = "E510"
 variant = "EmptyIDLanguage"
 summary = "Empty language field in `@ID` header."
@@ -951,13 +953,6 @@ status = "implemented"
 code = "E515"
 variant = "EmptyIDRole"
 summary = "Empty role field in `@ID` header."
-kind = "Invalidity"
-status = "implemented"
-
-[[code]]
-code = "E516"
-variant = "EmptyDate"
-summary = "Empty date value."
 kind = "Invalidity"
 status = "implemented"
 
@@ -1056,13 +1051,6 @@ status = "implemented"
 code = "E532"
 variant = "InvalidParticipantRole"
 summary = "Invalid participant role value."
-kind = "Invalidity"
-status = "implemented"
-
-[[code]]
-code = "E533"
-variant = "EmptyOptionsHeader"
-summary = "Empty `@Options` header."
 kind = "Invalidity"
 status = "implemented"
 
@@ -1196,6 +1184,13 @@ status = "implemented"
 code = "E552"
 variant = "MediaUnlinkedWithTiming"
 summary = "The `@Media` header declares `unlinked` status, yet the transcript\ncontains timing bullets. `unlinked` means the media file exists but its\nutterances have not been aligned to timestamps; the presence of timing\nbullets contradicts that, so the `unlinked` qualifier must be removed\n(the media is in fact linked). This is the inverse of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming) (E544) and\ncorresponds to CLAN CHECK error 124 (\"remove \\\"unlinked\\\" from @Media\nheader\")."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E553"
+variant = "EmptyHeaderContent"
+summary = "A colon-bearing header has no content after its colon. The header\nsays it carries content and supplies none, which has no meaning in\nCHAT, so it is refused for every header kind with one rule: the parsed\n`Header::EmptyContent` state. Omit the header instead (for a gem\nheader, use the bare form with no colon). `@Languages`,\n`@Participants` and `@ID` keep their own declaration codes."
 kind = "Invalidity"
 status = "implemented"
 

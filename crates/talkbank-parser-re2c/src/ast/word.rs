@@ -2,9 +2,7 @@
 
 use super::RetraceKindParsed;
 use serde::Serialize;
-use talkbank_model::model::{
-    CADelimiterType, CAElementType, OverlapPointKind, WordStressMarkerType,
-};
+use talkbank_model::model::{CADelimiterType, CAElementType, WordStressMarkerType};
 
 /// Lexer payload admitted once, retaining the token (its index digit as the
 /// payload, the whole `[<1]` as the lexeme) and its valid index.
@@ -406,7 +404,7 @@ pub enum WordBodyItem<'a> {
     /// Stress marker (primary ˈ or secondary ˌ), as written.
     Stress(WordStressMarkerType, &'a str),
     /// Overlap point (⌈, ⌉, ⌊, ⌋ with optional index)
-    OverlapPoint(OverlapPointKind, &'a str),
+    OverlapPoint(super::WordOverlapPoint<'a>),
     /// Syllable pause (^), as written.
     SyllablePause(&'a str),
     /// Clitic boundary (~), as written.

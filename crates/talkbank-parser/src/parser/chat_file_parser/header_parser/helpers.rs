@@ -1,152 +1,13 @@
 //! Shared helper functions for header parsing.
 //!
 //! CHAT reference anchors:
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Bg_Header>
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Eg_Header>
-//! - <https://talkbank.org/0info/manuals/CHAT.html#G_Header>
+//! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 
-use crate::error::ErrorSink;
-use crate::generated_traversal::{Absence, Never, SourceRecovery};
-
-use crate::generated_traversal::{
-    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, FromNodeKind, HeaderSepNode,
-    L1OfHeaderNode, NodeSlot, SlotView, SourceBound, SourceBoundKind, SourceField, SourceSlotView,
-    extract_birth_of_header, extract_birthplace_of_header, extract_l1_of_header,
-};
-use crate::generated_traversal::{
-    FreeTextChild0Choice, FreeTextChild0ChoiceBoundView, FreeTextChild1Choice,
-    FreeTextChild1ChoiceBoundView, FreeTextNode,
-};
-use crate::model;
+use crate::generated_traversal::{AsRawNode, NodeSlot, SlotView};
 use crate::model::TierSeparator;
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use talkbank_model::ParseOutcome;
+use crate::parser::tree_parsing::parser_helpers::find_header_separator;
 use tree_sitter::Node;
-
-/// Parse optional label text used by `@Bg`, `@Eg`, and `@G` headers, from
-/// the header's `free_text` node when it has one.
-///
-/// Grammar: `free_text: repeat1(choice(rest_of_line, continuation))`. The
-/// pieces of text are joined, a continuation (a line break and its tab)
-/// contributing one space between them once text has been seen; no text
-/// at all is no label. Until 2026-09-09 this walked the node's children by
-/// `kind()` string, reporting anything else as unexpected; the generated
-/// choice names the two kinds, and a piece position holding an ERROR or a
-/// displaced node is reported as that catch-all reported it (a MISSING
-/// piece is the whole-tree pass's, E342, and contributes no text, as its
-/// empty placeholder contributed none before).
-pub(crate) fn parse_optional_gem_label<'tree>(
-    node: Option<SourceBound<'tree, '_, FreeTextNode<'tree>>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Option<model::GemLabel>> {
-    let Some(node) = node else {
-        return ParseOutcome::parsed(None);
-    };
-    let input = node.source();
-    let children = node.extract();
-    let mut label = String::new();
-    let mut saw_text = false;
-    let mut push = |piece: Piece<'_>| match piece {
-        Piece::Text(text) => {
-            if !text.is_empty() {
-                label.push_str(text);
-                saw_text = true;
-            }
-        }
-        Piece::Continuation => {
-            if saw_text {
-                label.push(' ');
-            }
-        }
-    };
-    let ParseOutcome::Parsed(first) = piece(children.field_child_0().slot(), errors) else {
-        return ParseOutcome::Rejected;
-    };
-    if let Some(first) = first {
-        push(first.into());
-    }
-    for element in children.field_child_1().slot().iter() {
-        let ParseOutcome::Parsed(next) = piece(element.slot(), errors) else {
-            return ParseOutcome::Rejected;
-        };
-        if let Some(next) = next {
-            push(next.into());
-        }
-    }
-    for displaced in children.field_unexpected().iter() {
-        surface_displaced(&[displaced.raw_node()], "free_text", input, errors);
-    }
-
-    if label.is_empty() {
-        ParseOutcome::parsed(None)
-    } else {
-        ParseOutcome::parsed(Some(model::GemLabel::new(label)))
-    }
-}
-
-/// The piece a `free_text` position holds, if it holds one: an ERROR
-/// standing in the position is reported in the gem-label
-/// context; a MISSING piece and an absent position yield nothing.
-fn piece<'a, 'tree: 'a, 'source: 'a, T, M, A>(
-    slot: SourceField<'a, 'tree, 'source, NodeSlot<T, M, tree_sitter::Node<'tree>, Never, A>>,
-    errors: &impl ErrorSink,
-) -> ParseOutcome<Option<SourceBound<'tree, 'source, T>>>
-where
-    T: SourceBoundKind<'tree> + 'a,
-    M: SourceRecovery<'a, 'tree, 'source>,
-    A: Absence,
-{
-    match slot.view() {
-        SourceSlotView::Present(value) => {
-            match crate::parser::typed_cst::read_source_field(value, errors) {
-                Some(bound) => ParseOutcome::Parsed(Some(bound)),
-                None => ParseOutcome::Rejected,
-            }
-        }
-        SourceSlotView::Error(bad) => {
-            errors.report(unexpected_node_error(
-                bad.raw_node(),
-                bad.source(),
-                "gem label",
-            ));
-            ParseOutcome::Parsed(None)
-        }
-        SourceSlotView::Missing(_) | SourceSlotView::Absent(_) => ParseOutcome::Parsed(None),
-        SourceSlotView::Unexpected(never) => match never {},
-    }
-}
-
-/// One piece of free text, whichever position it came through.
-enum Piece<'source> {
-    /// A run of text to the end of its line.
-    Text(&'source str),
-    /// A line break and its tab, which the text continues after.
-    Continuation,
-}
-
-impl<'tree, 'source> From<SourceBound<'tree, 'source, FreeTextChild0Choice<'tree>>>
-    for Piece<'source>
-{
-    fn from(choice: SourceBound<'tree, 'source, FreeTextChild0Choice<'tree>>) -> Self {
-        match choice.view() {
-            FreeTextChild0ChoiceBoundView::RestOfLine(node) => Piece::Text(node.text()),
-            FreeTextChild0ChoiceBoundView::Continuation(_) => Piece::Continuation,
-        }
-    }
-}
-
-impl<'tree, 'source> From<SourceBound<'tree, 'source, FreeTextChild1Choice<'tree>>>
-    for Piece<'source>
-{
-    fn from(choice: SourceBound<'tree, 'source, FreeTextChild1Choice<'tree>>) -> Self {
-        match choice.view() {
-            FreeTextChild1ChoiceBoundView::RestOfLine(node) => Piece::Text(node.text()),
-            FreeTextChild1ChoiceBoundView::Continuation(_) => Piece::Continuation,
-        }
-    }
-}
 
 /// Decode a header line's `header_sep` node (E758 provenance) into a
 /// [`TierSeparator`].
@@ -159,30 +20,8 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, FreeTextChild1Choice<'tree
 /// The trailing space must remain adjacent to the same separator's actual
 /// tab. Recovery can otherwise put a content space in this optional slot.
 pub(crate) fn header_separator(header_node: Node) -> Result<TierSeparator, crate::CstFailure> {
-    let qualified = if let Some(header) = BirthOfHeaderNode::from_node(header_node) {
-        Some(present_header_separator(
-            extract_birth_of_header(header).child_3.slot(),
-        ))
-    } else if let Some(header) = BirthplaceOfHeaderNode::from_node(header_node) {
-        Some(present_header_separator(
-            extract_birthplace_of_header(header).child_3.slot(),
-        ))
-    } else {
-        L1OfHeaderNode::from_node(header_node)
-            .map(|header| present_header_separator(extract_l1_of_header(header).child_3.slot()))
-    };
-    let sep = match qualified {
-        Some(Some(sep)) => sep,
-        Some(None) => return Ok(TierSeparator::CLEAN),
-        None => {
-            let Some(sep) = header_node
-                .named_child(1)
-                .and_then(HeaderSepNode::from_node)
-            else {
-                return Ok(TierSeparator::CLEAN);
-            };
-            sep
-        }
+    let Some(sep) = find_header_separator(header_node) else {
+        return Ok(TierSeparator::CLEAN);
     };
     let sep_children = crate::parser::typed_cst::extract_header_separator(sep)?;
     let trailing = sep_children.child_2.slot();
@@ -198,57 +37,4 @@ pub(crate) fn header_separator(header_node: Node) -> Result<TierSeparator, crate
             TierSeparator::CLEAN
         }
     })
-}
-
-/// Only a present separator establishes whitespace geometry, regardless of
-/// which proof axes its enclosing header exposes.
-fn present_header_separator<'tree, M, E, U, A>(
-    slot: &NodeSlot<HeaderSepNode<'tree>, M, E, U, A>,
-) -> Option<HeaderSepNode<'tree>> {
-    match slot {
-        NodeSlot::Present(separator) => Some(*separator),
-        NodeSlot::Missing(_)
-        | NodeSlot::Error(_)
-        | NodeSlot::Unexpected(_)
-        | NodeSlot::Absent(_) => None,
-    }
-}
-
-#[cfg(test)]
-mod gem_admission_tests {
-    use super::*;
-
-    #[test]
-    fn gem_label_requires_its_parse_owner() {
-        let source = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../corpus/reference/edge-cases/postcodes-and-gems.cha"
-        ));
-        let parser = crate::TreeSitterParser::new().expect("grammar");
-        let parsed = parser
-            .parse_source_incremental(source, None)
-            .expect("reference");
-        let other = parser
-            .parse_source_incremental(source, None)
-            .expect("independent reference parse");
-        let mut pending = vec![parsed.root_node()];
-        let mut witnessed = 0;
-        while let Some(node) = pending.pop() {
-            let mut cursor = node.walk();
-            pending.extend(node.children(&mut cursor));
-            let Some(text) = FreeTextNode::from_node(node) else {
-                continue;
-            };
-            let errors = talkbank_model::ErrorCollector::new();
-            let bound = parsed.bind_typed(text).expect("owning parse");
-            assert!(parse_optional_gem_label(Some(bound), &errors).is_some());
-            assert!(errors.into_vec().is_empty());
-            assert!(matches!(
-                other.bind_typed(text),
-                Err(crate::generated_traversal::SourceBindingError::ForeignTree)
-            ));
-            witnessed += 1;
-        }
-        assert!(witnessed > 0);
-    }
 }

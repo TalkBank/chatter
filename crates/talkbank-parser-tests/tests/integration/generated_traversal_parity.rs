@@ -1034,13 +1034,14 @@ fn test_options_header_semantic_conversion() {
             // carries the typed `OptionsContentsNode` wrapper, so it is
             // passed straight into `extract_options_contents` with no
             // unwrap-then-rewrap.
-            if let NodeSlot::Present(contents_node) = children.child_2.slot() {
+            if let Some(NodeSlot::Present(contents_node)) = children.child_2.slot() {
                 let contents_children = extract_options_contents(*contents_node);
 
                 if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
                     let option_text = node_text(option_node.raw_node(), source);
 
-                    let value = talkbank_model::ChatOptionFlag::from_text(option_text);
+                    let value =
+                        talkbank_model::ChatOptionFlag::try_new(option_text).expect("nonblank");
                     assert_eq!(value, talkbank_model::ChatOptionFlag::Ca);
                     assert!(!matches!(
                         value,
@@ -1065,15 +1066,16 @@ fn test_options_header_unknown_value() {
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
             let children = extract_options_header(classify::<OptionsHeaderNode>(node));
-            if let NodeSlot::Present(contents_node) = children.child_2.slot() {
+            if let Some(NodeSlot::Present(contents_node)) = children.child_2.slot() {
                 let contents_children = extract_options_contents(*contents_node);
                 if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
-                    let value = talkbank_model::ChatOptionFlag::from_text(node_text(
+                    let value = talkbank_model::ChatOptionFlag::try_new(node_text(
                         option_node.raw_node(),
                         source,
-                    ));
+                    ))
+                    .expect("nonblank");
                     assert!(
-                        matches!(value, talkbank_model::ChatOptionFlag::Unsupported(ref s) if s == "SomeUnknownOption"),
+                        matches!(value, talkbank_model::ChatOptionFlag::Unsupported(ref s) if s.as_str() == "SomeUnknownOption"),
                         "Unknown option should be Unsupported, got {value:?}"
                     );
                     found = true;

@@ -135,7 +135,10 @@ fn media_normalization_recovery_specs_require_a_clean_header_carrier() {
         ("W109_recovery_1.cha", ExpectedFinding::Absent),
         ("W109_recovery_2.cha", ExpectedFinding::Proposed),
         ("W109_recovery_3.cha", ExpectedFinding::Absent),
-        ("W109_recovery_4.cha", ExpectedFinding::Refused),
+        // The malformed carrier (`Schlu\u{308}ssel,, audio`) is unparsable
+        // text in the @Media body, kept as an unknown header under both
+        // parsers: no filename is modeled, so nothing is found to refuse.
+        ("W109_recovery_4.cha", ExpectedFinding::Absent),
     ] {
         let source = std::fs::read_to_string(root.join(fixture)).expect("authored recovery spec");
         let observed = DiagnosedSource::observe_named(&parser, &source, name);

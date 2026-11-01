@@ -25,6 +25,11 @@ def generate(output: Path, command: list[str]) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def exit_status(returncode: int) -> int:
+    """A child's status as this process's: a signal (negative) becomes 128+n."""
+    return returncode if returncode > 0 else 128 - returncode
+
+
 def publish(staged: Path, output: Path) -> None:
     """Publish completed output on the same filesystem, preserving equal files."""
     if output.exists() and filecmp.cmp(staged, output, shallow=False):
@@ -44,7 +49,7 @@ def main() -> int:
     try:
         generate(args.output, args.command)
     except subprocess.CalledProcessError as error:
-        return error.returncode if error.returncode > 0 else 128 - error.returncode
+        return exit_status(error.returncode)
     except OSError as error:
         print(f"generation failed for {args.output}: {error}", file=sys.stderr)
         return 1

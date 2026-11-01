@@ -179,6 +179,152 @@ unreadable, the join cannot prove that any unmatched declaration lacks an ID;
 it withholds those missing-ID conclusions. Readable orphan IDs and birth
 references remain independently checkable. Sanitization refuses the raw ID.
 
+### Empty header content
+
+A colon-bearing header with nothing after its separator (or only blanks) is
+one model state, `Header::EmptyContent(EmptyHeader)`, whichever header it is.
+`EmptyHeader` names the header by its kind: `Plain { kind: PlainKind, .. }`,
+or `Qualified { kind: QualifiedKind, participant, .. }` for `@Birth of`,
+`@Birthplace of` and `@L1 of`, which keep the participant the line names (a
+qualified empty header without its participant is not expressible). It also
+carries a `WrittenSeparator`, evidence minted from the separator's own text,
+so a colon whose tab is a recovery placeholder never becomes empty content.
+
+The kinds form one graph, owned by `header_enum/kind.rs`:
+
+```mermaid
+graph TD
+    HK["HeaderKind (Header::kind)"] --> P["Plain(PlainKind)"]
+    HK --> Q["Qualified(QualifiedKind)"]
+    HK --> F["Fixed(FixedKind): Utf8, Begin, End, Languages, Participants, Id, NewEpisode, Blank"]
+    HK --> U["Unknown: recovery, no prefix of its own"]
+    P --> T["Text(TextKind): TextKind::header(HeaderText)"]
+    P --> G["Gem(GemKind): bare / labelled(HeaderText)"]
+    P --> S["Structured(StructuredKind): Comment, Options, Media, Types, Page"]
+    Q --> QH["QualifiedKind::header(participant, HeaderText)"]
+    P --> E1["PlainKind::empty(WrittenSeparator)"]
+    Q --> E2["QualifiedKind::empty(participant, WrittenSeparator)"]
+```
+
+A kind owns its label (`HeaderKind::label`, so `Header::name` and the
+writer's `HeaderPrefix` read one table), the header it builds from content,
+and its empty form. A parser maps its node or token to a kind and nothing
+else, so it cannot pair one header's empty form with another's builder.
+`HeaderPrefix` is built only from a kind whose prefix is well formed: a
+`FixedKind` or `PlainKind`, or a `QualifiedKind` together with its
+participant (`HeaderPrefix::qualified`). A participant-free prefix such as
+`@Birth of` alone is a diagnostic's keyword (`QualifiedKind::keyword`), never
+something the writer can emit.
+
+Both parsers make the one emptiness decision, `HeaderContent::classify`,
+before building any payload. It is the only source of `HeaderText`, content
+proven to hold a non-whitespace character, and every payload is built from
+one (`from_content`): the header-content string types (`PidValue`,
+`SituationDescription`, `GemLabel`, `WarningText` and their siblings),
+`ChatDate`, `TimeDurationValue`, `TimeStartValue` and the closed vocabularies.
+Every other route in (`try_new`, `TryFrom`, JSON) goes through the same
+decision and refuses blank text with `BlankContent`, so a JSON payload of
+`" "` cannot write a header that reparses as empty. `@Comment` carries bullet
+content, so its payload is `CommentContent`, admitted by running the writer
+against a probe that stops at the first fragment `classify` calls text: a
+comment with no segments, or only blank text and continuations, is refused by
+both parsers and by JSON. A closed vocabulary's `Unsupported` holds
+`UnsupportedSpelling<Self>`, which only its `from_text` mints after refusing
+every known spelling, so `Unsupported` is never blank and never a known value.
+`ChatOptionFlags` is a nonempty list, read once by `ChatOptionFlags::parse`.
+A malformed `ChatDate` keeps the model's own refusal (`InvalidChatDate`),
+each refused component with the text `from_content` split it from, which
+validation renders; it is never split or parsed a second time. Validation always refuses the empty state
+(E553), and `WriteChat` writes the header prefix and the separator, so the
+line roundtrips as written. Ordering rules match on `Header::kind`, so an
+empty `@Options` or `@Birth of` line still occupies its header's position and
+the one defect gets one diagnostic.
+
+Two macros in `talkbank-model/src/model/macros.rs` give every payload the
+same admission surface, so no header type grows a route around the decision.
+`header_content_admission!` takes a type's `from_content(HeaderText)` and
+`as_str` and generates `try_new`, `TryFrom<String>`, `TryFrom<&str>`, serde
+through `try_new`, and optionally `Display`, `WriteChat` and a `minLength: 1`
+schema; `non_empty_string_newtype!` (the header-content string types) and the
+parsed values `ChatDate`, `TimeDurationValue` and `TimeStartValue` use it.
+`closed_vocabulary!` generates a closed vocabulary (`Number`,
+`RecordingQuality`, `Transcription`, `MediaType`, `MediaStatus`,
+`ChatOptionFlag`): its known variants, `from_text(HeaderText)`, the
+`Unsupported(UnsupportedSpelling<Self>)` fallback that only that `from_text`
+mints, and the same blank-refusing serde and schema. Neither macro offers an
+infallible constructor from a raw string.
+
+The flowchart below is the decision a parser makes for the body of a header
+whose kind it recognized, in the order both parsers apply it. Tree-sitter
+makes it in `HeaderSite::complete_body` and `read_body`
+(`talkbank-parser/src/parser/tree_parsing/parser_helpers/header_slots.rs`),
+re2c in its line parser (`talkbank-parser-re2c/src/parser/file/headers.rs`).
+re2c has no MISSING placeholders, and a colon without its tab never matches
+one of its header rules, so the lexer's catch-all keeps that line as
+`Header::Unknown` before this decision starts.
+
+```mermaid
+flowchart TD
+    line["Header line of a recognized kind\n(tree-sitter HeaderSite, re2c LineKind)"]
+    unreadable{"Unreadable text anywhere in the header?\ntree-sitter: HeaderSite::complete_body finds an ERROR\nre2c: a content token the lexer marked malformed"}
+    placeholder{"tree-sitter only: body slot MISSING,\nor blank text made of recovery placeholders?"}
+    classify{"HeaderContent::classify(body text)\nan omitted body is Blank"}
+    separator{"WrittenSeparator::admit\n(the separator's own source text)"}
+    unknown1["Header::Unknown, text as written\nparse_reason MALFORMED_HEADER_CONTENT\n(E316, then E525)"]
+    unknown2["Header::Unknown\n(E330 from the slot's refusal, then E525)"]
+    build["The kind's constructor from HeaderText:\nTextKind::header, QualifiedKind::header,\nGemKind::labelled, the structured readers"]
+    empty["Header::EmptyContent(EmptyHeader)\nPlainKind::empty / QualifiedKind::empty\n(validation: E553)"]
+    unknown3["Header::Unknown\n(E303, then E525)"]
+
+    line --> unreadable
+    unreadable -->|"yes"| unknown1
+    unreadable -->|"no"| placeholder
+    placeholder -->|"yes"| unknown2
+    placeholder -->|"no"| classify
+    classify -->|"Text(HeaderText)"| build
+    classify -->|"Blank"| separator
+    separator -->|"Some"| empty
+    separator -.->|"None: the tab is a recovery placeholder"| unknown3
+```
+
+Unreadable text is judged before the body slot, so an ERROR anywhere in the
+header wins over a MISSING body, as re2c's malformed-token refusal does. A
+structured body (`@Options`, `@Media`, `@Types`, `@Page`) that passes the
+decision can still be refused by its own reader, for example an `@Options`
+list with an empty position (`ChatOptionFlags::parse` returns
+`MalformedOptionList`) or a `@Media` field left blank by a trailing comma;
+such a header is likewise kept as `Header::Unknown` (E316, then E525), never
+as partial content.
+
+`@Languages`, `@Participants` and `@ID` are deliberately not represented
+there. They declare the transcript's languages and speakers; their malformed
+forms, empty ones included, keep the declaration-admission states above
+(`UnparsedLanguages`, `UnparsedParticipants`, `UnparsedID`). A generic state
+would make every rule that needs the declaration see it as absent and report a
+spurious missing declaration on top of the real defect. The `@ID` field
+string types stay possibly empty, because an `@ID` field may legitimately be
+blank.
+
+Gem headers have a second, legal form with no colon (`@Bg`, `@Eg`, `@G`),
+which is `label: None` on the gem variant (`GemKind::bare`); only the colon
+form with nothing after the colon is empty content. A recovery node in a gem
+header is neither: a MISSING label is recovery, and an ERROR in the group or
+label position, or displaced beside the label, keeps the line as
+`Header::Unknown` with its text (E316, then E525), never a gem labelled from
+part of it. That is the recovery every malformed header body gets, under both
+parsers: tree-sitter for an ERROR anywhere in the header, where a body
+belongs, in or beside a body it read only in part, or after a gem's bare
+marker, re2c for a content token its lexer marked, blank or not,
+refused before any body reader runs. Neither keeps the part of a body before
+the unparsable text as the header's content. In tree-sitter the decision is
+made once, for every header family, by the body reader
+(`HeaderSite::complete_body`): content is lowered only from a `CompleteBody`,
+which nothing else can build. The `Header::Unknown` either parser keeps holds
+the line as written without its line terminator, so the two recoveries of one
+line are equal.
+A label continued onto further lines is joined by one model function,
+`GemLabel::from_label_content`, each continuation becoming one space.
+
 `participant_declaration()` admits exactly one parsed declaration. Absent,
 rejected and repeated declarations have distinct errors; no first declaration
 wins. The optional `participant_entries()` convenience and `declared_speakers()`
@@ -250,16 +396,29 @@ the existing empty-content rule independently of label admission.
 
 ## Date admission
 
-Construct `ChatDate` through `from_text` or `new`. `Valid(CheckedChatDate)`
-contains private components admitted together with the original spelling;
-read them with `day()`, `month()`, `year()` and `as_str()`; match `Valid(date)`
-and use these accessors. There is no independent component constructor or mutable field access.
+Construct `ChatDate` through `from_content(HeaderText)`, from content the one
+emptiness decision admitted, or through the fallible `try_new` (and
+`TryFrom<String>`, `TryFrom<&str>`), which refuses blank text with
+`BlankContent`. There is no infallible constructor from a raw string, and a
+date is never blank: a date header with nothing after its colon is
+`Header::EmptyContent`. `Valid(CheckedChatDate)` contains private components
+admitted together with the original spelling; read them with `day()`,
+`month()`, `year()` and `as_str()`; match `Valid(date)` and use these
+accessors. There is no independent component constructor or mutable field
+access.
 
 This checks ASCII `DD-MMM-YYYY` syntax, uppercase month abbreviations and days
-01–31, **not calendar validity**: impossible month/day combinations and year
-0000 retain their existing admission behavior. Unsupported text is preserved
-for diagnostics. JSON remains a string and deserialization uses the same
-admission boundary; no unchecked payload deserialization is exposed.
+01-31, **not calendar validity**: impossible month/day combinations and year
+0000 retain their existing admission behavior. Any other nonblank text is
+`Unsupported(InvalidChatDate)`, which keeps the original spelling and the
+model's own refusal: the wrong shape, or each refused day, month and year
+component with the text it was split from (`refusals()`, reached through
+`ChatDate::invalidity()`). Validation renders that refusal as E518 for
+`@Date` or E545 for `@Birth of`, without splitting or parsing the date again;
+`ChatDate` itself does not implement `Validate`, because a date alone has no
+header to choose the code. JSON remains a string, deserialization uses the
+same admission boundary, and the schema says `minLength: 1`; no unchecked
+payload deserialization is exposed.
 
 ## ChatFile
 

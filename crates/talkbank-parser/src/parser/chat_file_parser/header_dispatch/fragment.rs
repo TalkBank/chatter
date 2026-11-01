@@ -114,7 +114,13 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
         // and recovery diagnostics; kind admission does not certify validity.
         let header = if let Some(choice) = source.typed::<FullDocumentChild1Choice>() {
             match parse_pre_begin_header(choice, &error_sink) {
-                Ok(header) => header,
+                Ok(ParseOutcome::Parsed(header)) => header,
+                // A source-admission fault: the fragment's own diagnostics
+                // are the result, and no header is lowered.
+                Ok(ParseOutcome::Rejected) => {
+                    drop(error_sink);
+                    return Err(ParseErrors::from(inner_sink.into_vec()));
+                }
                 Err(fault) => {
                     crate::parser::typed_cst::report_cst_failure(
                         header_node,
@@ -174,6 +180,24 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
             }
         };
 
+        // The fragment has no whole-tree backstop. A header kept as unknown
+        // because its body is unparsable (an ERROR where the body belongs)
+        // carries no diagnostic of its own, since in a document the backstop
+        // reports it; here the fragment reports the header's recovery nodes
+        // itself, so the outcome does not depend on the entry point.
+        if inner_sink.is_empty()
+            && crate::parser::tree_parsing::parser_helpers::is_recovery(header_node)
+        {
+            let mut recovered = Vec::new();
+            crate::parser::tree_parsing::parser_helpers::collect_recovery_nodes(
+                header_node,
+                wrapped,
+                &mut recovered,
+            );
+            for error in recovered {
+                error_sink.report(error);
+            }
+        }
         drop(error_sink);
         let parse_errors = inner_sink.into_vec();
         if !parse_errors.is_empty() {

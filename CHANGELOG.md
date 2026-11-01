@@ -9,6 +9,237 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-01
+
+This pre-1.0 minor release makes a colon-bearing header with nothing after its
+colon one model state that validation refuses (E553) under both parsers, keeps
+every header body that cannot be read in full as `Header::Unknown` instead of
+a header built from part of the line, and rebuilds the header model around one
+typed header-kind graph whose payloads cannot hold blank text. The typed
+traversal is now generated from the grammar contract. See the
+[0.34 migration guide](https://talkbank.github.io/chatter/contributing/migration-0.34.html)
+for replacements when upgrading from 0.33.0; older consumers should apply the
+[0.33 guide](https://talkbank.github.io/chatter/contributing/migration-0.33.html)
+first.
+
+### Changed
+
+#### CHAT validation and parsing
+
+- **Breaking validation:** a colon-bearing header with nothing after its colon
+  (or only whitespace) is refused with the new code E553, identically under
+  both parsers. This covers every colon-bearing header the model carries
+  except `@Languages`, `@Participants` and `@ID`, which keep their declaration
+  codes; `@Thumbnail`, which has no model, stays E525 whatever it holds. Such
+  a header is meaningless in CHAT; omit it (for `@Bg`, `@Eg` and `@G`, the
+  bare form with no colon remains legal). Before, the empty form was caught by
+  accident: some headers had their own empty codes, some got grammar-recovery
+  errors (E342, E316) from tree-sitter only, and `@Time Duration` and
+  `@Time Start` were accepted by both parsers, `@PID`, `@Font`, `@Window` and
+  `@Color words` by re2c. Ordering rules still see an empty `@Options` or
+  `@Birth of` line in its header's position.
+- **Breaking validation:** an `@Birth of` header that states no date is
+  refused with E553. Both parsers accepted it before (an unknown birth date
+  is written by omitting the header).
+- **Breaking validation:** E508, E509, E516 and E533 are retired into E553.
+  E508 and E509 were never emitted: E516 reported an empty `@Date`, and an
+  empty `@Media` was unstructured recovery (E316).
+- E545 again means only that an `@Birth of` date does not match the date
+  pattern. Its message now names `@Birth of`, not `@Date`.
+- **Breaking validation:** a header body that cannot be read in full is kept
+  as `Header::Unknown` with its text under both parsers (E316, and
+  validation's E525), with no partial content. Tree-sitter used to lower no
+  header for an ERROR where a body or gem separator belongs (`@G:`,
+  `@G: story`, `@Page:` with a tab), to label a gem from the text before a
+  displaced ERROR, and to build a header from the part of a body before an
+  ERROR in or beside it or anywhere else in the header (after a gem's bare
+  marker, so `@Bg` followed by a NUL is no longer the legal bare marker):
+  `@Situation:` with a control character mid-text, `@Page:` with `1x`,
+  `@Types:` with `long, toy play, TD`, a `@Media` body with an extra comma,
+  and so on are now `Header::Unknown` (E316, E525), as re2c already kept
+  them. re2c keeps a body of only marked tokens, such as a tab where a page
+  number belongs, as `Header::Unknown` too, never as empty content. The
+  decision is made once, in the tree-sitter body reader, for the text,
+  qualified, structured, gem, pre-`@Begin` and `@Types` headers alike; an
+  ERROR in the header wins over a MISSING body, as in re2c.
+- As a consequence, W109 no longer reports a decomposed filename inside a
+  malformed `@Media` line, which models no filename.
+- **Breaking validation:** a blank `@Media` field (a trailing comma) is a
+  malformed header (E316) in both parsers, not an unsupported type or status.
+- **Breaking validation:** an `@Options` list with an empty position
+  (`CA,,NoAlign`) is refused once for both parsers and kept as
+  `Header::Unknown` (E316, E525), instead of re2c inventing an unsupported
+  option named `""` (E534) and tree-sitter dropping the position.
+- A colon whose tab is missing is never empty content: the header stays
+  malformed with E303 and an unknown header. `@Comment:` with nothing after
+  the colon now reports E303 under tree-sitter, where it reported E316.
+- **Breaking validation:** a bullet-payload dependent tier (`%com`, `%act`,
+  `%cod`, ...) holding only a continuation, a line break and a tab with
+  nothing after them reports E756 under both parsers (see Fixed).
+- A gem label continued onto further lines joins each continuation as one
+  space, the same in both parsers.
+- E525's message for a tree-sitter `Header::Unknown` carries no line break:
+  its text no longer ends with the line terminator (see Fixed).
+- re2c refuses a structured body (`@Page`, `@Types`, `@Media`) holding a
+  malformed token before its token grammar reads it, so its `parse_reason` is
+  the shared `MALFORMED_HEADER_CONTENT` like every other header's, as does
+  tree-sitter for an unsupported header holding an ERROR.
+
+#### JSON
+
+- **Breaking JSON:** an empty header is
+  `{"type":"empty_content","header":"<kind>"}`, with `participant` for the
+  `of` headers (`birth`, `birthplace`, `l1_of`). A qualified kind without its
+  participant, or a participant on a plain kind, is refused.
+- **Breaking JSON:** blank text (empty or only whitespace) is refused for
+  every header-content string type, `ChatDate`, `TimeDurationValue`,
+  `TimeStartValue`, the closed vocabularies (`Number`, `RecordingQuality`,
+  `Transcription`, `MediaType`, `MediaStatus`, `ChatOptionFlag`) and the
+  `@L1 of` language; their schemas say `minLength: 1`. An `@Options` list
+  must hold at least one option.
+- **Breaking JSON:** a `@Comment` keeps the `BulletContent` object, but a
+  blank one (no segments, or only blank text and continuations) is refused,
+  so JSON can no longer build a comment that writes `@Comment:` and a tab.
+
+#### Library API
+
+- **Breaking model API:** a header's identity is a typed kind:
+  `Header::kind()` returns `HeaderKind`, either `Plain(PlainKind)` (with the
+  `TextKind`, `GemKind` and `StructuredKind` families),
+  `Qualified(QualifiedKind)`, `Fixed(FixedKind)` for the markers and
+  declarations, or `Unknown`. The kind owns every label (`Header::name` is
+  its label), the header it builds from content (`TextKind::header`,
+  `QualifiedKind::header`, `GemKind::labelled`) and its empty form
+  (`PlainKind::empty`, `QualifiedKind::empty`).
+- `HeaderPrefix` is the one prefix writer, built only from a `FixedKind` or
+  `PlainKind` (`From`) or from a `QualifiedKind` with its participant
+  (`HeaderPrefix::qualified`), so `@Birth of` without its participant cannot
+  be written. `QualifiedKind::keyword` names it in diagnostics (the E547
+  ordering message).
+- **Breaking model API:** a colon-bearing header written empty is
+  `Header::EmptyContent(EmptyHeader)`, a new variant. `EmptyHeader` is
+  `Plain { kind, .. }` or `Qualified { kind, participant, .. }` and carries a
+  `WrittenSeparator`, so a colon whose tab is missing is never empty content;
+  `EmptyHeader::kind()` and `prefix()` read it.
+- Header payloads are built only from `HeaderText`, content proven nonblank,
+  which only `HeaderContent::classify` (and its `admit` and
+  `classify_literal` forms) makes. A refused text is `BlankContent`.
+- **Breaking model API:** every header-content string type (`PidValue`,
+  `SituationDescription`, `GemLabel`, `WarningText`, ...), `ChatDate`,
+  `TimeDurationValue` and `TimeStartValue` have `from_content(HeaderText)`
+  and a fallible `try_new` (with `TryFrom<String>` and `TryFrom<&str>`) that
+  refuses blank text with `BlankContent`, replacing the infallible `new`,
+  `From<String>` and `From<&str>`, and `from_text` for the date and time
+  values. The `@ID` field types are unchanged. The time values no longer have
+  an empty state.
+- **Breaking model API:** `Header::Comment`'s `content` is `CommentContent`,
+  bullet content proven to write a non-whitespace character
+  (`from_content`, `try_from_text`, `try_from_bullets`, `as_bullet_content`),
+  so a comment with no segments can no longer write `@Comment:` and a tab.
+  The transform crate's `TranscriptDescription::comments` holds
+  `CommentContent` (it held `String`).
+- **Breaking model API:** the closed vocabularies' `from_text` takes
+  `HeaderText`, and `try_new` refuses blank text. `Unsupported` now holds
+  `UnsupportedSpelling<Self>`, minted only by `from_text` after it refuses
+  every known spelling, so it is never blank and never a known value (it held
+  `String`).
+- **Breaking model API:** `ChatDate::Unsupported` holds `InvalidChatDate`
+  (it held `String`): the model's refusal, naming each wrong component
+  (`refusals()`, reached through `ChatDate::invalidity()`), which validation
+  renders as E518/E545. `ChatDate` no longer implements `Validate`, since a
+  date alone has no header to choose the code.
+- **Breaking model API:** `ChatOptionFlags::parse` reads an option list once
+  for both parsers and refuses an empty position (`MalformedOptionList`)
+  instead of inventing an unsupported option named `""` or dropping it.
+  `ChatOptionFlags` is a nonempty list: `new` and `TryFrom<Vec<_>>` return a
+  `Result`, `from_flag` builds a one-flag list, and it has no `take`,
+  `retain`, `Default` or `Validate`.
+- `Header::Birth`'s `date` remains a `ChatDate`, not an `Option`: an undated
+  `@Birth of` is `Header::EmptyContent`, where 0.33 built
+  `ChatDate::Unsupported("")`.
+- **Breaking model API:** `Header::Unknown`'s `text` is `RecoveryText` (it
+  was `WarningText`); JSON keeps a string. `MALFORMED_HEADER_CONTENT` is the
+  one `parse_reason` both parsers record for an unreadable header body.
+- `LanguageCode::from_non_empty` builds an `@L1 of` language from text
+  already proven nonempty.
+- **Breaking low-level native parser API:** the native re2c AST lowers each
+  header line once: `LocatedHeader::header` is the model `Header`, and
+  `HeaderParsed` is gone (see Removed). Native AST inspection JSON for a
+  header carries the model header object directly.
+- **Breaking low-level native parser API:** the re2c header prefix token
+  carries its rule family: `HeaderPrefixToken::family()` (replacing
+  `kind()`) returns `HeaderPrefixFamily`, a `LexedHeader` with its required
+  `WrittenSeparator`, a gem with an optional one, or the catch-all.
+  `token::HeaderKind` is renamed `LexedHeader` and has no gem or catch-all
+  variants. The speaker-qualified header tokens (`Token::HeaderBirthOf`,
+  `HeaderBirthplaceOf`, `HeaderL1Of`) carry `SeparatedPrefixToken`, whose
+  `written_separator()` holds the separator; `PrefixToken` has no
+  `written_separator`.
+- The tree-sitter header fragment API, which has no whole-tree pass, reports
+  an unreadable header's recovery nodes itself (E316) instead of an
+  "Unknown header type" error.
+
+#### Generated traversal and grammar build
+
+- **Breaking low-level generated traversal API:** the typed traversal is
+  generated from `grammar/src/grammar-contract.json`, which the pinned
+  Tree-sitter build (`tree-sitter-revision`, selected by `TREE_SITTER_DIR`)
+  writes beside the parser; `grammar.json` and `node-types.json` are no
+  longer the generator's inputs. That build's `parser.c`, `grammar.json` and
+  `node-types.json` are byte-identical to those of the Tree-sitter release it
+  is based on, and `tsgu-revision` moves to the generator that reads the
+  contract.
+- **Breaking low-level generated traversal API:** the generated module
+  narrows 176 node kinds (was 153), so `GraRelationChildren` and the
+  `@Types` field slots take a kind proof, and `@Types` fields are read under
+  the admitted proof, where they cannot be MISSING, as are `@ID` languages,
+  speaker and role and the `@Media` fields.
+- **Breaking low-level generated traversal API:** each header content slot
+  that can now be empty is optional in the grammar, so the generated carriers
+  change shape: for example, the `@Types` fields move into the optional
+  `TypesHeaderChild2Children` group, and the uninhabited
+  `BirthplaceOfHeaderChildrenRule` and `L1OfHeaderChildrenRule` are gone.
+- `just grammar-gen` fails when the producer omits the contract instead of
+  leaving it stale.
+- `TSGU_DIR` no longer defaults to a home-directory checkout: like
+  `TREE_SITTER_DIR`, which has no default, it must name the checkout.
+
+#### Native word parsing
+
+- **Breaking low-level native parser API:** `WordBodyItem::OverlapPoint`
+  carries an admitted `WordOverlapPoint` instead of an independently supplied
+  kind/spelling pair. Use its checked constructor and `kind()`, `index()` and
+  `text()` accessors. Native AST inspection JSON retains its existing shape;
+  shared-model JSON and overlap-index validation are unchanged.
+
+### Removed
+
+- **Breaking model API:** the `ErrorCode` variants `EmptyDateHeader` (E508),
+  `EmptyMediaHeader` (E509), `EmptyDate` (E516) and `EmptyOptionsHeader`
+  (E533), with their error pages. `EmptyHeaderContent` (E553) replaces them.
+- **Breaking low-level native parser API:** the re2c `HeaderParsed` AST
+  (`Shared` and `Other`).
+- **Breaking low-level native parser API:** the `BeginGem`, `EndGem`,
+  `LazyGem` and `Unknown` variants of the lexer's header kind, now carried by
+  `HeaderPrefixFamily::Gem` and `HeaderPrefixFamily::Unknown`.
+
+### Fixed
+
+- A bullet-payload dependent tier (`%com`, `%act`, `%cod`, ...) holding only
+  a continuation, a line break and a tab with nothing after them, now
+  reports E756 under both parsers: `BulletContent::is_empty` judges what the
+  content writes by the header-content rule (whitespace and continuations
+  are not content), the same judgement that refuses a blank `@Comment`.
+- A participant whose `@Birth of` header states no date no longer reports a
+  birth date (`Participant::has_birth_date` returned `true` for it); the
+  empty header is now empty content, which joins to no participant.
+- Tree-sitter's `Header::Unknown` text no longer ends with the line
+  terminator, so it is the text re2c keeps for the same line, and such a
+  header writes back byte for byte.
+- Native MOR/GRA fragment APIs report each forbidden control character once
+  at its caller-relative position. Checked input admission rejects it before
+  grammar parsing, avoiding duplicate E315 reports and secondary grammar errors.
+
 ## [0.33.0] - 2026-10-29
 
 This pre-1.0 minor release strengthens model admission, parser failure handling
@@ -6003,7 +6234,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/TalkBank/chatter/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/TalkBank/chatter/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/TalkBank/chatter/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/TalkBank/chatter/compare/v0.31.0...v0.32.0

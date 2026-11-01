@@ -23,7 +23,10 @@ Commit hooks do not substitute for either.
 2. **Touched `grammar/`, `spec/` or a registry: `just regen`, then `just
    test`, once.** Every derived artifact, one command, dependency order.
    Enforced by each artifact's currency test, which fails the gate when it is
-   stale.
+   stale. `just regen` always runs the grammar and traversal generators, so it
+   needs `TREE_SITTER_DIR` and `TSGU_DIR`, each naming a clean checkout at the
+   commit `tree-sitter-revision` or `tsgu-revision` pins; neither has a
+   default (see the book's Grammar Workflow).
 3. **One review, on the final diff, before the commit.** Five angles: reuse,
    simplification, efficiency, altitude, typestate. Not after every edit.
 4. **Every commit reduces the bug count and says what it removed.** A commit
@@ -69,7 +72,9 @@ alone do not establish clean-machine or public-bootstrap readiness.
    mirroring their command lists here.
 2. **Never run two cargo-family commands concurrently against one workspace**
    (the root or `spec/`). The target-dir lock serializes them silently.
-3. **`grammar/src/parser.c`, `node_types.rs`, `generated_traversal.rs`, the
+3. **`grammar/src/parser.c`, `grammar/src/grammar-contract.json` (the typed
+   traversal generator's one input), `node_types.rs`,
+   `generated_traversal.rs`, the
    conformance inventory, the spec fixtures and snapshot, the symbol and
    form-marker sites, `docs/audits/check-parity-audit.md`, and
    `schema/chat-file.schema.json` are all generated.** Never hand-edit any of

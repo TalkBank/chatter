@@ -156,7 +156,7 @@ impl WriteChat for IDHeader {
     /// Optional fields are emitted as empty segments so output remains stable
     /// for tools that expect the trailing delimiter.
     fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
-        w.write_str("@ID:\t")?;
+        crate::model::HeaderPrefix::from(crate::model::FixedKind::Id).write_start(w)?;
         self.language.write_chat(w)?;
         w.write_char('|')?;
 

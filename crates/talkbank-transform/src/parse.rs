@@ -151,7 +151,7 @@ pub fn is_dummy(chat_file: &ChatFile) -> bool {
 
     chat_file
         .option_flags()
-        .any(|f| matches!(f, ChatOptionFlag::Unsupported(s) if s == "dummy"))
+        .any(|f| matches!(f, ChatOptionFlag::Unsupported(s) if s.as_str() == "dummy"))
 }
 
 /// Check whether a parsed CHAT file has `@Options: NoAlign`.

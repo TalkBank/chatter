@@ -20,6 +20,7 @@
     },
     "ActivitiesDescription": {
       "description": "Activities list recorded in `@Activities`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Activities_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "ActivityType": {
@@ -618,10 +619,12 @@
     },
     "BackgroundDescription": {
       "description": "Background context stored in `@Bck`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Bck_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "BirthplaceDescription": {
       "description": "Description of the birthplace in `@Birthplace of`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Birthplace_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "BracketedContent": {
@@ -1414,6 +1417,7 @@
       ]
     },
     "ChatDate": {
+      "minLength": 1,
       "type": "string"
     },
     "ChatFileLines": {
@@ -1424,13 +1428,15 @@
       "type": "array"
     },
     "ChatOptionFlag": {
+      "minLength": 1,
       "type": "string"
     },
     "ChatOptionFlags": {
-      "description": "Ordered payload of an `@Options` header.\n\nFlags are retained in source order even though most consumers treat this as\na set, which keeps roundtrip output deterministic.\n\n# Reference\n\n- [Options header](https://talkbank.org/0info/manuals/CHAT.html#Options_Header)",
+      "description": "Ordered payload of an `@Options` header: at least one flag.\n\nFlags are retained in source order even though most consumers treat this as\na set, which keeps roundtrip output deterministic. The list is never empty:\nan `@Options` header with nothing after its colon is\n`Header::EmptyContent`, so every route in ([`Self::parse`], [`Self::new`],\n`TryFrom`, JSON) refuses an empty list, and no length-shrinking operation\nis offered.\n\n# Reference\n\n- [Options header](https://talkbank.org/0info/manuals/CHAT.html#Options_Header)",
       "items": {
         "$ref": "#/$defs/ChatOptionFlag"
       },
+      "minItems": 1,
       "type": "array"
     },
     "CodTier": {
@@ -1483,6 +1489,7 @@
     },
     "ColorWordList": {
       "description": "Color word palette listed in `@Color words`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#ColorWords_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "ComTier": {
@@ -1497,6 +1504,14 @@
         "content"
       ],
       "type": "object"
+    },
+    "CommentContent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/BulletContent"
+        }
+      ],
+      "description": "@Comment content: bullet content whose CHAT form carries at least one non-whitespace character (a text run with one, a bullet or a picture). Blank content is refused."
     },
     "ContentAnnotation": {
       "description": "Scoped annotation that modifies or provides information about speech content.\n\nScoped annotations in CHAT format are enclosed in square brackets and provide\ncontextual information about errors, clarifications, overlaps, and repetitions.\n\n# Annotation Types\n\n- **Error marking** (`[*]`, `[* code]`): Indicates speech errors, grammatical mistakes,\n  or phonological errors that need correction or special attention.\n\n- **Explanations** (`[= text]`): Clarifies unintelligible speech, unusual pronunciations,\n  or ambiguous utterances. Often used with `xxx` for unintelligible material.\n\n- **Retracing** (`[/]`, `[//]`, `[///]`): Marks self-corrections and repeated words.\n  Single `/` for partial repetition, double for full retracing, triple for multiple.\n\n- **Overlaps** (`[<]`, `[>]`): Marks simultaneous speech by different speakers.\n  `[<]` at overlap start, `[>]` at overlap end.\n\n# CHAT Manual Reference\n\n- [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)\n- [Explanation Scope](https://talkbank.org/0info/manuals/CHAT.html#Explanation_Scope)\n- [Retracing](https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition)\n- [Overlap Precedes Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope)\n- [Overlap Follows Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapFollows_Scope)\n\n# Examples\n\n```\nuse talkbank_model::model::{ContentAnnotation, ScopedError, ScopedExplanation};\n\n// Error marking\nlet error = ContentAnnotation::Error(ScopedError { code: Some(\"grammar\".into()) });\n\n// Explanation\nlet explanation = ContentAnnotation::Explanation(ScopedExplanation {\n    text: \"probably said ball\".into()\n});\n```",
@@ -2465,6 +2480,39 @@
       "description": "Education description from `@ID` (field 9).\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Education_Field>",
       "type": "string"
     },
+    "EmptyHeader": {
+      "description": "Which header was written with nothing after its colon. Validation always refuses this state (E553).",
+      "oneOf": [
+        {
+          "description": "A header with no participant, written empty.",
+          "properties": {
+            "header": {
+              "$ref": "#/$defs/PlainKind"
+            }
+          },
+          "required": [
+            "header"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A participant-qualified header, written empty.",
+          "properties": {
+            "header": {
+              "$ref": "#/$defs/QualifiedKind"
+            },
+            "participant": {
+              "$ref": "#/$defs/SpeakerCode"
+            }
+          },
+          "required": [
+            "header",
+            "participant"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ErrorCode": {
       "description": "Standard error codes for CHAT parsing and validation.\n\nThe `#[error_code_enum]` attribute macro derives, from the `#[code(\"...\")]`\nattributes below: the serde renames, `as_str`, `parse_exact`,\n`Display`, `documentation_url`, `iter` and `planned`. The attributes\nthemselves come from `spec/codes/error-codes.toml`, so the code strings, the\nvariant names and the enforcement split all have one owner and no gate\nstanding between two copies of them.\n\nSee [`super::CheckStatus`] for the enforced/planned distinction and\n[`ErrorCode::check_status`] for reading it off a value.",
       "oneOf": [
@@ -3004,16 +3052,6 @@
           "type": "string"
         },
         {
-          "const": "E508",
-          "description": "Empty `@Date` header.",
-          "type": "string"
-        },
-        {
-          "const": "E509",
-          "description": "Empty `@Media` header.",
-          "type": "string"
-        },
-        {
           "const": "E510",
           "description": "Empty language field in `@ID` header.",
           "type": "string"
@@ -3041,11 +3079,6 @@
         {
           "const": "E515",
           "description": "Empty role field in `@ID` header.",
-          "type": "string"
-        },
-        {
-          "const": "E516",
-          "description": "Empty date value.",
           "type": "string"
         },
         {
@@ -3116,11 +3149,6 @@
         {
           "const": "E532",
           "description": "Invalid participant role value.",
-          "type": "string"
-        },
-        {
-          "const": "E533",
-          "description": "Empty `@Options` header.",
           "type": "string"
         },
         {
@@ -3216,6 +3244,11 @@
         {
           "const": "E552",
           "description": "The `@Media` header declares `unlinked` status, yet the transcript\ncontains timing bullets. `unlinked` means the media file exists but its\nutterances have not been aligned to timestamps; the presence of timing\nbullets contradicts that, so the `unlinked` qualifier must be removed\n(the media is in fact linked). This is the inverse of\n[`MediaLinkageWithoutTiming`](Self::MediaLinkageWithoutTiming) (E544) and\ncorresponds to CLAN CHECK error 124 (\"remove \\\"unlinked\\\" from @Media\nheader\").",
+          "type": "string"
+        },
+        {
+          "const": "E553",
+          "description": "A colon-bearing header has no content after its colon. The header\nsays it carries content and supplies none, which has no meaning in\nCHAT, so it is refused for every header kind with one rule: the parsed\n`Header::EmptyContent` state. Omit the header instead (for a gem\nheader, use the bare form with no colon). `@Languages`,\n`@Participants` and `@ID` keep their own declaration codes.",
           "type": "string"
         },
         {
@@ -3715,6 +3748,7 @@
     },
     "FontSpec": {
       "description": "Font specification declared in `@Font`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Font_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "FormLabel": {
@@ -3861,8 +3895,29 @@
         }
       ]
     },
+    "GemKind": {
+      "description": "A gem header: `@Bg`, `@Eg` or `@G`.\n\nEach has two legal forms, the bare marker with no colon ([`Self::bare`])\nand the labelled one ([`Self::labelled`]); the colon form with nothing\nafter the colon is the empty state ([`PlainKind::empty`]).",
+      "oneOf": [
+        {
+          "const": "begin_gem",
+          "description": "`@Bg`.",
+          "type": "string"
+        },
+        {
+          "const": "end_gem",
+          "description": "`@Eg`.",
+          "type": "string"
+        },
+        {
+          "const": "lazy_gem",
+          "description": "`@G`.",
+          "type": "string"
+        }
+      ]
+    },
     "GemLabel": {
       "description": "Label for gem headers (`@Bg`, `@Eg`, `@G`).\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#Bg_Header>\n- <https://talkbank.org/0info/manuals/CHAT.html#Eg_Header>\n- <https://talkbank.org/0info/manuals/CHAT.html#G_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "GpxTier": {
@@ -4180,6 +4235,20 @@
           "type": "object"
         },
         {
+          "$ref": "#/$defs/EmptyHeader",
+          "description": "A colon-bearing header with nothing after its colon.\n\nOne state for every header kind that can be written this way (see\n[`EmptyHeader`](super::empty::EmptyHeader)), decided by the parser\nbefore any payload is built,\nso no payload type below has to represent \"no content\". Validation\nalways refuses it (E553). `@Languages`, `@Participants` and `@ID` are\nnot represented here: their malformed forms keep their own\ndeclaration-admission states above.",
+          "properties": {
+            "type": {
+              "const": "empty_content",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
           "description": "@Date:\\tDD-MMM-YYYY",
           "properties": {
             "date": {
@@ -4201,8 +4270,8 @@
           "description": "@Comment:\\tfree text",
           "properties": {
             "content": {
-              "$ref": "#/$defs/BulletContent",
-              "description": "Free-text comment content, may include a media bullet"
+              "$ref": "#/$defs/CommentContent",
+              "description": "Comment content, which may include media bullets and pictures,\nproven to write something (never blank: blank is `EmptyContent`)"
             },
             "type": {
               "const": "comment",
@@ -4291,7 +4360,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional gem label"
+              "description": "The gem label; `None` for the bare form `@Bg`, which has no colon.\nA colon followed by nothing is [`Header::EmptyContent`]."
             },
             "type": {
               "const": "begin_gem",
@@ -4315,7 +4384,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional gem label"
+              "description": "The gem label; `None` for the bare form `@Eg`, which has no colon.\nA colon followed by nothing is [`Header::EmptyContent`]."
             },
             "type": {
               "const": "end_gem",
@@ -4339,7 +4408,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional gem label"
+              "description": "The gem label; `None` for the bare form `@G`, which has no colon.\nA colon followed by nothing is [`Header::EmptyContent`]."
             },
             "type": {
               "const": "lazy_gem",
@@ -4567,7 +4636,7 @@
           "properties": {
             "date": {
               "$ref": "#/$defs/ChatDate",
-              "description": "Birth date in DD-MMM-YYYY format"
+              "description": "Birth date in DD-MMM-YYYY format. A birth header with no date is\n[`Header::EmptyContent`]; an unknown birth date is written by\nomitting the header."
             },
             "participant": {
               "$ref": "#/$defs/SpeakerCode",
@@ -4613,7 +4682,7 @@
           "properties": {
             "language": {
               "$ref": "#/$defs/LanguageCode",
-              "description": "First language as an ISO 639-3 code.\n\nWild corpus usage is uniformly codes (verified 2026-07-16:\n16 distinct values across 1,158 kept files, all three-letter\nregistry codes), so the field is typed as [`LanguageCode`]\nand held to the same shared code rule set as `@Languages` /\n`@ID` (migrated from a free-text `LanguageName` per the\n2026-07-15 @s-declaration ruling, part 2)."
+              "description": "First language as an ISO 639-3 code.\n\nWild corpus usage is uniformly codes (verified 2026-07-16:\n16 distinct values across 1,158 kept files, all three-letter\nregistry codes), so the field is typed as [`LanguageCode`]\nand held to the same shared code rule set as `@Languages` /\n`@ID` (migrated from a free-text `LanguageName` per the\n2026-07-15 @s-declaration ruling, part 2).\n\nJSON refuses blank text here, as a parser does (an `@L1 of` with\nnothing after its colon is `Header::EmptyContent`), while\n`LanguageCode` stays lenient everywhere else."
             },
             "participant": {
               "$ref": "#/$defs/SpeakerCode",
@@ -4698,8 +4767,8 @@
               ]
             },
             "text": {
-              "$ref": "#/$defs/WarningText",
-              "description": "Header text as captured from parser recovery."
+              "$ref": "#/$defs/RecoveryText",
+              "description": "Header text as captured from parser recovery, exactly as observed."
             },
             "type": {
               "const": "unknown",
@@ -5024,7 +5093,7 @@
       ]
     },
     "Line": {
-      "description": "One line-level unit in a CHAT transcript.\n\nA value is either:\n- `Header`: metadata beginning with `@`\n- `Utterance`: speaker turn (`*...`) with its dependent tiers\n\nThe enum is intentionally minimal: it captures file ordering and delegates\nline-type-specific behavior to `Header`/`Utterance`.\n\n# CHAT Format Examples\n\nA typical CHAT file interleaves headers and utterances:\n\n```text\n@UTF8\n@Begin\n@Languages: eng\n@Participants: CHI Child, MOT Mother\n@ID: eng|corpus|CHI|2;06.00|male|||Child|||\n*CHI: I want cookie .\n%mor: pro:sub|I v|want n|cookie .\n@Comment: Child reaching for cookie jar\n*MOT: you can have one .\n%mor: pro:per|you mod|can v|have det:num|one .\n@End\n```\n\nEach line is parsed as a `Line::Header` or `Line::Utterance`:\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Line, Header, Utterance, MainTier, BulletContent};\n\nlet lines = vec![\n    Line::header(Location::Unlocated, Header::Utf8),\n    Line::header(Location::Unlocated, Header::Begin),\n    // Languages header\n    // Participants header\n    // Utterance: *CHI: I want cookie .\n    // Dependent tier: %mor\n    Line::header(Location::Unlocated, Header::Comment { content: BulletContent::from_text(\"Between utterances\") }),\n    // Utterance: *MOT: you can have one .\n    // Dependent tier: %mor\n    Line::header(Location::Unlocated, Header::End),\n];\n```\n\n# Ordering Guarantee\n\nComments and other headers can appear between utterances; preserving that\norder is required for semantic roundtrips. Without `Line`, this structure\nis lost:\n\n```text\n*CHI: hello .\n@Comment: First greeting\n*MOT: hi there .\n@Comment: Mother responds\n*CHI: bye .\n```\n\nThe `Line` enum preserves that `@Comment` appears after specific utterances.\n\n# References\n\n- [File Format](https://talkbank.org/0info/manuals/CHAT.html#File_Format)\n- [Main Line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [File Headers](https://talkbank.org/0info/manuals/CHAT.html#File_Headers)",
+      "description": "One line-level unit in a CHAT transcript.\n\nA value is either:\n- `Header`: metadata beginning with `@`\n- `Utterance`: speaker turn (`*...`) with its dependent tiers\n\nThe enum is intentionally minimal: it captures file ordering and delegates\nline-type-specific behavior to `Header`/`Utterance`.\n\n# CHAT Format Examples\n\nA typical CHAT file interleaves headers and utterances:\n\n```text\n@UTF8\n@Begin\n@Languages: eng\n@Participants: CHI Child, MOT Mother\n@ID: eng|corpus|CHI|2;06.00|male|||Child|||\n*CHI: I want cookie .\n%mor: pro:sub|I v|want n|cookie .\n@Comment: Child reaching for cookie jar\n*MOT: you can have one .\n%mor: pro:per|you mod|can v|have det:num|one .\n@End\n```\n\nEach line is parsed as a `Line::Header` or `Line::Utterance`:\n\n```\nuse talkbank_model::Location;\nuse talkbank_model::model::{Line, Header, Utterance, MainTier, CommentContent};\n\nlet lines = vec![\n    Line::header(Location::Unlocated, Header::Utf8),\n    Line::header(Location::Unlocated, Header::Begin),\n    // Languages header\n    // Participants header\n    // Utterance: *CHI: I want cookie .\n    // Dependent tier: %mor\n    Line::header(Location::Unlocated, Header::Comment {\n        content: CommentContent::try_from_text(\"Between utterances\").expect(\"nonblank\"),\n    }),\n    // Utterance: *MOT: you can have one .\n    // Dependent tier: %mor\n    Line::header(Location::Unlocated, Header::End),\n];\n```\n\n# Ordering Guarantee\n\nComments and other headers can appear between utterances; preserving that\norder is required for semantic roundtrips. Without `Line`, this structure\nis lost:\n\n```text\n*CHI: hello .\n@Comment: First greeting\n*MOT: hi there .\n@Comment: Mother responds\n*CHI: bye .\n```\n\nThe `Line` enum preserves that `@Comment` appears after specific utterances.\n\n# References\n\n- [File Format](https://talkbank.org/0info/manuals/CHAT.html#File_Format)\n- [Main Line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [File Headers](https://talkbank.org/0info/manuals/CHAT.html#File_Headers)",
       "oneOf": [
         {
           "description": "Header line (starts with `@`).",
@@ -5162,6 +5231,7 @@
     },
     "LocationDescription": {
       "description": "Location description from `@Location`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Location_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "LongFeatureBegin": {
@@ -5252,6 +5322,7 @@
       "type": "object"
     },
     "MediaStatus": {
+      "minLength": 1,
       "type": "string"
     },
     "MediaTiming": {
@@ -5277,6 +5348,7 @@
       "type": "object"
     },
     "MediaType": {
+      "minLength": 1,
       "type": "string"
     },
     "Mor": {
@@ -5462,6 +5534,7 @@
       "type": "object"
     },
     "Number": {
+      "minLength": 1,
       "type": "string"
     },
     "OrphanAnnotation": {
@@ -5902,7 +5975,25 @@
     },
     "PidValue": {
       "description": "Persistent identifier recorded in `@PID`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#PID_Header>",
+      "minLength": 1,
       "type": "string"
+    },
+    "PlainKind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextKind",
+          "description": "A header whose whole content is one text or scalar value."
+        },
+        {
+          "$ref": "#/$defs/GemKind",
+          "description": "`@Bg`, `@Eg` or `@G`, which also have a legal bare form."
+        },
+        {
+          "$ref": "#/$defs/StructuredKind",
+          "description": "A header whose content has its own grammar."
+        }
+      ],
+      "description": "A content header that names no participant.\n\nSerialized as the bare snake-case name of the inner kind (`\"situation\"`,\n`\"begin_gem\"`, `\"options\"`): the three families never share a name, so\nthe name alone says which family it is."
     },
     "PosCategory": {
       "description": "Part-of-speech category (e.g., `noun` for noun, `verb` for verb, `pron` for pronoun).\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Part_of_Speech>\n\n## Memory Optimization\n\nThis type uses `Arc<str>` with interning for memory efficiency:\n- All categories are interned through a global interner\n- Common categories (noun, verb, pron, det, etc.) are pre-populated on first use\n- Cloning is O(1) (atomic reference count increment)\n- Multiple occurrences of the same category share a single Arc\n\nThis reduces memory usage by 5-30MB for large corpora with extensive %mor tiers.",
@@ -5937,6 +6028,26 @@
       ],
       "description": "Utterance-level postcode payload.\n\nThe model stores raw postcode text and leaves interpretation to downstream\ntooling/pipelines.\n\n# CHAT Format Examples\n\n```text\n*CHI: I want cookie [+ exc] .      Exclude from analysis\n*MOT: very good [+ imp] !          Imitation prompt\n```\n\n# Common Postcodes\n\n- `[+ exc]` - Exclude utterance\n- `[+ trn]` - Translation\n- `[+ gram]` - Grammatical\n- `[+ jar]` - Jargon\n\n# References\n\n- [Postcodes](https://talkbank.org/0info/manuals/CHAT.html#Postcodes)\n- [Excluded Utterance Postcode](https://talkbank.org/0info/manuals/CHAT.html#ExcludedUtterancePostcode)\n- [Included Utterance Postcode](https://talkbank.org/0info/manuals/CHAT.html#IncludedUtterancePostcode)"
     },
+    "QualifiedKind": {
+      "description": "A content header naming a participant: `@Birth of SPK`, `@Birthplace of\nSPK`, `@L1 of SPK`.",
+      "oneOf": [
+        {
+          "const": "birth",
+          "description": "`@Birth of`.",
+          "type": "string"
+        },
+        {
+          "const": "birthplace",
+          "description": "`@Birthplace of`.",
+          "type": "string"
+        },
+        {
+          "const": "l1_of",
+          "description": "`@L1 of`.",
+          "type": "string"
+        }
+      ]
+    },
     "Quotation": {
       "description": "Quoted speech group (`“...”`).\n\nThis form preserves quoted payload boundaries as a single bracketed unit.\n\n# CHAT Format Examples\n\n```text\nShe said \"hello there\" loudly\nI told him \"no way\"\n```\n\n# References\n\n- [Quotation](https://talkbank.org/0info/manuals/CHAT.html#Quotation)",
       "properties": {
@@ -5951,6 +6062,7 @@
       "type": "object"
     },
     "RecordingQuality": {
+      "minLength": 1,
       "type": "string"
     },
     "RecoveryText": {
@@ -6056,6 +6168,7 @@
     },
     "RoomLayoutDescription": {
       "description": "Room layout description from `@Room Layout`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Room_Layout_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "ScopedAlternative": {
@@ -6531,6 +6644,7 @@
     },
     "SituationDescription": {
       "description": "Description attached to `@Situation`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Situation_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "SpaTier": {
@@ -6549,6 +6663,36 @@
     "SpeakerCode": {
       "description": "Interned speaker identifier used by main-tier prefixes and participant headers.\n\nSpeaker codes identify participants in:\n- main tiers (`*CHI:`)\n- participant-related headers (`@Participants`, `@ID`, `@Birth of ...`)\n\n## Memory Optimization\n\nThis type uses `Arc<str>` with interning for memory efficiency:\n- All codes are interned through a global interner\n- Standard codes (CHI, MOT, FAT, etc.) are pre-populated on first use\n- Cloning is O(1) (atomic reference count increment)\n- Multiple occurrences of the same code share a single Arc\n\nThis reduces memory usage by 10-50MB for large corpora.\n\n# Common Usage\n\n**In main tiers:**\n- `*CHI:` - Utterance by child participant\n- `*MOT:` - Utterance by mother\n- `*FAT:` - Utterance by father\n\n**In headers:**\n- `@Participants:` - Lists all speaker codes with names and roles\n- `@ID:` - Detailed participant information\n- `@Birth of SPK:` - Participant-specific metadata\n- `@Language of SPK:` - Participant language\n\n# CHAT Format Examples\n\n```text\n@Participants: CHI Target_Child, MOT Mother, FAT Father, INV Investigator\n@ID: eng|Corpus|CHI|2;06.15|male|||Target_Child|||\n@Birth of CHI: 15-JAN-2015\n*CHI: I want cookie.\n*MOT: here you go.\n*FAT: what do you say?\n*CHI: thank you!\n```\n\n# Common Codes\n\n**Family members:**\n- `CHI` - Target child (primary participant)\n- `MOT` - Mother\n- `FAT` - Father\n- `BRO` - Brother\n- `SIS` - Sister\n- `GRA` - Grandmother\n- `GRF` - Grandfather\n\n**Research roles:**\n- `INV` - Investigator/Researcher\n- `EXP` - Experimenter\n- `OBS` - Observer\n- `CAM` - Cameraman\n\n**Other:**\n- `TEA` - Teacher\n- `DOC` - Doctor\n- `NUR` - Nurse\n- `UNK` - Unknown speaker\n- `ENV` - Environment (background noise, etc.)\n\n# Format Rules (validator)\n\n- max length: 7 characters\n- reserved chars: colon (the tier delimiter) and whitespace\n- other characters remain representable for legacy and international data\n\n# References\n\n- [CHAT Manual: Speaker Codes](https://talkbank.org/0info/manuals/CHAT.html#Speaker_Codes)\n- [Main Tier Format](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Participants Header](https://talkbank.org/0info/manuals/CHAT.html#Participants_Header)",
       "type": "string"
+    },
+    "StructuredKind": {
+      "description": "A header whose content has its own grammar, so each keeps a dedicated\nbuilder; its emptiness is still the one shared decision.",
+      "oneOf": [
+        {
+          "const": "comment",
+          "description": "`@Comment`: text with media bullets and pictures.",
+          "type": "string"
+        },
+        {
+          "const": "options",
+          "description": "`@Options`: a comma-separated option list.",
+          "type": "string"
+        },
+        {
+          "const": "media",
+          "description": "`@Media`: filename, type and optional status.",
+          "type": "string"
+        },
+        {
+          "const": "types",
+          "description": "`@Types`: design, activity and group.",
+          "type": "string"
+        },
+        {
+          "const": "page",
+          "description": "`@Page`: a page number.",
+          "type": "string"
+        }
+      ]
     },
     "SylTier": {
       "description": "A syllabified phonology tier (`%modsyl` or `%phosyl`).\n\nContent is organized as space-separated **words**, each containing\nIPA phonemes annotated with syllable position codes\n(`phoneme:Position` pairs, e.g. `b:Oɛ:Nt:C`).\n\nEach unit is `phone:CODE`; the legal constituent codes are\n`O N C L R E A D U` (see [`PositionCode`]). Stress markers (`ˈ` primary,\n`ˌ` secondary) may precede a segment.\n\n# Alignment\n\nEach word aligns 1-to-1 with a word in the corresponding phonological\ntier (`%mod` for modsyl, `%pho` for phosyl). Stripping position codes\nand stress markers yields the raw phonemes which must match the\ncorresponding tier's content.",
@@ -6588,10 +6732,12 @@
     },
     "TDescription": {
       "description": "Inline thumbnail marker text from `@T`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Thumbnail_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "TapeLocationDescription": {
       "description": "Location text recorded in `@Tape Location`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Tape_Location_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "Terminator": {
@@ -6768,6 +6914,111 @@
         }
       ]
     },
+    "TextKind": {
+      "description": "A header whose content is one text or scalar value, built by\n[`TextKind::header`] and nothing else.",
+      "oneOf": [
+        {
+          "const": "date",
+          "description": "`@Date`.",
+          "type": "string"
+        },
+        {
+          "const": "pid",
+          "description": "`@PID`.",
+          "type": "string"
+        },
+        {
+          "const": "situation",
+          "description": "`@Situation`.",
+          "type": "string"
+        },
+        {
+          "const": "tape_location",
+          "description": "`@Tape Location`.",
+          "type": "string"
+        },
+        {
+          "const": "time_duration",
+          "description": "`@Time Duration`.",
+          "type": "string"
+        },
+        {
+          "const": "time_start",
+          "description": "`@Time Start`.",
+          "type": "string"
+        },
+        {
+          "const": "location",
+          "description": "`@Location`.",
+          "type": "string"
+        },
+        {
+          "const": "room_layout",
+          "description": "`@Room Layout`.",
+          "type": "string"
+        },
+        {
+          "const": "transcriber",
+          "description": "`@Transcriber`.",
+          "type": "string"
+        },
+        {
+          "const": "warning",
+          "description": "`@Warning`.",
+          "type": "string"
+        },
+        {
+          "const": "activities",
+          "description": "`@Activities`.",
+          "type": "string"
+        },
+        {
+          "const": "bck",
+          "description": "`@Bck`.",
+          "type": "string"
+        },
+        {
+          "const": "videos",
+          "description": "`@Videos`.",
+          "type": "string"
+        },
+        {
+          "const": "t",
+          "description": "`@T`.",
+          "type": "string"
+        },
+        {
+          "const": "font",
+          "description": "`@Font`.",
+          "type": "string"
+        },
+        {
+          "const": "window",
+          "description": "`@Window`.",
+          "type": "string"
+        },
+        {
+          "const": "color_words",
+          "description": "`@Color words`.",
+          "type": "string"
+        },
+        {
+          "const": "number",
+          "description": "`@Number`.",
+          "type": "string"
+        },
+        {
+          "const": "recording_quality",
+          "description": "`@Recording Quality`.",
+          "type": "string"
+        },
+        {
+          "const": "transcription",
+          "description": "`@Transcription`.",
+          "type": "string"
+        }
+      ]
+    },
     "TextTier": {
       "anyOf": [
         {
@@ -6858,9 +7109,11 @@
       "type": "string"
     },
     "TimeDurationValue": {
+      "minLength": 1,
       "type": "string"
     },
     "TimeStartValue": {
+      "minLength": 1,
       "type": "string"
     },
     "TimedPause": {
@@ -6880,9 +7133,11 @@
     },
     "TranscriberName": {
       "description": "Transcriber name captured in `@Transcriber`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Transcriber_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "Transcription": {
+      "minLength": 1,
       "type": "string"
     },
     "TypesHeader": {
@@ -7657,14 +7912,17 @@
     },
     "VideoSpec": {
       "description": "Video references listed in `@Videos`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Videos_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "WarningText": {
       "description": "Warning text from `@Warning`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Warning_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "WindowGeometry": {
       "description": "Window geometry captured in `@Window`.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Window_Header>",
+      "minLength": 1,
       "type": "string"
     },
     "WorItem": {

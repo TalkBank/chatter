@@ -8,45 +8,54 @@
 //! `@Situation` description is expected).
 //! These wrappers intentionally perform no semantic normalization so parser
 //! roundtrips can preserve corpus-authored header text exactly.
+//!
+//! Two families live here. A header payload whose whole meaning is its text
+//! (`@PID`, `@Situation`, a gem label, ...) is a `non_empty_string_newtype!`:
+//! it can never be empty or only whitespace, because a header with nothing
+//! after its colon is `Header::EmptyContent`, decided once by the parser
+//! (`HeaderContent::classify`) before any payload is built, and the payload is
+//! built only from that decision's proof (`HeaderText`). The `@ID` field types stay `string_newtype!`: an `@ID` field may be
+//! legitimately blank (`eng|corpus|CHI|||||Target_Child|||`), and the `@ID`
+//! header keeps its own admission state (`Header::UnparsedID`).
 
-use crate::string_newtype;
+use crate::{non_empty_string_newtype, string_newtype};
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Persistent identifier recorded in `@PID`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#PID_Header>
     pub struct PidValue;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Description attached to `@Situation`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Situation_Header>
     pub struct SituationDescription;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Location text recorded in `@Tape Location`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Tape_Location_Header>
     pub struct TapeLocationDescription;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Location description from `@Location`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Location_Header>
     pub struct LocationDescription;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Room layout description from `@Room Layout`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Room_Layout_Header>
     pub struct RoomLayoutDescription;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Label for gem headers (`@Bg`, `@Eg`, `@G`).
     ///
     /// References:
@@ -56,7 +65,49 @@ string_newtype!(
     pub struct GemLabel;
 );
 
-string_newtype!(
+impl GemLabel {
+    /// Builds a gem label from a gem header's content: the one label joiner
+    /// both parsers use.
+    ///
+    /// A gem label may continue onto further lines; each continuation (line
+    /// breaks, the tab that opens the next line, and incidental spaces after
+    /// it, `[\r\n]+\t[ ]*` in both grammars) separates label words and
+    /// becomes one space. A continuation before any label text adds nothing.
+    /// Every other character is kept exactly as written. The label is never
+    /// empty: the content holds a character that is not whitespace, and the
+    /// join keeps every such character, so no check is repeated here.
+    pub fn from_label_content(text: crate::model::HeaderText<'_>) -> Self {
+        let text = text.as_str();
+        if !text.contains(['\r', '\n']) {
+            return Self(::smol_str::SmolStr::from(text));
+        }
+        let mut label = String::with_capacity(text.len());
+        // Line breaks only occur inside continuations, so splitting on them
+        // leaves the first line, then one piece per later line that begins
+        // with the continuation's tab. A run of line breaks splits into empty
+        // pieces between them, which are not lines.
+        let mut lines = text.split(['\r', '\n']);
+        let mut saw_text = false;
+        if let Some(first) = lines.next() {
+            label.push_str(first);
+            saw_text = !first.is_empty();
+        }
+        for line in lines.filter(|line| !line.is_empty()) {
+            if saw_text {
+                label.push(' ');
+            }
+            let words = line
+                .strip_prefix('\t')
+                .unwrap_or(line)
+                .trim_start_matches(' ');
+            label.push_str(words);
+            saw_text |= !words.is_empty();
+        }
+        Self(::smol_str::SmolStr::from(label))
+    }
+}
+
+non_empty_string_newtype!(
     /// Description of the birthplace in `@Birthplace of`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Birthplace_Header>
@@ -70,14 +121,14 @@ string_newtype!(
     pub struct LanguageName;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Transcriber name captured in `@Transcriber`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Transcriber_Header>
     pub struct TranscriberName;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Warning text from `@Warning`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Warning_Header>
@@ -114,49 +165,49 @@ string_newtype!(
     pub struct CustomIdField;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Activities list recorded in `@Activities`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Activities_Header>
     pub struct ActivitiesDescription;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Background context stored in `@Bck`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Bck_Header>
     pub struct BackgroundDescription;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Video references listed in `@Videos`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Videos_Header>
     pub struct VideoSpec;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Inline thumbnail marker text from `@T`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Thumbnail_Header>
     pub struct TDescription;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Font specification declared in `@Font`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Font_Header>
     pub struct FontSpec;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Window geometry captured in `@Window`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Window_Header>
     pub struct WindowGeometry;
 );
 
-string_newtype!(
+non_empty_string_newtype!(
     /// Color word palette listed in `@Color words`.
     ///
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#ColorWords_Header>

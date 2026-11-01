@@ -20,8 +20,8 @@ The following flow shows the principal artifact boundaries, not Cargo imports:
 ```mermaid
 flowchart TD
     S["spec/: examples and registries"] -->|"registered generators"| A["Tests, fixtures, error docs and registry artifacts"]
-    G["grammar/grammar.js: grammar rules"] -->|"tree-sitter generator"| C["Generated C parser and node metadata"]
-    C -->|"pinned traversal generator"| T["Typed CST traversal and metadata bridge"]
+    G["grammar/grammar.js: grammar rules"] -->|"pinned Tree-sitter build\n(tree-sitter-revision)"| C["Generated C parser, node metadata\nand grammar-contract.json"]
+    C -->|"grammar contract, pinned traversal generator\n(tsgu-revision)"| T["Typed CST traversal and metadata bridge"]
     C --> P["talkbank-parser"]
     T --> P
     P --> M["talkbank-model: owned CHAT, validation and serialization"]
@@ -36,7 +36,9 @@ Some grammar regions are generated from registries; handwritten grammar rules
 remain an explicit source, not an output reconstructed from every spec example.
 
 Ordinary source builds consume committed generated artifacts. Regenerating
-typed traversal additionally needs the pinned standalone generator and the
+them needs both pinned producers: the Tree-sitter build that writes the
+grammar contract, named by `TREE_SITTER_DIR`, and the standalone traversal
+generator, which reads only that contract, named by `TSGU_DIR`, with the
 access described in the grammar workflow. A successful ordinary build is not
 proof of independent generator bootstrap, registry installation or release
 qualification.

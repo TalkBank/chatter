@@ -208,6 +208,34 @@ fn reference_header_text_adapters_preserve_authored_payloads() {
             witnessed.insert(stringify!($kind));
         }};
     }
+    // A header payload that is nonempty by construction: rebuilt through
+    // its checked constructor, and refused empty on every route in.
+    macro_rules! check_non_empty {
+        ($kind:ident, $value:expr) => {{
+            let value = $value;
+            let text = value.as_str();
+            assert_lexical_adapters(value, text);
+            for rebuilt in [
+                talkbank_model::model::$kind::try_new(text).expect("nonempty payload"),
+                talkbank_model::model::$kind::try_new(text.to_owned()).expect("nonempty payload"),
+            ] {
+                assert_eq!(&rebuilt, value);
+                assert_eq!(rebuilt.to_chat_string(), text);
+            }
+            assert!(talkbank_model::model::$kind::try_new("").is_err());
+            for invalid in [
+                serde_json::json!(""),
+                serde_json::json!(null),
+                serde_json::json!(true),
+                serde_json::json!(1),
+                serde_json::json!([]),
+                serde_json::json!({}),
+            ] {
+                assert!(serde_json::from_value::<talkbank_model::model::$kind>(invalid).is_err());
+            }
+            witnessed.insert(stringify!($kind));
+        }};
+    }
     for fixture in corpus.fixtures() {
         let file =
             strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
@@ -240,19 +268,25 @@ fn reference_header_text_adapters_preserve_authored_payloads() {
                         check!(CustomIdField, custom);
                     }
                 }
-                Header::Pid { pid } => check!(PidValue, pid),
-                Header::Situation { text } => check!(SituationDescription, text),
+                Header::Pid { pid } => check_non_empty!(PidValue, pid),
+                Header::Situation { text } => check_non_empty!(SituationDescription, text),
                 Header::BeginGem { label: Some(label) }
                 | Header::EndGem { label: Some(label) }
-                | Header::LazyGem { label: Some(label) } => check!(GemLabel, label),
-                Header::TapeLocation { location } => check!(TapeLocationDescription, location),
-                Header::Location { location } => check!(LocationDescription, location),
-                Header::RoomLayout { layout } => check!(RoomLayoutDescription, layout),
-                Header::Birthplace { place, .. } => check!(BirthplaceDescription, place),
-                Header::Transcriber { transcriber } => check!(TranscriberName, transcriber),
-                Header::Warning { text } => check!(WarningText, text),
-                Header::Activities { activities } => check!(ActivitiesDescription, activities),
-                Header::Bck { bck } => check!(BackgroundDescription, bck),
+                | Header::LazyGem { label: Some(label) } => check_non_empty!(GemLabel, label),
+                Header::TapeLocation { location } => {
+                    check_non_empty!(TapeLocationDescription, location)
+                }
+                Header::Location { location } => check_non_empty!(LocationDescription, location),
+                Header::RoomLayout { layout } => check_non_empty!(RoomLayoutDescription, layout),
+                Header::Birthplace { place, .. } => check_non_empty!(BirthplaceDescription, place),
+                Header::Transcriber { transcriber } => {
+                    check_non_empty!(TranscriberName, transcriber)
+                }
+                Header::Warning { text } => check_non_empty!(WarningText, text),
+                Header::Activities { activities } => {
+                    check_non_empty!(ActivitiesDescription, activities)
+                }
+                Header::Bck { bck } => check_non_empty!(BackgroundDescription, bck),
                 Header::Page { page } => {
                     assert_lexical_adapters(page, page.as_str());
                     assert_eq!(
@@ -261,11 +295,11 @@ fn reference_header_text_adapters_preserve_authored_payloads() {
                     );
                     witnessed.insert("PageNumber");
                 }
-                Header::Videos { videos } => check!(VideoSpec, videos),
-                Header::T { text } => check!(TDescription, text),
-                Header::Font { font } => check!(FontSpec, font),
-                Header::Window { geometry } => check!(WindowGeometry, geometry),
-                Header::ColorWords { colors } => check!(ColorWordList, colors),
+                Header::Videos { videos } => check_non_empty!(VideoSpec, videos),
+                Header::T { text } => check_non_empty!(TDescription, text),
+                Header::Font { font } => check_non_empty!(FontSpec, font),
+                Header::Window { geometry } => check_non_empty!(WindowGeometry, geometry),
+                Header::ColorWords { colors } => check_non_empty!(ColorWordList, colors),
                 _ => {} // Structured payloads have separate admission contracts.
             }
         }

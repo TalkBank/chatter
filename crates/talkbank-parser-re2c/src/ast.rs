@@ -12,10 +12,12 @@ mod chain_atoms;
 mod content_ref;
 mod enclosure;
 mod file;
+mod overlap_point;
 pub use chain::Chain;
 pub use chain_atoms::{ParsedEvent, ZeroAction};
 pub use content_ref::{ContentChildren, ContentRef};
 pub use enclosure::Enclosure;
+pub use overlap_point::WordOverlapPoint;
 
 mod word;
 pub use word::{
@@ -346,24 +348,6 @@ pub struct Quotation<'a> {
 // ═══════════════════════════════════════════════════════════════
 // Header ASTs
 // ═══════════════════════════════════════════════════════════════
-
-/// A parsed participant header or another header's preserved lexer tokens.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum HeaderParsed<'a> {
-    /// Header already admitted to the shared model, including explicit recovery.
-    Shared(talkbank_model::model::Header),
-    /// Other header families retain their lexer representation for lowering.
-    Other {
-        /// Original header bytes, excluding the terminal line ending. Recovery
-        /// must use this source slice rather than reconstructing lexical payloads.
-        #[serde(skip)]
-        source: &'a str,
-        /// Header discriminator produced by the lexer.
-        prefix: Token<'a>,
-        /// Content tokens, including whitespace and continuation newlines.
-        content: Vec<Token<'a>>,
-    },
-}
 
 // ═══════════════════════════════════════════════════════════════
 // Full file AST

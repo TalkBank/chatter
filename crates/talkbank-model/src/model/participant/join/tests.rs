@@ -82,7 +82,7 @@ fn test_build_participants_with_birth() -> Result<(), String> {
         Header::ID(id("CHI", "Target_Child")),
         Header::Birth {
             participant: SpeakerCode::new("CHI"),
-            date: ChatDate::new("28-JUN-2001"),
+            date: ChatDate::try_new("28-JUN-2001").expect("nonblank date"),
         },
     ]);
 
@@ -96,6 +96,30 @@ fn test_build_participants_with_birth() -> Result<(), String> {
         chi.birth_date.as_ref().map(|d| d.as_str()),
         Some("28-JUN-2001")
     );
+    Ok(())
+}
+
+/// An `@Birth of` written with nothing after its colon is empty content, not
+/// a birth date: the participant has none (validation refuses the header).
+#[test]
+fn test_build_participants_with_empty_birth_header() -> Result<(), String> {
+    let (participants, errors) = join(vec![
+        declares("CHI", "Ruth", "Target_Child"),
+        Header::ID(id("CHI", "Target_Child")),
+        crate::model::QualifiedKind::Birth.empty(
+            SpeakerCode::new("CHI"),
+            crate::model::WrittenSeparator::admit(":\t").expect("written separator"),
+        ),
+    ]);
+
+    assert_eq!(participants.len(), 1);
+    assert!(errors.is_empty());
+
+    let chi = participants
+        .get("CHI")
+        .ok_or_else(|| "CHI participant should exist".to_string())?;
+    assert_eq!(chi.birth_date, None);
+    assert!(!chi.has_birth_date());
     Ok(())
 }
 
@@ -135,7 +159,7 @@ fn test_e524_orphan_birth() {
         Header::ID(id("CHI", "Target_Child")),
         Header::Birth {
             participant: SpeakerCode::new("MOT"),
-            date: ChatDate::new("01-JAN-2000"),
+            date: ChatDate::try_new("01-JAN-2000").expect("nonblank date"),
         },
     ]);
 
@@ -153,7 +177,7 @@ fn birth_for_declared_speaker_without_id_is_not_orphaned() {
         declares("CHI", "Ruth", "Target_Child"),
         Header::Birth {
             participant: SpeakerCode::new("CHI"),
-            date: ChatDate::new("01-JAN-2000"),
+            date: ChatDate::try_new("01-JAN-2000").expect("nonblank date"),
         },
     ]);
     assert!(participants.is_empty(), "metadata is genuinely missing");
@@ -185,7 +209,7 @@ fn test_multiple_participants() -> Result<(), String> {
         Header::ID(id("INV", "Investigator")),
         Header::Birth {
             participant: SpeakerCode::new("CHI"),
-            date: ChatDate::new("28-JUN-2001"),
+            date: ChatDate::try_new("28-JUN-2001").expect("nonblank date"),
         },
     ];
 

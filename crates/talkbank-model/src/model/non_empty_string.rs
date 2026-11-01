@@ -94,6 +94,15 @@ impl TryFrom<&str> for RecoveryText {
 }
 
 impl RecoveryText {
+    /// The text a recovery observed, exactly as written: `Empty` when it
+    /// observed nothing. Copies the text once, straight into its storage.
+    pub fn observed(text: &str) -> Self {
+        match NonEmptyString::new(text) {
+            Ok(text) => Self::NonEmpty(text),
+            Err(EmptyText) => Self::Empty,
+        }
+    }
+
     /// Admit non-empty input; use the explicit `Empty` variant for recovery.
     pub fn new(text: impl AsRef<str>) -> Result<Self, EmptyText> {
         NonEmptyString::new(text).map(Self::NonEmpty)
@@ -158,7 +167,8 @@ pub struct NonEmptyStr<'a>(&'a str);
 
 impl<'a> NonEmptyStr<'a> {
     /// Admit text without allocating. Whitespace is non-empty lexical text.
-    pub fn new(text: &'a str) -> Result<Self, EmptyText> {
+    /// `const`, so a literal can be admitted at compile time.
+    pub const fn new(text: &'a str) -> Result<Self, EmptyText> {
         if text.is_empty() {
             Err(EmptyText)
         } else {
@@ -287,6 +297,12 @@ impl NonEmptyString {
     /// Borrow the inner string.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Borrow the text with its nonempty proof, for a constructor that takes
+    /// [`NonEmptyStr`]; nothing is re-checked.
+    pub fn as_non_empty(&self) -> NonEmptyStr<'_> {
+        NonEmptyStr(&self.0)
     }
 
     /// Consume and return an owned `String`.

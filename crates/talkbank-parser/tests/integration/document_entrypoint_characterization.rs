@@ -127,6 +127,7 @@ fn header_tag(h: &Header) -> &'static str {
         Header::ID(_) => "ID",
         Header::Comment { .. } => "Comment",
         Header::Date { .. } => "Date",
+        Header::Unknown { .. } => "Unknown",
         _ => "Other",
     }
 }
@@ -165,11 +166,13 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
 
 #[test]
 fn omitted_date_payload_does_not_hide_a_missing_separator() {
-    // Optional payloads let the grammar recover a typed Date header here.
-    // The missing TAB is still source recovery, not a legal empty header.
+    // Optional payloads let the grammar recover the header here. The missing
+    // TAB is still source recovery, not a header written with empty content:
+    // empty content is what follows a written separator, so the header is
+    // retained as unknown (malformed), with the separator reported.
     let source = STRAY_TOP_LEVEL_DATE.replace("@Date!", "@Date:");
     let (tags, diags) = parse_lines_and_diags(&source);
-    assert_eq!(tags[5], "Header(Date)");
+    assert_eq!(tags[5], "Header(Unknown)");
     assert_eq!(tags[6], "Header(End)");
     assert_eq!(diags.len(), 1, "missing separator: {diags:?}");
     assert_eq!(diags[0].0, "E303");

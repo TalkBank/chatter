@@ -37,9 +37,16 @@ re2c DFA Lexer  -->  Chumsky Combinators  -->  talkbank-model
 2. **Parser** (`parser/`), chumsky combinators consume `&[Token]`. MOR parsing
    constructs shared words, items and tiers directly. Participant lists construct
    shared `ParticipantEntries`, including explicit missing-role recovery, with no
-   native participant AST or conversion. ID and media bodies also construct shared
-   headers directly. Text-tier parsing retains a token view for direct shared-model construction; other
-   families still use native intermediate types in `ast.rs`.
+   native participant AST or conversion. Every header line is lowered once, in
+   the line parser (`parser/file/headers.rs`), straight to the shared `Header`
+   that `LocatedHeader` carries: the prefix token's `HeaderPrefixFamily` names
+   the header (`LexedHeader::route` maps it to the model's kind) with its
+   `WrittenSeparator`, a line holding a lexer-marked malformed token is
+   refused as `Header::Unknown`, and the content's source slice goes through
+   the model's one emptiness decision (`HeaderContent::classify`). There is no
+   native header AST. Text-tier parsing retains a token view for direct
+   shared-model construction; other non-header families still use native
+   intermediate types in `ast.rs`.
 3. **Conversion** (`convert/`), conversion functions build talkbank-model
    values from admitted input, each through its model constructor with its `Location` as the
    first argument. Source-aware conversions use `SourceText` to place original

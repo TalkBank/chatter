@@ -159,11 +159,8 @@ impl MainTier {
                 return None;
             }
 
-            let outcome = GoverningMarker::of(word, enclosing).resolve_with_declaration(
-                word,
-                tier_language,
-                declared_languages,
-            );
+            let outcome = GoverningMarker::of(word, enclosing)
+                .resolve_with_declaration(tier_language, declared_languages);
             let resolved = match outcome.resolution {
                 crate::validation::LanguageResolution::Single(code) => code,
                 _ => return None,

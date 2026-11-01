@@ -182,8 +182,9 @@ rationale with historical observations, not a proof over every parser state.
 1. **tree-sitter** parses CHAT source into a CST with this grammar.
 2. **Generated typed traversal** (`crates/talkbank-parser/src/generated_traversal.rs`
    and the C metadata bridge in `bindings/rust/`) gives the parser typed access
-   to each node's children. It is regenerated from the grammar by the pinned
-   traversal recipe, never edited by hand.
+   to each node's children. It is regenerated from the grammar contract
+   (`src/grammar-contract.json`, written by the pinned Tree-sitter build) by
+   the pinned traversal recipe, never edited by hand.
 3. **`talkbank-parser`** lowers the typed CST into a `ChatFile` and reports
    recovery nodes as diagnostics.
 4. **`talkbank-model`** validates the model (error codes, cross-tier alignment).

@@ -2,7 +2,7 @@
 //! drop/rename `@Participants` entries and `@ID` rows accordingly.
 
 use talkbank_model::ParseValidateOptions;
-use talkbank_model::model::header::{Header, ParticipantEntries, ParticipantEntry};
+use talkbank_model::model::header::{EmptyHeader, Header, ParticipantEntries, ParticipantEntry};
 use talkbank_model::model::{ChatFile, Line};
 
 use crate::pipeline::parse_and_validate;
@@ -157,6 +157,9 @@ fn rewrite_header(header: &Header, mapping: &AdmittedMapping<'_>) -> HeaderRewri
             participant,
             language: language.clone(),
         }),
+        // An empty participant-qualified header still names its participant,
+        // which follows the same rename/drop assignment.
+        Header::EmptyContent(empty) => rewrite_empty_header(header, empty, mapping),
         // Exhaustive preservation: adding a header requires reviewing whether
         // it carries a speaker reference instead of silently keeping it.
         Header::Utf8
@@ -197,6 +200,25 @@ fn rewrite_header(header: &Header, mapping: &AdmittedMapping<'_>) -> HeaderRewri
         | Header::Page { .. }
         | Header::Videos { .. }
         | Header::T { .. } => HeaderRewrite::Keep(header.clone()),
+    }
+}
+
+/// Rewrite the participant an empty participant-qualified header names; an
+/// empty header naming nobody is kept as written.
+fn rewrite_empty_header(
+    header: &Header,
+    empty: &EmptyHeader,
+    mapping: &AdmittedMapping<'_>,
+) -> HeaderRewrite {
+    match empty {
+        EmptyHeader::Qualified {
+            kind,
+            participant,
+            separator,
+        } => rewrite_reference(participant, mapping, |participant| {
+            kind.empty(participant, *separator)
+        }),
+        EmptyHeader::Plain { .. } => HeaderRewrite::Keep(header.clone()),
     }
 }
 

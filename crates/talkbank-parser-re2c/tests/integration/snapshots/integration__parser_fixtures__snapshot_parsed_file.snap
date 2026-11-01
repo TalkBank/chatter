@@ -5,47 +5,38 @@ expression: file
 lines:
   - Header:
       header:
-        Other:
-          prefix:
-            HeaderUtf8: "@UTF8"
-          content: []
+        type: utf8
   - Header:
       header:
-        Other:
-          prefix:
-            HeaderBegin: "@Begin"
-          content: []
+        type: begin
   - Header:
       header:
-        Shared:
-          type: languages
-          codes:
-            - eng
+        type: languages
+        codes:
+          - eng
   - Header:
       header:
-        Shared:
-          type: participants
-          entries:
-            - speaker_code: CHI
-              details:
-                state: complete
-                name: ~
-                role: Child
-            - speaker_code: MOT
-              details:
-                state: complete
-                name: ~
-                role: Mother
+        type: participants
+        entries:
+          - speaker_code: CHI
+            details:
+              state: complete
+              name: ~
+              role: Child
+          - speaker_code: MOT
+            details:
+              state: complete
+              name: ~
+              role: Mother
   - Header:
       header:
-        Shared:
-          type: id
-          language:
-            - eng
-          corpus: corpus
-          speaker: CHI
-          age: 3;00.
-          role: Child
+        type: id
+        language:
+          - eng
+        corpus: corpus
+        speaker: CHI
+        age: 3;00.
+        role: Child
   - Utterance:
       main_tier:
         speaker:
@@ -79,8 +70,5 @@ lines:
                 type: period
   - Header:
       header:
-        Other:
-          prefix:
-            HeaderEnd: "@End"
-          content: []
+        type: end
 source: "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|3;00.||||Child|||\n*CHI:\thello .\n%mor:\tn|hello .\n@End\n"

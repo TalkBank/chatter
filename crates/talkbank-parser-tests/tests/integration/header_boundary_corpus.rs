@@ -3,24 +3,22 @@
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::repo_paths::workspace_root;
 
+/// Which header a specimen holds, by the model's own kind: written with
+/// content, or written with nothing after its colon.
 #[derive(Clone, Copy)]
 enum HeaderField {
-    Date,
-    Birth,
-    Duration,
-    Start,
+    Content(talkbank_model::model::HeaderKind),
+    Empty(talkbank_model::model::HeaderKind),
 }
 
 impl HeaderField {
     fn matches(self, header: &talkbank_model::model::Header) -> bool {
         use talkbank_model::model::Header;
-        matches!(
-            (self, header),
-            (Self::Date, Header::Date { .. })
-                | (Self::Birth, Header::Birth { .. })
-                | (Self::Duration, Header::TimeDuration { .. })
-                | (Self::Start, Header::TimeStart { .. })
-        )
+        match (self, header) {
+            (Self::Empty(kind), Header::EmptyContent(empty)) => empty.kind() == kind,
+            (Self::Empty(_), _) | (Self::Content(_), Header::EmptyContent(_)) => false,
+            (Self::Content(kind), header) => header.kind() == kind,
+        }
     }
 }
 
@@ -28,23 +26,35 @@ impl HeaderField {
 /// lexical alternative supplies the preserved header value.
 #[test]
 fn header_empty_and_suffix_specs_preserve_values_and_validation() {
-    use HeaderField::{Birth, Date, Duration, Start};
     use talkbank_model::ErrorCollector;
-    use talkbank_model::model::{ChatFile, TranscriptName, WriteChat};
+    use talkbank_model::model::{
+        ChatFile, HeaderKind, PlainKind, QualifiedKind, TextKind, TranscriptName, WriteChat,
+    };
+    let text = |kind| HeaderKind::Plain(PlainKind::Text(kind));
+    let (date, birth) = (
+        text(TextKind::Date),
+        HeaderKind::Qualified(QualifiedKind::Birth),
+    );
+    let (duration, start) = (text(TextKind::TimeDuration), text(TextKind::TimeStart));
+    use HeaderField::{Content, Empty};
 
     let parser = TreeSitterParser::new().expect("parser");
     for (specimen, field, expected) in [
-        ("E518_7", Date, None),
-        ("E518_16", Date, Some("E518")),
-        ("E516_1", Date, Some("E516")),
-        ("E545_5", Birth, None),
-        ("E545_8", Birth, None),
-        ("E540_numeric_boundaries_1", Duration, None),
-        ("E540_numeric_boundaries_12", Duration, None),
-        ("E540_numeric_boundaries_13", Duration, Some("E540")),
-        ("E541_clock_3", Start, None),
-        ("E541_clock_10", Start, None),
-        ("E541_clock_11", Start, Some("E541")),
+        ("E518_7", Content(date), None),
+        ("E518_16", Content(date), Some("E518")),
+        ("E553_1", Empty(date), Some("E553")),
+        ("E545_5", Content(birth), None),
+        ("E553_5", Empty(birth), Some("E553")),
+        ("E540_numeric_boundaries_1", Content(duration), None),
+        ("E540_numeric_boundaries_12", Empty(duration), Some("E553")),
+        (
+            "E540_numeric_boundaries_13",
+            Content(duration),
+            Some("E540"),
+        ),
+        ("E541_clock_3", Content(start), None),
+        ("E541_clock_10", Empty(start), Some("E553")),
+        ("E541_clock_11", Content(start), Some("E541")),
     ] {
         let path = workspace_root()
             .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors")

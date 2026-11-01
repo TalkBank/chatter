@@ -169,10 +169,10 @@ chat = '''
 @End
 '''
 [[example]]
-title = 'An empty duration retains the optional-empty policy'
+title = 'An empty duration is empty header content, not a duration'
 level = 'header'
-claim = 'legal'
-notes = 'Delete the complete value from the legal 23:59:59 control, keeping its tab separator and following speech. TimeDurationValue::invalidity explicitly exempts empty optional values; the omission is preserved rather than serialized as zero.'
+claim = { subsumed_by = 'E553' }
+notes = 'Delete the complete value from the legal 23:59:59 control, keeping its tab separator and following speech. A header with nothing after its colon is Header::EmptyContent, refused by E553; no duration value is built, so E540 has nothing to assess.'
 chat = '''
 @UTF8
 @Begin

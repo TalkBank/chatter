@@ -50,6 +50,21 @@ class GeneratorOutputTests(unittest.TestCase):
                     self.assertEqual(output.read_text(), "original")
                 self.assertEqual(list(output.parent.iterdir()), [output] if exists else [])
 
+    def stage(self, grammar: Path, names: list[str], returncode: int, mode):
+        """Run the staging seam with a producer that writes `names`."""
+
+        def generate(arguments, **kwargs):
+            staged = Path(arguments[-1])
+            for name in names:
+                (staged / name).write_text("changed")
+            return subprocess.CompletedProcess(arguments, returncode)
+
+        diagnostics = io.StringIO()
+        with patch.object(generate_grammar, "GRAMMAR", grammar), patch.object(
+            generate_grammar.subprocess, "run", side_effect=generate
+        ), redirect_stderr(diagnostics):
+            status = generate_grammar.stage_and_publish(Path("tree-sitter"), mode)
+        return status, diagnostics.getvalue()
 
     def test_grammar_check_and_failed_generation_do_not_publish(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -57,28 +72,42 @@ class GeneratorOutputTests(unittest.TestCase):
             target = grammar / "src" / "parser.c"
             target.parent.mkdir()
             target.write_text("original")
+            status, diagnostics = self.stage(
+                grammar, list(generate_grammar.REQUIRED), 0, generate_grammar.Mode.CHECK
+            )
+            self.assertEqual(status, 1)
+            self.assertIn("stale grammar/src/parser.c", diagnostics)
+            self.assertEqual(target.read_text(), "original")
+            self.assertEqual(list(target.parent.iterdir()), [target])
+            status, _ = self.stage(
+                grammar, list(generate_grammar.REQUIRED), 7, generate_grammar.Mode.PUBLISH
+            )
+            self.assertEqual(status, 7)
+            self.assertEqual(target.read_text(), "original")
+            self.assertEqual(list(grammar.iterdir()), [target.parent])
 
-            def generate(arguments, **kwargs):
-                staged = Path(arguments[-1])
-                for name in ["parser.c", "grammar.json", "node-types.json"]:
-                    (staged / name).write_text("changed")
-                return subprocess.CompletedProcess(arguments, returncode)
+    def test_a_producer_without_the_contract_fails_closed(self):
+        # An upstream CLI writes every file but the contract; publishing its
+        # output would leave grammar-contract.json silently stale.
+        with tempfile.TemporaryDirectory() as directory:
+            grammar = Path(directory)
+            (grammar / "src").mkdir()
+            upstream = ["parser.c", "grammar.json", "node-types.json"]
+            for mode in generate_grammar.Mode:
+                status, diagnostics = self.stage(grammar, upstream, 0, mode)
+                self.assertEqual(status, 1)
+                self.assertIn("generator omitted grammar-contract.json", diagnostics)
+                self.assertEqual(list((grammar / "src").iterdir()), [])
 
-            with patch.object(generate_grammar, "GRAMMAR", grammar), patch.object(
-                generate_grammar.subprocess, "run", side_effect=generate
+    def test_an_unset_producer_selection_fails_closed(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(generate_grammar.TREE_SITTER.variable, None)
+            diagnostics = io.StringIO()
+            with patch.object(sys, "argv", ["generate_grammar.py", "--check"]), redirect_stderr(
+                diagnostics
             ):
-                returncode = 0
-                diagnostics = io.StringIO()
-                with patch.object(sys, "argv", ["generate_grammar.py", "--check"]), redirect_stderr(diagnostics):
-                    self.assertEqual(generate_grammar.main(), 1)
-                self.assertIn("stale grammar/src/parser.c", diagnostics.getvalue())
-                self.assertEqual(target.read_text(), "original")
-                self.assertEqual(list(target.parent.iterdir()), [target])
-                returncode = 7
-                with patch.object(sys, "argv", ["generate_grammar.py"]):
-                    self.assertEqual(generate_grammar.main(), 7)
-                self.assertEqual(target.read_text(), "original")
-                self.assertEqual(list(grammar.iterdir()), [target.parent])
+                self.assertEqual(generate_grammar.main(), 1)
+            self.assertIn("TREE_SITTER_DIR must name a clean checkout", diagnostics.getvalue())
 
 
 if __name__ == "__main__":

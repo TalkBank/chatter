@@ -218,11 +218,10 @@ impl<'a> Token<'a> {
             Token::OtherSpokenPrefix(prefix) => prefix.text(),
             Token::MediaBullet { bullet } => bullet.text(),
             Token::HeaderPrefix(s) => s.text(),
-            Token::HeaderSep(s)
-            | Token::HeaderBirthOf(s)
-            | Token::HeaderBirthplaceOf(s)
-            | Token::HeaderL1Of(s)
-            | Token::TierSep(s) => s.text(),
+            Token::HeaderSep(s) | Token::TierSep(s) => s.text(),
+            Token::HeaderBirthOf(s) | Token::HeaderBirthplaceOf(s) | Token::HeaderL1Of(s) => {
+                s.text()
+            }
             Token::TierPrefix(s) => s.text(),
             Token::MorWord { pos, .. } => pos,
             Token::GraRelation { index, .. } => index,

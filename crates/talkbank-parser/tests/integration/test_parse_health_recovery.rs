@@ -238,7 +238,7 @@ fn malformed_postcode_does_not_emit_empty_postcode_placeholder() {
 
 /// Verifies empty `@Date` headers are preserved for validation-phase checks.
 #[test]
-fn empty_date_header_is_preserved_for_validation_phase() {
+fn empty_date_header_is_preserved_as_empty_content_for_validation_phase() {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let input = "@UTF8\n@Begin\n@Date:\t\n*CHI:\thello .\n@End\n";
     let errors = ErrorCollector::new();
@@ -253,8 +253,11 @@ fn empty_date_header_is_preserved_for_validation_phase() {
     let mut saw_empty_date_header = false;
     for line in &file.lines {
         if let Line::Header { header, .. } = line
-            && let talkbank_model::model::Header::Date { date } = header.as_ref()
-            && date.as_str().is_empty()
+            && let talkbank_model::model::Header::EmptyContent(empty) = header.as_ref()
+            && empty.kind()
+                == talkbank_model::model::HeaderKind::Plain(talkbank_model::model::PlainKind::Text(
+                    talkbank_model::model::TextKind::Date,
+                ))
         {
             saw_empty_date_header = true;
         }
@@ -262,6 +265,6 @@ fn empty_date_header_is_preserved_for_validation_phase() {
 
     assert!(
         saw_empty_date_header,
-        "Expected parser recovery to preserve an empty @Date value for validation checks"
+        "Expected the parser to preserve the empty @Date header as empty content for validation"
     );
 }

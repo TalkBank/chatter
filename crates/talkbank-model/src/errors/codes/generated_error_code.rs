@@ -28,6 +28,10 @@
 // E703: Unexpected node in morphology tier. Retired 2026-07-31, same closure and same reason as E700. Distinct from temporal.rs's separate note that E702/E703 are reserved for a strict timeline mode: that never-built feature would need its own new variant, not this number.
 // E754: LetterFormMultipleLetters. Retired 2026-08-11: it required an `@l` letter form to carry exactly one letter of stem but counted CHARACTERS, and a digraph is one letter written with two (Welsh `ll`, Dutch `ij`, Hungarian `sz`), so it reported a spurious error on valid CHAT and could not do better, never seeing the word's language. CLAN reached the same conclusion four days earlier, retiring its error 76.
 // E214: Empty scoped annotation content. Retired 2026-08-26, and it had drifted into TWO rules under one number, neither of which could fire. It began as "bare [*] carries no error code" and was deliberately DISABLED as leniency Decision 1, because reference files use bare [*] as valid CHAT; its spec file still documented that rule. The code was then reused for "the scoped-annotation LIST is empty", which no input reaches: an empty bracket is E316, and the only empty list in the model was the parser wrapping every bare 0, never validated because Action does not implement Validate. AnnotatedContentAnnotations is non-empty by construction now, so the second rule is unrepresentable and the first stays retired. The registry already recorded status = not_implemented.
+// E508: EmptyDateHeader. Retired 2026-10-31 into E553: a colon-bearing header with nothing after its colon is one model state (Header::EmptyContent) that validation always refuses with E553. E508 was never emitted; E516 reported the empty @Date instead.
+// E509: EmptyMediaHeader. Retired 2026-10-31 into E553 (Header::EmptyContent). It was never emitted: the empty @Media header was unstructured recovery (E316).
+// E516: EmptyDate. Retired 2026-10-31 into E553: an empty @Date is Header::EmptyContent, refused by the one empty-header rule, and ChatDate can no longer hold empty text.
+// E533: EmptyOptionsHeader. Retired 2026-10-31 into E553: an empty @Options is Header::EmptyContent, refused by the one empty-header rule, and ChatOptionFlags can no longer hold an empty list.
 
 /// Standard error codes for CHAT parsing and validation.
 ///
@@ -402,13 +406,6 @@ pub enum ErrorCode {
     /// Empty `@Languages` header.
     #[code("E507")]
     EmptyLanguagesHeader,
-    /// Empty `@Date` header.
-    #[code("E508")]
-    #[status(planned)]
-    EmptyDateHeader,
-    /// Empty `@Media` header.
-    #[code("E509")]
-    EmptyMediaHeader,
     /// Empty language field in `@ID` header.
     #[code("E510")]
     EmptyIDLanguage,
@@ -429,9 +426,6 @@ pub enum ErrorCode {
     /// Empty role field in `@ID` header.
     #[code("E515")]
     EmptyIDRole,
-    /// Empty date value.
-    #[code("E516")]
-    EmptyDate,
     /// Invalid age format in `@ID` header.
     #[code("E517")]
     InvalidAgeFormat,
@@ -474,9 +468,6 @@ pub enum ErrorCode {
     /// Invalid participant role value.
     #[code("E532")]
     InvalidParticipantRole,
-    /// Empty `@Options` header.
-    #[code("E533")]
-    EmptyOptionsHeader,
     /// Unsupported `@Options` value.
     #[code("E534")]
     UnsupportedOption,
@@ -566,6 +557,14 @@ pub enum ErrorCode {
     /// header").
     #[code("E552")]
     MediaUnlinkedWithTiming,
+    /// A colon-bearing header has no content after its colon. The header
+    /// says it carries content and supplies none, which has no meaning in
+    /// CHAT, so it is refused for every header kind with one rule: the parsed
+    /// `Header::EmptyContent` state. Omit the header instead (for a gem
+    /// header, use the bare form with no colon). `@Languages`,
+    /// `@Participants` and `@ID` keep their own declaration codes.
+    #[code("E553")]
+    EmptyHeaderContent,
     /// Generic tier validation error.
     #[code("E600")]
     TierValidationError,

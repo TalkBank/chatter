@@ -1,8 +1,13 @@
 use super::*;
+use crate::model::BlankContent;
 
 #[test]
 fn clock_range_accepts_valid_and_rejects_out_of_range() {
-    let out_of_range = |s: &str| TimeDurationValue::from_text(s).has_out_of_range_component();
+    let out_of_range = |s: &str| {
+        TimeDurationValue::try_new(s)
+            .expect("nonempty")
+            .has_out_of_range_component()
+    };
     // Valid clock values (CLAN accepts these).
     assert!(!out_of_range("23:59:59"));
     assert!(!out_of_range("12:30:45"));
@@ -63,7 +68,7 @@ fn time_value_parse_with_millis() {
 
 #[test]
 fn duration_single() {
-    let d = TimeDurationValue::from_text("01:23:45");
+    let d = TimeDurationValue::try_new("01:23:45").expect("nonempty");
     assert!(matches!(d.state, TimeDurationState::Parsed { .. }));
     assert_eq!(d.segments().len(), 1);
     assert!(matches!(d.segments()[0], TimeSegment::Single(_)));
@@ -71,21 +76,21 @@ fn duration_single() {
 
 #[test]
 fn duration_range_hyphen() {
-    let d = TimeDurationValue::from_text("00:00:00-01:30:00");
+    let d = TimeDurationValue::try_new("00:00:00-01:30:00").expect("nonempty");
     assert_eq!(d.segments().len(), 1);
     assert!(matches!(d.segments()[0], TimeSegment::Range { .. }));
 }
 
 #[test]
 fn duration_range_semicolon() {
-    let d = TimeDurationValue::from_text("00:00:00;01:30:00");
+    let d = TimeDurationValue::try_new("00:00:00;01:30:00").expect("nonempty");
     assert_eq!(d.segments().len(), 1);
     assert!(matches!(d.segments()[0], TimeSegment::Range { .. }));
 }
 
 #[test]
 fn duration_comma_separated() {
-    let d = TimeDurationValue::from_text("01:00:00, 02:00:00-03:00:00");
+    let d = TimeDurationValue::try_new("01:00:00, 02:00:00-03:00:00").expect("nonempty");
     assert_eq!(d.segments().len(), 2);
     assert!(matches!(d.segments()[0], TimeSegment::Single(_)));
     assert!(matches!(d.segments()[1], TimeSegment::Range { .. }));
@@ -93,7 +98,7 @@ fn duration_comma_separated() {
 
 #[test]
 fn duration_unsupported() {
-    let d = TimeDurationValue::from_text("foobar");
+    let d = TimeDurationValue::try_new("foobar").expect("nonempty");
     assert!(matches!(d.state, TimeDurationState::Unsupported(_)));
     assert_eq!(d.segments().len(), 0);
 }
@@ -102,9 +107,11 @@ fn duration_unsupported() {
 fn duration_admission_requires_every_segment_and_preserves_rejected_text() {
     use crate::model::{SemanticEq, WriteChat};
 
-    let clock = TimeDurationValue::from_text("00:00:00");
+    let clock = TimeDurationValue::try_new("00:00:00").expect("nonempty");
+    // Blank text is no duration at all: the header carrying it is
+    // `Header::EmptyContent`, so no route admits it as a value.
+    assert_eq!(TimeDurationValue::try_new(" "), Err(BlankContent));
     for text in [
-        " ",
         ",",
         " , ",
         ",00:00:00",
@@ -113,7 +120,7 @@ fn duration_admission_requires_every_segment_and_preserves_rejected_text() {
         "00:00:00,broken",
         "broken,00:00:00",
     ] {
-        let value = TimeDurationValue::from_text(text);
+        let value = TimeDurationValue::try_new(text).expect("nonempty");
         assert!(value.segments().is_empty(), "partial admission: {text:?}");
         assert!(!value.semantic_eq(&clock), "recovery became a clock");
         assert_eq!(value.invalidity().unwrap().into_text(), text);
@@ -130,25 +137,25 @@ fn duration_admission_requires_every_segment_and_preserves_rejected_text() {
         " 00:00:00 , 01:00:00 ",
         "00:00-01:00,02:00;03:00",
     ] {
-        let value = TimeDurationValue::from_text(text);
+        let value = TimeDurationValue::try_new(text).expect("nonempty");
         assert_eq!(value.segments().len(), 2);
         assert_eq!(value.to_chat_string(), text);
         assert!(value.invalidity().is_some());
     }
-    assert!(TimeDurationValue::from_text("").invalidity().is_none());
+    assert_eq!(TimeDurationValue::try_new(""), Err(BlankContent));
 }
 
 #[test]
 fn duration_roundtrip() {
     for input in &["01:23:45", "00:00:00-01:30:00", "01:00:00, 02:00:00"] {
-        let d = TimeDurationValue::from_text(input);
+        let d = TimeDurationValue::try_new(input).expect("nonempty");
         assert_eq!(d.as_str(), *input);
     }
 }
 
 #[test]
 fn start_hms() {
-    let s = TimeStartValue::from_text("01:23:45");
+    let s = TimeStartValue::try_new("01:23:45").expect("nonempty");
     assert!(matches!(
         s.time(),
         Some(TimeValue {
@@ -162,7 +169,7 @@ fn start_hms() {
 
 #[test]
 fn start_ms() {
-    let s = TimeStartValue::from_text("23:45");
+    let s = TimeStartValue::try_new("23:45").expect("nonempty");
     assert!(matches!(
         s.time(),
         Some(TimeValue {
@@ -176,7 +183,7 @@ fn start_ms() {
 
 #[test]
 fn start_with_millis() {
-    let s = TimeStartValue::from_text("01:23:45.678");
+    let s = TimeStartValue::try_new("01:23:45.678").expect("nonempty");
     assert!(matches!(
         s.time(),
         Some(TimeValue {
@@ -190,10 +197,9 @@ fn start_with_millis() {
 }
 
 #[test]
-fn wire_admission_preserves_clock_assessment_and_absence() {
-    use crate::model::{SemanticEq, ValidationTagged, WriteChat};
+fn wire_admission_preserves_clock_assessment_and_refuses_empty() {
+    use crate::model::{SemanticEq, WriteChat};
     for (text, duration_invalid, start_invalid) in [
-        ("", false, false),
         ("00:00:00", false, false),
         ("25:00:00", true, true),
         ("12:60:00", true, true),
@@ -205,7 +211,7 @@ fn wire_admission_preserves_clock_assessment_and_absence() {
         (" 01:23:45 ", true, true),
     ] {
         let wire = serde_json::to_string(text).unwrap();
-        let duration = TimeDurationValue::from_text(text);
+        let duration = TimeDurationValue::try_new(text).expect("nonempty");
         let restored: TimeDurationValue = serde_json::from_str(&wire).unwrap();
         assert_eq!(restored, duration);
         assert!(restored.semantic_eq(&duration));
@@ -215,7 +221,7 @@ fn wire_admission_preserves_clock_assessment_and_absence() {
         );
         assert_eq!(serde_json::to_string(&restored).unwrap(), wire);
         assert_eq!(restored.to_chat_string(), text);
-        let start = TimeStartValue::from_text(text);
+        let start = TimeStartValue::try_new(text).expect("nonempty");
         let restored: TimeStartValue = serde_json::from_str(&wire).unwrap();
         assert_eq!(restored, start);
         assert!(restored.semantic_eq(&start));
@@ -226,17 +232,17 @@ fn wire_admission_preserves_clock_assessment_and_absence() {
         assert_eq!(serde_json::to_string(&restored).unwrap(), wire);
         assert_eq!(restored.to_chat_string(), text);
     }
-    let absent = TimeStartValue::from_text("");
-    let midnight = TimeStartValue::from_text("00:00:00");
-    assert_eq!(absent.time(), None);
+    // An empty value is not a time value at all: the header carrying it is
+    // `Header::EmptyContent`. The wire refuses it as the constructor does.
+    assert_eq!(TimeStartValue::try_new(""), Err(BlankContent));
+    assert!(serde_json::from_str::<TimeStartValue>("\"\"").is_err());
+    assert!(serde_json::from_str::<TimeDurationValue>("\"\"").is_err());
+    // Blank is refused the same way: whitespace alone is no content.
+    assert_eq!(TimeStartValue::try_new(" \t"), Err(BlankContent));
+    assert!(serde_json::from_str::<TimeStartValue>("\" \"").is_err());
+    assert!(serde_json::from_str::<TimeDurationValue>("\" \"").is_err());
+    let midnight = TimeStartValue::try_new("00:00:00").expect("nonempty");
     assert!(midnight.time().is_some());
-    assert!(!absent.semantic_eq(&midnight));
-    assert!(!absent.has_validation_issue());
-    assert!(!absent.violates_depfile_pattern());
-    let absent_duration = TimeDurationValue::from_text("");
-    assert!(!absent_duration.has_validation_issue());
-    assert!(!absent_duration.violates_depfile_pattern());
-    assert!(absent_duration.segments().is_empty());
     let mut copy = midnight.time().unwrap();
     copy.hours = 25;
     assert!(!copy.is_in_clock_range());

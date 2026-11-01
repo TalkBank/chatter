@@ -6,22 +6,17 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#PID_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Font_Header>
 
-use crate::error::{
-    DiagnosticLocation, ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity,
-};
+use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, ColorWordsHeaderNode, FontHeaderNode, FreeTextNode, FullDocumentChild1Choice,
-    FullDocumentChild1ChoiceBoundView, NamedKind, SourceBound, SourceField, SourceRecovery,
-    SourceSlotView, WindowHeaderNode,
+    AsRawNode, FullDocumentChild1Choice, FullDocumentChild1ChoiceBoundView, SourceBound,
 };
-use crate::model::{self, Header, Line};
-use tree_sitter::Node;
+use crate::model::{Header, Line, TextKind};
+use talkbank_model::ParseOutcome;
 
+use super::dispatch::content_header;
 use super::helpers::header_separator;
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::header::parse_pid_header;
-use crate::parser::tree_parsing::parser_helpers::{surface_displaced, unknown_header_from_node};
-use crate::parser::typed_cst::AnyKindSlot;
+use crate::parser::tree_parsing::parser_helpers::{ContentSlot, HeaderSite};
 
 /// Parse and append one pre-`@Begin` header line.
 ///
@@ -30,8 +25,9 @@ use crate::parser::typed_cst::AnyKindSlot;
 /// and this matches it exhaustively; until 2026-09-09 the lowering handed
 /// over the raw node and this matched `node.kind()` with a catch-all
 /// reporting "unknown pre-begin header type", which the choice makes
-/// unreachable. `@PID` has a parser of its own; the other three share one
-/// shape, `seq(prefix, header_sep, free_text, newline)`, and one reader.
+/// unreachable. All four share one shape,
+/// `seq(prefix, header_sep, optional(free_text), newline)`, and one reader,
+/// the text-header reader every other text header uses.
 pub fn handle_pre_begin_header<'tree>(
     choice: SourceBound<'tree, '_, FullDocumentChild1Choice<'tree>>,
     errors: &impl ErrorSink,
@@ -40,7 +36,11 @@ pub fn handle_pre_begin_header<'tree>(
     let input = choice.source();
     let span = span_of(choice.raw_node());
     let header = match parse_pre_begin_header(choice, errors) {
-        Ok(header) => header,
+        Ok(ParseOutcome::Parsed(header)) => header,
+        // A source-admission fault, already reported by the reader. (An
+        // unparsable body is not a rejection: it is kept as an unknown
+        // header with its text.)
+        Ok(ParseOutcome::Rejected) => return,
         Err(failure) => {
             crate::parser::typed_cst::report_cst_failure(choice.raw_node(), input, failure, errors);
             return;
@@ -62,151 +62,43 @@ pub fn handle_pre_begin_header<'tree>(
 pub(crate) fn parse_pre_begin_header<'tree>(
     choice: SourceBound<'tree, '_, FullDocumentChild1Choice<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<Header, crate::parser::typed_cst::CstFailure> {
-    let input = choice.source();
+) -> Result<ParseOutcome<Header>, crate::parser::typed_cst::CstFailure> {
+    // One pre-`@Begin` text header: admit its envelope, then the shared text
+    // reader over its `free_text` slot.
+    macro_rules! text_header {
+        ($typed:expr, $missing:literal, $kind:expr) => {{
+            let typed = $typed;
+            let site = HeaderSite::bound(typed);
+            let associated = crate::parser::typed_cst::extract_envelope(typed)?;
+            content_header(
+                &site,
+                associated.field_child_2().slot(),
+                &associated.children().unexpected,
+                &ContentSlot {
+                    missing: $missing,
+                    suggested_fix: None,
+                },
+                errors,
+                $kind,
+            )
+        }};
+    }
     Ok(match choice.view() {
         FullDocumentChild1ChoiceBoundView::PidHeader(pid) => {
-            let header_errors = ErrorCollector::new();
-            let header = parse_pid_header(pid, &header_errors);
-            errors.report_all(header_errors.into_vec());
-            header?
+            text_header!(pid, "Missing PID value in @PID header", TextKind::Pid)
         }
-        FullDocumentChild1ChoiceBoundView::WindowHeader(window) => {
-            let associated = crate::parser::typed_cst::extract_envelope(window)?;
-            surface_displaced(
-                &associated.children().unexpected,
-                "window_header",
-                input,
-                errors,
-            );
-            free_text_header(
-                associated.field_child_2().slot(),
-                window.raw_node(),
-                FreeText {
-                    kind: WindowHeaderNode::KIND.name(),
-                    missing: "Missing or invalid @Window geometry",
-                    malformed: "Malformed @Window header",
-                },
-                errors,
-                |geometry| Header::Window {
-                    geometry: model::WindowGeometry::new(geometry),
-                },
-            )?
-        }
-        FullDocumentChild1ChoiceBoundView::ColorWordsHeader(color_words) => {
-            let associated = crate::parser::typed_cst::extract_envelope(color_words)?;
-            surface_displaced(
-                &associated.children().unexpected,
-                "color_words_header",
-                input,
-                errors,
-            );
-            free_text_header(
-                associated.field_child_2().slot(),
-                color_words.raw_node(),
-                FreeText {
-                    kind: ColorWordsHeaderNode::KIND.name(),
-                    missing: "Missing or invalid @Color words content",
-                    malformed: "Malformed @Color words header",
-                },
-                errors,
-                |colors| Header::ColorWords {
-                    colors: model::ColorWordList::new(colors),
-                },
-            )?
-        }
+        FullDocumentChild1ChoiceBoundView::WindowHeader(window) => text_header!(
+            window,
+            "Missing or invalid @Window geometry",
+            TextKind::Window
+        ),
+        FullDocumentChild1ChoiceBoundView::ColorWordsHeader(color_words) => text_header!(
+            color_words,
+            "Missing or invalid @Color words content",
+            TextKind::ColorWords
+        ),
         FullDocumentChild1ChoiceBoundView::FontHeader(font) => {
-            let associated = crate::parser::typed_cst::extract_envelope(font)?;
-            surface_displaced(
-                &associated.children().unexpected,
-                "font_header",
-                input,
-                errors,
-            );
-            free_text_header(
-                associated.field_child_2().slot(),
-                font.raw_node(),
-                FreeText {
-                    kind: FontHeaderNode::KIND.name(),
-                    missing: "Missing or invalid @Font content",
-                    malformed: "Malformed @Font header",
-                },
-                errors,
-                |font| Header::Font {
-                    font: model::FontSpec::new(font),
-                },
-            )?
-        }
-    })
-}
-
-/// What a free-text header says when its text position does not deliver.
-struct FreeText {
-    /// The header node's own kind, for the diagnostic's context.
-    kind: &'static str,
-    /// The diagnostic's message.
-    missing: &'static str,
-    /// The `parse_reason` of the `Header::Unknown` built in its place.
-    malformed: &'static str,
-}
-
-/// The header a free-text position builds: `build` over the text of a
-/// present position; for any other state (a MISSING placeholder, an ERROR,
-/// or absent text) the header is reported malformed and lowered as
-/// `Header::Unknown`. A source-binding failure is instead an internal fault.
-/// Generic over the text slot's `Missing` payload: a placeholder is only ever
-/// "not a value", so one body serves either kind proof.
-fn free_text_header<'value, 'tree: 'value, 'source, M, E, A>(
-    text: SourceField<'value, 'tree, 'source, AnyKindSlot<FreeTextNode<'tree>, M, E, A>>,
-    header_node: Node,
-    words: FreeText,
-    errors: &impl ErrorSink,
-    build: impl FnOnce(String) -> Header,
-) -> Result<Header, crate::parser::typed_cst::CstFailure>
-where
-    M: SourceRecovery<'value, 'tree, 'source>,
-    E: SourceRecovery<'value, 'tree, 'source>,
-    A: crate::generated_traversal::Absence,
-{
-    let input = text.source();
-    // What the position holds. An EMPTY text is no value: a line with
-    // nothing after the tab leaves the position present with zero-width
-    // text (the placeholder tree-sitter inserts is elsewhere on the line),
-    // and until 2026-09-09 that empty text became `Header::Window {
-    // geometry: "" }`, a value nobody wrote. It lowers as `Header::Unknown`
-    // with no report of its own: the placeholder is the whole-tree pass's
-    // (E342) and the malformed header is validation's (E525), and an empty
-    // value is neither an internal traversal failure nor a decode error.
-    enum Held {
-        Value(String),
-        Empty,
-        Nothing,
-    }
-    let held = match text.view() {
-        SourceSlotView::Present(text) => {
-            let text = text.read()?;
-            match text.text() {
-                "" => Held::Empty,
-                value => Held::Value(value.to_owned()),
-            }
-        }
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {
-            Held::Nothing
-        }
-        SourceSlotView::Unexpected(never) => match never {},
-    };
-    Ok(match held {
-        Held::Value(value) => build(value),
-        Held::Empty => unknown_header_from_node(header_node, input, words.malformed, None)?,
-        Held::Nothing => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                DiagnosticLocation::new(span_of(header_node)),
-                ErrorContext::new(input, span_of(header_node), words.kind),
-                words.missing,
-            ));
-            unknown_header_from_node(header_node, input, words.malformed, None)?
+            text_header!(font, "Missing or invalid @Font content", TextKind::Font)
         }
     })
 }

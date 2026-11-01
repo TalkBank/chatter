@@ -203,11 +203,15 @@ The contract confirms typed `None` for both deletions and checks strict-policy
 diagnostics on the following completion. CA waives E305, not the requirement
 for explicit trailing-off evidence under E354. These specimens reach the
 missing-terminator path naturally; that path must not be removed as impossible.
-The E545 empty birth-date control similarly reaches a real allowed-empty
-boundary. Its contract requires a retained typed `Header::Birth` with empty
-date text and no diagnostics, rather than inferring success from a missing
-error code alone. CHECK accepts the control; no fabricated date or dropped
-header is allowed to stand in for unknown information.
+An `@Birth of` header with no date is not an allowed-empty boundary: it is
+empty header content, refused by E553 like every other colon-bearing header
+written empty (an unknown birth date is written by omitting the header).
+`empty_birth_header_spec_keeps_its_participant_and_is_refused` in
+`talkbank-parser-tests/tests/integration/validation_corpus.rs` requires the
+parsed model to keep a `Header::EmptyContent` naming the participant, never a
+`Header::Birth` with a fabricated or empty date and never a dropped header,
+and requires validation to report exactly E553, rather than inferring the
+outcome from one error code alone.
 CA delimiter traversal uses the shared `ContentStructure` walk and typed
 `WordRef::words` ordering rather than separate main-tier/bracketed variant
 lists. The delimiter policy covers replacement targets as well.
@@ -322,10 +326,9 @@ refusals, clock bounds and legal controls through header-only validation and
 JSON roundtrip. The numeric-boundary deck checks both malformed semicolon
 endpoints and surplus clock fields: neither may be discarded to recover a valid
 prefix, and serialization must preserve the original spelling and findings. A
-separate public-model boundary check clears only the duration in each parsed
-spec model using its constructor, then roundtrips JSON and retains the existing
-optional-empty policy. That API/wire check does not claim an empty raw CHAT
-header parses cleanly or certify its serialization as a valid transcript.
+separate public-model boundary check confirms that neither the duration
+constructor nor the JSON wire can build an empty duration: an empty time
+header is `Header::EmptyContent`, refused as E553.
 
 The E537/E538/E539 vocabulary families enumerate supported `@Number`,
 `@Recording Quality` and `@Transcription` tokens, alongside near-miss numeric,
@@ -560,7 +563,11 @@ permitting alternative) from `eng&fra` (neither permits the marker). Both parse
 and roundtrip cleanly; only the second emits E763. Owned governing marks
 dispatch their actual marked payload directly to the borrowed resolver, leaving
 the utterance-default variant on its separate no-marker path rather than
-reclassifying an already matched value.
+reclassifying an already matched value. Borrowed internal marks retain the
+word's diagnostic location at the same admission edge as owned public marks;
+validation, metadata and language-switch normalization cannot supply a second
+word to relocate a selected marker. Both representations use the same private
+state shape and resolver, with no clone for a borrowed word-level marker.
 
 Overlap anchors retain the main-tier span captured during extraction. Orphan
 validation consumes that origin directly rather than reconstructing it with

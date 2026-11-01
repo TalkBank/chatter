@@ -8,8 +8,9 @@
 use std::num::NonZeroUsize;
 
 use crate::generated_traversal::{
-    AsRawNode, GraRelationChildren, GraRelationNode, Never, PresenceProof, RangeAdmittedChildren,
-    Ranged, ReadableSlot, SourceBound, SourceBoundKind,
+    AsRawNode, GraRelationChildren, GraRelationNode, KindAdmitted, NarrowedMissing, Never,
+    PresenceError, RangeAdmittedChildren, Ranged, ReadableSlot, RequiredPresence, SourceBound,
+    SourceBoundKind,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
@@ -26,8 +27,12 @@ use talkbank_model::{
 /// gra_relation: seq(gra_index, '|', gra_head, '|', gra_relation_name)
 /// ```
 ///
-/// Generated slots retain recovery states. Field admission rejects recovery or
-/// unreadable ranges before numeric conversion; an admitted index is nonzero.
+/// Read under the rule's admission (the admitted kind proof and required
+/// presence), so no position can be ERROR or absent, and the narrowed index
+/// and head cannot be MISSING: they are read infallibly. Only the relation
+/// name, whose kind is not narrowed, can be MISSING, and that is the one
+/// structural diagnostic here. Range admission rejects unreadable ranges
+/// before numeric conversion; an admitted index is nonzero.
 pub(super) fn parse_gra_relation<'tree>(
     typed: SourceBound<'tree, '_, GraRelationNode<'tree>>,
     errors: &impl ErrorSink,
@@ -44,9 +49,7 @@ pub(super) fn parse_gra_relation<'tree>(
     );
     let children = children.admit_ranges()?;
 
-    let ParseOutcome::Parsed(index_text) = RelationField::Index.read(&children, errors) else {
-        return Ok(ParseOutcome::rejected());
-    };
+    let index_text = index_text(&children);
 
     let index = match index_text.parse::<usize>() {
         Ok(idx) => {
@@ -81,9 +84,7 @@ pub(super) fn parse_gra_relation<'tree>(
         }
     };
 
-    let ParseOutcome::Parsed(head_text) = RelationField::Head.read(&children, errors) else {
-        return Ok(ParseOutcome::rejected());
-    };
+    let head_text = head_text(&children);
 
     let head = match head_text.parse::<usize>() {
         Ok(h) => h,
@@ -105,7 +106,14 @@ pub(super) fn parse_gra_relation<'tree>(
         }
     };
 
-    let ParseOutcome::Parsed(relation_text) = RelationField::Label.read(&children, errors) else {
+    let Some(relation_text) = relation_name_text(&children) else {
+        errors.report(ParseError::new(
+            ErrorCode::MalformedGrammarRelation,
+            Severity::Error,
+            DiagnosticLocation::new(span_of(node)),
+            ErrorContext::new(source, relation_span, ""),
+            "Missing relation name in grammatical relation".to_string(),
+        ));
         return Ok(ParseOutcome::rejected());
     };
 
@@ -130,79 +138,70 @@ pub(super) fn parse_gra_relation<'tree>(
     )))
 }
 
-/// A role projects only its matching field from the complete admitted relation.
-/// No unrelated field slot can be paired with this parent's diagnostic context.
-enum RelationField {
-    Index,
-    Head,
-    Label,
+/// A relation's children as its rule admits them, with readable ranges.
+type AdmittedRelation<'tree, 'source> = RangeAdmittedChildren<
+    'tree,
+    'source,
+    GraRelationChildren<'tree, KindAdmitted, Ranged<'source>, RequiredPresence>,
+>;
+
+/// The index's text: always present under the relation's admission.
+fn index_text<'source>(relation: &AdmittedRelation<'_, 'source>) -> &'source str {
+    admitted_text(&relation.children().index.slot)
 }
 
-impl RelationField {
-    fn read<'tree, 'source, P: PresenceProof>(
-        self,
-        relation: &RangeAdmittedChildren<
-            'tree,
-            'source,
-            GraRelationChildren<'tree, Ranged<'source>, P>,
-        >,
-        errors: &impl ErrorSink,
-    ) -> ParseOutcome<&'source str> {
-        let (field, name) = match self {
-            Self::Index => (read_present_text(&relation.children().index.slot), "index"),
-            Self::Head => (read_present_text(&relation.children().head.slot), "head"),
-            Self::Label => (
-                read_present_text(&relation.children().relation.slot),
-                "relation name",
-            ),
-        };
-        let Some(field) = field else {
-            let parent = relation.parent();
-            let node = parent.raw_node();
-            errors.report(ParseError::new(
-                ErrorCode::MalformedGrammarRelation,
-                Severity::Error,
-                DiagnosticLocation::new(span_of(node)),
-                ErrorContext::new(parent.source(), span_of(node), ""),
-                format!("Missing {name} in grammatical relation"),
-            ));
-            return ParseOutcome::rejected();
-        };
-        ParseOutcome::parsed(field)
-    }
+/// The head's text: always present under the relation's admission.
+fn head_text<'source>(relation: &AdmittedRelation<'_, 'source>) -> &'source str {
+    admitted_text(&relation.children().head.slot)
 }
 
-fn read_present_text<'tree, 'source, T: SourceBoundKind<'tree>, E, A>(
-    slot: &ReadableSlot<
-        SourceBound<'tree, 'source, T>,
-        SourceBound<'tree, 'source, T>,
-        E,
-        Never,
-        A,
-    >,
-) -> Option<&'source str> {
-    match slot {
+/// The relation name's text, or `None` when it is MISSING: its kind is not
+/// narrowed, so that is the one state admission leaves it besides present.
+fn relation_name_text<'source>(relation: &AdmittedRelation<'_, 'source>) -> Option<&'source str> {
+    match &relation.children().relation.slot {
         ReadableSlot::Present(field) => Some(field.text()),
-        ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(_) => None,
-        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Missing(_) => None,
+        ReadableSlot::Error(PresenceError(never))
+        | ReadableSlot::Unexpected(never)
+        | ReadableSlot::Absent(never) => match *never {},
     }
 }
 
-/// Test-only counted-work observation; field roles remain private to their owner.
+/// A required field whose kind the admitted proof narrows: every state but
+/// present is uninhabited.
+type AdmittedRequiredSlot<'tree, 'source, T, M, E> = ReadableSlot<
+    SourceBound<'tree, 'source, T>,
+    NarrowedMissing<KindAdmitted, M>,
+    PresenceError<RequiredPresence, E>,
+    Never,
+    Never,
+>;
+
+/// The text of an [`AdmittedRequiredSlot`]: the present field's, since no
+/// other state can be built.
+fn admitted_text<'tree, 'source, T: SourceBoundKind<'tree>, M, E>(
+    slot: &AdmittedRequiredSlot<'tree, 'source, T, M, E>,
+) -> &'source str {
+    match slot {
+        ReadableSlot::Present(field) => field.text(),
+        ReadableSlot::Missing(NarrowedMissing(never)) => match *never {},
+        ReadableSlot::Error(PresenceError(never))
+        | ReadableSlot::Unexpected(never)
+        | ReadableSlot::Absent(never) => match *never {},
+    }
+}
+
+/// Test-only counted-work observation: reading every field again performs no
+/// further range checks.
 #[cfg(test)]
-pub(super) fn assert_repeated_field_reads<'tree, 'source>(
-    relation: &RangeAdmittedChildren<'tree, 'source, GraRelationChildren<'tree, Ranged<'source>>>,
-) {
+pub(super) fn assert_repeated_field_reads(relation: &AdmittedRelation<'_, '_>) {
     let checks = relation.checked_range_count();
-    let errors = talkbank_model::ErrorCollector::new();
     for _ in 0..100 {
-        for role in [
-            RelationField::Index,
-            RelationField::Head,
-            RelationField::Label,
-        ] {
-            let _ = role.read(relation, &errors);
-        }
+        let _ = (
+            index_text(relation),
+            head_text(relation),
+            relation_name_text(relation),
+        );
         assert_eq!(relation.checked_range_count(), checks);
     }
 }

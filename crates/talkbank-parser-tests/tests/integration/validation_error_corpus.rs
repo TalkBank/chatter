@@ -571,10 +571,11 @@ fn free_text_recovery_specs_preserve_unaffected_sibling_tiers() {
     }
 }
 
-/// Missing bullet-text syntax must not become a serialized continuation.
+/// An empty comment header is empty content, not a recovered body, and must
+/// not become a serialized continuation.
 #[test]
 fn comment_recovery_does_not_invent_continuations() {
-    use talkbank_model::model::WriteChat;
+    use talkbank_model::model::{EmptyHeader, PlainKind, StructuredKind, WriteChat};
     use talkbank_model::{ErrorCode, Header};
 
     let parser = TreeSitterParser::new().expect("parser");
@@ -582,28 +583,29 @@ fn comment_recovery_does_not_invent_continuations() {
     let errors = ErrorCollector::new();
     let mut file = parser.parse_chat_file_streaming(&source, &errors);
     let diagnostics = errors.into_vec();
-    assert!(
-        diagnostics
-            .iter()
-            .any(|error| error.code == ErrorCode::MissingRequiredElement)
-    );
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
     assert!(
         file.headers()
             .all(|header| !matches!(header, Header::Comment { .. })),
-        "a MISSING continuation cannot supply a comment body: {}",
+        "no comment body was written: {}",
         file.to_chat_string()
     );
+    assert!(file.headers().any(|header| matches!(
+        header,
+        Header::EmptyContent(EmptyHeader::Plain {
+            kind: PlainKind::Structured(StructuredKind::Comment),
+            ..
+        })
+    )));
+    assert_eq!(file.to_chat_string(), source, "written as authored");
     let utterance = file.utterances().next().expect("healthy sibling utterance");
     assert_eq!(utterance.dependent_tiers.len(), 1);
     assert_eq!(utterance.dependent_tiers[0].kind(), "com");
     let errors = ErrorCollector::new();
     file.validate_with_alignment(&errors, TranscriptName::Anonymous);
-    assert!(
-        errors
-            .into_vec()
-            .iter()
-            .any(|error| error.code == ErrorCode::EmptyDependentTier)
-    );
+    let codes: Vec<_> = errors.into_vec().iter().map(|error| error.code).collect();
+    assert!(codes.contains(&ErrorCode::EmptyDependentTier), "{codes:?}");
+    assert!(codes.contains(&ErrorCode::EmptyHeaderContent), "{codes:?}");
 
     let source =
         fs::read_to_string(corpus_dir().join("E342_10.cha")).expect("written continuation control");

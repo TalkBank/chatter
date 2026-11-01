@@ -304,7 +304,7 @@ impl WriteChat for TypesHeader {
     /// Serializes as `@Types:\tdesign, activity, group`.
     fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
         {
-            w.write_str("@Types:\t")?;
+            crate::model::HeaderPrefix::from(crate::model::StructuredKind::Types).write_start(w)?;
             crate::model::WriteChat::write_chat(&self.design.as_str(), w)?;
             w.write_str(", ")?;
             crate::model::WriteChat::write_chat(&self.activity.as_str(), w)?;

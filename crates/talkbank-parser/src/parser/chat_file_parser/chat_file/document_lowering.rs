@@ -682,7 +682,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
     /// per-carrier mechanism that makes the backstop deletable in migration Task D.
     fn surface_displaced(&self, unexpected: &[tree_sitter::Node<'_>], context: &str) {
         for node in unexpected {
-            if node.is_error() || node.is_missing() || node.has_error() {
+            if crate::parser::tree_parsing::parser_helpers::is_recovery(*node) {
                 let mut candidates = Vec::new();
                 collect_recovery_nodes(*node, self.parsed.source(), &mut candidates);
                 for candidate in candidates {

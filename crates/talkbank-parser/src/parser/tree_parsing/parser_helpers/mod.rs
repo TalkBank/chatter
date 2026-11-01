@@ -23,15 +23,16 @@ pub(crate) mod node_dispatch;
 // Re-export commonly used functions
 #[allow(unused_imports)]
 pub(crate) use cst_assertions::{
-    check_not_missing, expect_delimiter, extract_utf8_text, find_child_by_kind, present,
+    check_not_missing, expect_delimiter, extract_utf8_text, find_child_by_kind,
 };
 pub(crate) use error_analysis::{analyze_dependent_tier_error, analyze_error_node};
 pub(crate) use error_checking::{
-    check_for_errors_recursive_with_context, collect_recovery_nodes, surface_displaced,
+    check_for_errors_recursive_with_context, collect_recovery_nodes, is_recovery, surface_displaced,
 };
 pub(crate) use header_slots::{
-    ContentReadError, ContentSlot, HeaderSite, read_admitted_content, read_optional_source_content,
-    read_source_content, unknown_header_from_node,
+    Body, ContentReadError, ContentSlot, HeaderSite, find_header_separator, read_admitted_content,
+    read_body, read_empty_body, read_source_content, unknown_header_from_node,
+    unsupported_header_from_node,
 };
 // The CA helpers dispatch through the GENERATED `from_char` tables. The word
 // converter is their caller: until 2026-09-09 it carried its own copies of

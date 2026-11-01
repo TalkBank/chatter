@@ -1,9 +1,9 @@
 # pid_simple
 
 `@PID` header carrying a persistent identifier, as every published TalkBank
-transcript does. A pre-`@Begin` header. Until 2026-09-08 no spec example
-exercised it: the only coverage of `parse_pid_header` came from three
-reference-corpus files.
+transcript does. A pre-`@Begin` header, read by the text-header reader
+every pre-`@Begin` header shares. Until 2026-09-08 no spec example
+exercised it: its only coverage came from three reference-corpus files.
 
 ## Input
 

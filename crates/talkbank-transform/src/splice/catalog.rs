@@ -244,7 +244,11 @@ fn w109_media_name(
         return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
     let fields = header.extract();
-    let SourceSlotView::Present(contents) = fields.field_child_2().slot().view() else {
+    // An empty @Media header has no filename token to normalize.
+    let Some(contents) = fields.field_child_2().slot().optional() else {
+        return Err(CatalogIneligibility::MissingCarrier.into());
+    };
+    let SourceSlotView::Present(contents) = contents.view() else {
         return Err(CatalogIneligibility::MissingCarrier.into());
     };
     let contents = contents.read()?;

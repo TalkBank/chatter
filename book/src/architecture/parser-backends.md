@@ -14,6 +14,13 @@ main-content condition. Numeric states cannot be injected, and callers cannot
 replace the source or coordinates during iteration. This protects the lexer
 boundary; it does not prove that every generated transition is panic-free.
 
+Native MOR/GRA fragment input helpers own control-character admission. Their
+checked-fragment state must be obtained before lexing; trait adapters admit the
+document range and translate the helper's diagnostics once. A forbidden control
+rejects the fragment before grammar parsing, giving one E315 per character
+without duplicate reports or a secondary grammar error caused by that control.
+This input admission does not certify morphology or dependency-graph validity.
+
 Native text-backed dependent tiers retain a `TextTierLabel` admitted once from
 an observed prefix. Empty labels cannot reach lowering. Dependent-tier lowering
 is total over admitted entries, including retained recovery variants, so file
@@ -63,6 +70,14 @@ segments reject; lowering copies the admitted values without unchecked text
 construction. Marker lexemes and whole-word source slices remain available for
 location mapping. This admission is non-emptiness, not whole-word CHAT validity
 or a guarantee about model values constructed through legacy JSON recovery.
+
+Native word-internal overlap points use `WordOverlapPoint`, which admits a
+complete overlap glyph with an optional ASCII digit 1–9 and retains the exact
+borrowed spelling, shared kind and decoded index together. Lowering adds the
+location from the word-owned source without reparsing the index. This lexical
+admission preserves index 1 for the shared model's semantic diagnostic; valid
+indexed overlap points still require 2–9. The native AST inspection JSON keeps
+its existing kind/spelling pair, and shared-model serialization is unchanged.
 
 The native word-body scanner refuses an underline prefix without its begin/end
 control discriminator as `WordBodyError::MalformedUnderline`. It never converts
@@ -152,10 +167,15 @@ the source span of whitespace before the first comma for E767. Rejected
 structure retains the original header as unknown; conversion does not rescan
 fields or invent omitted values.
 
-Other native header families retain a lexer-token view with the original header
-slice. Rejected lowering uses that slice, including the header name and separator,
-in the shared `Header::Unknown` recovery representation. Structurally malformed
-headers cannot be lowered as partial parsed metadata. This preserves rejected
+Every other native header family is lowered in the same line parser, from the
+lexer's tokens and the original header slice, straight to the shared `Header`;
+there is no native header AST. Rejected lowering uses that slice, including the
+header name and separator but not the line terminator, in the shared
+`Header::Unknown` recovery representation, with the shared
+`MALFORMED_HEADER_CONTENT` reason when the body was unreadable. A content line
+holding any token the lexer marked malformed is refused before a body reader
+runs, structured kinds included, so structurally malformed headers cannot be
+lowered as partial parsed metadata. This preserves rejected
 source through CHAT rendering and JSON without creating another semantic AST.
 
 Native text, MOR, GRA, PHO and SIN parsing now construct shared values directly.
@@ -664,8 +684,16 @@ flowchart LR
 The list distinguishes its initial state, a nonempty entry, and a consumed
 comma awaiting another entry. A trailing comma therefore reports E550 while
 preserving the preceding participants. The parser builds shared entries directly;
-`HeaderParsed::Shared` carries the resulting header without a duplicate native
-participant AST or conversion. Header fragments forward the same diagnostics
+the native `LocatedHeader` carries the resulting model header without a
+duplicate native participant AST or conversion. Every re2c header line is
+lowered once, in the line parser: the lexer's prefix token carries its rule
+family (`HeaderPrefixFamily`: a known header with its required written
+separator, a gem marker whose separator is optional, or the catch-all), a
+known header maps to the model's kind (`LexedHeader::route`), malformed
+content is refused, the content's exact source slice goes through the
+model's one emptiness decision, and the kind's own constructor builds the
+header. Because only a gem can lack its separator, no branch has to
+invent an outcome for a separator-less text header. Header fragments forward the same diagnostics
 with the caller's offset. A code without a role retains explicit `MissingRole`
 details in full-file recovery; the single-entry fragment rejects it.
 

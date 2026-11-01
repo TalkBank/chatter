@@ -127,7 +127,11 @@ pub(super) fn media_header_parser<'tokens, 'a: 'tokens>(
         .try_map(move |(((filename, gap), media_type), status), _| {
             let filename =
                 MediaFilename::parse(filename).map_err(|_| chumsky::error::EmptyErr::default())?;
-            let mut media = MediaHeader::new(filename, MediaType::from_text(media_type));
+            // A blank field is a malformed header (E316), never an
+            // unsupported value named "": the same refusal as tree-sitter's.
+            let media_type =
+                MediaType::try_new(media_type).map_err(|_| chumsky::error::EmptyErr::default())?;
+            let mut media = MediaHeader::new(filename, media_type);
             // E767 concerns the actual whitespace token immediately before the
             // first comma. Continuation syntax is not substituted for that gap.
             if let Some(Token::Whitespace(text)) = gap.last() {
@@ -137,7 +141,10 @@ pub(super) fn media_header_parser<'tokens, 'a: 'tokens>(
                 media = media.with_whitespace_before_comma(talkbank_model::Location::Located(span));
             }
             if let Some(status) = status {
-                media = media.with_status(MediaStatus::from_text(status));
+                media = media.with_status(
+                    MediaStatus::try_new(status)
+                        .map_err(|_| chumsky::error::EmptyErr::default())?,
+                );
             }
             Ok(media)
         })

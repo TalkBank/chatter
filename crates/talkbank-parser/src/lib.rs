@@ -97,25 +97,23 @@ pub(crate) mod validation {
 /// module is the canonical successor, renamed from its transitional
 /// `generated_traversal_typed` name once it became the sole visitor.)
 ///
-/// Regenerate from a checkout of the `tree-sitter-grammar-utils` repo. There is
-/// NO `--skip` flag (the backend models grammar extras explicitly); the wrapper
-/// runs `rustfmt` on its own output, so this single command produces the
-/// canonical, fmt-clean file directly with no separate `cargo fmt` step:
+/// Its one input is the grammar contract, `grammar/src/grammar-contract.json`,
+/// which the pinned Tree-sitter build (`tree-sitter-revision`) writes beside
+/// the parser. Regenerate it from the repository root with the generator
+/// checkout pinned by `tsgu-revision`, which `TSGU_DIR` must name (it has no
+/// default); the recipe admits only a clean checkout at that commit, and the
+/// generator runs `rustfmt` on its own output, so no separate `cargo fmt` step
+/// is needed:
 ///
 /// ```sh
-/// cargo run --example generate_typed_traversal -p tree-sitter-node-types -- \
-///   <CHATTER>/grammar/src/grammar.json \
-///   <CHATTER>/grammar/src/node-types.json \
-///   --edition 2024 \
-///   --toolchain stable \
-///   > <CHATTER>/crates/talkbank-parser/src/generated_traversal.rs
+/// TSGU_DIR=/path/to/tree-sitter-grammar-utils just traversal-gen
 /// ```
 ///
 /// Never hand-edit the generated file (no dash-stripping, no adding allows): if
 /// the output is wrong, fix the generator in `tree-sitter-grammar-utils` as a
 /// GENERAL change and regenerate. The `generated_traversal_is_current` staleness
-/// guard recomputes the embedded digests from the committed grammar JSON, so a
-/// forgotten regeneration fails the test suite. The two suppressions below
+/// guard recomputes the embedded digest of the committed grammar contract, so a
+/// forgotten regeneration after a grammar change fails the test suite. The two suppressions below
 /// (`missing_docs`, because the crate is `#![deny(missing_docs)]` and the
 /// generated `pub` items carry no `///` docs; and
 /// `rustdoc::broken_intra_doc_links`) are structural to any generated traversal

@@ -489,6 +489,17 @@ export default grammar({
     //   - @UTF8, @Begin, @End: fixed positions in document structure
     //   - @PID, @Color words, @Window, @Font: pre_begin_header (before @Begin)
     //
+    // Empty content: every colon-bearing header the model carries, except
+    // @Languages, @Participants and @ID, makes its content optional, so a
+    // header with nothing after its separator PARSES (no MISSING or ERROR
+    // node) and is lowered to the one model state Header::EmptyContent, which
+    // validation always refuses (E553). Recovery is not validity: optional
+    // here means "the parser can say exactly what was written", not "this is
+    // legal". The three declaration headers keep required content and their
+    // own declaration-admission recovery. @Thumbnail keeps required content
+    // too: it has no supported model, so every @Thumbnail line is refused as
+    // unsupported (E525), empty or not.
+    //
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#File_Headers
     // ============================================================================
     header: $ => choice(
@@ -586,7 +597,7 @@ export default grammar({
       optional($.header_gap),
       $.speaker,
       $.header_sep,
-      optional($.date_contents),  // Unknown birth date is a real omission, not a missing node
+      optional($.date_contents),  // Content optional: an empty header parses as EmptyContent and validation refuses it (E553)
       $.newline
     ),
 
@@ -596,7 +607,7 @@ export default grammar({
       optional($.header_gap),
       $.speaker,
       $.header_sep,
-      $.free_text,
+      optional($.free_text),  // Content optional: an empty header parses as EmptyContent and validation refuses it (E553)
       $.newline
     ),
 
@@ -608,27 +619,27 @@ export default grammar({
       optional($.header_gap),
       $.speaker,
       $.header_sep,
-      $.language_code,  // Structured language code parsing, not free_text
+      optional($.language_code),  // Structured language code, not free_text; optional so an empty header is EmptyContent (E553)
       $.newline
     ),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Media_Header
-    media_header: $ => seq($.media_prefix, $.header_sep, $.media_contents, $.newline),
+    media_header: $ => seq($.media_prefix, $.header_sep, optional($.media_contents), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Location_Header
-    location_header: $ => seq($.location_prefix, $.header_sep, $.free_text, $.newline),
+    location_header: $ => seq($.location_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Number_Header
-    number_header: $ => seq($.number_prefix, $.header_sep, $.number_option, $.newline),
+    number_header: $ => seq($.number_prefix, $.header_sep, optional($.number_option), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Recording_Quality_Header
-    recording_quality_header: $ => seq($.recording_quality_prefix, $.header_sep, $.recording_quality_option, $.newline),
+    recording_quality_header: $ => seq($.recording_quality_prefix, $.header_sep, optional($.recording_quality_option), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Room_Layout_Header
-    room_layout_header: $ => seq($.room_layout_prefix, $.header_sep, $.free_text, $.newline),
+    room_layout_header: $ => seq($.room_layout_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Tape_Location_Header
-    tape_location_header: $ => seq($.tape_location_prefix, $.header_sep, $.free_text, $.newline),
+    tape_location_header: $ => seq($.tape_location_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Time_Duration_Header
     time_duration_header: $ => seq($.time_duration_prefix, $.header_sep, optional($.time_duration_contents), $.newline),
@@ -637,72 +648,74 @@ export default grammar({
     time_start_header: $ => seq($.time_start_prefix, $.header_sep, optional($.time_duration_contents), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Transcriber_Header
-    transcriber_header: $ => seq($.transcriber_prefix, $.header_sep, $.free_text, $.newline),
+    transcriber_header: $ => seq($.transcriber_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Transcription_Header
-    transcription_header: $ => seq($.transcription_prefix, $.header_sep, $.transcription_option, $.newline),
+    transcription_header: $ => seq($.transcription_prefix, $.header_sep, optional($.transcription_option), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Warning_Header
-    warning_header: $ => seq($.warning_prefix, $.header_sep, $.free_text, $.newline),
+    warning_header: $ => seq($.warning_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Activities_Header
-    activities_header: $ => seq($.activities_prefix, $.header_sep, $.free_text, $.newline),
+    activities_header: $ => seq($.activities_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Bck_Header
-    bck_header: $ => seq($.bck_prefix, $.header_sep, $.free_text, $.newline),
+    bck_header: $ => seq($.bck_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Bg_Header
-    bg_header: $ => seq($.bg_prefix, optional(seq($.header_sep, $.free_text)), $.newline),
+    bg_header: $ => seq($.bg_prefix, optional(seq($.header_sep, optional($.free_text))), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Blank_Header
     blank_header: $ => seq($.blank_prefix, $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Comment_Header
-    comment_header: $ => seq($.comment_prefix, $.header_sep, $.text_with_bullets_and_pics, $.newline),
+    comment_header: $ => seq($.comment_prefix, $.header_sep, optional($.text_with_bullets_and_pics), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Date_Header
     date_header: $ => seq($.date_prefix, $.header_sep, optional($.date_contents), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Eg_Header
-    eg_header: $ => seq($.eg_prefix, optional(seq($.header_sep, $.free_text)), $.newline),
+    eg_header: $ => seq($.eg_prefix, optional(seq($.header_sep, optional($.free_text))), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#G_Header
-    g_header: $ => seq($.g_prefix, optional(seq($.header_sep, $.free_text)), $.newline),
+    g_header: $ => seq($.g_prefix, optional(seq($.header_sep, optional($.free_text))), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#New_Episode_Header
     new_episode_header: $ => seq($.new_episode_prefix, $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Situation_Header
-    situation_header: $ => seq($.situation_prefix, $.header_sep, $.free_text, $.newline),
+    situation_header: $ => seq($.situation_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Page_Header
-    page_header: $ => seq($.page_prefix, $.header_sep, $.page_number, $.newline),
+    page_header: $ => seq($.page_prefix, $.header_sep, optional($.page_number), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Options_Header
-    options_header: $ => seq($.options_prefix, $.header_sep, $.options_contents, $.newline),
+    options_header: $ => seq($.options_prefix, $.header_sep, optional($.options_contents), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Font_Header
-    font_header: $ => seq($.font_prefix, $.header_sep, $.free_text, $.newline),
+    font_header: $ => seq($.font_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Window_Header
-    window_header: $ => seq($.window_prefix, $.header_sep, $.free_text, $.newline),
+    window_header: $ => seq($.window_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#ColorWords_Header
-    color_words_header: $ => seq($.color_words_prefix, $.header_sep, $.free_text, $.newline),
+    color_words_header: $ => seq($.color_words_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Videos_Header
-    videos_header: $ => seq($.videos_prefix, $.header_sep, $.free_text, $.newline),
+    videos_header: $ => seq($.videos_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Types_Header
     // Allows optional whitespace before commas: "cross, toyplay, SLI" or "long , interview , TD"
     types_header: $ => seq(
       $.types_prefix,
       $.header_sep,
-      $.types_design,
-      optional($.whitespaces), $.comma, optional($.whitespaces),
-      $.types_activity,
-      optional($.whitespaces), $.comma, optional($.whitespaces),
-      $.types_group,
+      optional(seq(  // Optional so an empty header parses as EmptyContent (E553)
+        $.types_design,
+        optional($.whitespaces), $.comma, optional($.whitespaces),
+        $.types_activity,
+        optional($.whitespaces), $.comma, optional($.whitespaces),
+        $.types_group,
+      )),
       $.newline
     ),
 
@@ -716,14 +729,14 @@ export default grammar({
     types_group: $ => /[a-zA-Z0-9]+/,
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#PID_Header
-    pid_header: $ => seq($.pid_prefix, $.header_sep, $.free_text, $.newline),
+    pid_header: $ => seq($.pid_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Thumbnail_Header
     thumbnail_header: $ => seq($.thumbnail_prefix, $.header_sep, $.free_text, $.newline),
 
     // @T: is an inline thumbnail marker (shorthand)
     // Reference: depfile.cut - Local Changeable Headers
-    t_header: $ => seq($.t_prefix, $.header_sep, $.free_text, $.newline),
+    t_header: $ => seq($.t_prefix, $.header_sep, optional($.free_text), $.newline),
 
     // ============================================================================
     // MAIN TIERS (Utterances)

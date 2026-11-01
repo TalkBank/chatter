@@ -77,7 +77,8 @@ Date/time headers declare strict lexical alternatives and whole-line fallbacks.
 Their selection must respect both complete values and malformed suffixes.
 Higher lexical precedence is not a harmless tie-break: it can select a strict
 prefix before a longer malformed value. Rule-order changes must also preserve
-empty-header recovery, not merely improve selection on valid examples. Follow
+the empty-header state (an omitted optional payload), not merely improve
+selection on valid examples. Follow
 Tree-sitter's [conflicting-token rules](https://tree-sitter.github.io/tree-sitter/creating-parsers/3-writing-the-grammar.html#conflicting-tokens)
 and review the complete diagnostic snapshot after any such change.
 
@@ -85,16 +86,17 @@ These CST types prove lexical shape, not calendar or clock validity. In
 particular, `strict_time` includes the shared digit/separator alphabet; the
 checked model and header-specific validator still decide whether a value is
 supported and in range. Selection tests need complete reference values, suffix
-error specimens and the established empty-header policies. A declared strict
+error specimens and the established empty-header policy. A declared strict
 alternative alone does not prove that the compiled lexer ever selects it.
 
-Empty fields have header-specific policy: an empty `@Date` is E516, whereas
-empty birth/start/duration values retain the existing omission policy. Their
-spec controls require the header and following speech to survive parsing and
-JSON replay with byte-exact CHAT output. Nonempty malformed suffixes remain
-E518/E540/E541. Do not infer midnight from the legacy start-time model's zero
-components when its preserved value is empty; that representation is not
-evidence of a known time.
+Empty fields have one policy: a colon-bearing header with nothing after its
+separator (other than `@Languages`, `@Participants` and `@ID`, and the
+unsupported `@Thumbnail`, which is E525 whatever it holds) parses as
+`Header::EmptyContent` and is refused as E553, for date, birth, start and
+duration headers as for every other. The spec controls require the header and
+following speech to survive parsing and JSON replay with byte-exact CHAT
+output. Nonempty malformed suffixes remain E518/E545/E540/E541. No date or
+time value is ever built from empty text.
 
 ## Grammar Test Strategy
 1. Keep corpus tests generated from `spec/constructs`.

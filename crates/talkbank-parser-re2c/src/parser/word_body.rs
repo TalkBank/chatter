@@ -1,14 +1,3 @@
-// This file used to carry `#![allow(clippy::unreachable)]` and a paragraph
-// explaining why three `_ => unreachable!()` arms were safe: each was guarded by
-// an outer char-classification match that enumerated the same characters. That
-// is a relationship between two lists maintained by convention, and the comment
-// was the receipt for it.
-//
-// All three mappings are now total functions returning `Option`, and the match
-// arms BIND that `Option` in an `if let` guard, so the classification happens
-// once and the "in a CA arm with no kind" state has no arm to live in. There is
-// nothing left to allow, and nothing left to explain away.
-
 //! Word body parser, scans a `&str` body for internal structure.
 //!
 //! The lexer determines word boundaries and extracts prefix/suffixes.
@@ -22,8 +11,7 @@
 use crate::ast::*;
 use talkbank_model::generated::symbol_sets::is_word_segment_rest_char;
 use talkbank_model::model::{
-    CADelimiterType, CAElementType, EmptyText, OverlapPointKind, WordShortening,
-    WordStressMarkerType, WordText,
+    CADelimiterType, CAElementType, EmptyText, WordShortening, WordStressMarkerType, WordText,
 };
 
 /// A word body cannot supply the lexical structure required by the model.
@@ -82,6 +70,12 @@ pub fn parse_word_body(body: &str) -> Result<Vec<WordBodyItem<'_>>, WordBodyErro
             items.push(WordBodyItem::Lengthening(run));
             continue;
         }
+        if let Some((point, remainder)) = WordOverlapPoint::take_prefix(&body[i..]) {
+            let end = body.len() - remainder.len();
+            while chars.next_if(|&(offset, _)| offset < end).is_some() {}
+            items.push(WordBodyItem::OverlapPoint(point));
+            continue;
+        }
         match ch {
             // Shortening: (text)
             '(' => {
@@ -117,24 +111,6 @@ pub fn parse_word_body(body: &str) -> Result<Vec<WordBodyItem<'_>>, WordBodyErro
             '~' => {
                 chars.next();
                 items.push(WordBodyItem::CliticBoundary(&body[i..i + ch.len_utf8()]));
-            }
-            // Overlap points: ⌈ ⌉ ⌊ ⌋ with optional digit.
-            _ if let Some(kind) = char_to_overlap_kind(ch) => {
-                chars.next();
-                // Include the overlap char + optional digit in the slice
-                let end = chars.peek().map_or(body.len(), |&(j, _)| j);
-                let overlap_text = &body[i..end];
-                // Check for trailing digit
-                if let Some(&(_, d)) = chars.peek()
-                    && d.is_ascii_digit()
-                    && d != '0'
-                {
-                    chars.next();
-                    let end2 = chars.peek().map_or(body.len(), |&(j, _)| j);
-                    items.push(WordBodyItem::OverlapPoint(kind, &body[i..end2]));
-                    continue;
-                }
-                items.push(WordBodyItem::OverlapPoint(kind, overlap_text));
             }
             // Underline markers
             '\u{0002}' => {
@@ -175,17 +151,6 @@ pub fn parse_word_body(body: &str) -> Result<Vec<WordBodyItem<'_>>, WordBodyErro
         }
     }
     Ok(items)
-}
-
-/// The overlap point a character denotes, or `None` when it denotes none.
-fn char_to_overlap_kind(ch: char) -> Option<OverlapPointKind> {
-    match ch {
-        '\u{2308}' => Some(OverlapPointKind::TopOverlapBegin),
-        '\u{2309}' => Some(OverlapPointKind::TopOverlapEnd),
-        '\u{230A}' => Some(OverlapPointKind::BottomOverlapBegin),
-        '\u{230B}' => Some(OverlapPointKind::BottomOverlapEnd),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

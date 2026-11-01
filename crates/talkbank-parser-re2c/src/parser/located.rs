@@ -49,6 +49,14 @@ impl<'tokens, 'source> LocatedTokens<'tokens, 'source> {
     ) -> impl DoubleEndedIterator<Item = (&'tokens Token<'source>, LexerSpan)> {
         self.tokens.iter().zip(self.spans.iter().cloned())
     }
+
+    /// Each token with its span, without consuming the selection.
+    pub(crate) fn located(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = (&'tokens Token<'source>, LexerSpan)> + use<'tokens, 'source>
+    {
+        self.tokens.iter().zip(self.spans.iter().cloned())
+    }
 }
 
 /// Only lexing constructs this immutable owner of parallel token/span storage.
@@ -99,7 +107,9 @@ impl<'source> LexedSource<'source> {
         NonEmptyRegion::whole(self)
     }
 
-    fn optional_region(
+    /// A cursor region that may be empty: `None` for an empty selection,
+    /// an internal failure for an invalid one.
+    pub(crate) fn optional_region(
         &self,
         range: Range<usize>,
         errors: &impl talkbank_model::ErrorSink,
@@ -224,6 +234,33 @@ mod tests {
         let findings = sink.into_vec();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].location.span(), Some(region.extent()));
+    }
+
+    /// The header line parser slices content text from the source by the
+    /// first and last content token's spans instead of joining token texts,
+    /// which is exact only because every token starts where the previous
+    /// one ended. Pin that tiling over header-rich reference files.
+    #[test]
+    fn lexer_tokens_tile_the_source_without_gaps() {
+        for file in [
+            "annotation/retrace.cha",
+            "edge-cases/postcodes-and-gems.cha",
+            "annotation/long-features.cha",
+        ] {
+            let input = std::fs::read_to_string(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../corpus/reference")
+                    .join(file),
+            )
+            .expect("existing public reference");
+            let lexed = LexedSource::new(&input, crate::lexer::COND_INITIAL);
+            let mut expected_start = 0;
+            for span in &lexed.spans {
+                assert_eq!(span.start, expected_start, "{file}: gap before {span:?}");
+                expected_start = span.end;
+            }
+            assert_eq!(expected_start, input.len(), "{file}: untiled tail");
+        }
     }
 
     #[test]

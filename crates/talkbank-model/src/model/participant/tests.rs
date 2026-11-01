@@ -54,7 +54,8 @@ fn test_participant_with_birth_date() {
         .with_age("10;03.")
         .with_corpus("chiat");
 
-    let participant = Participant::new(entry, id).with_birth_date(ChatDate::new("28-JUN-2001"));
+    let participant = Participant::new(entry, id)
+        .with_birth_date(ChatDate::try_new("28-JUN-2001").expect("nonblank date"));
 
     assert_eq!(
         participant.birth_date.as_ref().map(|d| d.as_str()),

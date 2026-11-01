@@ -241,7 +241,9 @@ fn reference_text_tier_constructors_preserve_structure_and_output() {
 /// A caller edits free-text payloads without reparsing or disturbing media.
 #[test]
 fn reference_comment_edits_preserve_nontext_segments_and_wire_contracts() {
-    use talkbank_model::model::{BulletContent, BulletContentSegment, Header, Line};
+    use talkbank_model::model::{
+        BulletContent, BulletContentSegment, CommentContent, Header, Line,
+    };
 
     let parser = TreeSitterParser::new().expect("parser");
     let corpus = ChatCorpus::reference().expect("reference corpus");
@@ -257,6 +259,7 @@ fn reference_comment_edits_preserve_nontext_segments_and_wire_contracts() {
             let Header::Comment { content } = header.as_ref() else {
                 continue;
             };
+            let content = content.as_bullet_content();
             let mut segments = content.segments.clone();
             for segment in &mut segments {
                 if let BulletContentSegment::Text(text) = segment {
@@ -290,7 +293,12 @@ fn reference_comment_edits_preserve_nontext_segments_and_wire_contracts() {
             let restored: BulletContent = serde_json::from_str(&json).expect("restore content");
             assert_eq!(restored, edited);
             assert!(
-                assert_writer_refusals(&Header::Comment { content: edited }, fixture.path()) > 0
+                assert_writer_refusals(
+                    &Header::Comment {
+                        content: CommentContent::try_from_bullets(edited).expect("edited content")
+                    },
+                    fixture.path()
+                ) > 0
             );
         }
     }

@@ -408,9 +408,9 @@ mod tests {
             Line::header(
                 talkbank_model::Location::Unlocated,
                 talkbank_model::Header::Options {
-                    options: talkbank_model::model::ChatOptionFlags::new(vec![
+                    options: talkbank_model::model::ChatOptionFlags::from_flag(
                         talkbank_model::model::ChatOptionFlag::Ca,
-                    ]),
+                    ),
                 },
             ),
         );

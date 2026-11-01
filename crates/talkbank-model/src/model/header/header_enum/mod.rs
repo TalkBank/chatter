@@ -11,9 +11,21 @@
 //! enum makes it straightforward to preserve file-order roundtrips while still
 //! handling unknown/legacy headers explicitly.
 
+mod comment;
+mod empty;
 mod header;
 mod impls;
+mod kind;
 mod options;
 
-pub use header::{ChatOptionFlags, Header, LanguageCodes, ParticipantEntries};
+pub use comment::CommentContent;
+pub use empty::{
+    BlankContent, EmptyHeader, HeaderContent, HeaderText, MALFORMED_HEADER_CONTENT,
+    WrittenSeparator,
+};
+pub use header::{ChatOptionFlags, Header, LanguageCodes, MalformedOptionList, ParticipantEntries};
+pub use kind::{
+    FixedKind, GemKind, HeaderKind, HeaderPrefix, PlainKind, QualifiedKind, StructuredKind,
+    TextKind,
+};
 pub use options::{CaOptionEffect, ChatOptionFlag};

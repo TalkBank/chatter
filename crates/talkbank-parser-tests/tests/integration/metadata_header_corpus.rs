@@ -160,11 +160,17 @@ fn metadata_headers_types_truncation_is_source_owned_and_not_fabricated() {
             continue;
         };
         let children = types.extract();
-        let SourceSlotView::Present(design) = children.field_child_2().slot().view() else {
-            panic!("legal control has a present design")
+        let Some(fields) = children.field_child_2().slot().optional() else {
+            panic!("types fields")
         };
-        let SourceSlotView::Present(group) = children.field_child_10().slot().view() else {
-            panic!("legal control has a present group")
+        let SourceSlotView::Present(fields) = fields.view() else {
+            panic!("types fields")
+        };
+        let SourceSlotView::Present(design) = fields.field_child_0().slot().view() else {
+            panic!("design")
+        };
+        let SourceSlotView::Present(group) = fields.field_child_8().slot().view() else {
+            panic!("group")
         };
         let design = design.read().expect("design read");
         let group = group.read().expect("group read");

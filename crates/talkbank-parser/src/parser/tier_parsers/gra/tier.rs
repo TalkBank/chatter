@@ -450,8 +450,8 @@ mod range_tests {
                         foreign.bind(relation.raw_node()),
                         Err(SourceBindingError::ForeignTree)
                     ));
-                    let ranged = relation
-                        .extract()
+                    let ranged = crate::parser::typed_cst::extract_inner(relation)
+                        .expect("the rule admits the relation")
                         .admit_ranges()
                         .expect("selected lexical fields");
                     assert_eq!(ranged.parent().raw_node(), relation.raw_node());

@@ -103,6 +103,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E316](E316.md) | Malformed precode and hostless annotation positions | Invalidity | utterance | ✅ |
 | [E316](E316.md) | Registry-owned word boundaries | Invalidity | utterance | ✅ |
 | [E316](E316.md) | Missing main-tier speaker colon | Invalidity | utterance | ✅ |
+| [E316](E316.md) | Unparsable header body | Invalidity | header | ✅ |
 | [E316](E316.md) | Main-tier annotations on word timing | Invalidity | tier | ✅ |
 | [E316](E316.md) | Unassociated word timing | Invalidity | tier | ✅ |
 | [E319](E319.md) | UnparsableLine | Invalidity | utterance | ✅ |
@@ -177,15 +178,12 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E505](E505.md) | Invalid @ID format | Invalidity | header | ✅ |
 | [E506](E506.md) | Empty @Participants header | Invalidity | header | ✅ |
 | [E507](E507.md) | Empty @Languages header | Invalidity | header | ✅ |
-| [E508](E508.md) | Empty @Date header (parser) | Invalidity | header | ⏳ |
-| [E509](E509.md) | Empty @Media header | Invalidity | header | ✅ |
 | [E510](E510.md) | Empty language field in @ID | Invalidity | header | ✅ |
 | [E511](E511.md) | Empty speaker field in @ID | Invalidity | header | ✅ |
 | [E512](E512.md) | Empty participant code | Invalidity | header | ✅ |
 | [E513](E513.md) | Participant entry without a role | Invalidity | header | ✅ |
 | [E514](E514.md) | Empty corpus field in @ID | Invalidity | header | ✅ |
 | [E515](E515.md) | Empty role field in @ID | Invalidity | header | ✅ |
-| [E516](E516.md) | Empty @Date | Invalidity | header | ✅ |
 | [E517](E517.md) | @ID age field does not match a legal CHAT date pattern | Invalidity | header | ✅ |
 | [E518](E518.md) | Invalid @Date format | Invalidity | header | ✅ |
 | [E519](E519.md) | Invalid language code or undeclared ID language | Invalidity | word, utterance, header | ✅ |
@@ -200,7 +198,6 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E530](E530.md) | Lazy gem inside a begin/end scope | Invalidity | header | ✅ |
 | [E531](E531.md) | Media filename mismatch | Invalidity | header | ✅ |
 | [E532](E532.md) | Invalid participant role | Invalidity | header | ✅ |
-| [E533](E533.md) | Empty @Options header | Invalidity | header | ✅ |
 | [E534](E534.md) | Unsupported @Options Value | Invalidity | header | ✅ |
 | [E535](E535.md) | Unsupported @Media Type | Invalidity | header, file | ✅ |
 | [E536](E536.md) | Unsupported @Media Status | Invalidity | header, file | ✅ |
@@ -226,6 +223,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E550](E550.md) | Trailing comma in @Participants | Invalidity | header | ✅ |
 | [E551](E551.md) | @Options header out of order | Invalidity | header | ✅ |
 | [E552](E552.md) | @Media declares unlinked but transcript carries timing | Invalidity | file | ✅ |
+| [E553](E553.md) | Header has no content after its colon | Invalidity | header | ✅ |
 | [E600](E600.md) | Tier alignment skipped due to parse errors | Invalidity | utterance, tier | ✅ |
 | [E601](E601.md) | Invalid dependent tier content | Invalidity | tier | ✅ |
 | [E602](E602.md) | Malformed dependent tier header | Invalidity | tier | ✅ |

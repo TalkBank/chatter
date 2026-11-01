@@ -140,12 +140,16 @@ impl LanguageCode {
     /// Returns [`LanguageCodeError::Empty`] if `value` is empty. Missing data
     /// must remain explicit in its owning recovery state, never become `und`.
     pub fn new(value: impl AsRef<str>) -> Result<Self, LanguageCodeError> {
-        let s = value.as_ref();
-        if s.is_empty() {
-            Err(LanguageCodeError::Empty)
-        } else {
-            Ok(Self(crate::model::language_interner().intern(s)))
-        }
+        crate::model::NonEmptyStr::new(value.as_ref())
+            .map(Self::from_non_empty)
+            .map_err(|crate::model::EmptyText| LanguageCodeError::Empty)
+    }
+
+    /// Construct and intern a language token from text already proven
+    /// nonempty, so the empty case has nowhere to go. Shape and registry
+    /// rules remain validation's (`report_code_issues`).
+    pub fn from_non_empty(value: crate::model::NonEmptyStr<'_>) -> Self {
+        Self(crate::model::language_interner().intern(value.as_str()))
     }
 
     /// Whether the explicitly supplied code is ISO 639-3 `und` (undetermined).

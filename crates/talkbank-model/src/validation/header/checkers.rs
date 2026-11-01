@@ -5,11 +5,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Date_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Role_Field>
 
-use crate::model::{BulletContent, IDHeader, ValidationTagged};
+use crate::model::{EmptyHeader, IDHeader, PlainKind, QualifiedKind, TextKind, ValidationTagged};
 use crate::validation::check_speaker_id;
 use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 
-use super::metadata;
 use super::participant::{is_allowed_participant_role, suggest_similar_role};
 
 /// Validates required `@ID` slots and role/age formatting rules.
@@ -118,44 +117,66 @@ pub(super) fn check_id_header(
     }
 }
 
-/// Validates `@Date` payload and delegates format checks.
-pub(super) fn check_date_header(date: &str, location: crate::Location, errors: &impl ErrorSink) {
-    if date.is_empty() {
-        let err = ParseError::new(
-            ErrorCode::EmptyDate,
-            Severity::Error,
-            DiagnosticLocation::from(location),
-            ErrorContext::new(date, crate::Span::new(0, 0), "date"),
-            "@Date header should not be empty",
-        );
-        errors.report(err);
-    } else {
-        metadata::check_date_format(date, location, errors, ErrorCode::InvalidDateFormat);
+/// The two headers whose payload is a CHAT date, each with its own code.
+///
+/// Pairs the error code with the header that is named in the message, so a
+/// birth-date diagnostic can no longer reuse the `@Date` wording (or code).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DateHeader {
+    /// `@Date`, reported as E518.
+    Date,
+    /// `@Birth of <SPK>`, reported as E545.
+    BirthOf,
+}
+
+impl DateHeader {
+    /// The code a malformed date in this header reports.
+    pub(super) fn error_code(self) -> ErrorCode {
+        match self {
+            Self::Date => ErrorCode::InvalidDateFormat,
+            Self::BirthOf => ErrorCode::InvalidBirthDateFormat,
+        }
+    }
+
+    /// The header named in the diagnostic, without the `@`, from the
+    /// header-kind label table.
+    pub(super) fn header_name(self) -> &'static str {
+        match self {
+            Self::Date => TextKind::Date.label(),
+            Self::BirthOf => QualifiedKind::Birth.label(),
+        }
     }
 }
 
-/// Validates `@Birth of <CODE>` payload against the depfile date
-/// template. Same component-level rules as `@Date`, but emits E545
-/// so users can distinguish which header was wrong.
-pub(super) fn check_birth_date_header(
-    date: &str,
+/// E553: a colon-bearing header with nothing after its colon.
+///
+/// One rule for every header kind, reported at the header. The message names
+/// the header as written and says what to do: omit it, or, for a gem header,
+/// use its bare form, which has no colon.
+pub(super) fn check_empty_header_content(
+    empty: &EmptyHeader,
     location: crate::Location,
     errors: &impl ErrorSink,
 ) {
-    if date.is_empty() {
-        // Empty @Birth of is allowed (date-unknown), matching the
-        // `Option<ChatDate>`-style semantics of participant fields.
-        return;
-    }
-    metadata::check_date_format(date, location, errors, ErrorCode::InvalidBirthDateFormat);
-}
+    let written = empty.prefix();
+    let remedy = match empty {
+        // A gem header has a legal bare form, which has no colon.
+        EmptyHeader::Plain {
+            kind: PlainKind::Gem(_),
+            ..
+        } => format!("write the bare {written} with no colon, or omit the header"),
+        EmptyHeader::Plain {
+            kind: PlainKind::Text(_) | PlainKind::Structured(_),
+            ..
+        }
+        | EmptyHeader::Qualified { .. } => "omit the header".to_owned(),
+    };
 
-/// Intentionally no-op for `@Comment` and `@Warning` payload bodies.
-pub(super) fn check_comment_warning(
-    _content: &BulletContent,
-    _location: crate::Location,
-    _errors: &impl ErrorSink,
-) {
-    // @Comment and @Warning headers are opaque CHAT data, not directives
-    // for our validator.  Nothing to check here.
+    errors.report(ParseError::new(
+        ErrorCode::EmptyHeaderContent,
+        Severity::Error,
+        DiagnosticLocation::from(location),
+        ErrorContext::new("", crate::Span::new(0, 0), "header"),
+        format!("{written} header has no content after its colon; {remedy}"),
+    ));
 }

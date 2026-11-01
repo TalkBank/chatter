@@ -57,12 +57,11 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::model::{Header, Line};
 use talkbank_parser::TreeSitterParser;
 
-/// Whether `h` is one of the 3 GEM header variants migrated in Task 2e.
+/// Whether `h` is one of the 3 GEM header variants migrated in Task 2e, or a
+/// gem header written with nothing after its colon.
 fn is_gem(h: &Header) -> bool {
-    matches!(
-        h,
-        Header::BeginGem { .. } | Header::EndGem { .. } | Header::LazyGem { .. }
-    )
+    use talkbank_model::model::{HeaderKind, PlainKind};
+    matches!(h.kind(), HeaderKind::Plain(PlainKind::Gem(_)))
 }
 
 /// Parse `input` at the real streaming boundary and return the `Debug` string of
@@ -98,27 +97,22 @@ fn wrap(body: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// `@G:\t` (colon form without label): recovery retains the bare lazy marker
+// `@G:\t` (colon form without label): empty content, not the bare marker
 // ---------------------------------------------------------------------------
 
-/// Bare `@G` is legal. The colon form additionally requires a TAB and label;
-/// with no label, recovery retains the bare marker and reports the colon as
-/// E316, matching the authored E530#5 specification.
+/// Bare `@G` is legal. The colon form with nothing after its separator is the
+/// one empty-content state, refused by validation (E553) rather than parsed
+/// as the bare marker nobody wrote; parsing reports nothing.
 #[test]
-fn g_separator_no_label_decodes_to_lazy_gem_none_with_e316() {
+fn g_separator_no_label_is_empty_content_not_the_bare_marker() {
     let input = wrap("@G:\t\n");
     let (headers, diags) = gem_headers_and_diags(&input);
     assert_eq!(
         headers,
-        vec![r#"LazyGem { label: None }"#.to_string()],
-        "@G with separator but no label must produce LazyGem{{label: None}}"
+        vec![r#"EmptyContent(Plain { kind: Gem(Lazy), separator: WrittenSeparator })"#.to_string()],
+        "@G with separator but no label is empty content"
     );
-    assert_eq!(
-        diags.len(),
-        1,
-        "exactly one diagnostic expected (E316 for the orphan colon): {diags:?}"
-    );
-    assert_eq!(diags[0].0, "E316", "orphan colon must be E316: {diags:?}");
+    assert!(diags.is_empty(), "no parse diagnostic: {diags:?}");
 }
 
 // ---------------------------------------------------------------------------
@@ -126,33 +120,25 @@ fn g_separator_no_label_decodes_to_lazy_gem_none_with_e316() {
 // ---------------------------------------------------------------------------
 
 /// `@Bg:` (colon suffix, no `:\t` header_sep, no label text): the parser must
-/// produce `Header::BeginGem { label: None }`, NOT `Header::LazyGem`.
+/// lower NO gem header, neither `LazyGem` nor the legal bare `BeginGem`.
 ///
-/// ## Bug history
+/// ## History
 ///
-/// The pre-fix `gem::bg()` had a recovery branch:
-/// ```text
-/// if label.is_none() && header_contains_colon(header_actual, input) {
-///     ParseOutcome::parsed(Header::LazyGem { label: None })
-/// }
-/// ```
-/// Because tree-sitter parses the bare `:` as an ERROR child (emitting E316),
-/// `header_contains_colon` returned `true` (it scanned the raw node text, which
-/// covers the ERROR child range), triggering the buggy `LazyGem` branch.
-///
-/// The fix: remove the branch entirely. `@Bg` NEVER produces `LazyGem`; only
-/// `@G` does. The E316 diagnostic for the unparsable `:` is orthogonal to the
-/// model kind and stays.
-///
-/// RED with the old code (produced `LazyGem { label: None }`); GREEN after fix.
+/// The pre-fix `gem::bg()` had a recovery branch producing
+/// `Header::LazyGem { label: None }` for this line, because tree-sitter parses
+/// the bare `:` as an ERROR child (emitting E316) and the branch scanned the
+/// raw node text for a colon. Removing that branch left the ERROR group
+/// lowered as `BeginGem { label: None }`: the legal bare marker, which the
+/// author did not write, fabricated from a recovery node. Now an ERROR in the
+/// group position lowers no header at all, exactly as an ERROR where any
+/// other header's content belongs; the E316 for the unparsable `:` stays.
 #[test]
-fn bg_colon_no_label_decodes_to_begin_gem_none_with_e316() {
+fn bg_colon_no_label_lowers_no_gem_header_and_reports_e316() {
     let input = wrap("@Bg:\n");
     let (headers, diags) = gem_headers_and_diags(&input);
-    assert_eq!(
-        headers,
-        vec![r#"BeginGem { label: None }"#.to_string()],
-        "@Bg: must produce BeginGem{{label: None}}, not LazyGem"
+    assert!(
+        headers.is_empty(),
+        "@Bg: must lower no gem header, not a fabricated bare marker: {headers:?}"
     );
     assert_eq!(
         diags.len(),

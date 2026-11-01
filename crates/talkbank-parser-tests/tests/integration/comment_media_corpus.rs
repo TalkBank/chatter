@@ -102,7 +102,7 @@ fn rejected_bullet_segments_preserve_source_and_invalidity() {
             let mut result: Vec<_> = file
                 .headers()
                 .filter_map(|h| match h {
-                    Header::Comment { content } => Some(content),
+                    Header::Comment { content } => Some(content.as_bullet_content()),
                     _ => None,
                 })
                 .collect();
@@ -161,6 +161,7 @@ fn rejected_bullet_segments_preserve_source_and_invalidity() {
                     panic!("comment variant")
                 };
                 let raw = content
+                    .as_bullet_content()
                     .segments
                     .iter()
                     .find_map(|s| match s {

@@ -19,13 +19,19 @@ struct ControlCheckedFragment<'source> {
 
 impl<'source> ControlCheckedFragment<'source> {
     fn admit(source: &'source str) -> Option<Self> {
+        Self::admit_reporting(source, &talkbank_model::NullErrorSink).into_option()
+    }
+
+    fn admit_reporting(source: &'source str, errors: &impl ErrorSink) -> ParseOutcome<Self> {
         let findings = talkbank_model::ErrorCollector::new();
         talkbank_model::validation::report_control_characters(source, &findings);
-        if findings.has_errors() {
-            None
+        let outcome = if findings.has_errors() {
+            ParseOutcome::Rejected
         } else {
-            Some(Self { source })
-        }
+            ParseOutcome::Parsed(Self { source })
+        };
+        errors.report_all(findings.into_vec());
+        outcome
     }
 
     fn lex(self, condition: crate::lexer::StartCondition) -> super::LexedSource<'source> {
@@ -188,11 +194,14 @@ pub fn parse_mor_word_with_errors(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<talkbank_model::MorWord> {
     use chumsky::Parser as _;
+    let ParseOutcome::Parsed(checked) = ControlCheckedFragment::admit_reporting(input, errors)
+    else {
+        return ParseOutcome::Rejected;
+    };
     let findings = talkbank_model::ErrorCollector::new();
-    talkbank_model::validation::report_control_characters(input, &findings);
-    let tokens = lex_to_tokens(input, crate::lexer::COND_MOR_CONTENT);
+    let lexed = checked.lex(crate::lexer::COND_MOR_CONTENT);
     let parsed = dependent_tiers::mor_word_parser()
-        .parse(tokens.as_slice())
+        .parse(lexed.tokens())
         .into_result();
     admit_mor_fragment(input, parsed, findings, errors)
 }
@@ -456,9 +465,12 @@ pub fn parse_mor_tier_with_errors(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<talkbank_model::MorTier> {
     use chumsky::Parser as _;
+    let ParseOutcome::Parsed(checked) = ControlCheckedFragment::admit_reporting(input, errors)
+    else {
+        return ParseOutcome::Rejected;
+    };
     let findings = talkbank_model::ErrorCollector::new();
-    talkbank_model::validation::report_control_characters(input, &findings);
-    let lexed = super::LexedSource::new(input, crate::lexer::COND_MOR_CONTENT);
+    let lexed = checked.lex(crate::lexer::COND_MOR_CONTENT);
     let source = lexed.source_text();
     let parsed = dependent_tiers::mor_tier_parser(source, source.whole().into())
         .parse(lexed.tokens())
@@ -501,16 +513,14 @@ pub fn parse_gra_tier_with_errors(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<talkbank_model::GraTier> {
     use chumsky::Parser as _;
-    let lexical = talkbank_model::ErrorCollector::new();
-    talkbank_model::validation::report_control_characters(input, &lexical);
-    if lexical.has_errors() {
-        errors.report_all(lexical.into_vec());
+    let ParseOutcome::Parsed(checked) = ControlCheckedFragment::admit_reporting(input, errors)
+    else {
         return ParseOutcome::Rejected;
-    }
-    let source = crate::source_text::SourceText::new(input);
-    let tokens = lex_to_tokens(input, crate::lexer::COND_GRA_CONTENT);
+    };
+    let lexed = checked.lex(crate::lexer::COND_GRA_CONTENT);
+    let source = lexed.source_text();
     let parsed = dependent_tiers::gra_tier_parser(source, source.whole(), errors)
-        .parse(tokens.as_slice())
+        .parse(lexed.tokens())
         .into_result();
     match parsed {
         Ok(outcome) => outcome,

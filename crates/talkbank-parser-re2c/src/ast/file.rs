@@ -1,6 +1,6 @@
 //! File lines and dependent-tier entries retain source separator provenance.
 
-use super::{DependentTierParsed, HeaderParsed, MainTier};
+use super::{DependentTierParsed, MainTier};
 use serde::Serialize;
 
 /// A parsed CHAT file with its original input and source-owning lines.
@@ -212,11 +212,11 @@ impl<'a> DependentTierEntryParsed<'a> {
     }
 }
 
-/// Parsed header syntax and its original source admitted by the line machine.
-/// Fields cannot be replaced independently after admission.
+/// A header lowered to the shared model by the line machine, with its
+/// original source. Fields cannot be replaced independently after admission.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LocatedHeader<'a> {
-    header: HeaderParsed<'a>,
+    header: talkbank_model::model::Header,
     #[serde(skip)]
     source: crate::source_text::SourceSlice<'a>,
     #[serde(skip)]
@@ -225,7 +225,7 @@ pub struct LocatedHeader<'a> {
 
 impl<'a> LocatedHeader<'a> {
     pub(crate) fn from_lexed(
-        header: HeaderParsed<'a>,
+        header: talkbank_model::model::Header,
         source: crate::source_text::SourceSlice<'a>,
         separator: talkbank_model::model::TierSeparator,
     ) -> Self {
@@ -236,8 +236,9 @@ impl<'a> LocatedHeader<'a> {
         }
     }
 
-    /// Syntax retained for native AST inspection.
-    pub fn header(&self) -> &HeaderParsed<'a> {
+    /// The header, as the shared model holds it, including explicit
+    /// recovery.
+    pub fn header(&self) -> &talkbank_model::model::Header {
         &self.header
     }
 

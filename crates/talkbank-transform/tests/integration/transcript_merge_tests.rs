@@ -882,7 +882,8 @@ fn selected_donor_header_only_reference_preserves_metadata_and_donor() {
     // A donor opening comment must reach the output even though the reference
     // has no body line to inject opening metadata before.
     let note = Header::Comment {
-        content: talkbank_model::model::BulletContent::from_text("donor opening note"),
+        content: talkbank_model::model::CommentContent::try_from_text("donor opening note")
+            .expect("a comment"),
     };
     let mut lines = donor.lines.take();
     let after_ids = lines.iter().rposition(|line| matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::ID(_)))).unwrap() + 1;

@@ -229,6 +229,22 @@ pub(crate) fn parse_file_with_errors<'a>(
     // requirement: header and utterance fragments use the same dispatcher.
     let mut ended = false;
 
+    // A marker header line: the marker token, then its line ending.
+    macro_rules! push_marker {
+        ($header:expr) => {{
+            let header_start = cursor.position();
+            cursor.advance();
+            let _ = cursor.take_newline();
+            let Ok(region) = lexed.admit_region(header_start..cursor.position(), errors) else {
+                break;
+            };
+            lines.push(Line::Header(Box::new(region.locate_header(
+                $header,
+                talkbank_model::model::TierSeparator::CLEAN,
+            ))));
+        }};
+    }
+
     while let Some(current) = cursor.peek() {
         if ended && !matches!(*current.token(), Token::Newline(_) | Token::BOM(_)) {
             let end = cursor.line_end_position();
@@ -246,30 +262,16 @@ pub(crate) fn parse_file_with_errors<'a>(
             reason = "file dispatch reports unhandled lexical tokens; content traversal remains exhaustive"
         )]
         match current.token() {
-            // No-content headers
-            Token::HeaderUtf8(_)
-            | Token::HeaderBegin(_)
-            | Token::HeaderEnd(_)
-            | Token::HeaderBlank(_)
-            | Token::HeaderNewEpisode(_) => {
-                let header_start = current.index();
-                let tok = current.token().clone();
-                if matches!(tok, Token::HeaderEnd(_)) {
-                    ended = true;
-                }
-                cursor.advance();
-                let _ = cursor.take_newline();
-                let Ok(region) = lexed.admit_region(header_start..cursor.position(), errors) else {
-                    break;
-                };
-                lines.push(Line::Header(Box::new(region.locate_header(
-                    HeaderParsed::Other {
-                        source: region.source_slice().text().trim_end_matches(['\r', '\n']),
-                        prefix: tok,
-                        content: vec![],
-                    },
-                    talkbank_model::model::TierSeparator::CLEAN,
-                ))));
+            // No-content headers: each lexer token is its header.
+            Token::HeaderUtf8(_) => push_marker!(talkbank_model::model::Header::Utf8),
+            Token::HeaderBegin(_) => push_marker!(talkbank_model::model::Header::Begin),
+            Token::HeaderEnd(_) => {
+                ended = true;
+                push_marker!(talkbank_model::model::Header::End)
+            }
+            Token::HeaderBlank(_) => push_marker!(talkbank_model::model::Header::Blank),
+            Token::HeaderNewEpisode(_) => {
+                push_marker!(talkbank_model::model::Header::NewEpisode)
             }
 
             Token::HeaderPrefix(prefix) => {

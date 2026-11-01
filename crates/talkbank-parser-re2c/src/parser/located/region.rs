@@ -222,7 +222,7 @@ impl<'tokens, 'source> NonEmptyRegion<'tokens, 'source> {
     /// Header provenance from this admitted logical line, not caller indices.
     pub(crate) fn locate_header(
         &self,
-        header: crate::ast::HeaderParsed<'source>,
+        header: talkbank_model::model::Header,
         separator: talkbank_model::model::TierSeparator,
     ) -> crate::ast::LocatedHeader<'source> {
         crate::ast::LocatedHeader::from_lexed(header, self.source_slice(), separator)

@@ -276,7 +276,8 @@ fn header_is_prose(header: &Header) -> bool {
         | Header::Options { .. }
         | Header::Page { .. }
         | Header::Videos { .. }
-        | Header::T { .. } => false,
+        | Header::T { .. }
+        | Header::EmptyContent(_) => false,
     }
 }
 

@@ -259,9 +259,10 @@ actionlint:
 # Generate in staging and report stale grammar artifacts without rewriting them.
 #
 # The ONLY check that catches a stale `parser.c`. The traversal staleness guard
-# hashes `grammar.json` and `node-types.json`, so a regeneration that changes
-# only `parser.c` passes it correctly; a tree-sitter version bump does exactly
-# that. A guard proves what it hashes.
+# hashes `grammar-contract.json`, so a regeneration that changes only
+# `parser.c` passes it correctly; a tree-sitter version bump does exactly that.
+# A guard proves what it hashes. Needs `TREE_SITTER_DIR` (see
+# scripts/generate_grammar.py).
 grammar-generate-check:
     python3 scripts/generate_grammar.py --check
 
@@ -278,6 +279,11 @@ node-types-check:
     #!/usr/bin/env bash
     set -euo pipefail
     python3 -m unittest discover -s scripts -p test_generate_if_changed.py
+    # The other generation scripts' tests (checkout admission, traversal
+    # regeneration, regeneration order) need no producer, so they run here,
+    # where CI runs them too.
+    python3 -m unittest discover -s scripts -p test_pinned_checkout.py
+    python3 -m unittest discover -s scripts -p 'test_regenerat*.py'
     # Generate to a TEMPORARY file and compare, never `>` straight over the
     # tracked one. The redirection truncates BEFORE node runs, so a generator
     # that crashes leaves an EMPTY `node_types.rs` in the working tree, and the

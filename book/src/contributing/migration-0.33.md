@@ -6,7 +6,8 @@ This guide covers changes from 0.32.1 to 0.33.0. Check the
 [release page](https://github.com/TalkBank/chatter/releases) for published
 artifacts. If upgrading from an earlier version, apply the
 [0.32 migration guide](migration-0.32.md) first. Pin one exact tag or commit
-across the CHAT library crates and rebuild dependent applications.
+across the CHAT library crates and rebuild dependent applications. After
+this guide, continue with the [0.34 migration guide](migration-0.34.md).
 
 ## Shared model and JSON
 

@@ -47,7 +47,7 @@ fn edited_option_policy(parser: &impl ChatParser) {
         if let Line::Header { header, .. } = line
             && let Header::Options { options } = header.as_mut()
         {
-            *options = ChatOptionFlags::new(vec![ChatOptionFlag::NoAlign]);
+            *options = ChatOptionFlags::from_flag(ChatOptionFlag::NoAlign);
         }
     }
     assert!(!is_ca(&file));

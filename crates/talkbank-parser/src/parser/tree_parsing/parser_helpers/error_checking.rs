@@ -267,6 +267,12 @@ pub(crate) fn collect_recovery_nodes_retaining<'tree>(
 /// practice most carriers' `unexpected` sinks are empty for valid CHAT and
 /// for the recovery fixtures exercised by each cluster's characterization
 /// tests, so calling this is usually a no-op.
+/// Whether `node` is, or holds, a recovery node: an ERROR, a MISSING
+/// placeholder, or a node with either among its descendants.
+pub(crate) fn is_recovery(node: tree_sitter::Node<'_>) -> bool {
+    node.is_error() || node.is_missing() || node.has_error()
+}
+
 pub(crate) fn surface_displaced<'tree, T: crate::generated_traversal::AsRawNode<'tree>>(
     unexpected: &[T],
     context: &str,
@@ -275,7 +281,7 @@ pub(crate) fn surface_displaced<'tree, T: crate::generated_traversal::AsRawNode<
 ) {
     for node in unexpected {
         let node = node.raw_node();
-        if node.is_error() || node.is_missing() || node.has_error() {
+        if is_recovery(node) {
             let mut candidates = Vec::new();
             collect_recovery_nodes(node, source, &mut candidates);
             for candidate in candidates {

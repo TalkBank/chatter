@@ -18,8 +18,10 @@ pub use inspection::{LexError, LexResult};
 pub use lang_suffix::{LangSuffix, WordLanguagePayload};
 pub use pause::PauseLexeme;
 pub use postcode::PostcodeToken;
+pub(crate) use prefix::{Declaration, HeaderRoute};
 pub use prefix::{
-    DependentBodyKind, DependentPrefixToken, HeaderKind, HeaderPrefixToken, PrefixToken,
+    DependentBodyKind, DependentPrefixToken, HeaderPrefixFamily, HeaderPrefixToken, LexedHeader,
+    PrefixToken, SeparatedPrefixToken,
 };
 
 use serde::Serialize;
@@ -53,11 +55,11 @@ pub enum Token<'a> {
     HeaderContent(&'a str),
 
     /// `@Birth of SPK:\t`, carries tag-extracted speaker code.
-    HeaderBirthOf(PrefixToken<'a>),
+    HeaderBirthOf(SeparatedPrefixToken<'a>),
     /// `@Birthplace of SPK:\t`, carries tag-extracted speaker code.
-    HeaderBirthplaceOf(PrefixToken<'a>),
+    HeaderBirthplaceOf(SeparatedPrefixToken<'a>),
     /// `@L1 of SPK:\t`, carries tag-extracted speaker code.
-    HeaderL1Of(PrefixToken<'a>),
+    HeaderL1Of(SeparatedPrefixToken<'a>),
 
     // ── No-content headers (distinct tokens) ────────────────
     /// @UTF8 header (must be first line)

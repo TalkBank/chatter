@@ -609,9 +609,16 @@ recovery states or certify semantic validity of source-admitted values.
 
 The bridge between the tree-sitter CST and the typed model is a single
 generated module, `crates/talkbank-parser/src/generated_traversal.rs`,
-produced by the `tree-sitter-grammar-utils` generator from the grammar's
-own machine-readable description (`grammar/src/grammar.json` plus
-`node-types.json`). It contains one `extract_*` function per grammar
+produced by the `tree-sitter-grammar-utils` generator (pinned by
+`tsgu-revision`) from one input, the grammar contract
+`grammar/src/grammar-contract.json`: the grammar's rule trees together with
+the facts Tree-sitter itself computed about them (hidden and inline symbols,
+supertypes, extras, node kinds). The pinned Tree-sitter build
+(`tree-sitter-revision`) writes the contract beside `parser.c`;
+`grammar.json` and `node-types.json` are not the generator's inputs. The
+[Grammar Workflow](../contributing/grammar-workflow.md) owns regeneration,
+which needs `TREE_SITTER_DIR` and `TSGU_DIR` naming clean checkouts at those
+two pinned revisions. The module contains one `extract_*` function per grammar
 rule, each returning a typed view of that rule's children, so consumer
 code dispatches on generated types rather than on `node.kind()` strings.
 
@@ -1181,9 +1188,9 @@ that a valid corpus fixture reaches fallback through production extraction;
 the recovery branches remain until the producer justifies narrowing them.
 
 **The staleness guard proves less than its name suggests.**
-`generated_traversal_is_current` recomputes the digests of `grammar.json` and
-`node-types.json`, so it catches a forgotten regeneration after a grammar
-change and nothing else. It cannot see which generator produced the file, so a
+`generated_traversal_is_current` recomputes the digest of
+`grammar-contract.json`, so it catches a forgotten regeneration after a
+grammar change and nothing else. It cannot see which generator produced the file, so a
 module emitted by an older backend passes indefinitely. The generator's name
 and version are stamped in the file's own header comment; read that when the
 question is which backend built it.
@@ -1427,8 +1434,9 @@ still rejects the file with E503. The Tree-sitter backend retains the present he
 discarding the document and reporting them as missing. The authored E503 example and its declaration-present
 control exercise this recovery; CLAN CHECK reports the corresponding CHECK (69).
 
-The re2c file parser carries each header's syntax, admitted source slice and
-separator together in `LocatedHeader`. Lowering derives the original full-buffer
+The re2c file parser lowers each header line once and carries the resulting
+model `Header`, its admitted source slice and its separator together in
+`LocatedHeader`. Lowering derives the original full-buffer
 source and lexer extent from that owner, without accepting a replacement source,
 so shared missing-header diagnostics derive a real EOF from the final header.
 The cross-backend `missing_encoding_keeps_the_document_and_locates_the_single_refusal`
@@ -1478,7 +1486,11 @@ source-file union. Wrapped headers follow `WrappedFragment -> ParsedFragment ->
 HeaderFragment -> Synthetic<Header>`: the middle phase parses the wrapper's own
 source, header admission binds the selected node through that owner before
 checking complete input coverage (whole line, or label supplied by the
-wrapper), and lowering yields a value the wrapper must rebase. Deeper token
+wrapper), and lowering yields a value the wrapper must rebase. A wrapped
+header has no whole-tree backstop, so when lowering keeps it as
+`Header::Unknown` because its body is unparsable, the fragment reports the
+header's own recovery nodes (E316) itself; the diagnostic does not depend on
+whether the header arrived as a fragment or inside a document. Deeper token
 APIs still retain independent source parameters and remain migration work.
 
 The transitional raw-node text helper returns `ParseOutcome<&str>`, rejecting
@@ -1503,7 +1515,8 @@ projects it from the associated repeat; fragment lowering classifies its
 already-bound source slice. Header spans derive from that same choice, not a
 separate caller argument. PID lowering projects its generated free-text field
 and admits its range before reading the value. A failed binding propagates as
-an internal failure, distinct from missing/empty PID recovery. Window, font and
+an internal failure, distinct from a MISSING PID value (recovery) and from a
+PID header with nothing after its colon (empty content, E553). Window, font and
 color-word decoding use the same generated source-associated leaf admission:
 their shared reader takes no independent source string and cannot turn a
 binding failure into a malformed-header fallback. Required-presence admission
@@ -1521,13 +1534,45 @@ preserves opaque nonempty components for model validation. Empty components
 retain their existing omission policy; no comma-splitting text parser mirrors
 the grammar. An omitted entire field builds an empty model list (E510), while
 recovery and source-binding failures cannot become successful omissions.
-Date, birth-date and time headers likewise use optional grammar payloads.
-Their reader distinguishes omission, a recovered slot and a source-read failure.
-An omission uses the existing model constructor and retains the empty spelling,
-including the established empty-time representation on the JSON boundary.
-Validation still reports empty Date as E516 and permits the
-existing empty Birth/Time forms. Strict date/time tokens win equal-length ties;
-a longer malformed value stays whole for validation.
+Every colon-bearing header the model carries, except `@Languages`,
+`@Participants` and `@ID`, uses an optional grammar payload, so a header with
+nothing after its separator parses without recovery. (`@Thumbnail` keeps a
+required payload: it has no supported model, and any `@Thumbnail` line is
+refused as unsupported, E525.) Each parser maps its node or token to the
+model's header kind and nothing else; the kind owns the label, the empty form
+and the constructor (`TextKind::header`, `QualifiedKind::header`,
+`GemKind::labelled`, `PlainKind::empty`), so a parser cannot pair one header's
+empty form with another header's builder. In tree-sitter one reader,
+`read_body`, owns the optional payload for every header family and
+distinguishes omission, a recovered slot and a source-read failure; in re2c
+the line parser lowers the line once, classifying the exact source slice the
+content tokens cover (the lexer tiles the source, so the slice needs no
+allocation). Omission, or a payload that is only blanks, is the one
+empty-content state: `HeaderContent::classify` makes the decision for both
+parsers and is the only source of `HeaderText`, the nonblank proof every
+payload is built from. Validation always refuses empty content (E553). Empty
+content is what follows a written separator, and the state carries that
+evidence (`WrittenSeparator`, minted from the separator's own text): when the
+tab is a recovery placeholder (`@Date:` with no tab, reported as E303), the
+header is retained as unknown instead. A blank body made only of recovery
+placeholders is recovery too, never empty content. Before any slot is read,
+`HeaderSite::complete_body` makes the single decision whether the body is all
+that was written: an ERROR anywhere in the header (where the payload or a gem
+separator belongs, in or beside a body read only in part, between a
+participant and the colon, or after a gem's bare marker) is unparsable text.
+The whole-tree backstop reports it (E316), and the header is kept as
+`Header::Unknown` with its line as written, without the line terminator, and
+the shared `MALFORMED_HEADER_CONTENT` reason (validation then reports E525).
+Content is lowered only from a `CompleteBody`, which nothing else can build,
+so no header family can build a header from the part of a body before an
+ERROR; and because the header is judged before its slot, an ERROR wins over a
+MISSING body, as in re2c. re2c reaches the same `Header::Unknown` by refusing
+any content token its lexer marked malformed, blank or not, before a body
+reader runs. The decision is drawn as a flowchart in
+[the data model chapter](chat-model/chat-model.md#empty-header-content).
+The three declaration headers keep required payloads and their own
+declaration-admission recovery. Strict date/time tokens
+win equal-length ties; a longer malformed value stays whole for validation.
 Participant-header contents are required by the admitted ordinary envelope;
 their source read remains fallible. A read failure propagates internally and
 rejects header construction, without adding an empty-participants diagnostic.

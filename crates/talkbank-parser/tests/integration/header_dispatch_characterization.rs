@@ -146,8 +146,8 @@ fn headers_episodes_fixture_parses_with_zero_diagnostics() {
         r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }, ParticipantEntry { speaker_code: SpeakerCode("MOT"), details: Complete { name: None, role: ParticipantRole("Mother") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: Some(Valid { years: 3, months: Some(0), days: None, raw: "3;00." }), sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("MOT"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Episode and inline headers: @New Episode, @G, @Bg, @Eg, @Bck, @Blank, @Number, @Page, @T" })]) } }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: new_episode_header, g_header, bg_header, eg_header," }), Continuation, Text(BulletContentText { text: "bck_header, blank_header, number_header, page_header, t_header" })]) } }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Episode and inline headers: @New Episode, @G, @Bg, @Eg, @Bck, @Blank, @Number, @Page, @T" })]) }) }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: new_episode_header, g_header, bg_header, eg_header," }), Continuation, Text(BulletContentText { text: "bck_header, blank_header, number_header, page_header, t_header" })]) }) }"#,
         r#"Bck { bck: BackgroundDescription("background noise from traffic outside") }"#,
         r#"LazyGem { label: Some(GemLabel("morning routine")) }"#,
         r#"Utterance"#,
@@ -190,8 +190,8 @@ fn headers_time_and_types_fixture_parses_with_zero_diagnostics() {
         r#"TimeStart { start: Parsed { hours: 8, minutes: 30, seconds: 31, millis: None, raw: "8:30:31" } }"#,
         r#"TimeDuration { duration: Parsed { segments: [Range { start: TimeValue { hours: 17, minutes: 30, seconds: 0, millis: None }, end: TimeValue { hours: 18, minutes: 0, seconds: 0, millis: None } }], raw: "17:30-18:00" } }"#,
         r#"Types(TypesHeader { design: DesignType("long"), activity: ActivityType("toyplay"), group: GroupType("TD") })"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Time, type, and option headers" })]) } }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: time_start_header, time_duration_header, time_duration_contents," }), Continuation, Text(BulletContentText { text: "types_header, types_design, types_activity, types_group," }), Continuation, Text(BulletContentText { text: "options_header, options_contents, option_name," }), Continuation, Text(BulletContentText { text: "id_corpus, id_age, id_sex, id_group, id_ses, id_education, id_custom_field" })]) } }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Time, type, and option headers" })]) }) }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: time_start_header, time_duration_header, time_duration_contents," }), Continuation, Text(BulletContentText { text: "types_header, types_design, types_activity, types_group," }), Continuation, Text(BulletContentText { text: "options_header, options_contents, option_name," }), Continuation, Text(BulletContentText { text: "id_corpus, id_age, id_sex, id_group, id_ses, id_education, id_custom_field" })]) }) }"#,
         r#"Utterance"#,
         r#"Utterance"#,
         r#"End"#,
@@ -221,8 +221,8 @@ fn headers_media_fixture_parses_with_zero_diagnostics() {
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("sample"), speaker: SpeakerCode("MOT"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
         r#"Media(MediaHeader { filename: MediaFilename("headers-media"), media_type: Video, status: Some(Unlinked), whitespace_before_comma: None })"#,
         r#"Videos { videos: VideoSpec("1a, 1b, 1c") }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Media headers: @Media with video type and unlinked status, @Videos" })]) } }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: media_header, media_contents, media_filename, media_type," }), Continuation, Text(BulletContentText { text: "media_status, video_value, unlinked_value, videos_header" })]) } }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Media headers: @Media with video type and unlinked status, @Videos" })]) }) }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: media_header, media_contents, media_filename, media_type," }), Continuation, Text(BulletContentText { text: "media_status, video_value, unlinked_value, videos_header" })]) }) }"#,
         r#"Utterance"#,
         r#"Utterance"#,
         r#"End"#,
@@ -248,12 +248,12 @@ fn headers_comments_fixture_parses_with_zero_diagnostics() {
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: Some(Valid { years: 3, months: Some(0), days: None, raw: "3;00." }), sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("MOT"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
         r#"Media(MediaHeader { filename: MediaFilename("headers-comments"), media_type: Video, status: Some(Unlinked), whitespace_before_comma: None })"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Comment and warning headers with multi-line continuation" })]) } }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: comment_header, warning_header, anything," }), Continuation, Text(BulletContentText { text: "text_with_bullets_and_pics, continuation, rest_of_line" })]) } }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI points to the shelf" }), Bullet(MediaTiming { start_ms: 1234, end_ms: 1567 })]) } }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Comment and warning headers with multi-line continuation" })]) }) }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: comment_header, warning_header, anything," }), Continuation, Text(BulletContentText { text: "text_with_bullets_and_pics, continuation, rest_of_line" })]) }) }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI points to the shelf" }), Bullet(MediaTiming { start_ms: 1234, end_ms: 1567 })]) }) }"#,
         r#"Warning { text: WarningText("audio quality degrades after minute 15") }"#,
         r#"Utterance"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI is pointing at the bookshelf while asking" }), Continuation, Text(BulletContentText { text: "this question, looking at MOT" })]) } }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "CHI is pointing at the bookshelf while asking" }), Continuation, Text(BulletContentText { text: "this question, looking at MOT" })]) }) }"#,
         r#"Utterance"#,
         r#"End"#,
     ];
@@ -265,8 +265,9 @@ fn unsupported_header_recovers_silently_and_thumbnail_gap_rejects_with_e525() {
     let (reprs, diags) = parse_lines_and_diags(UNSUPPORTED_AND_THUMBNAIL);
 
     // `unsupported_header` (the catch-all `simple::unsupported`) recovers to
-    // `Header::Unknown` capturing the WHOLE header text (including its
-    // trailing newline) and reports NO diagnostic. `thumbnail_header` (the
+    // `Header::Unknown` capturing the WHOLE header text (without its line
+    // terminator, the text re2c keeps for the same line) and reports NO
+    // diagnostic. `thumbnail_header` (the
     // `dispatch::thumbnail` gap handler) is REJECTED outright (no fallback
     // line at all), so it does not appear in the model; only its E525
     // diagnostic below is observable.
@@ -276,7 +277,7 @@ fn unsupported_header_recovers_silently_and_thumbnail_gap_rejects_with_e525() {
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
         r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
-        "Unknown { text: WarningText(\"@Foo:\\tunexpected header text\\n\"), parse_reason: Some(\"Unsupported header type\"), suggested_fix: None }",
+        "Unknown { text: NonEmpty(NonEmptyString(\"@Foo:\\tunexpected header text\")), parse_reason: Some(\"Unsupported header type\"), suggested_fix: None }",
         r#"Utterance"#,
         r#"End"#,
     ];

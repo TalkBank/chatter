@@ -51,7 +51,9 @@ fn duration_empty_segment_spec_cannot_become_a_partial_clock() {
             assert!(durations.next().is_none());
             assert_eq!(duration.as_str(), "00:00:00,");
             assert!(duration.segments().is_empty());
-            assert!(!duration.semantic_eq(&TimeDurationValue::from_text("00:00:00")));
+            assert!(
+                !duration.semantic_eq(&TimeDurationValue::try_new("00:00:00").expect("nonempty"))
+            );
             assert_eq!(file.to_chat_string(), source);
             let findings = ErrorCollector::new();
             file.validate_headers_only(&findings, TranscriptName::Anonymous);

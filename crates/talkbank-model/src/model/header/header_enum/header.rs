@@ -21,6 +21,7 @@ use super::super::{
     enums::{Number, RecordingQuality, Transcription},
     types_header::TypesHeader,
 };
+use super::empty::{HeaderContent, HeaderText};
 use super::options::ChatOptionFlag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -278,40 +279,93 @@ impl crate::validation::Validate for ParticipantEntries {
     }
 }
 
-/// Ordered payload of an `@Options` header.
+/// Ordered payload of an `@Options` header: at least one flag.
 ///
 /// Flags are retained in source order even though most consumers treat this as
-/// a set, which keeps roundtrip output deterministic.
+/// a set, which keeps roundtrip output deterministic. The list is never empty:
+/// an `@Options` header with nothing after its colon is
+/// `Header::EmptyContent`, so every route in ([`Self::parse`], [`Self::new`],
+/// `TryFrom`, JSON) refuses an empty list, and no length-shrinking operation
+/// is offered.
 ///
 /// # Reference
 ///
 /// - [Options header](https://talkbank.org/0info/manuals/CHAT.html#Options_Header)
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ChatOptionFlags(Vec<ChatOptionFlag>);
+pub struct ChatOptionFlags(#[schemars(length(min = 1))] Vec<ChatOptionFlag>);
 
-crate::collection_newtype_ops!(ChatOptionFlags, ChatOptionFlag);
+crate::collection_newtype_read_ops!(ChatOptionFlags, ChatOptionFlag);
+
+/// Why an `@Options` list cannot be admitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum MalformedOptionList {
+    /// The list names no option at all (an empty list from a constructor or
+    /// JSON; a parsed header with no option is `Header::EmptyContent`).
+    #[error("an @Options list must name at least one option")]
+    NoOption,
+    /// A comma-separated position holds no option name, as in `CA,,NoAlign`
+    /// or a trailing comma.
+    #[error("@Options option {position} is empty")]
+    EmptyName {
+        /// The 1-based position of the empty name in the list.
+        position: usize,
+    },
+}
 
 impl ChatOptionFlags {
+    /// Reads an `@Options` content: comma-separated option names, each
+    /// trimmed of surrounding whitespace. The one reader both parsers use.
+    ///
+    /// Built as a nonempty list from its first name, so no empty list is ever
+    /// formed, and an empty name is refused rather than kept as an
+    /// unsupported option named `""`.
+    ///
+    /// # Errors
+    ///
+    /// [`MalformedOptionList::EmptyName`] when a position between commas, or
+    /// after a trailing comma, holds no name.
+    pub fn parse(text: HeaderText<'_>) -> Result<Self, MalformedOptionList> {
+        let mut names = text.as_str().split(',').enumerate();
+        let admit = |(index, name): (usize, &str)| match HeaderContent::classify(name.trim()) {
+            HeaderContent::Text(name) => Ok(ChatOptionFlag::from_text(name)),
+            HeaderContent::Blank => Err(MalformedOptionList::EmptyName {
+                position: index + 1,
+            }),
+        };
+        let first = names.next().ok_or(MalformedOptionList::NoOption)?;
+        let mut flags = vec![admit(first)?];
+        for name in names {
+            flags.push(admit(name)?);
+        }
+        Ok(Self(flags))
+    }
+
+    /// Wraps option flags in source order, refusing an empty list.
+    ///
+    /// # Errors
+    ///
+    /// [`MalformedOptionList::NoOption`] when `options` is empty.
+    pub fn new(options: Vec<ChatOptionFlag>) -> Result<Self, MalformedOptionList> {
+        if options.is_empty() {
+            Err(MalformedOptionList::NoOption)
+        } else {
+            Ok(Self(options))
+        }
+    }
+
+    /// Admits one known flag without a fallible collection check.
+    pub fn from_flag(flag: ChatOptionFlag) -> Self {
+        Self(vec![flag])
+    }
+
     /// Appends one flag.
     ///
-    /// A NAMED length-changing operation, added when `DerefMut` was removed
-    /// from this family. `@Options` is a closed set with real rules about
-    /// which flags may co-occur, so this is exactly the seam where such a rule
-    /// would live.
+    /// `@Options` is a closed set with real rules about which flags may
+    /// co-occur, so this is exactly the seam where such a rule would live.
     pub fn push(&mut self, flag: ChatOptionFlag) {
         self.0.push(flag);
-    }
-
-    /// Wraps option flags in source order, including an empty recovery payload.
-    pub fn new(options: Vec<ChatOptionFlag>) -> Self {
-        Self(options)
-    }
-
-    /// Returns `true` when no options were declared.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
     }
 }
 
@@ -324,10 +378,20 @@ impl Deref for ChatOptionFlags {
     }
 }
 
-impl From<Vec<ChatOptionFlag>> for ChatOptionFlags {
-    /// Wraps an owned vector without copying.
-    fn from(options: Vec<ChatOptionFlag>) -> Self {
-        Self(options)
+impl TryFrom<Vec<ChatOptionFlag>> for ChatOptionFlags {
+    type Error = MalformedOptionList;
+
+    /// Admits a raw list without bypassing the nonempty constraint.
+    fn try_from(options: Vec<ChatOptionFlag>) -> Result<Self, Self::Error> {
+        Self::new(options)
+    }
+}
+
+impl<'de> Deserialize<'de> for ChatOptionFlags {
+    /// Reads a list and admits it through `new`, refusing an empty one.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(Vec::<ChatOptionFlag>::deserialize(deserializer)?)
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -358,34 +422,6 @@ impl IntoIterator for ChatOptionFlags {
     /// Consumes the wrapper and yields owned option flags.
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-impl Default for ChatOptionFlags {
-    /// Returns an empty option-flag payload, not evidence of an absent header.
-    ///
-    /// An enclosing `Header::Options` remains present and validates as E533.
-    fn default() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl crate::validation::Validate for ChatOptionFlags {
-    /// Enforces non-empty `@Options` (option values are otherwise free-form flags).
-    fn validate(
-        &self,
-        context: &crate::validation::ValidationContext,
-        errors: &impl crate::ErrorSink,
-    ) {
-        if self.is_empty() {
-            errors.report(crate::ParseError::new(
-                crate::ErrorCode::EmptyOptionsHeader,
-                crate::Severity::Error,
-                context.field_diagnostic_location(),
-                crate::ErrorContext::new("", crate::Span::new(0, 0), "options"),
-                "@Options header cannot be empty",
-            ));
-        }
     }
 }
 
@@ -444,6 +480,17 @@ pub enum Header {
     #[serde(rename = "id")]
     ID(super::super::IDHeader),
 
+    /// A colon-bearing header with nothing after its colon.
+    ///
+    /// One state for every header kind that can be written this way (see
+    /// [`EmptyHeader`](super::empty::EmptyHeader)), decided by the parser
+    /// before any payload is built,
+    /// so no payload type below has to represent "no content". Validation
+    /// always refuses it (E553). `@Languages`, `@Participants` and `@ID` are
+    /// not represented here: their malformed forms keep their own
+    /// declaration-admission states above.
+    EmptyContent(super::empty::EmptyHeader),
+
     // =========================================================================
     // Metadata Headers
     // =========================================================================
@@ -455,8 +502,9 @@ pub enum Header {
 
     /// @Comment:\tfree text
     Comment {
-        /// Free-text comment content, may include a media bullet
-        content: crate::model::BulletContent,
+        /// Comment content, which may include media bullets and pictures,
+        /// proven to write something (never blank: blank is `EmptyContent`)
+        content: super::comment::CommentContent,
     },
 
     /// @PID:\tpersistent-id
@@ -484,19 +532,22 @@ pub enum Header {
     // =========================================================================
     /// @Bg:\tlabel - Begin gem
     BeginGem {
-        /// Optional gem label
+        /// The gem label; `None` for the bare form `@Bg`, which has no colon.
+        /// A colon followed by nothing is [`Header::EmptyContent`].
         label: Option<GemLabel>,
     },
 
     /// @Eg:\tlabel - End gem
     EndGem {
-        /// Optional gem label
+        /// The gem label; `None` for the bare form `@Eg`, which has no colon.
+        /// A colon followed by nothing is [`Header::EmptyContent`].
         label: Option<GemLabel>,
     },
 
     /// @G:\tlabel - Lazy gem
     LazyGem {
-        /// Optional gem label
+        /// The gem label; `None` for the bare form `@G`, which has no colon.
+        /// A colon followed by nothing is [`Header::EmptyContent`].
         label: Option<GemLabel>,
     },
 
@@ -582,7 +633,9 @@ pub enum Header {
     Birth {
         /// Speaker code of the participant
         participant: SpeakerCode,
-        /// Birth date in DD-MMM-YYYY format
+        /// Birth date in DD-MMM-YYYY format. A birth header with no date is
+        /// [`Header::EmptyContent`]; an unknown birth date is written by
+        /// omitting the header.
         date: ChatDate,
     },
 
@@ -606,6 +659,11 @@ pub enum Header {
         /// and held to the same shared code rule set as `@Languages` /
         /// `@ID` (migrated from a free-text `LanguageName` per the
         /// 2026-07-15 @s-declaration ruling, part 2).
+        ///
+        /// JSON refuses blank text here, as a parser does (an `@L1 of` with
+        /// nothing after its colon is `Header::EmptyContent`), while
+        /// `LanguageCode` stays lenient everywhere else.
+        #[serde(deserialize_with = "deserialize_l1_language")]
         language: LanguageCode,
     },
 
@@ -632,8 +690,8 @@ pub enum Header {
     /// This variant should be eliminated by validation (reported as an error)
     /// before data is treated as a clean CHAT model.
     Unknown {
-        /// Header text as captured from parser recovery.
-        text: WarningText,
+        /// Header text as captured from parser recovery, exactly as observed.
+        text: crate::model::RecoveryText,
         /// Optional parser-side reason describing why decoding failed.
         parse_reason: Option<String>,
         /// Optional suggested correction (for example nearest known header).
@@ -675,4 +733,16 @@ pub enum Header {
         /// Thumbnail marker text
         text: TDescription,
     },
+}
+
+/// Admits an `@L1 of` language from JSON through the one emptiness decision,
+/// so the wire cannot carry the blank value a parser would have made
+/// `Header::EmptyContent`.
+fn deserialize_l1_language<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<LanguageCode, D::Error> {
+    let text = std::borrow::Cow::<'de, str>::deserialize(deserializer)?;
+    HeaderContent::admit(&text)
+        .map(|text| LanguageCode::from_non_empty(text.as_non_empty()))
+        .map_err(serde::de::Error::custom)
 }

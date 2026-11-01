@@ -69,6 +69,7 @@ mod golden_words_parse;
 mod golden_words_validation;
 mod gra_alignment_from_source;
 mod gra_structure_from_source;
+mod header_body_recovery_from_source;
 mod header_metadata_corpus;
 mod header_structure_from_source;
 mod header_values_from_source;

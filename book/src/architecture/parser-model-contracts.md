@@ -81,9 +81,12 @@ E756. JSON preserves the original string and re-enters the same constructor.
 Time headers use the same ownership boundary: `TimeDurationValue` and
 `TimeStartValue` classify their text once, with read-only segments or a copied
 `TimeValue`. Callers cannot pair out-of-range source text with valid numeric
-components to bypass clock assessment. Empty optional headers have an explicit
-absent state, so an empty start has no clock reading rather than midnight.
-Their JSON remains a string and re-enters the text constructor.
+components to bypass clock assessment. Neither value has an empty state: they
+are built only from `HeaderText`, content proven nonblank, so a time header
+with nothing after its colon is `Header::EmptyContent` (E553) and an empty
+start has no clock reading at all rather than midnight. Their JSON remains a
+string and re-enters the same admission through `try_new`, which refuses
+blank text.
 
 ## Source identity and coordinates
 

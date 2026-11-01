@@ -83,3 +83,43 @@ fn test_empty() {
     let content = BulletContent::from_text("");
     assert!(content.is_empty());
 }
+
+/// Emptiness is what the content writes, judged by the header-content rule:
+/// whitespace and continuations are not content, so a `%com` holding only a
+/// continuation is empty (E756), exactly as an `@Comment` holding it is
+/// blank; a bullet or a picture writes a visible delimiter and is content.
+#[test]
+fn emptiness_is_what_the_content_writes() {
+    use crate::model::HeaderContent;
+    let empty = [
+        BulletContent::empty(),
+        BulletContent::from_text(" \t"),
+        BulletContent::new(vec![BulletContentSegment::continuation()]),
+        BulletContent::new(vec![
+            BulletContentSegment::continuation(),
+            BulletContentSegment::continuation(),
+        ]),
+    ];
+    let content = [
+        BulletContent::from_text("x"),
+        BulletContent::new(vec![BulletContentSegment::bullet(0, 10)]),
+        BulletContent::new(vec![BulletContentSegment::picture("a.jpg")]),
+        BulletContent::new(vec![
+            BulletContentSegment::continuation(),
+            BulletContentSegment::text("late"),
+        ]),
+    ];
+    for payload in empty {
+        let written = payload.to_chat_string();
+        assert!(payload.is_empty(), "{written:?}");
+        assert_eq!(HeaderContent::classify(&written), HeaderContent::Blank);
+    }
+    for payload in content {
+        let written = payload.to_chat_string();
+        assert!(!payload.is_empty(), "{written:?}");
+        assert!(matches!(
+            HeaderContent::classify(&written),
+            HeaderContent::Text(_)
+        ));
+    }
+}

@@ -120,11 +120,12 @@ fn transcript_headers_date_situation_options_are_emitted_in_order() {
     };
 
     let mut desc = desc_with(Some(MediaStatus::Unlinked));
-    desc.pid = Some(PidValue::new("11312/a-00065721-1"));
-    desc.date = Some(ChatDate::new("07-JUL-1998"));
-    desc.situation = Some(SituationDescription::new("Honors Advising Office"));
-    desc.options = Some(ChatOptionFlags::new(vec![ChatOptionFlag::Ca]));
-    desc.transcriber = Some(TranscriberName::new("Jane Doe"));
+    desc.pid = Some(PidValue::try_new("11312/a-00065721-1").expect("nonempty"));
+    desc.date = Some(ChatDate::try_new("07-JUL-1998").expect("nonempty"));
+    desc.situation =
+        Some(SituationDescription::try_new("Honors Advising Office").expect("nonempty"));
+    desc.options = Some(ChatOptionFlags::from_flag(ChatOptionFlag::Ca));
+    desc.transcriber = Some(TranscriberName::try_new("Jane Doe").expect("nonempty"));
 
     let chat = build_chat(&desc).expect("build_chat");
     let text = chat.to_chat_string();
@@ -173,7 +174,10 @@ fn l1_of_and_comment_headers_are_emitted_in_order() {
         end_ms: None,
         lang: None,
     }];
-    desc.comments = vec!["S1 quotation restriction: cite".to_string()];
+    desc.comments = vec![
+        talkbank_model::model::CommentContent::try_from_text("S1 quotation restriction: cite")
+            .expect("a comment"),
+    ];
 
     let text = build_chat(&desc).expect("build_chat").to_chat_string();
     assert!(text.contains("@L1 of S1:\test"), "expected coded @L1 of");

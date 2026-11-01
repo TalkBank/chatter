@@ -54,7 +54,7 @@ Each diagnostic contains:
 | E2xx | Word-level content | E202: Missing form type after `@`, E203: Invalid form type marker, E207: Unknown annotation |
 | E3xx | Main tier (speakers, terminators, content) | E301: Empty/missing main tier, E304: Missing speaker, E305: Missing terminator, E306: Empty utterance, E307: Invalid speaker, E308: Undeclared speaker |
 | E4xx | Dependent tier structure | E401: Duplicate dependent tier |
-| E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format |
+| E5xx | Headers | E501: Duplicate header, E504: Missing @Participants, E505: Invalid @ID format, E553: Header with nothing after its colon |
 | E6xx | Dependent tier validation | E601: Invalid dependent tier, E604: %gra without %mor |
 | E7xx | Alignment, Phon tiers, structure | E705: Main/%mor count mismatch, E721: %gra index error, E747: Blank line, E748: Leading zero in bullet time, E749: Comma glued to next word, E750: Space inside angle group, E751: Pause glued to word, E752: Timing bullets without @Media, E753: Word only repetition segments, E755: Undeclared utterance language, E756: Empty dependent tier, E757: Bracketed code glued to following word, E758: Leading space on tier (non-CA), E759: Annotation at utterance start, E760: %mor item with empty POS, E761: %gra relation head not a UD relation, E762: Prefix marker `#` standalone or word-initial, E763: Prefix marker `#` in a language that does not use it, E764: Prefixed form glued to the preceding word, E765: Separator glued to following content, E766: Linker not utterance-initial, E767: Whitespace before the @Media comma, E768: @Media filename not representable |
 | W1xx-W6xx | Warnings | W108: Speaker not found in @Participants (non-fatal contexts) |
@@ -126,6 +126,34 @@ Check that pipe-separated fields are correct and the speaker code matches `@Part
 ```text
 @ID:	eng|corpus|CHI|2;6.||||Target_Child|||
 ```
+
+### E553: header with nothing after its colon
+
+A header written with its colon and tab but no content (`@Date:` followed by
+a tab and then the end of the line, or only spaces) says it carries
+information and supplies none. Chatter refuses it with E553 for every
+colon-bearing header except `@Languages`, `@Participants` and `@ID`, which
+keep their own codes (E507, E506 and E316), and `@Thumbnail`, which is E525
+whatever it holds. There is no per-header exception: `@Date`, `@Media`,
+`@Options`, `@Time Duration`, `@Time Start`, `@PID`, `@Comment` and
+`@Birth of` are all refused when empty.
+
+To fix it, delete the header. An unknown birth date, for example, is written
+by omitting `@Birth of`. For the gem headers, write the bare form with no
+colon (`@Bg`, `@Eg`, `@G`), which is legal and needs no label.
+
+A colon with no tab after it is a different defect: the header is malformed
+(E303) and is kept as an unknown header, not as an empty one.
+
+### E316 and E525 on a header: a body that cannot be read in full
+
+When part of a header's body cannot be read (`1x` as an `@Page` number, a
+`@Media` line with an extra or trailing comma, an `@Options` list with an
+empty position such as `CA,,NoAlign`), Chatter keeps
+the whole line as an unknown header with its text, reports the unparsable
+content (E316) and the unknown header (E525), and builds no header from the
+readable part. Both parsers make the same decision. Fix the body; the rest of
+the header is not salvaged.
 
 ### E705: Main/%mor alignment mismatch
 
@@ -269,6 +297,9 @@ Whitespace-only counts as nothing on every free-text tier, `%com` and
 `%add` included; CLAN
 CHECK 31 rejects the same lines.
 
+A body that is only a continuation (a line break and a tab with nothing
+after them) is empty too: continuations and whitespace are not content.
+
 This covers every tier whose body is free text, which is every
 dependent tier except the structured ones (`%mor`, `%gra`, `%pho`,
 `%mod`, `%sin`, `%wor`). An empty structured tier fails earlier and
@@ -370,10 +401,10 @@ violation that CLAN rejects is an error here.
 
 The construct is unambiguous, so the grammar deliberately PARSES it rather
 than failing, which is the only way to name the rule and point at the exact
-space. Were the line to fail to match, the whole header would fall back to
-`Unknown` and report E525 about a header chatter had recognised perfectly
-well, alongside E330 "Missing media_type node" on a line visibly ending in
-`, audio`. Deleting the one space validates clean.
+space. Were the line to fail to match, the whole header would be kept as
+unknown and report generic unparsable content (E316) and an unknown header
+(E525) about a header chatter had recognised perfectly well. Deleting the one
+space validates clean.
 
 ### E768: `@Media` filename cannot be written and read back
 

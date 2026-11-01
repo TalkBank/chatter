@@ -4,16 +4,18 @@ expression: result
 ---
 Ok(
     Comment {
-        content: BulletContent {
-            segments: BulletContentSegments(
-                [
-                    Text(
-                        BulletContentText {
-                            text: "This is a test comment",
-                        },
-                    ),
-                ],
-            ),
-        },
+        content: CommentContent(
+            BulletContent {
+                segments: BulletContentSegments(
+                    [
+                        Text(
+                            BulletContentText {
+                                text: "This is a test comment",
+                            },
+                        ),
+                    ],
+                ),
+            },
+        ),
     },
 )

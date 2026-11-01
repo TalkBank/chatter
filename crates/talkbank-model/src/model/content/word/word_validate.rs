@@ -127,7 +127,6 @@ impl crate::validation::Validate for Word {
                 diagnostics,
             } = GoverningMarker::of(self, context.enclosing_code_switch.as_ref())
                 .resolve_with_declaration(
-                    self,
                     tier_language,
                     context
                         .shared

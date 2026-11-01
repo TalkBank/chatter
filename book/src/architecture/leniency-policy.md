@@ -182,7 +182,7 @@ log, archived, holds the full record).
 
 - **Behaviour**: A file may carry any number of `@Date` headers, anywhere
   headers are allowed, with the same or different values, adjacent or
-  separated. Each is validated on its own (`E516` empty, `E518`
+  separated. Each is validated on its own (`E553` empty, `E518`
   malformed); no rule relates one `@Date` to another.
 - **Parity**: CLAN CHECK accepts the same three shapes: two identical
   `@Date` lines together, two different ones together, and a later
@@ -220,6 +220,25 @@ log, archived, holds the full record).
 - **Consumer boundary**: `assess_wor_timing_sequence` still requires a positive
   interval for every word and names rejected slots. Validation of partial CHAT
   and admission of a complete reusable timing sequence remain distinct.
+
+### Decision 11: Headers written empty, refused (E553)
+
+- **Behaviour**: A colon-bearing header with nothing after its separator, or
+  only blanks, is one model state (`Header::EmptyContent`) that validation
+  always refuses with `E553`, under both parsers and with no per-header
+  exception. `@Languages`, `@Participants` and `@ID` keep their declaration
+  codes, and `@Thumbnail` is `E525` whatever it holds. The bare gem markers
+  (`@Bg`, `@Eg`, `@G` with no colon) remain legal. An unknown value is
+  written by omitting the header.
+- **Relation to CHECK**: CLAN CHECK's missing-text check (CHECK 31) exempts
+  `@` headers, to always allow empty header tiers (see the
+  [CHECK assessment](errors-and-validation/check-parity-audit.md)). Chatter is
+  deliberately stricter: such a header announces content and supplies none,
+  which carries no meaning in CHAT.
+- **Why one rule**: one state, decided once by both parsers before any
+  payload is built, lets every header payload type be nonblank by
+  construction, so no per-header validator has to notice an empty value and
+  none can forget to.
 
 ---
 
@@ -350,6 +369,6 @@ Chatter's source-preservation and tier-replacement boundaries.
 | `grammar/grammar.js` | Inline comments on each leniency decision (follow named rules rather than old line numbers) |
 | `talkbank-model/src/errors/config.rs` | `RuleSelection` API (and the cache key derived from it) |
 | `talkbank-transform/src/presentation.rs` | `PresentationPolicy` and the `ConfigurableErrorSink` adapter |
-| `talkbank-model/src/validation/header/structure.rs` | Header validation: E501, E502, E503, E504-E533 |
+| `talkbank-model/src/validation/header/structure.rs` | Header validation: E501, E502, E503, E504-E553 |
 | `talkbank-model/src/validation/temporal.rs` | Temporal constraint checks (E701, E704), run for every file |
 | `talkbank-model/src/model/content/main_tier.rs` | Main-tier validation path; carries no W210/W211 spacing pass |

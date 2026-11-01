@@ -123,7 +123,7 @@ impl Participant {
     /// # let entry = ParticipantEntry::new(SpeakerCode::new("CHI"), None, ParticipantRole::new("Target_Child"));
     /// # let id = IDHeader::new(LanguageCode::new("eng")?, "CHI", "Target_Child");
     /// let participant = Participant::new(entry, id)
-    ///     .with_birth_date(ChatDate::new("28-JUN-2001"));
+    ///     .with_birth_date(ChatDate::try_new("28-JUN-2001")?);
     ///
     /// assert_eq!(
     ///     participant.birth_date.as_ref().map(|d| d.as_str()),

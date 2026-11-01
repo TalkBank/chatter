@@ -112,8 +112,8 @@ fn speaker_info_special_headers_decode_to_exact_payloads() {
             r#"Birth { participant: SpeakerCode("MOT"), date: Valid(CheckedChatDate { day: 15, month: Mar, year: 1975, raw: "15-MAR-1975" }) }"#.to_string(),
             r#"Birthplace { participant: SpeakerCode("MOT"), place: BirthplaceDescription("Taipei, Taiwan") }"#.to_string(),
             r#"L1Of { participant: SpeakerCode("F_A_T"), language: LanguageCode("ara") }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Speaker info headers: @Birth of, @Birthplace of, @L1 of" })]) } }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: birth_of_header, birthplace_of_header, l1_of_header," }), Continuation, Text(BulletContentText { text: "age_format, multiple @Languages codes, participant with special chars" })]) } }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Speaker info headers: @Birth of, @Birthplace of, @L1 of" })]) }) }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: birth_of_header, birthplace_of_header, l1_of_header," }), Continuation, Text(BulletContentText { text: "age_format, multiple @Languages codes, participant with special chars" })]) }) }"#.to_string(),
         ],
         "special-header content access must reproduce the pre-migration payloads"
     );
@@ -131,8 +131,8 @@ fn number_header_decodes_to_exact_payload() {
     assert_eq!(
         headers,
         vec![
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Episode and inline headers: @New Episode, @G, @Bg, @Eg, @Bck, @Blank, @Number, @Page, @T" })]) } }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: new_episode_header, g_header, bg_header, eg_header," }), Continuation, Text(BulletContentText { text: "bck_header, blank_header, number_header, page_header, t_header" })]) } }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Episode and inline headers: @New Episode, @G, @Bg, @Eg, @Bck, @Blank, @Number, @Page, @T" })]) }) }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: new_episode_header, g_header, bg_header, eg_header," }), Continuation, Text(BulletContentText { text: "bck_header, blank_header, number_header, page_header, t_header" })]) }) }"#.to_string(),
             r#"Number { number: Number2 }"#.to_string(),
         ],
         "special-header content access must reproduce the pre-migration payloads"
@@ -153,8 +153,8 @@ fn recording_quality_header_decodes_to_exact_payload() {
         headers,
         vec![
             r#"RecordingQuality { quality: Quality4 }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Recording environment headers" })]) } }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: recording_quality_header, recording_quality_option," }), Continuation, Text(BulletContentText { text: "room_layout_header, tape_location_header" })]) } }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Recording environment headers" })]) }) }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: recording_quality_header, recording_quality_option," }), Continuation, Text(BulletContentText { text: "room_layout_header, tape_location_header" })]) }) }"#.to_string(),
         ],
         "special-header content access must reproduce the pre-migration payloads"
     );
@@ -173,8 +173,8 @@ fn transcription_header_decodes_to_exact_payload() {
         headers,
         vec![
             r#"Transcription { transcription: EyeDialect }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Metadata headers: @Date, @Location, @Situation, @Activities," }), Continuation, Text(BulletContentText { text: "@Transcriber, @Transcription" })]) } }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: date_header, location_header, situation_header," }), Continuation, Text(BulletContentText { text: "activities_header, transcriber_header, transcription_header" })]) } }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Metadata headers: @Date, @Location, @Situation, @Activities," }), Continuation, Text(BulletContentText { text: "@Transcriber, @Transcription" })]) }) }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: date_header, location_header, situation_header," }), Continuation, Text(BulletContentText { text: "activities_header, transcriber_header, transcription_header" })]) }) }"#.to_string(),
         ],
         "special-header content access must reproduce the pre-migration payloads"
     );
@@ -193,8 +193,8 @@ fn options_header_decodes_to_exact_payload() {
         headers,
         vec![
             r#"Options { options: ChatOptionFlags([Ca]) }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Long feature spans and nonvocal begin/end markers" })]) } }"#.to_string(),
-            r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: long_feature, long_feature_begin, long_feature_begin_marker," }), Continuation, Text(BulletContentText { text: "long_feature_end, long_feature_end_marker, long_feature_label," }), Continuation, Text(BulletContentText { text: "nonvocal, nonvocal_begin, nonvocal_begin_marker, nonvocal_end," }), Continuation, Text(BulletContentText { text: "nonvocal_end_marker, nonvocal_simple" })]) } }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Long feature spans and nonvocal begin/end markers" })]) }) }"#.to_string(),
+            r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: long_feature, long_feature_begin, long_feature_begin_marker," }), Continuation, Text(BulletContentText { text: "long_feature_end, long_feature_end_marker, long_feature_label," }), Continuation, Text(BulletContentText { text: "nonvocal, nonvocal_begin, nonvocal_begin_marker, nonvocal_end," }), Continuation, Text(BulletContentText { text: "nonvocal_end_marker, nonvocal_simple" })]) }) }"#.to_string(),
         ],
         "special-header content access must reproduce the pre-migration payloads"
     );

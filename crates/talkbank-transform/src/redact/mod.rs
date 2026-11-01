@@ -68,6 +68,14 @@ mod word;
 /// Marker text emitted in place of redacted free-text content.
 pub(crate) const REDACTED_TEXT: &str = "[redacted]";
 
+/// [`REDACTED_TEXT`] admitted as header content, at compile time, for the
+/// header payload types that cannot hold blank text.
+pub(crate) const REDACTED_CONTENT: talkbank_model::model::HeaderText<'static> =
+    match talkbank_model::model::HeaderContent::classify_literal(REDACTED_TEXT) {
+        Ok(text) => text,
+        Err(_) => panic!("the redaction placeholder is not blank"),
+    };
+
 pub use document::{SanitizedDocument, sanitize};
 pub use error::{RedactError, SourceSanitizationError};
 pub use placeholder::{PlaceholderIndex, PlaceholderToken};

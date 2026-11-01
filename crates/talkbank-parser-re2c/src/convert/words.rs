@@ -31,14 +31,11 @@ pub(crate) fn body_item_to_word_content(
         WordBodyItem::CliticBoundary(s) => WordContent::CliticBoundary(
             talkbank_model::model::WordCliticBoundary::new(super::locate(source, s)),
         ),
-        WordBodyItem::OverlapPoint(kind, s) => {
-            let index = s
-                .chars()
-                .nth(1)
-                .and_then(|c| c.to_digit(10))
-                .map(OverlapIndex::new);
-            WordContent::OverlapPoint(OverlapPoint::new(super::locate(source, s), *kind, index))
-        }
+        WordBodyItem::OverlapPoint(point) => WordContent::OverlapPoint(OverlapPoint::new(
+            super::locate(source, point.text()),
+            point.kind(),
+            point.index(),
+        )),
         WordBodyItem::CaElement(kind, s) => {
             WordContent::CAElement(CAElement::new(super::locate(source, s), *kind))
         }

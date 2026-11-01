@@ -34,8 +34,8 @@ prototyped first, not granted ownership of its syntax or recovery types.
   Commit tsgu, pin, regenerate through `just traversal-gen` and
   `just conformance-gen`, then commit the migrated consumers; the module
   header carries the generator's revision, so the order is not optional.
-- `generated_traversal_is_current` hashes the grammar JSON; a passing check
-  proves what it hashes and nothing else. A generator API change requires
+- `generated_traversal_is_current` hashes the grammar contract; a passing
+  check proves what it hashes and nothing else. A generator API change requires
   consumer migration even when the grammar is unchanged.
 
 ## Locations
@@ -66,6 +66,13 @@ prototyped first, not granted ownership of its syntax or recovery types.
   per-position handling; both are load-bearing. Never drop a recovery node,
   never fabricate a model value for one, never read a `MISSING` node as the
   value it stands for.
+- Header content reaches the model only through
+  `parser_helpers/header_slots.rs`: `HeaderSite::complete_body` is the one
+  decision that the header holds no ERROR, and only its `CompleteBody` proof
+  lets `read_body` (or `read_empty_body`, a gem's bare form, the `@Types`
+  field group) lower content or the empty state. A header holding an ERROR is
+  kept as `Header::Unknown` with its text, never built from the part of a
+  body before the ERROR. Do not add a header reader that bypasses that proof.
 - Diagnostics are architecture-native: derived from CST kinds, source-bound
   recovery evidence and the owning traversal's context. Matching another
   validator's code, wording or count is not a goal. A construct or parser bug

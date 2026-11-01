@@ -4,17 +4,18 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Linking>
 
-use crate::generated_traversal::{
-    AsRawNode, MediaHeaderNode, ReadableSlot, SourceBound, SourceSlotView,
-};
+use crate::generated_traversal::{AsRawNode, MediaHeaderNode, ReadableSlot, SourceBound};
 
 use crate::error::ErrorSink;
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::{
-    ContentSlot, HeaderSite, read_admitted_content, surface_displaced,
+    Body, ContentSlot, HeaderSite, read_admitted_content, read_body, surface_displaced,
 };
-use crate::parser::typed_cst::CstFailure;
-use talkbank_model::model::{Header, MediaFilename, MediaHeader, MediaStatus, MediaType};
+use crate::parser::typed_cst::{CstFailure, ExtractCanonical};
+use talkbank_model::ParseOutcome;
+use talkbank_model::model::{
+    Header, MediaFilename, MediaHeader, MediaStatus, MediaType, PlainKind, StructuredKind,
+};
 
 /// The fix every `@Media` recovery suggests.
 const MEDIA_FIX: &str = "Expected @Media:\tfilename, audio|video[, status]";
@@ -26,23 +27,46 @@ const MEDIA_FIX: &str = "Expected @Media:\tfilename, audio|video[, status]";
 pub fn parse_media_header<'tree>(
     typed: SourceBound<'tree, '_, MediaHeaderNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<Header, CstFailure> {
+) -> Result<ParseOutcome<Header>, CstFailure> {
     let source = typed.source();
     let site = HeaderSite::bound(typed);
 
-    // The envelope proves its composite body present, not the validity of
-    // the filename, media kind or other nested fields.
+    // The body is optional in the grammar: an omitted one is the one
+    // empty-content state, refused by validation (E553). A present body is
+    // not proof of a valid filename, media kind or other nested field. An
+    // ERROR where the body belongs is unparsable text, the whole-tree
+    // backstop's to report, and the line is kept as an unknown header with
+    // its text.
     let header_children = crate::parser::typed_cst::extract_envelope(typed)?;
-    let SourceSlotView::Present(contents) = header_children.field_child_2().slot().view();
     surface_displaced(
         &header_children.children().unexpected,
         "media_header",
         source,
         errors,
     );
+    let words = ContentSlot {
+        missing: "Missing @Media content",
+        suggested_fix: Some(MEDIA_FIX),
+    };
+    let contents = match read_body(
+        &site,
+        header_children.field_child_2().slot(),
+        &words,
+        errors,
+    ) {
+        Ok(Body::Empty(separator)) => {
+            return Ok(ParseOutcome::Parsed(
+                PlainKind::Structured(StructuredKind::Media).empty(separator),
+            ));
+        }
+        Ok(Body::Written { body, .. }) => body.into_inner(),
+        Err(failure) => return Ok(failure.into_outcome(&site, errors)),
+    };
 
-    // Child slots retain the same source as their admitted body.
-    let admitted = contents.read()?.extract().admit_ranges()?;
+    // Child slots retain the same source as their admitted body. Read under
+    // the admitted kind proof: the filename, type and status kinds are
+    // narrowed, so none of them can be MISSING.
+    let admitted = contents.extract_canonical()?.admit_ranges()?;
     let contents_children = admitted.children();
 
     // Payload recovery reports once and retains Header::Unknown. Finite
@@ -57,7 +81,7 @@ pub fn parse_media_header<'tree>(
         errors,
     ) {
         Ok(text) => text,
-        Err(failure) => return Ok(failure.into_header()),
+        Err(failure) => return Ok(ParseOutcome::Parsed(failure.into_header())),
     };
 
     // Whitespace between the filename and the comma, recorded as provenance
@@ -85,8 +109,17 @@ pub fn parse_media_header<'tree>(
         },
         errors,
     ) {
-        Ok(text) => MediaType::from_text(text),
-        Err(failure) => return Ok(failure.into_header()),
+        Ok(text) => match MediaType::try_new(text) {
+            Ok(media_type) => media_type,
+            Err(_) => {
+                return Ok(blank_field(
+                    &site,
+                    "Blank media type in @Media header",
+                    errors,
+                ));
+            }
+        },
+        Err(failure) => return Ok(ParseOutcome::Parsed(failure.into_header())),
     };
 
     // Preserve the existing optional-group policy. The sequence slot cannot
@@ -112,8 +145,17 @@ pub fn parse_media_header<'tree>(
             },
             errors,
         ) {
-            Ok(text) => Some(MediaStatus::from_text(text)),
-            Err(failure) => return Ok(failure.into_header()),
+            Ok(text) => match MediaStatus::try_new(text) {
+                Ok(status) => Some(status),
+                Err(_) => {
+                    return Ok(blank_field(
+                        &site,
+                        "Blank media status in @Media header",
+                        errors,
+                    ));
+                }
+            },
+            Err(failure) => return Ok(ParseOutcome::Parsed(failure.into_header())),
         },
         None => None,
     };
@@ -144,7 +186,10 @@ pub fn parse_media_header<'tree>(
     let filename = match MediaFilename::parse(filename) {
         Ok(filename) => filename,
         Err(err) => {
-            return Ok(site.unknown(format!("Invalid @Media filename: {err}"), Some(MEDIA_FIX)));
+            return Ok(ParseOutcome::Parsed(site.unknown(
+                format!("Invalid @Media filename: {err}"),
+                Some(MEDIA_FIX),
+            )));
         }
     };
 
@@ -155,5 +200,24 @@ pub fn parse_media_header<'tree>(
     if let Some(s) = status {
         media_header = media_header.with_status(s);
     }
-    Ok(Header::Media(media_header))
+    Ok(ParseOutcome::Parsed(Header::Media(media_header)))
+}
+
+/// A `@Media` field that is present but blank (a trailing comma with nothing
+/// after it, which the grammar holds as a zero-width field rather than a
+/// recovery node): a malformed header, E316 and an unknown header, exactly
+/// as the re2c field combinator refuses it. Never an unsupported value named
+/// `""`.
+fn blank_field(
+    site: &HeaderSite<'_, '_>,
+    reason: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Header> {
+    errors.report(talkbank_model::ParseError::at_span(
+        talkbank_model::ErrorCode::UnparsableContent,
+        talkbank_model::Severity::Error,
+        span_of(site.actual()),
+        reason,
+    ));
+    ParseOutcome::Parsed(site.unknown(reason, Some(MEDIA_FIX)))
 }

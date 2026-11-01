@@ -34,13 +34,30 @@ Modify `grammar.js` in the `grammar/` directory. Key design principles:
 - Precedence annotations to resolve ambiguities
 - Named rules for all semantically meaningful nodes
 
-### 2. Generate the Parser
+### 2. Generate the Parser and the Grammar Contract
 
 ```bash
-(cd grammar && tree-sitter generate)
+TREE_SITTER_DIR=/path/to/tree-sitter just grammar-gen
 ```
 
-This produces `src/parser.c` and `src/node-types.json`. Never edit these files by hand.
+This produces `src/parser.c`, `src/grammar.json`, `src/node-types.json` and
+`src/grammar-contract.json`. Never edit these files by hand.
+
+`grammar-contract.json` is the typed traversal generator's one input: the
+grammar's rule trees and the facts Tree-sitter itself computed about them
+(which symbols are hidden or inline, the supertypes, the extras, the node
+kinds). Only a Tree-sitter build that adds it writes it, through
+`generate --grammar-contract`; that maintainer-provided build's other outputs
+are byte-identical to the Tree-sitter release it is based on.
+`tree-sitter-revision` pins its full commit, as `tsgu-revision` pins the
+traversal generator's. `TREE_SITTER_DIR` selects its checkout and has no
+default. The recipe refuses a non-root, dirty or wrong-revision checkout,
+builds `tree-sitter-cli` with `cargo build --locked`, uses the executable
+Cargo reports, and requires all four files: an upstream CLI writes the first
+three, so selecting one fails instead of leaving the contract stale. The
+producer is never chosen by `PATH` order. `just grammar-generate-check`, part
+of the gate, does the same in staging and reports a stale file without
+rewriting it.
 
 `tree-sitter test` does NOT detect a stale `parser.c`, so nothing downstream
 can be trusted until this has run.
@@ -48,11 +65,12 @@ can be trusted until this has run.
 ### 3. Regenerate the Typed Traversal
 
 `crates/talkbank-parser/src/generated_traversal.rs` is the single generated
-visitor the whole production parser dispatches through, produced from the
-grammar's JSON by `tree-sitter-grammar-utils`. A grammar change that alters
-node types or their positions makes it stale. A TSGU update also requires
-regeneration and consumer integration, even when both grammar JSON hashes are
-unchanged. Grammar-hash checks alone do not prove generator currency. Do not
+visitor the whole production parser dispatches through, produced from
+`grammar/src/grammar-contract.json` by `tree-sitter-grammar-utils`. A grammar
+change that alters node types or their positions makes it stale. A TSGU update
+also requires regeneration and consumer integration, even when the contract's
+hash is unchanged. A contract-hash check alone does not prove generator
+currency. Do not
 declare an update complete while retaining an older traversal to avoid its
 API migration; the generated source identity must name the reviewed generator.
 
@@ -72,8 +90,8 @@ TSGU_DIR=/path/to/tree-sitter-grammar-utils just traversal-gen
 just conformance-gen
 ```
 
-`TSGU_DIR` selects the generator checkout; the recipe defaults to the `tsgu`
-directory in the user's home directory. The recipe requires Python 3.11 or later.
+`TSGU_DIR` selects the generator checkout and has no default. The recipe
+requires Python 3.11 or later.
 It refuses a non-root, dirty or wrong-revision generator checkout, builds its
 `generate_typed_traversal` example with `cargo build --locked`, and reads edition
 and toolchain from Chatter's own manifests rather than a copied command. Cargo
@@ -123,8 +141,8 @@ the recipe never fetches, resets or silently selects a newer generator. Regenera
 Chatter, migrate the handwritten consumers of the
 changed API, and exercise the affected spec/reference workflows. A local
 generator commit is not publication. Grammar changes additionally require
-`tree-sitter generate` before traversal regeneration; a generator-only change
-does not require changing the grammar.
+`just grammar-gen` before traversal regeneration; a generator-only change does
+not require changing the grammar.
 
 The generated module owns both CST shape and source-binding capabilities.
 `ParsedSource` owns the tree/input association; its `bind_typed` transition
@@ -207,9 +225,10 @@ children are immediately separated from their source is not a completed
 consumer migration.
 
 **The staleness guard proves less than it looks.**
-`generated_traversal_is_current` recomputes the digests of `grammar.json` and
-`node-types.json`, so it catches a forgotten regeneration after a GRAMMAR
-change. Its inputs are those two files, so it cannot see the generator at all:
+`generated_traversal_is_current` recomputes the digest of
+`grammar-contract.json` and requires the header to state that no annotations
+were used, so it catches a forgotten regeneration after a GRAMMAR change. Its
+input is that file, so it cannot see the generator at all:
 a module emitted by an older backend passes indefinitely, and the guard is not
 wrong to pass it. It is answering a different question from the one its name
 invites you to ask.
@@ -311,7 +330,7 @@ For small, isolated syntax additions, the grammar workflow should stay local:
 ### Changing a Rule
 
 1. Modify the rule in `grammar.js`
-2. `tree-sitter generate && tree-sitter test`
+2. `just grammar-gen` (with `TREE_SITTER_DIR`), then `just grammar-test`
 3. Update Rust parser if CST node structure changed
 4. Update spec examples if the expected CST changed
 5. Run the current local verification sweep from `contributing/dev-checks.md`

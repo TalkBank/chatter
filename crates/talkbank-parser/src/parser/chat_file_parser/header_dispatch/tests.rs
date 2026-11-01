@@ -144,6 +144,7 @@ fn header_comment_with_bullet() {
     let header = result.expect("header should parse");
     match header {
         Header::Comment { content } => {
+            let content = content.as_bullet_content();
             assert_eq!(content.segments.len(), 2, "expected text + bullet segments");
             assert!(matches!(
                 &content.segments[0],

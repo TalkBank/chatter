@@ -91,11 +91,15 @@ strict prefix versus a longer malformed value. See
 
 ## Generated Artifacts
 
-Running `tree-sitter generate` produces:
+Running `just grammar-gen` produces, through the pinned Tree-sitter build:
 - `src/parser.c`: the C parser
+- `src/grammar.json`: the grammar as Tree-sitter reads it
 - `src/node-types.json`: node type metadata
+- `src/grammar-contract.json`: the grammar contract, the typed traversal
+  generator's one input
 
-`crates/talkbank-parser/src/node_types.rs` is GENERATED from it, by
+`crates/talkbank-parser/src/node_types.rs` is GENERATED from
+`src/node-types.json`, by
 `scripts/generate-node-types.js`, which also reads `scripts/node-type-docs.json`
 for the per-constant doc comments:
 

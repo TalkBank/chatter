@@ -25,8 +25,10 @@ pub(crate) mod time_values;
 
 // Re-export all public types
 pub use age::{AgeComponents, AgeValue};
-pub use date::{ChatDate, CheckedChatDate, Month};
-pub(crate) use date::{DateDigitError, DateDigits};
+pub use date::{
+    ChatDate, CheckedChatDate, DateDigitProblem, DateRefusal, DayProblem, InvalidChatDate, Month,
+    MonthProblem,
+};
 pub use header_strings::*;
 pub use language::{LanguageCode, LanguageCodeError, RegisteredLanguageCode};
 pub use multiple_languages::{MultipleLanguageCodes, TooFewLanguageCodes};

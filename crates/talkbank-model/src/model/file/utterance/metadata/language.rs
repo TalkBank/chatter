@@ -92,8 +92,7 @@ impl Utterance {
                     WordItem::Separator(_) => return,
                 };
                 let governor = GoverningMarker::of(word, scope.span());
-                let outcome =
-                    governor.resolve_with_declaration(word, tier_language, declared_languages);
+                let outcome = governor.resolve_with_declaration(tier_language, declared_languages);
                 let source = governor.source(&outcome.resolution, &self.utterance_language);
                 metadata.add_word(
                     resolution_to_metadata_languages(&outcome.resolution),

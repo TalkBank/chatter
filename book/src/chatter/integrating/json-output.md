@@ -463,11 +463,27 @@ Headers use the `header` object with a `type` discriminator:
 | `"participants"` | `@Participants` | `entries` (`speaker_code`, `details`) |
 | `"id"` | `@ID` | `language`, `corpus`, `speaker`, `role`, `age`, `sex`, ... |
 | `"media"` | `@Media` | `filename`, `media_type`, `status` |
-| `"comment"` | `@Comment` | `content` (`BulletContent`) |
+| `"comment"` | `@Comment` | `content` (`CommentContent`: the `BulletContent` object, never blank) |
 | `"date"` | `@Date` | `date` |
-| `"options"` | `@Options` | `options` (array of strings) |
+| `"options"` | `@Options` | `options` (array of option strings, at least one) |
+| `"empty_content"` | any colon-bearing header written with nothing after its colon | `header` (the header kind), plus `participant` for `birth`, `birthplace` and `l1_of` |
+| `"unknown"` | a header line that could not be read in full, or a header name Chatter does not support | `text` (the line as written), `parse_reason`, `suggested_fix` |
 
 See the [JSON Schema](json-schema.md) for the complete list of header types and fields.
+
+An empty header is one object whatever the header, for example
+`{"type":"empty_content","header":"date"}` or
+`{"type":"empty_content","header":"birth","participant":"CHI"}`. Validation
+always refuses it (E553). Deserialization refuses a qualified kind without its
+participant and a participant on a plain kind. Header payload strings are
+never blank: every header-content string, `date`, the `@Time Duration` and
+`@Time Start` values, the closed vocabularies (`@Number`,
+`@Recording Quality`, `@Transcription`, the `@Media` type and status, each
+`@Options` flag) and the `@L1 of` language are refused when empty or only
+whitespace, and their schemas say `minLength: 1`. A `@Comment` whose
+`BulletContent` writes nothing but whitespace and continuations is refused
+too. To express a header with no content, use `empty_content`; to express no
+header, omit it.
 
 Participant declarations keep the observed name and role inside `details`:
 

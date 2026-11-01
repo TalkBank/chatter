@@ -66,10 +66,12 @@ mod non_empty_string;
 pub mod participant;
 mod provenance;
 mod time;
+mod unsupported_spelling;
 
 // Re-export RecoveryText
 pub use non_empty_string::{EmptyText, NonEmptyLiteral, NonEmptyStr, NonEmptyString, RecoveryText};
 pub use time::MediaTiming;
+pub use unsupported_spelling::UnsupportedSpelling;
 
 // Re-export provenance types
 pub use provenance::{
@@ -104,26 +106,35 @@ pub use header::{
     AgeValue,
     BackgroundDescription,
     BirthplaceDescription,
+    BlankContent,
     CaOptionEffect,
     ChatDate,
     ChatOptionFlag,
     ChatOptionFlags,
     CheckedChatDate,
     ColorWordList,
+    CommentContent,
     CorpusName,
     CustomIdField,
     DesignType,
     EducationDescription,
+    EmptyHeader,
     Ethnicity,
+    FixedKind,
     FontSpec,
     GemEndFailure,
     GemEvent,
+    GemKind,
     GemLabel,
     GemPair,
     GemState,
     GroupName,
     GroupType,
     Header,
+    HeaderContent,
+    HeaderKind,
+    HeaderPrefix,
+    HeaderText,
     IDHeader,
     InvalidPageNumber,
     InvalidTypesField,
@@ -133,6 +144,8 @@ pub use header::{
     LanguageHeaderFailure,
     LanguageName,
     LocationDescription,
+    MALFORMED_HEADER_CONTENT,
+    MalformedOptionList,
     MediaFilename,
     MediaFilenameError,
     MediaFilenameProblem,
@@ -149,6 +162,8 @@ pub use header::{
     ParticipantName,
     ParticipantRole,
     PidValue,
+    PlainKind,
+    QualifiedKind,
     RecordingQuality,
     RegisteredLanguageCode,
     RoomLayoutDescription,
@@ -157,8 +172,10 @@ pub use header::{
     Sex,
     SituationDescription,
     SpeakerCode,
+    StructuredKind,
     TDescription,
     TapeLocationDescription,
+    TextKind,
     TimeDurationValue,
     TimeSegment,
     TimeStartValue,
@@ -175,6 +192,7 @@ pub use header::{
     VideoSpec,
     WarningText,
     WindowGeometry,
+    WrittenSeparator,
 };
 
 // Re-export content types
@@ -438,11 +456,33 @@ mod tests {
     /// Existing model enums with `Unsupported` get `Warning` tag via derive.
     #[test]
     fn test_existing_enums_validation_tagged() {
-        assert!(RecordingQuality::from_text("1").validation_tag() == ValidationTag::Clean);
-        assert!(RecordingQuality::from_text("unknown").has_validation_issue());
-        assert!(MediaType::from_text("audio").validation_tag() == ValidationTag::Clean);
-        assert!(MediaType::from_text("unknown").has_validation_issue());
-        assert!(Number::from_text("1").validation_tag() == ValidationTag::Clean);
-        assert!(Number::from_text("unknown").has_validation_issue());
+        assert!(
+            RecordingQuality::try_new("1")
+                .expect("nonblank")
+                .validation_tag()
+                == ValidationTag::Clean
+        );
+        assert!(
+            RecordingQuality::try_new("unknown")
+                .expect("nonblank")
+                .has_validation_issue()
+        );
+        assert!(
+            MediaType::try_new("audio")
+                .expect("nonblank")
+                .validation_tag()
+                == ValidationTag::Clean
+        );
+        assert!(
+            MediaType::try_new("unknown")
+                .expect("nonblank")
+                .has_validation_issue()
+        );
+        assert!(Number::try_new("1").expect("nonblank").validation_tag() == ValidationTag::Clean);
+        assert!(
+            Number::try_new("unknown")
+                .expect("nonblank")
+                .has_validation_issue()
+        );
     }
 }

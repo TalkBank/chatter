@@ -34,7 +34,7 @@ fn header_round_trip_languages() {
 #[test]
 fn header_round_trip_comment() {
     let header = Header::Comment {
-        content: talkbank_model::model::BulletContent::from_text("test"),
+        content: talkbank_model::model::CommentContent::try_from_text("test").expect("a comment"),
     };
     let output = header.to_chat();
     assert_eq!(output, "@Comment:\ttest");

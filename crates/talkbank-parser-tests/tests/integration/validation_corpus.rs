@@ -391,16 +391,17 @@ fn gra_subtype_specs_preserve_label_and_diagnostic_location() {
     }
 }
 
-/// CHECK accepts an unknown birth date; retain its actual typed header rather
-/// than silently replacing it with a missing header or a fabricated date.
+/// A birth header with no date parses as empty content that keeps the
+/// participant it names (not a dropped header or a fabricated date), and
+/// validation refuses it with the one empty-header rule.
 #[test]
-fn empty_birth_date_spec_preserves_typed_header_and_validation() {
-    use talkbank_model::model::Header;
+fn empty_birth_header_spec_keeps_its_participant_and_is_refused() {
+    use talkbank_model::model::{EmptyHeader, Header, QualifiedKind};
     let source = std::fs::read_to_string(
         workspace_root()
-            .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E545_8.cha"),
+            .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E553_5.cha"),
     )
-    .expect("canonical empty birth date");
+    .expect("canonical empty birth header");
     let parser = TreeSitterParser::new().expect("parser");
     let errors = ErrorCollector::new();
     let file = parser.parse_chat_file_streaming(&source, &errors);
@@ -408,19 +409,28 @@ fn empty_birth_date_spec_preserves_typed_header_and_validation() {
     let births: Vec<_> = file
         .headers()
         .filter_map(|header| match header {
-            Header::Birth { participant, date } => Some((participant, date)),
+            Header::EmptyContent(EmptyHeader::Qualified {
+                kind: QualifiedKind::Birth,
+                participant,
+                ..
+            }) => Some(participant),
+            Header::Birth { .. } => panic!("an empty birth header has no date to model"),
             _ => None,
         })
         .collect();
     assert_eq!(births.len(), 1);
-    assert_eq!(births[0].0.as_str(), "CHI");
-    assert_eq!(births[0].1.as_str(), "");
+    assert_eq!(births[0].as_str(), "CHI");
     file.validate_with_rules(
         talkbank_model::RuleSelection::new(),
         &errors,
         TranscriptName::Anonymous,
     );
-    assert!(errors.is_empty());
+    let codes: Vec<_> = errors
+        .into_vec()
+        .into_iter()
+        .map(|error| error.code.to_string())
+        .collect();
+    assert_eq!(codes, ["E553"]);
 }
 
 /// Optional linker policy and diagnostic locations stay source-bound across

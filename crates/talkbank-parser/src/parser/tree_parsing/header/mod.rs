@@ -40,10 +40,7 @@ use tree_sitter::Node;
 // Re-export all header parsing functions
 pub use id::parse_id_header;
 pub(crate) use metadata::recover_languages_header;
-pub use metadata::{
-    parse_languages_header, parse_media_header, parse_pid_header, parse_situation_header,
-    parse_types_header,
-};
+pub use metadata::{parse_languages_header, parse_media_header, parse_types_header};
 pub use participants::parse_participants_header;
 
 /// Whether an `ERROR` recovery node consists solely of comma separators (with

@@ -18,10 +18,8 @@ use crate::ErrorSink;
 use crate::model::Header;
 use crate::validation::{Validate, ValidationContext};
 
-use super::checkers::{
-    check_birth_date_header, check_comment_warning, check_date_header, check_id_header,
-};
-use super::metadata::{check_time_duration_format, check_time_start_format};
+use super::checkers::{DateHeader, check_empty_header_content, check_id_header};
+use super::metadata::{check_time_duration_format, check_time_start_format, report_invalid_date};
 use super::unknown::check_unknown_header;
 
 /// Validate a parsed `Header` and emit diagnostics through `errors`.
@@ -95,15 +93,26 @@ pub(crate) fn check_header(
             // set as @Languages / @ID, anchored at this header's location.
             language.report_code_issues(crate::DiagnosticLocation::from(location), errors);
         }
+        Header::EmptyContent(empty) => {
+            check_empty_header_content(empty, location, errors);
+        }
         Header::Date { date } => {
-            check_date_header(date.as_str(), location, errors);
+            if let Some(invalid) = date.invalidity() {
+                report_invalid_date(invalid, DateHeader::Date, location, errors);
+            }
         }
         Header::Birth { date, .. } => {
-            check_birth_date_header(date.as_str(), location, errors);
+            if let Some(invalid) = date.invalidity() {
+                report_invalid_date(invalid, DateHeader::BirthOf, location, errors);
+            }
         }
+        // The comment text is opaque CHAT data, not a directive for the
+        // validator; only its media bullets carry a rule.
         Header::Comment { content } => {
-            check_comment_warning(content, location, errors);
-            content.segments.validate(context, errors);
+            content
+                .as_bullet_content()
+                .segments
+                .validate(context, errors);
         }
         Header::Unknown {
             text,
@@ -119,7 +128,6 @@ pub(crate) fn check_header(
             );
         }
         Header::Options { options } => {
-            options.validate(context, errors);
             check_unsupported_options(options, location, errors);
         }
         Header::Media(media_header) => {
@@ -154,10 +162,36 @@ pub(crate) fn check_header(
                 check_time_start_format(invalid, location, errors);
             }
         }
-        Header::Types(_) => {
-            // No validation, @Types fields have no fixed vocabulary.
-        }
-        _ => {}
+        // No payload rule: @Types fields have no fixed vocabulary, the
+        // free-text payloads are nonempty by construction, the structural
+        // markers carry nothing, and a page number is admitted when built.
+        // Listed rather than caught by `_` so a new header kind has to say
+        // whether it has a rule.
+        Header::Types(_)
+        | Header::Utf8
+        | Header::Begin
+        | Header::End
+        | Header::Pid { .. }
+        | Header::Situation { .. }
+        | Header::BeginGem { .. }
+        | Header::EndGem { .. }
+        | Header::LazyGem { .. }
+        | Header::Font { .. }
+        | Header::Window { .. }
+        | Header::ColorWords { .. }
+        | Header::NewEpisode
+        | Header::TapeLocation { .. }
+        | Header::Location { .. }
+        | Header::RoomLayout { .. }
+        | Header::Birthplace { .. }
+        | Header::Blank
+        | Header::Transcriber { .. }
+        | Header::Warning { .. }
+        | Header::Activities { .. }
+        | Header::Bck { .. }
+        | Header::Page { .. }
+        | Header::Videos { .. }
+        | Header::T { .. } => {}
     }
 }
 
@@ -175,7 +209,11 @@ fn check_unsupported_options(
                 crate::ErrorCode::UnsupportedOption,
                 crate::Severity::Error,
                 crate::DiagnosticLocation::from(location),
-                crate::ErrorContext::new(value, crate::Span::new(0, value.len()), "option_name"),
+                crate::ErrorContext::new(
+                    value.as_str(),
+                    crate::Span::new(0, value.len()),
+                    "option_name",
+                ),
                 format!("Unsupported @Options value: '{}'", value),
             )
             .with_suggestion("Supported options (per CLAN depfile.cut): CA, NoAlign");
@@ -195,7 +233,11 @@ fn check_unsupported_media(
             crate::ErrorCode::UnsupportedMediaType,
             crate::Severity::Error,
             crate::DiagnosticLocation::from(location),
-            crate::ErrorContext::new(value, crate::Span::new(0, value.len()), "media_type"),
+            crate::ErrorContext::new(
+                value.as_str(),
+                crate::Span::new(0, value.len()),
+                "media_type",
+            ),
             format!("Unsupported @Media type: '{}'", value),
         )
         .with_suggestion("Supported media types: audio, video, missing");
@@ -207,7 +249,11 @@ fn check_unsupported_media(
             crate::ErrorCode::UnsupportedMediaStatus,
             crate::Severity::Error,
             crate::DiagnosticLocation::from(location),
-            crate::ErrorContext::new(value, crate::Span::new(0, value.len()), "media_status"),
+            crate::ErrorContext::new(
+                value.as_str(),
+                crate::Span::new(0, value.len()),
+                "media_status",
+            ),
             format!("Unsupported @Media status: '{}'", value),
         )
         .with_suggestion("Supported media status values: unlinked, missing, notrans");
@@ -252,7 +298,11 @@ fn check_unsupported_number(
             crate::ErrorCode::UnsupportedNumber,
             crate::Severity::Error,
             crate::DiagnosticLocation::from(location),
-            crate::ErrorContext::new(value, crate::Span::new(0, value.len()), "number_option"),
+            crate::ErrorContext::new(
+                value.as_str(),
+                crate::Span::new(0, value.len()),
+                "number_option",
+            ),
             format!("Unsupported @Number value: '{}'", value),
         )
         .with_suggestion("Supported values: 1, 2, 3, 4, 5, more, audience");
@@ -272,7 +322,7 @@ fn check_unsupported_recording_quality(
             crate::Severity::Error,
             crate::DiagnosticLocation::from(location),
             crate::ErrorContext::new(
-                value,
+                value.as_str(),
                 crate::Span::new(0, value.len()),
                 "recording_quality_option",
             ),
@@ -295,7 +345,7 @@ fn check_unsupported_transcription(
             crate::Severity::Error,
             crate::DiagnosticLocation::from(location),
             crate::ErrorContext::new(
-                value,
+                value.as_str(),
                 crate::Span::new(0, value.len()),
                 "transcription_option",
             ),

@@ -1889,7 +1889,7 @@ impl_inspect_struct!(TranscriptionHeaderChildren {
     child_3
 });
 impl_inspect_struct!(TranscriptionOptionChildren { content });
-impl_inspect_struct!(TypesHeaderChildren {
+impl_inspect_struct!(TypesHeaderChild2Children {
     child_0,
     child_1,
     child_2,
@@ -1898,10 +1898,13 @@ impl_inspect_struct!(TypesHeaderChildren {
     child_5,
     child_6,
     child_7,
-    child_8,
-    child_9,
-    child_10,
-    child_11
+    child_8
+});
+impl_inspect_struct!(TypesHeaderChildren {
+    child_0,
+    child_1,
+    child_2,
+    child_3
 });
 impl_inspect_struct!(UnsupportedDependentTierChildren {
     child_0,

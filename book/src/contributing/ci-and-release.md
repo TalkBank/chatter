@@ -22,7 +22,8 @@ missing release entry fails before compilation.
 
 After changing grammar, spec, or a registry, run `just regen`, then `just test`.
 The regeneration recipe builds derived artifacts in dependency order; currency
-tests detect stale output. Never hand-edit generated artifacts.
+tests detect stale output. It needs `TREE_SITTER_DIR` and `TSGU_DIR` naming
+the two pinned generator checkouts (see [Setup](setup.md)). Never hand-edit generated artifacts.
 
 See [Spec Workflow](spec-workflow.md) and `spec/AGENTS.md` for the current
 source-of-truth guidance.

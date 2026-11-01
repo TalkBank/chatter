@@ -10,6 +10,7 @@ use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 use super::BulletContentSegment;
+use crate::model::HeaderContent;
 
 /// Content that may contain inline media bullets interspersed with text.
 ///
@@ -135,28 +136,52 @@ impl BulletContent {
         }
     }
 
-    /// Returns `true` when the payload carries no meaningful content.
+    /// Returns `true` when the payload carries no meaningful content: its
+    /// CHAT form writes no character that is not whitespace.
     ///
-    /// Text segments that are empty or whitespace-only count as nothing, so a
-    /// tier written as `%com:` followed by a tab and spaces declares nothing,
-    /// exactly as `%eng:` with the same bytes does (the text tiers' predicate
-    /// trims); a bullet segment is always content. Until 2026-09-08 only a
-    /// single EMPTY segment counted, so `%com` and `%add` escaped E756 on
-    /// whitespace that CLAN CHECK 31 rejects (`check_FoundText` skips ASCII
-    /// space, tab and newline before looking for text). Whitespace here is
-    /// Unicode whitespace, as on the free-text tiers, so a payload of
-    /// non-breaking spaces alone also declares nothing; CHECK accepts that
-    /// one, and chatter is deliberately stricter. [`Self::from_text`] can
-    /// build the empty segment; [`Self::empty`] carries no segment at all.
+    /// The test is the writer itself, run against a probe that stops at the
+    /// first fragment [`HeaderContent::classify`] calls text, the one
+    /// emptiness decision header content takes too, so "what this writes"
+    /// and "whether it is empty" cannot drift apart, and nothing is
+    /// allocated. A text run that is empty or only whitespace, and a
+    /// continuation (a line break and a tab), write nothing a reader can see,
+    /// so a tier written as `%com:` followed by a tab and spaces, or by a
+    /// continuation alone, declares nothing, exactly as `%eng:` with the same
+    /// bytes does; a bullet, an unparsed bullet and a picture each write a
+    /// visible delimiter and are content.
+    ///
+    /// Until 2026-09-08 only a single EMPTY segment counted, so `%com` and
+    /// `%add` escaped E756 on whitespace that CLAN CHECK 31 rejects
+    /// (`check_FoundText` skips ASCII space, tab and newline before looking
+    /// for text), and until 2026-10-31 a lone continuation counted as
+    /// content. Whitespace here is Unicode whitespace, as on the free-text
+    /// tiers, so a payload of non-breaking spaces alone also declares
+    /// nothing; CHECK accepts that one, and chatter is deliberately stricter.
+    /// [`Self::from_text`] can build the empty segment; [`Self::empty`]
+    /// carries no segment at all.
     pub fn is_empty(&self) -> bool {
-        self.segments.iter().all(|segment| match segment {
-            BulletContentSegment::Text(text) => text.text.trim().is_empty(),
-            // A bullet, a picture and a continuation marker are each a payload.
-            BulletContentSegment::Bullet(_)
-            | BulletContentSegment::UnparsedBullet(_)
-            | BulletContentSegment::Picture(_)
-            | BulletContentSegment::Continuation => false,
-        })
+        match self.write_chat(&mut FirstText) {
+            Err(FoundText) => false,
+            Ok(()) => true,
+        }
+    }
+}
+
+/// A [`ChatWriter`](crate::model::ChatWriter) that stops at the first
+/// fragment carrying text, as [`HeaderContent::classify`] judges it.
+struct FirstText;
+
+/// The probe's stop signal: the content wrote a non-whitespace character.
+struct FoundText;
+
+impl crate::model::ChatWriter for FirstText {
+    type Error = FoundText;
+
+    fn write_str(&mut self, text: &str) -> Result<(), Self::Error> {
+        match HeaderContent::classify(text) {
+            HeaderContent::Text(_) => Err(FoundText),
+            HeaderContent::Blank => Ok(()),
+        }
     }
 }
 

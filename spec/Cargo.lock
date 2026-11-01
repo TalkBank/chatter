@@ -1274,11 +1274,11 @@ dependencies = [
 
 [[package]]
 name = "talkbank-build"
-version = "0.33.0"
+version = "0.34.0"
 
 [[package]]
 name = "talkbank-derive"
-version = "0.33.0"
+version = "0.34.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1287,7 +1287,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-model"
-version = "0.33.0"
+version = "0.34.0"
 dependencies = [
  "dashmap",
  "indexmap",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser"
-version = "0.33.0"
+version = "0.34.0"
 dependencies = [
  "indexmap",
  "smallvec",
@@ -1324,7 +1324,7 @@ dependencies = [
 
 [[package]]
 name = "talkbank-parser-re2c"
-version = "0.33.0"
+version = "0.34.0"
 dependencies = [
  "chumsky",
  "indexmap",

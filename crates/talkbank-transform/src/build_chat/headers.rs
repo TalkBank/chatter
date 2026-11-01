@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use talkbank_model::model::{
-    BulletContent, Header, IDHeader, LanguageCodes, Line, MediaFilename, MediaHeader, MediaType,
+    Header, IDHeader, LanguageCodes, Line, MediaFilename, MediaHeader, MediaType,
     ParticipantEntries, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
 };
 
@@ -115,7 +115,7 @@ pub(super) fn build_header_lines(context: &BuildChatContext<'_>) -> Vec<Line> {
         lines.push(Line::header(
             talkbank_model::Location::Unlocated,
             Header::Comment {
-                content: BulletContent::from_text(comment),
+                content: comment.clone(),
             },
         ));
     }
@@ -191,14 +191,17 @@ pub(super) fn admit_media_header(
     let Some(media_name) = desc.media_name.as_ref() else {
         return Ok(None);
     };
-    let media_type = match desc.media_type.as_deref().map(MediaType::from_text) {
+    let media_type = match desc.media_type.as_deref().map(MediaType::try_new) {
         None => MediaType::Audio,
-        Some(MediaType::Unsupported(value)) => {
+        Some(Err(blank)) => {
+            return Err(BuildChatError::Build(format!("@Media type: {blank}")));
+        }
+        Some(Ok(MediaType::Unsupported(value))) => {
             return Err(BuildChatError::Build(format!(
                 "unsupported @Media type {value:?}"
             )));
         }
-        Some(kind @ (MediaType::Audio | MediaType::Video | MediaType::Missing)) => kind,
+        Some(Ok(kind @ (MediaType::Audio | MediaType::Video | MediaType::Missing))) => kind,
     };
 
     let filename = admit_media_name(media_name)?;

@@ -8,8 +8,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Time_Duration_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Time_Start_Header>
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use crate::model::{HeaderText, NonEmptyString};
 use smol_str::SmolStr;
 use talkbank_derive::{SemanticEq, SpanShift, ValidationTagged};
 
@@ -104,9 +103,6 @@ impl crate::model::ValidationTagged for TimeDurationValue {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift, ValidationTagged)]
 enum TimeDurationState {
-    /// An absent optional value is not a parsed clock reading.
-    #[validation_tag(clean)]
-    Empty,
     /// Successfully parsed time duration with structured segments.
     Parsed {
         /// Structured time segments extracted from the text.
@@ -117,8 +113,8 @@ enum TimeDurationState {
         #[span_shift(skip)]
         raw: SmolStr,
     },
-    /// Unrecognized value preserved for validation.
-    Unsupported(String),
+    /// Unrecognized nonempty value preserved for validation.
+    Unsupported(NonEmptyString),
 }
 
 /// Refusal evidence issued only after duration shape and clock assessment.
@@ -134,11 +130,10 @@ impl<'a> InvalidTimeDuration<'a> {
 }
 
 impl TimeDurationValue {
-    /// Preserve the existing optional-empty policy before issuing a refusal.
+    /// Assess shape and clock range, issuing a refusal for an invalid value.
     pub(crate) fn invalidity(&self) -> Option<InvalidTimeDuration<'_>> {
         let text = self.as_str();
         let invalid = match &self.state {
-            TimeDurationState::Empty => false,
             TimeDurationState::Unsupported(_) => true,
             TimeDurationState::Parsed { .. } => {
                 self.violates_depfile_pattern() || self.has_out_of_range_component()
@@ -147,22 +142,19 @@ impl TimeDurationValue {
         invalid.then_some(InvalidTimeDuration { text })
     }
 
-    /// Parse a CHAT time duration string.
+    /// Parse CHAT time duration content.
     ///
-    /// Empty text stays absent; nonempty text is parsed or retained as unsupported.
+    /// The text is parsed or retained as unsupported; a duration header with
+    /// nothing after its colon is `Header::EmptyContent`, never this value.
     /// Every comma-separated segment must parse; an empty or malformed segment
     /// retains the entire value as unsupported rather than exposing a partial list.
-    pub fn from_text(value: &str) -> Self {
-        let state = if value.is_empty() {
-            TimeDurationState::Empty
-        } else {
-            match ParsedDurationSegments::parse(value) {
-                Some(segments) => TimeDurationState::Parsed {
-                    segments,
-                    raw: SmolStr::from(value),
-                },
-                None => TimeDurationState::Unsupported(value.to_owned()),
-            }
+    pub fn from_content(value: HeaderText<'_>) -> Self {
+        let state = match ParsedDurationSegments::parse(value.as_str()) {
+            Some(segments) => TimeDurationState::Parsed {
+                segments,
+                raw: SmolStr::from(value.as_str()),
+            },
+            None => TimeDurationState::Unsupported(value.as_non_empty().into_owned()),
         };
         Self { state }
     }
@@ -172,15 +164,14 @@ impl TimeDurationValue {
         match &self.state {
             TimeDurationState::Parsed { raw, .. } => raw.as_str(),
             TimeDurationState::Unsupported(s) => s.as_str(),
-            TimeDurationState::Empty => "",
         }
     }
 
-    /// Returns the structured segments (empty for absent or unsupported text).
+    /// Returns the structured segments (empty for unsupported text).
     pub fn segments(&self) -> &[TimeSegment] {
         match &self.state {
             TimeDurationState::Parsed { segments, .. } => segments.as_slice(),
-            TimeDurationState::Unsupported(_) | TimeDurationState::Empty => &[],
+            TimeDurationState::Unsupported(_) => &[],
         }
     }
 
@@ -196,11 +187,6 @@ impl TimeDurationValue {
                 !start.is_in_clock_range() || !end.is_in_clock_range()
             }
         })
-    }
-
-    /// Backward-compatible constructor.
-    pub fn new(value: impl AsRef<str>) -> Self {
-        Self::from_text(value.as_ref())
     }
 
     /// Returns true when a structurally-parseable duration does not match
@@ -393,52 +379,7 @@ fn parse_time_value_with_pair(s: &str, pair: TimePairMeaning) -> Option<TimeValu
     }
 }
 
-impl std::fmt::Display for TimeDurationValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl crate::model::WriteChat for TimeDurationValue {
-    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
-        w.write_str(self.as_str())
-    }
-}
-
-impl Serialize for TimeDurationValue {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for TimeDurationValue {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        Ok(Self::from_text(&s))
-    }
-}
-
-impl JsonSchema for TimeDurationValue {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "TimeDurationValue".into()
-    }
-
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({ "type": "string" })
-    }
-}
-
-impl From<String> for TimeDurationValue {
-    fn from(value: String) -> Self {
-        Self::from_text(&value)
-    }
-}
-
-impl From<&str> for TimeDurationValue {
-    fn from(value: &str) -> Self {
-        Self::from_text(value)
-    }
-}
+crate::header_content_admission!(TimeDurationValue, render, schema);
 
 // ---------------------------------------------------------------------------
 // TimeStartValue
@@ -457,7 +398,7 @@ impl From<&str> for TimeDurationValue {
 ///     hours: 0, minutes: 0, seconds: 0, millis: None,
 ///     raw: "25:00:00".into(),
 /// };
-/// assert_eq!(value, TimeStartValue::from_text(value.as_str()));
+/// assert_eq!(Ok(value), TimeStartValue::try_new(value.as_str()));
 /// ```
 #[derive(Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
 pub struct TimeStartValue {
@@ -478,9 +419,6 @@ impl crate::model::ValidationTagged for TimeStartValue {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift, ValidationTagged)]
 enum TimeStartState {
-    /// An absent optional value is not a parsed clock reading.
-    #[validation_tag(clean)]
-    Empty,
     /// Successfully parsed time start.
     Parsed {
         /// Hours component.
@@ -500,8 +438,8 @@ enum TimeStartState {
         #[span_shift(skip)]
         raw: SmolStr,
     },
-    /// Unrecognized value preserved for validation.
-    Unsupported(String),
+    /// Unrecognized nonempty value preserved for validation.
+    Unsupported(NonEmptyString),
 }
 
 /// Refusal evidence issued only by the time-start assessment.
@@ -518,11 +456,9 @@ impl<'a> InvalidTimeStart<'a> {
 
 impl TimeStartValue {
     /// Assess syntax and clock bounds without discarding recovery text.
-    /// Empty optional values retain their existing omission policy.
     pub(crate) fn invalidity(&self) -> Option<InvalidTimeStart<'_>> {
         let text = self.as_str();
         let invalid = match &self.state {
-            TimeStartState::Empty => false,
             TimeStartState::Unsupported(_) => true,
             TimeStartState::Parsed {
                 hours,
@@ -543,27 +479,26 @@ impl TimeStartValue {
         invalid.then_some(InvalidTimeStart { text })
     }
 
-    /// Parse a CHAT time start string (`MM:SS`, `HH:MM:SS`, or either with `.mmm`).
+    /// Parse CHAT time start content (`MM:SS`, `HH:MM:SS`, or either with
+    /// `.mmm`).
     ///
-    /// Empty text stays absent; nonempty text is parsed or retained as unsupported.
-    pub fn from_text(value: &str) -> Self {
-        let state = if value.is_empty() {
-            TimeStartState::Empty
-        } else if let Some(tv) = parse_time_value(value) {
-            TimeStartState::Parsed {
+    /// The text is parsed or retained as unsupported; a start header with
+    /// nothing after its colon is `Header::EmptyContent`, never this value.
+    pub fn from_content(value: HeaderText<'_>) -> Self {
+        let state = match parse_time_value(value.as_str()) {
+            Some(tv) => TimeStartState::Parsed {
                 hours: tv.hours,
                 minutes: tv.minutes,
                 seconds: tv.seconds,
                 millis: tv.millis,
-                raw: SmolStr::from(value),
-            }
-        } else {
-            TimeStartState::Unsupported(value.to_owned())
+                raw: SmolStr::from(value.as_str()),
+            },
+            None => TimeStartState::Unsupported(value.as_non_empty().into_owned()),
         };
         Self { state }
     }
 
-    /// Parsed components, absent for empty or unsupported text.
+    /// Parsed components, absent for unsupported text.
     /// The returned copy cannot change the source value's classification.
     pub fn time(&self) -> Option<TimeValue> {
         match &self.state {
@@ -579,7 +514,7 @@ impl TimeStartValue {
                 seconds: *seconds,
                 millis: *millis,
             }),
-            TimeStartState::Empty | TimeStartState::Unsupported(_) => None,
+            TimeStartState::Unsupported(_) => None,
         }
     }
 
@@ -588,13 +523,7 @@ impl TimeStartValue {
         match &self.state {
             TimeStartState::Parsed { raw, .. } => raw.as_str(),
             TimeStartState::Unsupported(s) => s.as_str(),
-            TimeStartState::Empty => "",
         }
-    }
-
-    /// Backward-compatible constructor.
-    pub fn new(value: impl AsRef<str>) -> Self {
-        Self::from_text(value.as_ref())
     }
 
     /// Returns true when a structurally-parseable start time does not
@@ -634,52 +563,7 @@ impl TimeStartValue {
     }
 }
 
-impl std::fmt::Display for TimeStartValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl crate::model::WriteChat for TimeStartValue {
-    fn write_chat<W: crate::model::ChatWriter>(&self, w: &mut W) -> Result<(), W::Error> {
-        w.write_str(self.as_str())
-    }
-}
-
-impl Serialize for TimeStartValue {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for TimeStartValue {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        Ok(Self::from_text(&s))
-    }
-}
-
-impl JsonSchema for TimeStartValue {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        "TimeStartValue".into()
-    }
-
-    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        schemars::json_schema!({ "type": "string" })
-    }
-}
-
-impl From<String> for TimeStartValue {
-    fn from(value: String) -> Self {
-        Self::from_text(&value)
-    }
-}
-
-impl From<&str> for TimeStartValue {
-    fn from(value: &str) -> Self {
-        Self::from_text(value)
-    }
-}
+crate::header_content_admission!(TimeStartValue, render, schema);
 
 // ---------------------------------------------------------------------------
 // Tests

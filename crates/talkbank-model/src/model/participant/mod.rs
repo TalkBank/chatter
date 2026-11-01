@@ -59,7 +59,7 @@
 //!     .with_corpus("chiat");
 //!
 //! let participant = Participant::new(entry, id)
-//!     .with_birth_date(ChatDate::new("28-JUN-2001"));
+//!     .with_birth_date(ChatDate::try_new("28-JUN-2001")?);
 //!
 //! assert_eq!(participant.code.as_str(), "CHI");
 //! assert_eq!(

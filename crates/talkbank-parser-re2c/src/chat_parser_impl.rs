@@ -318,8 +318,7 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelMorTier> {
-        let ParseOutcome::Parsed(fragment_source) =
-            Self::token_fragment_source(input, offset, errors)
+        let ParseOutcome::Parsed(fragment_source) = FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };
@@ -333,8 +332,7 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<MorWord> {
-        let ParseOutcome::Parsed(fragment_source) =
-            Self::token_fragment_source(input, offset, errors)
+        let ParseOutcome::Parsed(fragment_source) = FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };
@@ -348,8 +346,7 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelGraTier> {
-        let ParseOutcome::Parsed(fragment_source) =
-            Self::token_fragment_source(input, offset, errors)
+        let ParseOutcome::Parsed(fragment_source) = FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };
@@ -364,8 +361,7 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<GrammaticalRelation> {
-        let ParseOutcome::Parsed(fragment_source) =
-            Self::token_fragment_source(input, offset, errors)
+        let ParseOutcome::Parsed(fragment_source) = FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };

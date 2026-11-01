@@ -24,7 +24,7 @@ regenerated from their owners, never repaired by hand.
 
 | Path | Owner |
 | --- | --- |
-| `src/parser.c`, `src/grammar.json`, `src/node-types.json` | Tree-sitter generation from `grammar.js` |
+| `src/parser.c`, `src/grammar.json`, `src/node-types.json`, `src/grammar-contract.json` | Tree-sitter generation from `grammar.js` by the build `tree-sitter-revision` pins (`just grammar-gen`) |
 | `src/generated_symbol_sets.js` | `spec/symbols/symbol_registry.json` through `just symbols-gen` |
 | `test/corpus/generated/` | Authored specs through `just spec-gen` |
 | `test/corpus/manual/` | Hand-maintained grammar tests; no spec generator owns this directory |

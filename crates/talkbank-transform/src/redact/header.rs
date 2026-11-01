@@ -1,8 +1,8 @@
 //! Header-level sanitization.
 
-use talkbank_model::{BulletContent, Header, IDHeader};
+use talkbank_model::{Header, IDHeader, model};
 
-use super::REDACTED_TEXT;
+use super::REDACTED_CONTENT;
 
 /// Sanitizes a single header in place.
 pub(crate) fn sanitize_header(header: &mut Header) -> Result<(), super::RedactError> {
@@ -18,23 +18,40 @@ pub(crate) fn sanitize_header(header: &mut Header) -> Result<(), super::RedactEr
             anonymize_id(id);
         }
         Header::Comment { content } => {
-            *content = BulletContent::from_text(REDACTED_TEXT);
+            *content = model::CommentContent::from_content(REDACTED_CONTENT);
         }
         // Preserve each header's typed identity, replacing only its payload.
         // In particular, Birthplace's speaker reference is not free text.
-        Header::Situation { text } => *text = REDACTED_TEXT.into(),
-        Header::TapeLocation { location } => *location = REDACTED_TEXT.into(),
-        Header::Location { location } => *location = REDACTED_TEXT.into(),
-        Header::RoomLayout { layout } => *layout = REDACTED_TEXT.into(),
-        Header::Birthplace { place, .. } => *place = REDACTED_TEXT.into(),
-        Header::Transcriber { transcriber } => *transcriber = REDACTED_TEXT.into(),
-        Header::Warning { text } => *text = REDACTED_TEXT.into(),
-        Header::Activities { activities } => *activities = REDACTED_TEXT.into(),
-        Header::Bck { bck } => *bck = REDACTED_TEXT.into(),
+        Header::Situation { text } => {
+            *text = model::SituationDescription::from_content(REDACTED_CONTENT)
+        }
+        Header::TapeLocation { location } => {
+            *location = model::TapeLocationDescription::from_content(REDACTED_CONTENT)
+        }
+        Header::Location { location } => {
+            *location = model::LocationDescription::from_content(REDACTED_CONTENT)
+        }
+        Header::RoomLayout { layout } => {
+            *layout = model::RoomLayoutDescription::from_content(REDACTED_CONTENT)
+        }
+        Header::Birthplace { place, .. } => {
+            *place = model::BirthplaceDescription::from_content(REDACTED_CONTENT)
+        }
+        Header::Transcriber { transcriber } => {
+            *transcriber = model::TranscriberName::from_content(REDACTED_CONTENT)
+        }
+        Header::Warning { text } => *text = model::WarningText::from_content(REDACTED_CONTENT),
+        Header::Activities { activities } => {
+            *activities = model::ActivitiesDescription::from_content(REDACTED_CONTENT)
+        }
+        Header::Bck { bck } => *bck = model::BackgroundDescription::from_content(REDACTED_CONTENT),
         // Explicit preservation policy, not a default for future variants.
         // Several of these can identify a person; sanitization is not a
         // complete de-identification guarantee. Unknown recovery is retained.
-        Header::Utf8
+        // Empty content carries nothing to redact (the participant it may
+        // name is a speaker reference, not free text).
+        Header::EmptyContent(_)
+        | Header::Utf8
         | Header::Begin
         | Header::End
         | Header::Languages { .. }

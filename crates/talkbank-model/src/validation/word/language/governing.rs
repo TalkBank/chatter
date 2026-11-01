@@ -4,7 +4,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single>
 
-use std::borrow::Cow;
+use std::borrow::Borrow;
 
 use crate::model::{CodeSwitchSpan, Separator, Word};
 use crate::validation::word::language::{
@@ -32,16 +32,8 @@ use crate::{LanguageCode, LanguageSource, UtteranceLanguage, WordLanguageMarker}
 ///
 /// Deciding once and deriving both answers is the point; do not add a second
 /// route that computes either half independently.
-pub(crate) enum GoverningMarker<'a> {
-    /// The word carries its own `@s` / `@s:code`. It wins: the more specific
-    /// mark is the defensible answer, and attested transcripts rely on it,
-    /// marking a switched stretch with a span and individual donor-language
-    /// items inside it with their own code.
-    Own(&'a WordLanguageMarker),
-    /// No marker on the word, but an enclosing `<...> [@s]` span governs it.
-    Span(&'a CodeSwitchSpan),
-    /// Neither; the word inherits whatever the utterance resolved to.
-    Utterance,
+pub(crate) struct GoverningMarker<'a> {
+    mark: Mark<&'a WordLanguageMarker, &'a CodeSwitchSpan>,
 }
 
 impl<'a> GoverningMarker<'a> {
@@ -52,14 +44,15 @@ impl<'a> GoverningMarker<'a> {
     /// the walk holds the enum, and mapping between them at each call site gave
     /// "absent means the utterance governs" two owners.
     pub(crate) fn of(word: &'a Word, enclosing: Option<&'a CodeSwitchSpan>) -> Self {
-        match (word.language_marker(), enclosing) {
-            (Some(own), _) => Self::Own(own),
-            (None, Some(span)) => Self::Span(span),
-            (None, None) => Self::Utterance,
-        }
+        let mark = match (word.language_marker(), enclosing) {
+            (Some(own), _) => Mark::Own(own, word.location),
+            (None, Some(span)) => Mark::Span(span, word.location),
+            (None, None) => Mark::Utterance,
+        };
+        Self { mark }
     }
 
-    /// Resolve `word`'s language under this governing mark.
+    /// Resolve the admitted word position under this governing mark.
     ///
     /// THE ONLY ROUTE to a word's language, and that is the point rather than a
     /// convenience. While a `resolve_word_language(word, ..)` existed beside
@@ -73,47 +66,21 @@ impl<'a> GoverningMarker<'a> {
     /// asked had no place to put the span.
     ///
     /// Taking the marker from `self` rather than as a parameter is what closes
-    /// that: a caller cannot supply a marker inconsistent with the scope,
-    /// because it does not supply one at all.
+    /// that: a caller supplies neither an independent marker nor a second
+    /// word/location. The admitted marked position owns both payload and anchor.
     /// Resolve while preserving unavailable declaration evidence. Explicit
     /// markers remain independently checkable; rejected declarations cannot
     /// justify shortcut-language diagnostics.
     pub(crate) fn resolve_with_declaration(
         &self,
-        word: &Word,
         tier_language: Option<&LanguageCode>,
         declaration: Result<
             crate::model::DeclaredLanguagesRef<'_>,
             crate::model::LanguageDeclarationError,
         >,
     ) -> LanguageResolutionOutcome {
-        self.resolve_at_with_declaration(word.location, tier_language, declaration)
-    }
-
-    fn resolve_at_with_declaration(
-        &self,
-        location: crate::Location,
-        tier_language: Option<&LanguageCode>,
-        declaration: Result<
-            crate::model::DeclaredLanguagesRef<'_>,
-            crate::model::LanguageDeclarationError,
-        >,
-    ) -> LanguageResolutionOutcome {
-        let marker = self.marker();
-        resolve_marker_at(marker.as_deref(), location, tier_language, declaration)
-    }
-
-    /// The marker the resolver should apply.
-    ///
-    /// Borrowed for a word's own marker, which is the common path and would
-    /// otherwise clone a `Vec` for every `Multiple`/`Ambiguous` word; only a
-    /// span-governed word constructs anything.
-    fn marker(&self) -> Option<Cow<'a, WordLanguageMarker>> {
-        match self {
-            Self::Own(own) => Some(Cow::Borrowed(*own)),
-            Self::Span(span) => Some(Cow::Owned(WordLanguageMarker::from(*span))),
-            Self::Utterance => None,
-        }
+        self.mark
+            .resolve_with_declaration(tier_language, declaration)
     }
 
     /// Where the resolved language came from.
@@ -137,16 +104,17 @@ impl<'a> GoverningMarker<'a> {
         ) {
             return LanguageSource::Unresolved;
         }
-        match self {
-            Self::Own(WordLanguageMarker::Shortcut) => LanguageSource::WordShortcut,
-            Self::Own(
+        match &self.mark {
+            Mark::Own(WordLanguageMarker::Shortcut, _) => LanguageSource::WordShortcut,
+            Mark::Own(
                 WordLanguageMarker::Explicit(_)
                 | WordLanguageMarker::Multiple(_)
                 | WordLanguageMarker::Ambiguous(_),
+                _,
             ) => LanguageSource::WordExplicit,
-            Self::Span(CodeSwitchSpan::Shortcut) => LanguageSource::SpanShortcut,
-            Self::Span(CodeSwitchSpan::Explicit(_)) => LanguageSource::SpanExplicit,
-            Self::Utterance => utterance_language.source(),
+            Mark::Span(CodeSwitchSpan::Shortcut, _) => LanguageSource::SpanShortcut,
+            Mark::Span(CodeSwitchSpan::Explicit(_), _) => LanguageSource::SpanExplicit,
+            Mark::Utterance => utterance_language.source(),
         }
     }
 }
@@ -183,10 +151,11 @@ impl<'a> GoverningMarker<'a> {
 /// public variant is a constructor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GoverningMark {
-    mark: Mark,
+    mark: Mark<WordLanguageMarker, CodeSwitchSpan>,
 }
 
-/// The owned payload of a [`GoverningMark`]. Private: see the opacity note.
+/// The shared state shape for borrowed and owned governing marks.
+/// Private: consumers cannot independently pair a marker and diagnostic location.
 ///
 /// THE SPAN LIVES ON THE MARKED VARIANTS, not beside them. A span exists to
 /// anchor a diagnostic, only a marker can raise one, and `Utterance` means
@@ -199,11 +168,38 @@ pub struct GoverningMark {
 /// that the no-marker path happens to emit no diagnostics, a fact no type
 /// recorded. Now the sentinel has nowhere to go.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Mark {
-    Own(WordLanguageMarker, crate::Location),
-    Span(CodeSwitchSpan, crate::Location),
+enum Mark<OwnMarker, SpanMarker> {
+    Own(OwnMarker, crate::Location),
+    Span(SpanMarker, crate::Location),
     /// No marker, and therefore no span: nothing here can place a diagnostic.
     Utterance,
+}
+
+impl<OwnMarker: Borrow<WordLanguageMarker>, SpanMarker: Borrow<CodeSwitchSpan>>
+    Mark<OwnMarker, SpanMarker>
+{
+    /// Resolve the admitted marked position directly, without reclassifying it.
+    /// A word marker stays borrowed; a span alone needs conversion to a marker.
+    fn resolve_with_declaration(
+        &self,
+        tier_language: Option<&LanguageCode>,
+        declaration: Result<
+            crate::model::DeclaredLanguagesRef<'_>,
+            crate::model::LanguageDeclarationError,
+        >,
+    ) -> LanguageResolutionOutcome {
+        match self {
+            Self::Own(own, location) => {
+                resolve_marker_at(Some(own.borrow()), *location, tier_language, declaration)
+            }
+            Self::Span(span, location) => {
+                let span: &CodeSwitchSpan = span.borrow();
+                let marker = WordLanguageMarker::from(span);
+                resolve_marker_at(Some(&marker), *location, tier_language, declaration)
+            }
+            Self::Utterance => resolve_without_marker(tier_language),
+        }
+    }
 }
 
 /// Which KIND of mark governs, with no payload.
@@ -225,10 +221,10 @@ impl GoverningMark {
     /// The one precedence decision, capturing the word's span.
     #[must_use]
     pub fn of(word: &Word, enclosing: Option<&CodeSwitchSpan>) -> Self {
-        let mark = match GoverningMarker::of(word, enclosing) {
-            GoverningMarker::Own(own) => Mark::Own(own.clone(), word.location),
-            GoverningMarker::Span(span) => Mark::Span(span.clone(), word.location),
-            GoverningMarker::Utterance => Mark::Utterance,
+        let mark = match GoverningMarker::of(word, enclosing).mark {
+            Mark::Own(own, location) => Mark::Own(own.clone(), location),
+            Mark::Span(span, location) => Mark::Span(span.clone(), location),
+            Mark::Utterance => Mark::Utterance,
         };
         Self { mark }
     }
@@ -288,18 +284,7 @@ impl GoverningMark {
             crate::model::LanguageDeclarationError,
         >,
     ) -> LanguageResolutionOutcome {
-        match &self.mark {
-            // A marked position anchors its diagnostics at the span it was born
-            // with; the pairing is structural, not a parameter to get wrong.
-            Mark::Own(own, location) => GoverningMarker::Own(own).resolve_at_with_declaration(
-                *location,
-                tier_language,
-                declared_languages,
-            ),
-            Mark::Span(marker, location) => GoverningMarker::Span(marker)
-                .resolve_at_with_declaration(*location, tier_language, declared_languages),
-            // No marker, so no diagnostic and no span to place one at.
-            Mark::Utterance => resolve_without_marker(tier_language),
-        }
+        self.mark
+            .resolve_with_declaration(tier_language, declared_languages)
     }
 }

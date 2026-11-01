@@ -127,8 +127,8 @@ fn headers_speaker_info_fixture_parses_with_zero_diagnostics() {
         r#"Birth { participant: SpeakerCode("MOT"), date: Valid(CheckedChatDate { day: 15, month: Mar, year: 1975, raw: "15-MAR-1975" }) }"#,
         r#"Birthplace { participant: SpeakerCode("MOT"), place: BirthplaceDescription("Taipei, Taiwan") }"#,
         r#"L1Of { participant: SpeakerCode("F_A_T"), language: LanguageCode("ara") }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Speaker info headers: @Birth of, @Birthplace of, @L1 of" })]) } }"#,
-        r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: birth_of_header, birthplace_of_header, l1_of_header," }), Continuation, Text(BulletContentText { text: "age_format, multiple @Languages codes, participant with special chars" })]) } }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Speaker info headers: @Birth of, @Birthplace of, @L1 of" })]) }) }"#,
+        r#"Comment { content: CommentContent(BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: birth_of_header, birthplace_of_header, l1_of_header," }), Continuation, Text(BulletContentText { text: "age_format, multiple @Languages codes, participant with special chars" })]) }) }"#,
         r#"Utterance"#,
         r#"Utterance"#,
         r#"Utterance"#,
@@ -175,10 +175,10 @@ const PARTICIPANTS_MISSING_ROLE: &str = "\
 @End
 ";
 
-/// `@Media` with empty contents (nothing after the tab). Empirically this
-/// makes the WHOLE `@Media` line fail tree-sitter's structural parse (an
-/// ERROR at the document level producing `EmptyMediaHeader`/E509), not a
-/// clean `media_header` node with an internally-Missing `media_contents`.
+/// `@Media` with empty contents (nothing after the tab). The body is optional
+/// in the grammar, so this is a clean `media_header` node with no body: the
+/// one empty-content state, refused by validation (E553), with no parse
+/// diagnostic and no recovery node.
 const MEDIA_EMPTY_CONTENTS: &str = "\
 @UTF8
 @Begin
@@ -226,11 +226,11 @@ const LANGUAGES_EMPTY_CONTENTS: &str = "\
 @End
 ";
 
-/// `@Situation` with empty contents. Empirically `free_text` CAN match
-/// zero-width, so this reaches `parse_situation_header`'s `Present` decode
-/// path with an empty string (NOT the "missing situation text" diagnostic
-/// arm), plus an unrelated zero-width `MissingRequiredElement`/E342 for a
-/// `continuation` node from the whole-tree backstop.
+/// `@Situation` with empty contents. The description is optional in the
+/// grammar, so this is a clean `situation_header` with no description: the
+/// one empty-content state, refused by validation (E553). Until 2026-10-31
+/// recovery inserted a zero-width MISSING `continuation` (E342) and the
+/// lowering fabricated an empty description.
 const SITUATION_EMPTY_CONTENTS: &str = "\
 @UTF8
 @Begin
@@ -324,7 +324,7 @@ fn participants_missing_role_retains_explicit_entry_with_e513() {
 }
 
 #[test]
-fn media_empty_contents_keeps_structural_recovery_without_a_fabricated_header() {
+fn media_empty_contents_is_empty_content_without_a_fabricated_header() {
     let (reprs, diags) = parse_lines_and_diags(MEDIA_EMPTY_CONTENTS);
 
     let expected: Vec<&str> = vec![
@@ -333,19 +333,14 @@ fn media_empty_contents_keeps_structural_recovery_without_a_fabricated_header() 
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
         r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
+        r#"EmptyContent(Plain { kind: Structured(Media), separator: WrittenSeparator })"#,
         r#"Utterance"#,
         r#"End"#,
     ];
     assert_eq!(reprs, expected, "media_empty_contents model output changed");
 
-    assert_eq!(
-        diags,
-        vec![(
-            "E316".to_string(),
-            87,
-            95,
-            "Unparsable content at file level: '@Media:\t'".to_string(),
-        ),],
+    assert!(
+        diags.is_empty(),
         "media_empty_contents diagnostics changed, got: {diags:?}"
     );
 }
@@ -436,7 +431,7 @@ fn languages_empty_contents_reports_missing_language_code_not_panic() {
 }
 
 #[test]
-fn situation_empty_contents_decodes_empty_text() {
+fn situation_empty_contents_is_empty_content_not_an_empty_description() {
     let (reprs, diags) = parse_lines_and_diags(SITUATION_EMPTY_CONTENTS);
 
     let expected: Vec<&str> = vec![
@@ -445,7 +440,7 @@ fn situation_empty_contents_decodes_empty_text() {
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
         r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
-        r#"Situation { text: SituationDescription("") }"#,
+        r#"EmptyContent(Plain { kind: Text(Situation), separator: WrittenSeparator })"#,
         r#"Utterance"#,
         r#"End"#,
     ];
@@ -454,14 +449,8 @@ fn situation_empty_contents_decodes_empty_text() {
         "situation_empty_contents model output changed"
     );
 
-    assert_eq!(
-        diags,
-        vec![(
-            "E342".to_string(),
-            99,
-            99,
-            "Missing required 'continuation': the document is incomplete here and was only parsed via tree-sitter recovery (recovery is not validity)".to_string(),
-        )],
+    assert!(
+        diags.is_empty(),
         "situation_empty_contents diagnostics changed, got: {diags:?}"
     );
 }
@@ -476,6 +465,7 @@ fn types_missing_activity_and_group_yields_e316_via_document_level_recovery() {
         r#"Languages { codes: LanguageCodes([LanguageCode("eng")]) }"#,
         r#"Participants { entries: ParticipantEntries([ParticipantEntry { speaker_code: SpeakerCode("CHI"), details: Complete { name: None, role: ParticipantRole("Child") } }]) }"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
+        r#"Unknown { text: NonEmpty(NonEmptyString("@Types:\tlong")), parse_reason: Some("Malformed or unsupported header content"), suggested_fix: None }"#,
         r#"Utterance"#,
         r#"End"#,
     ];
@@ -484,13 +474,16 @@ fn types_missing_activity_and_group_yields_e316_via_document_level_recovery() {
         "types_missing_activity_and_group model output changed"
     );
 
+    // The field group is optional in the grammar, so the ERROR now sits
+    // inside the header, where the field group belongs, and is reported at
+    // its own span; the header is not lowered, as before.
     assert_eq!(
         diags,
         vec![(
             "E316".to_string(),
-            87,
+            95,
             99,
-            "Unparsable content at file level: '@Types:\tlong'".to_string(),
+            "Unparsable content: tree-sitter could not parse 'long'".to_string(),
         ),],
         "types_missing_activity_and_group diagnostics changed, got: {diags:?}"
     );

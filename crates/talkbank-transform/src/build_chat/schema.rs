@@ -13,8 +13,9 @@
 //! schema on top downstream.
 
 use talkbank_model::model::{
-    AgeValue, ChatDate, ChatOptionFlags, CustomIdField, EducationDescription, GroupName,
-    LanguageCode, MediaStatus, PidValue, SesValue, Sex, SituationDescription, TranscriberName,
+    AgeValue, ChatDate, ChatOptionFlags, CommentContent, CustomIdField, EducationDescription,
+    GroupName, LanguageCode, MediaStatus, PidValue, SesValue, Sex, SituationDescription,
+    TranscriberName,
 };
 
 /// Description of a transcript to assemble into CHAT.
@@ -52,7 +53,9 @@ pub struct TranscriptDescription {
     pub transcriber: Option<TranscriberName>,
     /// Free-text `@Comment` header lines (e.g. speaker usage restrictions,
     /// preserved provenance). Emitted in order at the end of the header block.
-    pub comments: Vec<String>,
+    /// Each is nonblank by construction (`CommentContent::try_from_text`), so
+    /// the builder cannot write an empty `@Comment` header.
+    pub comments: Vec<CommentContent>,
     /// Utterances in document order.
     pub utterances: Vec<UtteranceDesc>,
 }

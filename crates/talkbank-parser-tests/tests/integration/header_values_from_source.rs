@@ -150,9 +150,12 @@ const ROWS: &[Row] = &[
         }],
     },
     Row {
-        what: "an empty @Time Duration value is not reported",
+        what: "an empty @Time Duration is exactly one E553, not a duration",
         header: "@Time Duration:\t",
-        fired: &[],
+        fired: &[Fired {
+            code: "E553",
+            message: "@Time Duration header has no content after its colon",
+        }],
     },
     Row {
         what: "an unrecognised @Time Start value is exactly one E541",
@@ -163,9 +166,12 @@ const ROWS: &[Row] = &[
         }],
     },
     Row {
-        what: "an empty @Time Start value is not reported",
+        what: "an empty @Time Start is exactly one E553, not a start time",
         header: "@Time Start:\t",
-        fired: &[],
+        fired: &[Fired {
+            code: "E553",
+            message: "@Time Start header has no content after its colon",
+        }],
     },
     Row {
         what: "a known media type and status are fine",

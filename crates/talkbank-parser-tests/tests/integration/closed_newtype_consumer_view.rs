@@ -133,7 +133,11 @@ fn every_closed_collection_newtype_offers_the_consumer_api() {
     assert_consumer_api!(LanguageCodes, LanguageCode);
     let _read_multiple: fn(&MultipleLanguageCodes) -> &[LanguageCode] =
         MultipleLanguageCodes::as_slice;
-    assert_consumer_api!(ChatOptionFlags, ChatOptionFlag);
+    // Nonempty by construction, so no `take` that would leave it empty.
+    let _read_options: fn(&ChatOptionFlags) -> &[ChatOptionFlag] = ChatOptionFlags::as_slice;
+    let _edit_options: fn(&mut ChatOptionFlags) -> &mut [ChatOptionFlag] =
+        ChatOptionFlags::as_mut_slice;
+    let _consume_options: fn(ChatOptionFlags) -> Vec<ChatOptionFlag> = ChatOptionFlags::into_vec;
     assert_consumer_api!(SinGroupGestures, SinToken);
 
     // Reachable only through their defining module. That they are NOT in the

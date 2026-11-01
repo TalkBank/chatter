@@ -606,7 +606,7 @@ fn role_specs_preserve_spelling_and_suggest_canonical_labels() {
 #[test]
 fn duration_specs_preserve_assessment_across_header_and_json_boundaries() {
     use talkbank_model::ErrorCode;
-    use talkbank_model::model::{ChatFile, Header, Line, TimeDurationValue, WriteChat};
+    use talkbank_model::model::{ChatFile, TimeDurationValue, WriteChat};
     use talkbank_parser_tests::test_error::strict_parse;
     let parser = TreeSitterParser::new().expect("parser");
     let cases = (1..=15)
@@ -647,29 +647,12 @@ fn duration_specs_preserve_assessment_across_header_and_json_boundaries() {
             "JSON must not change duration assessment: {stem}_{example}"
         );
 
-        // A public model constructor can represent an empty optional value
-        // even if raw CHAT parsing rejects the corresponding empty header.
-        // Exercise that distinct boundary without inventing a whole AST.
-        let mut omitted = file.clone();
-        let mut changed = 0;
-        for line in omitted.lines.as_mut_slice() {
-            if let Line::Header { header, .. } = line
-                && let Header::TimeDuration { duration } = header.as_mut()
-            {
-                *duration = TimeDurationValue::from_text("");
-                changed += 1;
-            }
-        }
-        assert_eq!(changed, 1);
-        let wire = serde_json::to_string(&omitted).expect("serialize optional value");
-        let decoded: ChatFile = serde_json::from_str(&wire).expect("deserialize optional value");
-        let errors = ErrorCollector::new();
-        decoded.validate_headers_only(&errors, TranscriptName::Anonymous);
-        assert!(
-            errors.into_vec().is_empty(),
-            "existing optional-empty model policy"
-        );
-        assert_eq!(decoded.to_chat_string(), omitted.to_chat_string());
+        // An empty duration is not a duration at all: the header carrying
+        // it is `Header::EmptyContent` (E553). Neither the public constructor
+        // nor the wire can build one.
+        assert!(TimeDurationValue::try_new("").is_err());
+        assert!(TimeDurationValue::try_new(" ").is_err());
+        assert!(serde_json::from_str::<TimeDurationValue>("\"\"").is_err());
     }
 }
 
@@ -705,10 +688,13 @@ fn duration_reference_retains_hour_minute_endpoint_meaning() {
     else {
         unreachable!()
     };
-    assert_eq!(TimeDurationValue::from(duration.as_str()), *duration);
     assert_eq!(
-        TimeDurationValue::from(duration.as_str().to_owned()),
-        *duration
+        TimeDurationValue::try_from(duration.as_str()).as_ref(),
+        Ok(duration)
+    );
+    assert_eq!(
+        TimeDurationValue::try_from(duration.as_str().to_owned()).as_ref(),
+        Ok(duration)
     );
     assert_eq!(duration.to_chat_string(), "17:30-18:00");
     assert_eq!(
@@ -734,8 +720,11 @@ fn clock_context_reference_keeps_start_and_timing_in_minutes_seconds() {
     let file = strict_parse(parser.parse_chat_file(source)).expect("clock reference parses");
     for header in file.headers() {
         if let Header::TimeStart { start } = header {
-            assert_eq!(TimeStartValue::from(start.as_str()), *start);
-            assert_eq!(TimeStartValue::from(start.as_str().to_owned()), *start);
+            assert_eq!(TimeStartValue::try_from(start.as_str()).as_ref(), Ok(start));
+            assert_eq!(
+                TimeStartValue::try_from(start.as_str().to_owned()).as_ref(),
+                Ok(start)
+            );
             assert_eq!(start.to_chat_string(), start.as_str());
             assert_eq!(
                 serde_json::to_string(start).expect("start JSON"),
@@ -991,15 +980,17 @@ fn nested_comma_specs_require_prior_spoken_content_at_the_actual_comma() {
 fn date_specs_reject_signed_components_without_rewriting_source() {
     use talkbank_model::ErrorCode;
     use talkbank_model::model::{ChatDate, Header, WriteChat};
-    use talkbank_model::validation::{Validate, ValidationContext};
 
     fn check_date(date: &ChatDate, valid: bool, months: &mut std::collections::BTreeSet<String>) {
         assert_eq!(matches!(date, ChatDate::Valid(_)), valid);
         let encoded = serde_json::to_string(date).expect("date wire value");
         assert_eq!(encoded, serde_json::to_string(date.as_str()).unwrap());
-        assert_eq!(ChatDate::new(date.as_str()), *date);
-        assert_eq!(ChatDate::from(date.as_str()), *date);
-        assert_eq!(ChatDate::from(date.as_str().to_owned()), *date);
+        assert_eq!(ChatDate::try_new(date.as_str()).as_ref(), Ok(date));
+        assert_eq!(ChatDate::try_from(date.as_str()).as_ref(), Ok(date));
+        assert_eq!(
+            ChatDate::try_from(date.as_str().to_owned()).as_ref(),
+            Ok(date)
+        );
         assert_eq!(date.to_chat_string(), date.as_str());
         if let ChatDate::Valid(checked) = date {
             assert_eq!(checked.as_str(), date.as_str());
@@ -1017,22 +1008,13 @@ fn date_specs_reject_signed_components_without_rewriting_source() {
         }
         let decoded: ChatDate = serde_json::from_str(&encoded).expect("date wire decoding");
         assert_eq!(&decoded, date, "wire admission and spelling");
-        // A standalone imported value has neither a header role nor
-        // document coordinates. Full-file validation below retains both.
-        let value_errors = ErrorCollector::new();
-        decoded.validate(&ValidationContext::default(), &value_errors);
-        let value_errors = value_errors.into_vec();
-        if valid {
-            assert!(value_errors.is_empty());
-        } else {
-            assert_eq!(value_errors.len(), 1);
-            assert_eq!(value_errors[0].code, ErrorCode::InvalidDateFormat);
-            assert_eq!(value_errors[0].severity, talkbank_model::Severity::Error);
-            assert_eq!(
-                value_errors[0].location,
-                talkbank_model::DiagnosticLocation::Unlocated
-            );
-            assert!(value_errors[0].message.contains(date.as_str()));
+        // A standalone imported value has no header role, so no code: the
+        // model's refusal travels with it, and full-file validation below
+        // renders it with the header's code and coordinates.
+        assert_eq!(decoded.invalidity().is_none(), valid);
+        if let Some(invalid) = decoded.invalidity() {
+            assert_eq!(invalid.as_str(), date.as_str());
+            assert!(invalid.refusals().next().is_some());
         }
     }
 
@@ -1898,17 +1880,18 @@ fn attribute_specs_preserve_the_source_bound_lexical_boundary() {
 /// recovery must not manufacture an empty unsupported option.
 #[test]
 fn option_specs_preserve_typed_flags_through_recovery() {
-    use ChatOptionFlag::{Ca, NoAlign, Unsupported};
+    use ChatOptionFlag::{Ca, NoAlign};
     use talkbank_model::model::{ChatOptionFlag, Header};
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
     for (fixture, expected) in [
-        ("E533_1", vec![]),
-        ("E534_2", vec![Ca, Unsupported("IPA".to_string())]),
+        (
+            "E534_2",
+            vec![Ca, ChatOptionFlag::try_new("IPA").expect("nonblank")],
+        ),
         ("E534_3", vec![Ca, NoAlign]),
         ("E534_4", vec![NoAlign, Ca]),
-        ("E316_24", vec![Ca, NoAlign]),
     ] {
         let source = std::fs::read_to_string(corpus.join(format!("{fixture}.cha")))
             .expect("generated canonical option spec");
@@ -1927,6 +1910,22 @@ fn option_specs_preserve_typed_flags_through_recovery() {
         assert_eq!(actual, expected, "{fixture}");
         assert!(headers.next().is_none());
     }
+    // An empty position in the list (`CA, , NoAlign`) is recovery: no option
+    // list is admitted, so no flag is dropped silently and no unsupported
+    // flag named "" is invented; the line is kept as an unknown header.
+    let source = std::fs::read_to_string(corpus.join("E316_24.cha"))
+        .expect("generated canonical option spec");
+    let errors = ErrorCollector::new();
+    let file = parser.parse_chat_file_streaming(&source, &errors);
+    assert!(
+        file.headers()
+            .all(|header| !matches!(header, Header::Options { .. })),
+        "a list with an empty position admits no options"
+    );
+    assert!(
+        file.headers()
+            .any(|header| matches!(header, Header::Unknown { .. }))
+    );
 }
 
 /// Removed recovery scanners must not turn malformed CHAT into accepted input.

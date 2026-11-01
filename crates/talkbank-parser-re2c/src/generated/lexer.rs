@@ -139,14 +139,43 @@ impl<'a> Iterator for Lexer<'a> {
             }};
         }
 
+        /// A known header whose rule matched its colon and tab. Every rule
+        /// using this matches them, so the error line is not reached; it is
+        /// what such a rule would have to be if it did not.
         macro_rules! emit_header_prefix {
             ($kind:ident) => {{
                 let end = self.cursor;
                 let matched = &yyinput[start..end];
-                let prefix = crate::token::PrefixToken::from_lexed(matched, matched, start);
-                let admitted = crate::token::HeaderPrefixToken::from_lexed(
-                    prefix, crate::token::HeaderKind::$kind,
+                return Some((
+                    match crate::token::HeaderPrefixToken::separated(
+                        matched, start, crate::token::LexedHeader::$kind,
+                    ) {
+                        Some(admitted) => Token::HeaderPrefix(admitted),
+                        None => Token::ErrorLine(matched),
+                    },
+                    start..end,
+                ));
+            }};
+        }
+
+        /// A gem marker, with or without its colon and tab.
+        macro_rules! emit_gem_prefix {
+            ($kind:ident) => {{
+                let end = self.cursor;
+                let matched = &yyinput[start..end];
+                let admitted = crate::token::HeaderPrefixToken::gem(
+                    matched, start, talkbank_model::model::GemKind::$kind,
                 );
+                return Some((Token::HeaderPrefix(admitted), start..end));
+            }};
+        }
+
+        /// The catch-all header name; its separator, if any, is the next token.
+        macro_rules! emit_unknown_header_prefix {
+            () => {{
+                let end = self.cursor;
+                let matched = &yyinput[start..end];
+                let admitted = crate::token::HeaderPrefixToken::unknown(matched, start);
                 return Some((Token::HeaderPrefix(admitted), start..end));
             }};
         }
@@ -163,13 +192,21 @@ impl<'a> Iterator for Lexer<'a> {
             }};
         }
 
+        /// A speaker-qualified header; its rule matches the colon and tab,
+        /// so the error line is not reached.
         macro_rules! emit_prefix_speaker {
             ($variant:ident) => {{
                 let end = self.cursor;
-                let prefix = crate::token::PrefixToken::from_lexed(
-                    yyinput[self.t1..self.t2].trim(), &yyinput[start..end], start,
-                );
-                return Some((Token::$variant(prefix), start..end));
+                let matched = &yyinput[start..end];
+                return Some((
+                    match crate::token::SeparatedPrefixToken::from_lexed(
+                        yyinput[self.t1..self.t2].trim(), matched, start,
+                    ) {
+                        Some(prefix) => Token::$variant(prefix),
+                        None => Token::ErrorLine(matched),
+                    },
+                    start..end,
+                ));
             }};
         }
 
@@ -633,7 +670,7 @@ impl<'a> Iterator for Lexer<'a> {
             14 => {
                 self.condition = YYC_HEADER_AFTER_NAME;
                 {
-            emit_header_prefix!(Unknown);
+            emit_unknown_header_prefix!();
         }
             }
             15 => {
@@ -1426,7 +1463,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            59 => { emit_header_prefix!(LazyGem); },
+            59 => { emit_gem_prefix!(Lazy); },
             60 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
@@ -2071,7 +2108,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            91 => { emit_header_prefix!(BeginGem); },
+            91 => { emit_gem_prefix!(Begin); },
             92 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
@@ -2181,7 +2218,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            97 => { emit_header_prefix!(EndGem); },
+            97 => { emit_gem_prefix!(End); },
             98 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
@@ -3149,7 +3186,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             150 => {
                 self.condition = YYC_HEADER_CONTENT;
-                { emit_header_prefix!(LazyGem); }
+                { emit_gem_prefix!(Lazy); }
             }
             151 => {
                 yych = self.input.symbol(self.cursor).lookahead();
@@ -3871,7 +3908,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             192 => {
                 self.condition = YYC_HEADER_CONTENT;
-                { emit_header_prefix!(BeginGem); }
+                { emit_gem_prefix!(Begin); }
             }
             193 => {
                 yyaccept = 3;
@@ -3989,7 +4026,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             199 => {
                 self.condition = YYC_HEADER_CONTENT;
-                { emit_header_prefix!(EndGem); }
+                { emit_gem_prefix!(End); }
             }
             200 => {
                 yyaccept = 3;

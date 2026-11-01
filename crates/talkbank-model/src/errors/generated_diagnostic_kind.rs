@@ -124,15 +124,12 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::InvalidIDFormat => DiagnosticKind::Invalidity,   // E505
         ErrorCode::EmptyParticipantsHeader => DiagnosticKind::Invalidity, // E506
         ErrorCode::EmptyLanguagesHeader => DiagnosticKind::Invalidity, // E507
-        ErrorCode::EmptyDateHeader => DiagnosticKind::Invalidity,   // E508
-        ErrorCode::EmptyMediaHeader => DiagnosticKind::Invalidity,  // E509
         ErrorCode::EmptyIDLanguage => DiagnosticKind::Invalidity,   // E510
         ErrorCode::EmptyIDSpeaker => DiagnosticKind::Invalidity,    // E511
         ErrorCode::EmptyParticipantCode => DiagnosticKind::Invalidity, // E512
         ErrorCode::EmptyParticipantRole => DiagnosticKind::Invalidity, // E513
         ErrorCode::EmptyIDCorpus => DiagnosticKind::Invalidity,     // E514
         ErrorCode::EmptyIDRole => DiagnosticKind::Invalidity,       // E515
-        ErrorCode::EmptyDate => DiagnosticKind::Invalidity,         // E516
         ErrorCode::InvalidAgeFormat => DiagnosticKind::Invalidity,  // E517
         ErrorCode::InvalidDateFormat => DiagnosticKind::Invalidity, // E518
         ErrorCode::InvalidLanguageCode => DiagnosticKind::Invalidity, // E519
@@ -147,7 +144,6 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::LazyGemInsideScope => DiagnosticKind::Invalidity, // E530
         ErrorCode::MediaFilenameMismatch => DiagnosticKind::Invalidity, // E531
         ErrorCode::InvalidParticipantRole => DiagnosticKind::Invalidity, // E532
-        ErrorCode::EmptyOptionsHeader => DiagnosticKind::Invalidity, // E533
         ErrorCode::UnsupportedOption => DiagnosticKind::Invalidity, // E534
         ErrorCode::UnsupportedMediaType => DiagnosticKind::Invalidity, // E535
         ErrorCode::UnsupportedMediaStatus => DiagnosticKind::Invalidity, // E536
@@ -167,6 +163,7 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::TrailingCommaInParticipants => DiagnosticKind::Invalidity, // E550
         ErrorCode::OptionsHeaderOutOfOrder => DiagnosticKind::Invalidity, // E551
         ErrorCode::MediaUnlinkedWithTiming => DiagnosticKind::Invalidity, // E552
+        ErrorCode::EmptyHeaderContent => DiagnosticKind::Invalidity, // E553
         ErrorCode::TierValidationError => DiagnosticKind::Invalidity, // E600
         ErrorCode::InvalidDependentTier => DiagnosticKind::Invalidity, // E601
         ErrorCode::MalformedTierHeader => DiagnosticKind::Invalidity, // E602

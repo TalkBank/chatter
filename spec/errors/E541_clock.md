@@ -137,10 +137,10 @@ chat = '''
 @End
 '''
 [[example]]
-title = 'An empty start time retains the optional-empty policy'
+title = 'An empty start time is empty header content, not a start time'
 level = 'header'
-claim = 'legal'
-notes = 'Delete the complete value from the legal 23:59:59 control, retaining its tab separator and following speech. TimeStartValue::invalidity explicitly exempts empty optional values; this contract preserves omission in CHAT, not a claim about its legacy numeric representation.'
+claim = { subsumed_by = 'E553' }
+notes = 'Delete the complete value from the legal 23:59:59 control, retaining its tab separator and following speech. A header with nothing after its colon is Header::EmptyContent, refused by E553; no start-time value is built, so E541 has nothing to assess.'
 chat = '''
 @UTF8
 @Begin

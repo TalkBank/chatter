@@ -22,6 +22,8 @@ mod simple;
 mod special;
 mod structured;
 
+pub(super) use simple::content_header;
+
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
     AsRawNode, HeaderChoice, HeaderChoiceSourceView, SourceField, SourceSlice, SourceSlotView,
@@ -117,7 +119,6 @@ fn dispatch_header_choice<'tree>(
                 None => ParseOutcome::rejected(),
             }
         }
-        HeaderChoiceSourceView::SituationHeader(n) => lower!(bound structured::situation, n),
         HeaderChoiceSourceView::TypesHeader(n) => lower!(bound structured::types, n),
 
         // Special (mixed-shape) headers.
@@ -139,6 +140,7 @@ fn dispatch_header_choice<'tree>(
 
         // Simple scalar headers.
         HeaderChoiceSourceView::DateHeader(n) => lower!(bound simple::date, n),
+        HeaderChoiceSourceView::SituationHeader(n) => lower!(bound simple::situation, n),
         HeaderChoiceSourceView::TapeLocationHeader(n) => lower!(bound simple::tape_location, n),
         HeaderChoiceSourceView::TimeDurationHeader(n) => lower!(bound simple::time_duration, n),
         HeaderChoiceSourceView::TimeStartHeader(n) => lower!(bound simple::time_start, n),

@@ -153,9 +153,13 @@ fn reference_header_json_conforms_to_generated_model_schema() {
                 }
                 Header::Options { options } => {
                     let preview: Vec<_> = (&options).into_iter().cloned().collect();
-                    let mut rebuilt = ChatOptionFlags::new(Vec::new());
-                    assert!(rebuilt.is_empty());
-                    for flag in options {
+                    // Nonempty by construction: an empty list is refused, so the
+                    // rebuild starts from the first flag and pushes the rest.
+                    assert!(ChatOptionFlags::new(Vec::new()).is_err());
+                    let mut flags = options.into_iter();
+                    let first = flags.next().expect("a parsed @Options names an option");
+                    let mut rebuilt = ChatOptionFlags::from_flag(first);
+                    for flag in flags {
                         rebuilt.push(flag);
                     }
                     assert_eq!(
@@ -529,13 +533,13 @@ fn timed_media_spec_mutations_refuse_ambiguous_or_unsupported_declarations() {
         (
             "E535_3.cha",
             MediaTimingError::UnusableMediaType {
-                media_type: MediaType::Unsupported("badtype".into()),
+                media_type: MediaType::try_new("badtype").expect("nonblank"),
             },
         ),
         (
             "E536_3.cha",
             MediaTimingError::IncompatibleMediaStatus {
-                status: MediaStatus::Unsupported("badstatus".into()),
+                status: MediaStatus::try_new("badstatus").expect("nonblank"),
             },
         ),
     ] {

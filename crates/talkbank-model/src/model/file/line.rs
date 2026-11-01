@@ -61,7 +61,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///
 /// ```
 /// use talkbank_model::Location;
-/// use talkbank_model::model::{Line, Header, Utterance, MainTier, BulletContent};
+/// use talkbank_model::model::{Line, Header, Utterance, MainTier, CommentContent};
 ///
 /// let lines = vec![
 ///     Line::header(Location::Unlocated, Header::Utf8),
@@ -70,7 +70,9 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///     // Participants header
 ///     // Utterance: *CHI: I want cookie .
 ///     // Dependent tier: %mor
-///     Line::header(Location::Unlocated, Header::Comment { content: BulletContent::from_text("Between utterances") }),
+///     Line::header(Location::Unlocated, Header::Comment {
+///         content: CommentContent::try_from_text("Between utterances").expect("nonblank"),
+///     }),
 ///     // Utterance: *MOT: you can have one .
 ///     // Dependent tier: %mor
 ///     Line::header(Location::Unlocated, Header::End),

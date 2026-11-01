@@ -39,10 +39,12 @@ npm start                     # Launch the web playground
    just regen
    ```
    This regenerates the parser (`src/parser.c`, `src/grammar.json`,
-   `src/node-types.json`) and every artifact derived from it, in dependency
-   order: node-kind constants, typed traversal and C metadata bridge,
-   conformance inventory, spec-derived tests and audits. Running
-   `tree-sitter generate` alone leaves those consumers stale.
+   `src/node-types.json`, `src/grammar-contract.json`) and every artifact
+   derived from it, in dependency order: node-kind constants, typed traversal
+   and C metadata bridge, conformance inventory, spec-derived tests and
+   audits. It needs the pinned Tree-sitter build named by `TREE_SITTER_DIR`
+   and the traversal generator named by `TSGU_DIR` (see the Grammar Workflow).
+   Running `tree-sitter generate` alone leaves those consumers stale.
 3. **Test the grammar**:
    ```bash
    just grammar-test
@@ -65,7 +67,7 @@ are:
 
 | File | Owner |
 |------|-------|
-| `src/parser.c`, `src/grammar.json`, `src/node-types.json` | `grammar.js`, through tree-sitter generation in `just regen` |
+| `src/parser.c`, `src/grammar.json`, `src/node-types.json`, `src/grammar-contract.json` | `grammar.js`, through the pinned Tree-sitter build in `just regen` |
 | `src/generated_symbol_sets.js` | `spec/symbols/symbol_registry.json`, through `just symbols-gen` |
 | `test/corpus/generated/` | authored specs under `spec/constructs/` and `spec/errors/`, through `just spec-gen` |
 | typed traversal and `bindings/rust/tsgu_language_metadata.c` | the pinned traversal recipe (`just traversal-gen`) |

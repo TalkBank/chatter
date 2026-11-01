@@ -352,13 +352,19 @@ fn metadata_headers_types_mutations_detect_faults_through_isolated_headers() {
                 continue;
             };
             let children = types.extract();
-            let SourceSlotView::Present(design) = children.field_child_2().slot().view() else {
+            let Some(fields) = children.field_child_2().slot().optional() else {
+                panic!("types fields")
+            };
+            let SourceSlotView::Present(fields) = fields.view() else {
+                panic!("types fields")
+            };
+            let SourceSlotView::Present(design) = fields.field_child_0().slot().view() else {
                 panic!("design")
             };
-            let SourceSlotView::Present(activity) = children.field_child_6().slot().view() else {
+            let SourceSlotView::Present(activity) = fields.field_child_4().slot().view() else {
                 panic!("activity")
             };
-            let SourceSlotView::Present(group) = children.field_child_10().slot().view() else {
+            let SourceSlotView::Present(group) = fields.field_child_8().slot().view() else {
                 panic!("group")
             };
             let design = design.read().unwrap();
@@ -422,22 +428,17 @@ fn rejected_headers_preserve_original_source_through_model_and_json() {
     const TYPES: &str = include_str!(
         "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_3.cha"
     );
-    const MEDIA: &str =
-        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E509_4.cha");
-    const L1: &str =
-        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E519_2.cha");
     const PARTIAL_MEDIA: &str =
         include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E342_7.cha");
     const PARTIAL_TYPES: &str = include_str!(
         "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_6.cha"
     );
-    let empty_l1 = L1.replace("@L1 of CHI:\tqzz", "@L1 of CHI:\t");
+    // A header written with nothing after its separator is empty content
+    // (E553), not a rejected header; these are headers with malformed content.
     for (original, prefix) in [
         (TYPES, "@Types:"),
-        (MEDIA, "@Media:"),
         (PARTIAL_MEDIA, "@Media:"),
         (PARTIAL_TYPES, "@Types:"),
-        (&empty_l1, "@L1 of"),
     ] {
         for newline in ["\n", "\r\n", "\r"] {
             let input = original.replace('\n', newline);

@@ -8,6 +8,13 @@ Start with [Contributor Setup](book/src/contributing/setup.md), which owns the
 toolchain, native dependencies and package-specific first checks. A full
 workspace build includes the desktop app and its platform prerequisites;
 it is not the minimum setup for every parser or documentation change.
+Regenerating derived artifacts with `just regen`, which a grammar, spec or
+registry change requires, needs two pinned generator checkouts: the
+Tree-sitter build named by `TREE_SITTER_DIR` (at `tree-sitter-revision`) and
+the traversal generator named by `TSGU_DIR` (at `tsgu-revision`). Neither
+variable has a default, and `just gate` needs `TREE_SITTER_DIR` too. Setup
+and the [Grammar Workflow](book/src/contributing/grammar-workflow.md) describe
+both.
 
 [Developer Verification Checks](book/src/contributing/dev-checks.md) explains
 the focused development loop, generation, documentation checks and final

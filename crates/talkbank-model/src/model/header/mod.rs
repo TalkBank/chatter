@@ -37,7 +37,10 @@ pub use codes::*;
 pub use enums::*;
 pub use gem::{GemEndFailure, GemEvent, GemPair, GemState, UnclosedGem};
 pub use header_enum::{
-    CaOptionEffect, ChatOptionFlag, ChatOptionFlags, Header, LanguageCodes, ParticipantEntries,
+    BlankContent, CaOptionEffect, ChatOptionFlag, ChatOptionFlags, CommentContent, EmptyHeader,
+    FixedKind, GemKind, Header, HeaderContent, HeaderKind, HeaderPrefix, HeaderText, LanguageCodes,
+    MALFORMED_HEADER_CONTENT, MalformedOptionList, ParticipantEntries, PlainKind, QualifiedKind,
+    StructuredKind, TextKind, WrittenSeparator,
 };
 pub use id::IDHeader;
 pub use media::{DeclaredRecording, MediaHeader};

@@ -6,14 +6,16 @@
 //! pieces joined, a continuation line contributing one space. Until
 //! 2026-09-09 a header whose typed read found no label fell back to slicing
 //! the header's raw text after its first colon; these rows pin that the
-//! typed position is the only read: a header with nothing after its tab
-//! has no label and its recovery is named by the whole-tree pass (E316 for
-//! a malformed separator/label group). A colon-bearing `@G:` is not the
-//! legal bare `@G`; its recovered model retains the lazy-gem kind while the
-//! diagnostic rejects the malformed suffix. The lone
-//! `@Bg`/`@Eg` rows also carry their unmatched-gem verdicts (E526/E527).
+//! typed position is the only read: a header with nothing after its tab is
+//! the one empty-content state (E553), not a gem with no label and not the
+//! bare marker nobody wrote, so it opens and closes no gem scope. A
+//! colon-bearing `@G:` with no tab is not the legal bare `@G`: the
+//! whole-tree pass rejects the malformed suffix (E316) and the line is kept
+//! as an unknown header (E525), the same under both parsers.
 
-use talkbank_model::model::{GemLabel, Header, Line};
+use talkbank_model::model::{
+    GemKind, GemLabel, Header, HeaderKind, Line, PlainKind, WrittenSeparator,
+};
 use talkbank_parser_tests::from_source::{Rules, parsed_document};
 use talkbank_parser_tests::test_error::TestError;
 
@@ -33,16 +35,16 @@ fn gem_header(line: &str, codes: &[&str]) -> Result<Option<Header>, TestError> {
             Line::Header { header, .. } => Some(*header),
             _ => None,
         })
-        .find(|header| {
-            matches!(
-                header,
-                Header::BeginGem { .. } | Header::EndGem { .. } | Header::LazyGem { .. }
-            )
-        }))
+        .find(|header| matches!(header.kind(), HeaderKind::Plain(PlainKind::Gem(_)))))
+}
+
+/// The empty colon form of a gem header.
+fn empty(kind: GemKind) -> Header {
+    PlainKind::Gem(kind).empty(WrittenSeparator::admit(":\t").expect("written separator"))
 }
 
 fn label(text: &str) -> Option<GemLabel> {
-    Some(GemLabel::new(text))
+    Some(GemLabel::try_new(text).expect("a nonempty label"))
 }
 
 #[test]
@@ -118,18 +120,13 @@ fn a_gem_label_is_read_only_from_its_free_text_position() -> Result<(), TestErro
                 label: label("label more"),
             }),
         ),
-        ("@G:\t", &["E316"], Some(Header::LazyGem { label: None })),
-        ("@G:", &["E316"], Some(Header::LazyGem { label: None })),
-        (
-            "@Bg:\t",
-            &["E316", "E526"],
-            Some(Header::BeginGem { label: None }),
-        ),
-        (
-            "@Eg:\t",
-            &["E316", "E527"],
-            Some(Header::EndGem { label: None }),
-        ),
+        ("@G:\t", &["E553"], Some(empty(GemKind::Lazy))),
+        // A colon with no tab is an ERROR in the group position: unparsable
+        // text (E316), kept as an unknown header (E525), never a gem header
+        // (in particular, never the bare marker nobody wrote).
+        ("@G:", &["E316", "E525"], None),
+        ("@Bg:\t", &["E553"], Some(empty(GemKind::Begin))),
+        ("@Eg:\t", &["E553"], Some(empty(GemKind::End))),
     ];
     let mut wrong = Vec::new();
     for (line, codes, expected) in rows {

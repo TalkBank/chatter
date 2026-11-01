@@ -66,34 +66,6 @@ pub fn extract_utf8_text<'a>(
     }
 }
 
-/// The value of a slot that is `Present`, borrowed, or `None` for every
-/// recovery state.
-///
-/// `NodeSlot::present_or_recover` CONSUMES the slot, and slots are reached
-/// through `Positioned::slot()`, which borrows. Eight call sites bridged that
-/// with `.slot().clone().present_or_recover().ok()`, a clone taken solely to
-/// satisfy a by-value signature and then thrown away, which also forced a
-/// `T: Clone` bound onto two generic helpers that had no other use for it.
-///
-/// This is the borrowing form, exhaustive over all five states in ONE place, so
-/// the recovery states stay spelled out (the crate bans `_` arms on this enum)
-/// without spelling them out eight times.
-///
-/// Use `present_or_recover` where the RECOVERY variant is wanted; use this
-/// where the call site only asks "is it there".
-pub(crate) fn present<T, M, E, U, A>(
-    slot: &crate::generated_traversal::NodeSlot<T, M, E, U, A>,
-) -> Option<&T> {
-    use crate::generated_traversal::NodeSlot;
-    match slot {
-        NodeSlot::Present(value) => Some(value),
-        NodeSlot::Missing(_)
-        | NodeSlot::Error(_)
-        | NodeSlot::Unexpected(_)
-        | NodeSlot::Absent(_) => None,
-    }
-}
-
 /// A typed delimiter position (`<`, `>`, a quotation mark, a group bracket).
 /// Present needs nothing and so does Absent; a MISSING placeholder is left to
 /// the whole-tree recovery backstop, which already reports every MISSING

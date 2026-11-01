@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Bg_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Eg_Header>
 
-use crate::model::{Header, SpeakerCode};
+use crate::model::{FixedKind, Header, HeaderKind, PlainKind, SpeakerCode, StructuredKind};
 use crate::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use std::collections::{HashMap, HashSet};
 
@@ -222,6 +222,18 @@ pub(crate) fn check_headers(
     check_gem_balance(headers, errors);
 }
 
+/// The kind of an `@Options` line.
+///
+/// Ordering rules are about which header LINE sits where, so they match on
+/// [`Header::kind`]: a header written with nothing after its colon
+/// (`Header::EmptyContent`, already refused by E553) has its header's kind
+/// and still occupies its header's position, and an unadmitted declaration
+/// has its declaration's kind. Treating either as some other header would
+/// add a spurious ordering error to the one real defect.
+const OPTIONS: HeaderKind = HeaderKind::Plain(PlainKind::Structured(StructuredKind::Options));
+const PARTICIPANTS: HeaderKind = HeaderKind::Fixed(FixedKind::Participants);
+const ID: HeaderKind = HeaderKind::Fixed(FixedKind::Id);
+
 /// Check that headers appear in canonical order.
 ///
 /// The CHAT spec requires:
@@ -233,37 +245,33 @@ fn check_header_order(headers: &[(&Header, crate::Location)], errors: &impl Erro
     let mut saw_participants = false;
 
     for (header, span) in headers {
-        match header {
-            Header::Participants { .. } | Header::UnparsedParticipants(_) => {
-                saw_participants = true;
-            }
-            Header::Options { .. } if !saw_participants => {
-                let err = ParseError::new(
-                    ErrorCode::HeaderOutOfOrder,
-                    Severity::Error,
-                    DiagnosticLocation::from(*span),
-                    ErrorContext::new(
-                        "@Options",
-                        crate::Span::new(0, "@Options".len()),
-                        "@Options",
-                    ),
-                    "@Options must appear after @Participants",
-                )
-                .with_suggestion("Move @Options to after the @Participants header");
-                errors.report(err);
-            }
-            Header::ID(_) | Header::UnparsedID(_) if !saw_participants => {
-                let err = ParseError::new(
-                    ErrorCode::HeaderOutOfOrder,
-                    Severity::Error,
-                    DiagnosticLocation::from(*span),
-                    ErrorContext::new("@ID", crate::Span::new(0, "@ID".len()), "@ID"),
-                    "@ID must appear after @Participants",
-                )
-                .with_suggestion("Move @ID to after the @Participants header");
-                errors.report(err);
-            }
-            _ => {}
+        let kind = header.kind();
+        if kind == PARTICIPANTS {
+            saw_participants = true;
+        } else if kind == OPTIONS && !saw_participants {
+            let err = ParseError::new(
+                ErrorCode::HeaderOutOfOrder,
+                Severity::Error,
+                DiagnosticLocation::from(*span),
+                ErrorContext::new(
+                    "@Options",
+                    crate::Span::new(0, "@Options".len()),
+                    "@Options",
+                ),
+                "@Options must appear after @Participants",
+            )
+            .with_suggestion("Move @Options to after the @Participants header");
+            errors.report(err);
+        } else if kind == ID && !saw_participants {
+            let err = ParseError::new(
+                ErrorCode::HeaderOutOfOrder,
+                Severity::Error,
+                DiagnosticLocation::from(*span),
+                ErrorContext::new("@ID", crate::Span::new(0, "@ID".len()), "@ID"),
+                "@ID must appear after @Participants",
+            )
+            .with_suggestion("Move @ID to after the @Participants header");
+            errors.report(err);
         }
     }
 }
@@ -286,30 +294,18 @@ fn check_constant_participant_header_order(
     // The only headers that may legally precede a constant participant header:
     // an `@ID` header, or another constant participant header.
     fn is_allowed_predecessor(header: &Header) -> bool {
-        matches!(
-            header,
-            Header::ID(_)
-                | Header::UnparsedID(_)
-                | Header::Birth { .. }
-                | Header::Birthplace { .. }
-                | Header::L1Of { .. }
-        )
+        matches!(header.kind(), ID | HeaderKind::Qualified(_))
     }
 
     let mut prev: Option<&Header> = None;
     for (header, span) in headers {
-        // Identify the constant participant header (and its keyword for the
-        // diagnostic); `None` for every other header.
-        let keyword = match header {
-            Header::Birth { .. } => Some("@Birth of"),
-            Header::Birthplace { .. } => Some("@Birthplace of"),
-            Header::L1Of { .. } => Some("@L1 of"),
-            _ => None,
-        };
-
-        if let Some(keyword) = keyword
+        // A constant participant header is a participant-qualified kind,
+        // with or without content; its keyword comes from the label table.
+        if let HeaderKind::Qualified(kind) = header.kind()
             && !prev.is_some_and(is_allowed_predecessor)
         {
+            let keyword = kind.keyword();
+            let keyword = keyword.as_str();
             let err = ParseError::new(
                 ErrorCode::ConstantHeaderOutOfOrder,
                 Severity::Error,
@@ -345,24 +341,15 @@ fn check_id_header_order(headers: &[(&Header, crate::Location)], errors: &impl E
     let mut saw_participants = false;
     let mut prev: Option<&Header> = None;
     for (header, span) in headers {
-        if matches!(
-            header,
-            Header::Participants { .. } | Header::UnparsedParticipants(_)
-        ) {
+        if header.kind() == PARTICIPANTS {
             saw_participants = true;
         }
-        if matches!(header, Header::ID(_) | Header::UnparsedID(_)) {
+        if header.kind() == ID {
             // Valid immediate predecessors of an @ID: @Participants, @Options,
             // or another @ID.
             let preceded_validly = prev.is_some_and(|p| {
-                matches!(
-                    p,
-                    Header::Participants { .. }
-                        | Header::UnparsedParticipants(_)
-                        | Header::Options { .. }
-                        | Header::ID(_)
-                        | Header::UnparsedID(_)
-                )
+                let kind = p.kind();
+                kind == PARTICIPANTS || kind == OPTIONS || kind == ID
             });
             if saw_participants && !preceded_validly {
                 let err = ParseError::new(
@@ -430,18 +417,12 @@ fn check_options_header_order(headers: &[(&Header, crate::Location)], errors: &i
     let mut saw_participants = false;
     let mut prev: Option<&Header> = None;
     for (header, span) in headers {
-        if matches!(
-            header,
-            Header::Participants { .. } | Header::UnparsedParticipants(_)
-        ) {
+        if header.kind() == PARTICIPANTS {
             saw_participants = true;
         }
-        if matches!(header, Header::Options { .. }) {
+        if header.kind() == OPTIONS {
             // The only valid immediate predecessor of @Options is @Participants.
-            let preceded_validly = matches!(
-                prev,
-                Some(Header::Participants { .. } | Header::UnparsedParticipants(_))
-            );
+            let preceded_validly = prev.is_some_and(|p| p.kind() == PARTICIPANTS);
             if saw_participants && !preceded_validly {
                 let err = ParseError::new(
                     ErrorCode::OptionsHeaderOutOfOrder,
