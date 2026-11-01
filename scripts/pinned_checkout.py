@@ -115,9 +115,13 @@ class PinnedCheckout:
         ):
             raise PinError(f"the {pin.variable} checkout has uncommitted changes")
         if not (self.directory / "Cargo.lock").is_file():
-            raise PinError(f"the {pin.variable} checkout needs its committed Cargo.lock")
+            raise PinError(
+                f"the {pin.variable} checkout needs its committed Cargo.lock"
+            )
 
-    def build_executable(self, cargo_arguments: list[str], name: str, kind: str) -> Path:
+    def build_executable(
+        self, cargo_arguments: list[str], name: str, kind: str
+    ) -> Path:
         """Build with the committed lockfile and return the one executable
         Cargo reports for target `name` of kind `kind` (`bin`, `example`).
 
@@ -127,7 +131,14 @@ class PinnedCheckout:
         """
         self.revalidate()
         result = subprocess.run(
-            ["cargo", "build", "--locked", "--release", "--message-format=json", *cargo_arguments],
+            [
+                "cargo",
+                "build",
+                "--locked",
+                "--release",
+                "--message-format=json",
+                *cargo_arguments,
+            ],
             cwd=self.directory,
             check=True,
             stdout=subprocess.PIPE,

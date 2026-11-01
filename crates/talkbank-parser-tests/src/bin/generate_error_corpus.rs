@@ -18,8 +18,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use std::path::PathBuf;
-
 use talkbank_parser_tests::error_corpus_gen::{
     error_corpus_root, generate_e0_e1xx_internal_errors, generate_e3xx_parser_errors,
     generate_wxxx_warnings,
@@ -27,7 +25,7 @@ use talkbank_parser_tests::error_corpus_gen::{
 
 /// Entry point for this binary target.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = talkbank_repo::RepoRoot::discover()?.join("crates/talkbank-parser-tests");
     let error_corpus_root = error_corpus_root(&manifest_dir)?;
 
     println!("Generating error corpus files...\n");

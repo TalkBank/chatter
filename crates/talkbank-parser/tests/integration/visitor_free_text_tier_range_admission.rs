@@ -7,7 +7,7 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser::generated_traversal::{
     AltDependentTierNode, AsRawNode, CohDependentTierNode, CompiledLanguage, DefDependentTierNode,
     EngDependentTierNode, ErrDependentTierNode, FacDependentTierNode, FloDependentTierNode,
-    GlsDependentTierNode, ModsylDependentTierNode, NodeSlot, OrtDependentTierNode,
+    GlsDependentTierNode, ModsylDependentTierNode, NodeSlot, ObservedText, OrtDependentTierNode,
     ParDependentTierNode, PhoalnDependentTierNode, PhosylDependentTierNode, ReadableSlot,
     TimDependentTierNode, UnsupportedDependentTierNode, XDependentTierNode,
     XphointDependentTierNode,
@@ -180,10 +180,16 @@ fn reference_free_text_tier_ranges_retain_fields_and_count_selected_work() {
                 let selected = tier.extract_admitted(&grammar).unwrap();
                 let raw = selected.children();
                 let raw_size = std::mem::size_of_val(raw);
-                let range = raw.child_2.range.clone();
-                let body = source.get(range.clone()).unwrap();
-                anonymous[usize::from(!body.is_empty())] += 1;
-                let expected = 5
+                let observation = raw.child_2.observation().clone();
+                match &observation {
+                    ObservedText::Fragments { .. } => anonymous[1] += 1,
+                    ObservedText::Empty => anonymous[0] += 1,
+                    ObservedText::Recovery => panic!("authored unsupported body has no recovery"),
+                }
+                // Three selected child nodes, the region's parent, and one
+                // source check per nonempty fragment. Empty is not a slice.
+                let expected = 4
+                    + observation.fragments().count()
                     + raw.child_0.leading_extras().len()
                     + raw.child_1.leading_extras().len()
                     + raw.child_3.leading_extras().len()
@@ -214,8 +220,26 @@ fn reference_free_text_tier_ranges_retain_fields_and_count_selected_work() {
                     check_retained(*prefix, source);
                     check_retained(*separator, source);
                     check_retained(*newline, source);
-                    assert_eq!(fields.child_2.range(), range);
-                    assert_eq!(fields.child_2.text(), body);
+                    match (&observation, fields.child_2.observation()) {
+                        (
+                            ObservedText::Fragments { first, rest },
+                            ObservedText::Fragments {
+                                first: readable_first,
+                                rest: readable_rest,
+                            },
+                        ) => {
+                            assert_eq!(rest.len(), readable_rest.len());
+                            for (range, fragment) in std::iter::once(first)
+                                .chain(rest)
+                                .zip(std::iter::once(readable_first).chain(readable_rest))
+                            {
+                                assert_eq!(fragment.range(), *range);
+                                assert_eq!(fragment.text(), source.get(range.clone()).unwrap());
+                            }
+                        }
+                        (ObservedText::Empty, ObservedText::Empty) => {}
+                        _ => panic!("range admission must preserve the region observation"),
+                    }
                     assert_eq!(fields.child_2.parent().source(), source);
                     assert_eq!(fields.child_2.parent().raw_node(), tier.raw_node());
                 }

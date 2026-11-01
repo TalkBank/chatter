@@ -138,13 +138,13 @@ coverage:
 #         --json --output-path /tmp/cov.json
 #     just coverage-attribution /tmp/cov.json crates/talkbank-model/src/validation
 coverage-attribution EXPORT SCOPE:
-    python3 scripts/coverage_attribution.py {{ EXPORT }} --scope {{ SCOPE }} \
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/coverage_attribution.py {{ EXPORT }} --scope {{ SCOPE }} \
         --produced-by "cargo +nightly llvm-cov --branch --workspace --tests"
 
 # The attribution tool's own cases. Every one is a mistake it actually made
 # against real llvm-cov output, each of which produced a confident wrong number.
 check-coverage-attribution:
-    python3 -m unittest discover -s scripts -p test_coverage_attribution.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest discover -s scripts -p test_coverage_attribution.py
 
 # Same coverage run, rendered as a browsable HTML report (local exploration
 # of which lines are uncovered). Opens the report when it finishes.
@@ -226,12 +226,12 @@ fmt-check:
 # version in Cargo.toml. Run after bumping the version. (tauri.conf.json has no
 # version field by design; the desktop bundle inherits the crate version.)
 app-sync:
-    python3 scripts/sync-app-version.py --fix
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/sync-app-version.py --fix
 
 # Verify the app version is in sync everywhere (CI-style; non-mutating).
 app-sync-check:
-    python3 -m unittest scripts/test_sync_app_version.py
-    python3 scripts/sync-app-version.py --check
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest scripts/test_sync_app_version.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/sync-app-version.py --check
 
 # Bump the release version EVERYWHERE in one command: the canonical
 # [workspace.package] version, all internal path-dep pins, npm manifests, and
@@ -239,7 +239,7 @@ app-sync-check:
 # `## [X.Y.Z]` CHANGELOG section; the check gates enforce it. Then: commit,
 # `just push`, wait for CI, `just release-tag X.Y.Z`.
 release-bump VERSION:
-    python3 scripts/sync-app-version.py --bump {{VERSION}}
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/sync-app-version.py --bump {{VERSION}}
     cargo update --workspace
     cargo update --workspace --manifest-path spec/Cargo.toml
 
@@ -264,7 +264,7 @@ actionlint:
 # A guard proves what it hashes. Needs `TREE_SITTER_DIR` (see
 # scripts/generate_grammar.py).
 grammar-generate-check:
-    python3 scripts/generate_grammar.py --check
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/generate_grammar.py --check
 
 # Regenerate the node-type constants and fail if the committed output moved.
 #
@@ -278,12 +278,12 @@ grammar-generate-check:
 node-types-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    python3 -m unittest discover -s scripts -p test_generate_if_changed.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest discover -s scripts -p test_generate_if_changed.py
     # The other generation scripts' tests (checkout admission, traversal
     # regeneration, regeneration order) need no producer, so they run here,
     # where CI runs them too.
-    python3 -m unittest discover -s scripts -p test_pinned_checkout.py
-    python3 -m unittest discover -s scripts -p 'test_regenerat*.py'
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest discover -s scripts -p test_pinned_checkout.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest discover -s scripts -p 'test_regenerat*.py'
     # Generate to a TEMPORARY file and compare, never `>` straight over the
     # tracked one. The redirection truncates BEFORE node runs, so a generator
     # that crashes leaves an EMPTY `node_types.rs` in the working tree, and the
@@ -371,8 +371,8 @@ install-hooks:
 
 # Assert CI and the gate cannot describe different checks.
 ci-gate-sync:
-    python3 scripts/test_check_ci_gate_sync.py
-    python3 scripts/check_ci_gate_sync.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/test_check_ci_gate_sync.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/check_ci_gate_sync.py
 
 # THE PRE-PUSH GATE. Locally owned publication checks, one content stamp.
 #
@@ -429,6 +429,7 @@ gate:
     just fmt-check
     just actionlint
     just ci-gate-sync
+    just python-tools-check
     just app-sync-check
     just doc-dates
     just shellcheck
@@ -491,8 +492,8 @@ symbols-gen:
 # left listed, so the list can only shrink. Do not bulk-stamp dates to empty it;
 # read the page first.
 doc-dates:
-    python3 -m unittest scripts/test_check_doc_dates.py
-    python3 {{ justfile_directory() }}/scripts/check_doc_dates.py --prospective
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest discover -s scripts -p test_check_doc_dates.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python {{ justfile_directory() }}/scripts/check_doc_dates.py --prospective
 # Regenerate every artifact derived from spec/ (tests, fixtures, registries).
 #
 # One command for what used to be four hand-typed `cargo run --manifest-path`
@@ -508,13 +509,13 @@ doc-dates:
 # (traversal, node types, inventory, observation snapshot, ...). After any
 # change under grammar/, spec/ or the registries: `just regen`, then
 # `just test`, once.
-regen: symbols-gen grammar-gen form-markers-gen model-sources-gen node-types-gen traversal-gen schema-gen conformance-gen spec-gen check-mapping-gen
+regen: symbols-gen grammar-gen form-markers-gen model-sources-gen node-types-gen traversal-gen conformance-gen schema-gen spec-gen check-mapping-gen
 
 grammar-gen:
-    python3 scripts/generate_grammar.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/generate_grammar.py
 
 node-types-gen:
-    python3 scripts/generate_if_changed.py crates/talkbank-parser/src/node_types.rs node scripts/generate-node-types.js
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/generate_if_changed.py crates/talkbank-parser/src/node_types.rs node scripts/generate-node-types.js
 
 # Select the source-only package: selecting the runtime package would unify its
 # model-runtime feature and compile the consumer before repairing its sources.
@@ -523,18 +524,19 @@ model-sources-gen:
 
 # The generator reads current traversal source without compiling its stale consumer.
 conformance-gen:
-    python3 scripts/generate_if_changed.py crates/talkbank-parser-tests/src/conformance/inventory.rs cargo run --quiet -p talkbank-parser-tests --no-default-features --example gen_conformance_inventory -- --stdout
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/generate_if_changed.py crates/talkbank-parser-tests/src/conformance/inventory.rs cargo run --quiet -p talkbank-parser-tests --no-default-features --example gen_conformance_inventory -- --stdout
 
 # Refresh the schema before later builds embed it. Select only the generator:
 # the currency test in the same binary sees the old compile-time schema.
-schema-gen:
+# Its Rust target compiles parser-tests, so bootstrap its source inventory first.
+schema-gen: conformance-gen
     cargo test --quiet -p talkbank-transform --test integration generate_schema::generate::generate_chat_file_schema -- --exact --ignored
 
 # Both traversal artifacts, from clean source at the reviewed tsgu-revision.
 # The owning script admits source, builds locked dependencies, uses Cargo's
 # executable report, and stages both outputs before replacing changed bytes.
 traversal-gen:
-    python3 scripts/regenerate_traversal.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/regenerate_traversal.py
 
 # The CHECK mapping inventory, `docs/audits/check-parity-audit.md`.
 #
@@ -646,7 +648,7 @@ form-markers-gen:
 verify-vendored-lexer:
     #!/usr/bin/env bash
     set -euo pipefail
-    expected="$(python3 -c 'import tomllib; print(tomllib.load(open("{{ justfile_directory() }}/re2c-version.toml", "rb"))["re2c"]["version"])')"
+    expected="$(uv run --locked --project "{{ justfile_directory() }}/scripts" python -c 'import tomllib; print(tomllib.load(open("{{ justfile_directory() }}/re2c-version.toml", "rb"))["re2c"]["version"])')"
     actual="$(re2rust --version | awk '{print $2}')"
     if [[ "$actual" != "$expected" ]]; then
         echo "error: re2rust $actual is installed; expected exactly $expected from re2c-version.toml" >&2
@@ -711,9 +713,9 @@ book-tools-check:
 # from the repo root): 0.4.x hands a preprocessor no cwd of its own, so the
 # `../scripts/...` command in book.toml only resolves from inside book/.
 book: book-tools-check
-    python3 -m unittest {{ justfile_directory() }}/scripts/test_mdbook_git_dates.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest {{ justfile_directory() }}/scripts/test_mdbook_git_dates.py
     cd {{ justfile_directory() }}/book && PATH="{{ book_tools_bin }}:$PATH" mdbook build
-    python3 {{ justfile_directory() }}/scripts/mdbook_git_dates.py verify --book-root {{ justfile_directory() }}/book --page introduction.md {{ justfile_directory() }}/book/build/index.html
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python {{ justfile_directory() }}/scripts/mdbook_git_dates.py verify --book-root {{ justfile_directory() }}/book --page introduction.md {{ justfile_directory() }}/book/build/index.html
     PATH="{{ book_tools_bin }}:$PATH" lychee --offline --root-dir {{ justfile_directory() }}/book/build {{ justfile_directory() }}/book/build
 
 # Serve the book locally with the repo-local pinned mdBook toolchain.
@@ -723,3 +725,10 @@ book-serve: book-tools-check
 # Gate receipts authorize exact pushed trees, including annotated tags.
 gate-receipts-test:
     bash scripts/test-gate-receipts.sh
+
+# Explicit acceptance checks for the owned uv development-tools project.
+python-tools-check:
+    uv sync --locked --project "{{ justfile_directory() }}/scripts" --all-groups
+    cd scripts && uv run --locked ruff check .
+    cd scripts && uv run --locked mypy
+    cd scripts && uv run --locked pytest -q

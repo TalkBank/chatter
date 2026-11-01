@@ -58,11 +58,9 @@ fn legal_zero_start_is_not_rejected_by_numeric_admission() {
 }
 
 fn example(title: &str) -> String {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path();
     let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
     specs
         .iter()

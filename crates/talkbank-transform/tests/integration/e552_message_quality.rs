@@ -30,12 +30,12 @@ use std::path::PathBuf;
 use talkbank_model::{ParseError, ParseValidateOptions};
 use talkbank_transform::{PipelineError, parse_and_validate};
 
-/// Repo root: this crate is `<root>/crates/talkbank-transform`, so pop twice.
+/// The admitted runtime checkout.
 fn workspace_root() -> PathBuf {
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    dir.pop();
-    dir.pop();
-    dir
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned()
 }
 
 /// Validation errors for CHAT content, raw from `parse_and_validate`.

@@ -46,6 +46,7 @@ unicode-segmentation = { workspace = true }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
+talkbank-repo = { path = "../talkbank-repo" }
 talkbank-parser-tests = { path = "../talkbank-parser-tests" }
 proptest = { workspace = true }
 insta = { workspace = true }

@@ -113,7 +113,9 @@ fn collect_cha_fixtures(dirs: &[PathBuf]) -> Result<Vec<PathBuf>, TestError> {
 /// recovery nodes: the CHECK-parity fixtures, the spec-generated validation
 /// corpus, and the hand-maintained parse-error corpus (at the repo root).
 fn error_corpus_dirs() -> Vec<PathBuf> {
-    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let crate_dir = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests");
     let repo_root = crate_dir.join("..").join("..");
     vec![
         crate_dir.join("tests/check_parity/fixtures"),
@@ -168,8 +170,9 @@ struct ManifestView {
 
 /// Read every fixture rule profile; code status cannot exempt parser recovery.
 fn manifest_view() -> Result<ManifestView, TestError> {
-    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/error_corpus/validation_errors/manifest.json");
+    let manifest_path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/manifest.json");
     let text = std::fs::read_to_string(&manifest_path)
         .map_err(|err| TestError::Failure(format!("read validation manifest: {err}")))?;
     let manifest: talkbank_spec_vocabulary::validation_manifest::ValidationManifest =

@@ -64,7 +64,10 @@ def neutralize_file(path: pathlib.Path) -> bool:
 def main() -> int:
     root = pathlib.Path("corpus/reference")
     if not root.is_dir():
-        print("run from the chatter repo root (corpus/reference not found)", file=sys.stderr)
+        print(
+            "run from the chatter repo root (corpus/reference not found)",
+            file=sys.stderr,
+        )
         return 2
     changed = [p for p in sorted(root.rglob("*.cha")) if neutralize_file(p)]
     print(f"neutralized @ID corpus field in {len(changed)} fixture(s):")

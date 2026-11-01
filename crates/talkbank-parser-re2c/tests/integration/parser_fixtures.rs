@@ -528,7 +528,10 @@ fn parse_all_languages_fixtures() {
 #[test]
 fn language_fragment_rejects_authored_failures_without_empty_success() {
     use talkbank_model::{ErrorCollector, ParseOutcome};
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned();
     let specs = talkbank_parser_tests::error_specs::load(&root).expect("authored specs");
     enum Expected {
         Parsed(&'static [&'static str]),

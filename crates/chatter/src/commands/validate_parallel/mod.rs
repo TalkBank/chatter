@@ -308,7 +308,10 @@ mod watch_tests {
     /// runner's read error, a complete run that does not pass.
     #[test]
     fn a_watched_file_is_validated_by_the_runner() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let root = talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .as_path()
+            .to_owned();
         let reference = root.join("corpus/reference/core/basic-conversation.cha");
         let run = ValidationRun::uncached(ValidationConfig::default());
         let ending = validate_watched_file(reference, &run).unwrap();

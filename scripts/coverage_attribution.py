@@ -71,6 +71,59 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Annotated, NotRequired, TypedDict
+
+from pydantic import Field, TypeAdapter
+
+
+class RegionCounts(TypedDict):
+    covered: int
+    count: int
+
+
+class FileSummary(TypedDict):
+    regions: RegionCounts
+
+
+class CoverageFile(TypedDict):
+    filename: str
+    summary: FileSummary
+
+
+type CodeRegion = Annotated[list[int], Field(min_length=8, max_length=8)]
+type BranchRegion = Annotated[list[int], Field(min_length=9, max_length=9)]
+
+
+class CoverageFunction(TypedDict):
+    name: str
+    filenames: NotRequired[list[str]]
+    regions: NotRequired[list[CodeRegion]]
+    branches: NotRequired[list[BranchRegion]]
+
+
+class CoverageData(TypedDict):
+    functions: NotRequired[list[CoverageFunction]]
+    files: NotRequired[list[CoverageFile]]
+
+
+class CoverageExport(TypedDict):
+    data: Annotated[list[CoverageData], Field(min_length=1)]
+
+
+class ByteRange(TypedDict):
+    start: int
+    end: int
+
+
+class RangeEvidence(TypedDict):
+    source_sha256: str
+    test_byte_ranges: list[ByteRange]
+
+
+type RegionSpan = tuple[str, int, int, int, int]
+
+EXPORT = TypeAdapter(CoverageExport)
+RANGES = TypeAdapter(dict[str, RangeEvidence])
 
 # Committed files that a generator writes. A mutant, an uncovered branch or a
 # surviving fabrication in one of these indicts the GENERATOR, not this
@@ -172,7 +225,7 @@ REGION_KIND_CODE = 0
 
 
 def build_rows(
-    export: dict, repo_root: Path, scope: str
+    export: CoverageExport, repo_root: Path, scope: str
 ) -> tuple[dict[tuple[str, int, int], FunctionRow], list[str]]:
     """Merged rows, plus any file where this disagrees with llvm-cov itself.
 
@@ -216,7 +269,7 @@ def build_rows(
         regions = [r for r in function.get("regions", []) if r[7] == REGION_KIND_CODE]
         if not regions:
             continue
-        by_file: dict[str, list] = {}
+        by_file: dict[str, list[list[int]]] = {}
         for region in regions:
             region_file = filenames[region[5]]
             by_file.setdefault(region_file, []).append(region)
@@ -225,7 +278,10 @@ def build_rows(
             key = (region_file, first[0], first[1])
             covered = sum(r[4] > 0 for r in file_regions)
             previous = summaries.get(key, (0, 0))
-            summaries[key] = (max(previous[0], covered), max(previous[1], len(file_regions)))
+            summaries[key] = (
+                max(previous[0], covered),
+                max(previous[1], len(file_regions)),
+            )
         span = (min(r[0] for r in regions), max(r[2] for r in regions))
         for region in regions:
             # A region names its OWN file by index into `filenames`, because a
@@ -235,7 +291,11 @@ def build_rows(
             # llvm-cov said 451/506. The self-check caught it; nothing else
             # would have.
             region_file = filenames[region[5]] if region[5] < len(filenames) else file
-            if region_file not in measured_files or not region_file.startswith(scope) or is_generated(repo_root, region_file):
+            if (
+                region_file not in measured_files
+                or not region_file.startswith(scope)
+                or is_generated(repo_root, region_file)
+            ):
                 continue
             # The full span, not the start: `if c { a } else { b }` puts two
             # regions at one start position, and keying on the start merged
@@ -282,7 +342,7 @@ def build_rows(
 
 
 def covered_positions(
-    export: dict,
+    export: CoverageExport,
     repo_root: Path,
     scope: str,
     exclude: set[tuple[str, int, int, int, int]] | None = None,
@@ -294,7 +354,9 @@ def covered_positions(
     same count.
     """
     covered: set[tuple[str, int, int, int, int]] = set()
-    measured_files = {relative(entry["filename"]) for entry in export["data"][0].get("files", [])}
+    measured_files = {
+        relative(entry["filename"]) for entry in export["data"][0].get("files", [])
+    }
     for function in export["data"][0].get("functions", []):
         filenames = [relative(name) for name in function.get("filenames", [])]
         if not filenames:
@@ -307,8 +369,14 @@ def covered_positions(
             # expansions, and a start position alone merges the two arms of an
             # `if`. This function had both bugs after `build_rows` was fixed,
             # and they showed up as a scope reporting 117.5% coverage.
-            region_file = filenames[region[5]] if region[5] < len(filenames) else filenames[0]
-            if region_file not in measured_files or not region_file.startswith(scope) or is_generated(repo_root, region_file):
+            region_file = (
+                filenames[region[5]] if region[5] < len(filenames) else filenames[0]
+            )
+            if (
+                region_file not in measured_files
+                or not region_file.startswith(scope)
+                or is_generated(repo_root, region_file)
+            ):
                 continue
             at = (region_file, region[0], region[1], region[2], region[3])
             if exclude is None or at not in exclude:
@@ -317,7 +385,7 @@ def covered_positions(
 
 
 def region_spans(
-    export: dict, repo_root: Path, scope: str
+    export: CoverageExport, repo_root: Path, scope: str
 ) -> tuple[set[tuple[str, int, int, int, int]], set[tuple[str, int, int, int, int]]]:
     """(every region span in `scope`, the covered subset), from ONE walk.
 
@@ -329,7 +397,9 @@ def region_spans(
     """
     every: set[tuple[str, int, int, int, int]] = set()
     covered: set[tuple[str, int, int, int, int]] = set()
-    measured_files = {relative(entry["filename"]) for entry in export["data"][0].get("files", [])}
+    measured_files = {
+        relative(entry["filename"]) for entry in export["data"][0].get("files", [])
+    }
     for function in export["data"][0].get("functions", []):
         filenames = [relative(name) for name in function.get("filenames", [])]
         if not filenames:
@@ -337,8 +407,14 @@ def region_spans(
         for region in function.get("regions", []):
             if region[7] != REGION_KIND_CODE:
                 continue
-            region_file = filenames[region[5]] if region[5] < len(filenames) else filenames[0]
-            if region_file not in measured_files or not region_file.startswith(scope) or is_generated(repo_root, region_file):
+            region_file = (
+                filenames[region[5]] if region[5] < len(filenames) else filenames[0]
+            )
+            if (
+                region_file not in measured_files
+                or not region_file.startswith(scope)
+                or is_generated(repo_root, region_file)
+            ):
                 continue
             at = (region_file, region[0], region[1], region[2], region[3])
             every.add(at)
@@ -353,7 +429,9 @@ def relative(path: str) -> str:
     return path[index + len(marker) :] if index >= 0 else path
 
 
-def branch_outcomes(export: dict, repo_root: Path, scope: str) -> dict:
+def branch_outcomes(
+    export: CoverageExport, repo_root: Path, scope: str
+) -> dict[RegionSpan, tuple[bool, bool]]:
     """Independent true/false outcomes, unioned by complete source span.
 
     Branch records have two counters, so their file index is 6, not the code
@@ -361,14 +439,20 @@ def branch_outcomes(export: dict, repo_root: Path, scope: str) -> dict:
     summary and not a replacement for the line or region measurements.
     """
     outcomes: dict[tuple[str, int, int, int, int], tuple[bool, bool]] = {}
-    measured_files = {relative(entry["filename"]) for entry in export["data"][0].get("files", [])}
+    measured_files = {
+        relative(entry["filename"]) for entry in export["data"][0].get("files", [])
+    }
     for function in export["data"][0].get("functions", []):
         filenames = function.get("filenames", [])
         for branch in function.get("branches", []):
             file = relative(filenames[branch[6]])
-            if file not in measured_files or not file.startswith(scope) or is_generated(repo_root, file):
+            if (
+                file not in measured_files
+                or not file.startswith(scope)
+                or is_generated(repo_root, file)
+            ):
                 continue
-            key = (file, *branch[:4])
+            key = (file, branch[0], branch[1], branch[2], branch[3])
             previous = outcomes.get(key, (False, False))
             outcomes[key] = (previous[0] or branch[4] > 0, previous[1] or branch[5] > 0)
     return outcomes
@@ -377,7 +461,7 @@ def branch_outcomes(export: dict, repo_root: Path, scope: str) -> dict:
 class TestSource:
     """Explicit test ranges admitted only against the source they describe."""
 
-    def __init__(self, source: bytes, evidence: dict):
+    def __init__(self, source: bytes, evidence: RangeEvidence) -> None:
         if hashlib.sha256(source).hexdigest() != evidence["source_sha256"]:
             raise ValueError("inline-test range inventory is stale; regenerate it")
         self.line_starts = [0] + [i + 1 for i, byte in enumerate(source) if byte == 10]
@@ -448,12 +532,18 @@ def main() -> int:
         ),
     )
     parser.add_argument("--json", type=Path, help="write the full row set here")
-    parser.add_argument("--branches-json", type=Path, help="write uncovered true/false outcomes here")
-    parser.add_argument("--test-ranges", type=Path, help="source-bound inventory from coverage_source_ranges")
+    parser.add_argument(
+        "--branches-json", type=Path, help="write uncovered true/false outcomes here"
+    )
+    parser.add_argument(
+        "--test-ranges",
+        type=Path,
+        help="source-bound inventory from coverage_source_ranges",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
-    export = json.loads(args.export.read_text())
+    export = EXPORT.validate_json(args.export.read_text(), strict=True)
     print(f"Export produced by: {args.produced_by}")
 
     # "Nothing to report" has two causes and they are opposite verdicts: the
@@ -461,7 +551,9 @@ def main() -> int:
     # first draft of this printed "no uncovered regions" for both and exited 0,
     # which is the vacuity this tool exists to find, in the tool.
     measured = sum(
-        1 for file in export["data"][0].get("files", []) if relative(file["filename"]).startswith(args.scope)
+        1
+        for file in export["data"][0].get("files", [])
+        if relative(file["filename"]).startswith(args.scope)
     )
     if measured == 0:
         print(
@@ -474,9 +566,9 @@ def main() -> int:
         )
         return 2
 
-    fabrication_only: set[tuple[str, int, int]] = set()
+    fabrication_only: set[RegionSpan] = set()
     if args.fabrication_floor:
-        floor = json.loads(args.fabrication_floor.read_text())
+        floor = EXPORT.validate_json(args.fabrication_floor.read_text(), strict=True)
         fabricated = covered_positions(floor, repo_root, args.scope)
         full = covered_positions(export, repo_root, args.scope)
         # Covered in the fabricating run, and covered in the full run ONLY
@@ -507,7 +599,9 @@ def main() -> int:
         )
         if args.without_fabrication:
             without = covered_positions(
-                json.loads(args.without_fabrication.read_text()), repo_root, args.scope
+                EXPORT.validate_json(args.without_fabrication.read_text(), strict=True),
+                repo_root,
+                args.scope,
             )
             fabrication_only = fabricated - without
             print(
@@ -522,24 +616,41 @@ def main() -> int:
     if args.test_ranges:
         test_sources = {
             file: TestSource((repo_root / file).read_bytes(), evidence)
-            for file, evidence in json.loads(args.test_ranges.read_text()).items()
+            for file, evidence in RANGES.validate_json(
+                args.test_ranges.read_text(), strict=True
+            ).items()
         }
         test_starts = sum(
             test_sources[row.file].contains(line, column)
-            for row in rows.values() for line, column in row.uncovered_region_starts
+            for row in rows.values()
+            for line, column in row.uncovered_region_starts
         )
         total_starts = sum(len(row.uncovered_region_starts) for row in rows.values())
-        print(f"Uncovered region starts: {test_starts} explicit inline tests; {total_starts - test_starts} production or unclassified")
+        print(
+            f"Uncovered region starts: {test_starts} explicit inline tests; {total_starts - test_starts} production or unclassified"
+        )
     branches = branch_outcomes(export, repo_root, args.scope)
     missing_branches = [
-        {"file": span[0], "span": span[1:], "outcome": outcome,
-         "produced_by": args.produced_by,
-         "source_class": ("explicit_inline_test" if test_sources[span[0]].contains(span[1], span[2]) else "production_or_unclassified") if test_sources is not None else "unclassified"}
+        {
+            "file": span[0],
+            "span": span[1:],
+            "outcome": outcome,
+            "produced_by": args.produced_by,
+            "source_class": (
+                "explicit_inline_test"
+                if test_sources[span[0]].contains(span[1], span[2])
+                else "production_or_unclassified"
+            )
+            if test_sources is not None
+            else "unclassified",
+        }
         for span, covered in sorted(branches.items())
         for outcome, reached in zip(("true", "false"), covered)
         if not reached
     ]
-    print(f"{len(missing_branches)} uncovered true/false outcomes across {len(branches)} source-union branch sites")
+    print(
+        f"{len(missing_branches)} uncovered true/false outcomes across {len(branches)} source-union branch sites"
+    )
     if args.branches_json:
         args.branches_json.write_text(json.dumps(missing_branches, indent=2) + "\n")
     # THREE BUCKETS, never two. A file this tool and llvm-cov disagree about is
@@ -561,12 +672,18 @@ def main() -> int:
 
     if not rows:
         if disagreements:
-            print("No attributable residual rows; excluded files prevent a completeness claim.")
+            print(
+                "No attributable residual rows; excluded files prevent a completeness claim."
+            )
             return 2
         if args.json:
             args.json.write_text("[]\n")
-        print(f"{measured} file(s) under {args.scope} measured; no uncovered source-union code regions")
-        print("This is not a completeness claim for LLVM line, region or branch summaries.")
+        print(
+            f"{measured} file(s) under {args.scope} measured; no uncovered source-union code regions"
+        )
+        print(
+            "This is not a completeness claim for LLVM line, region or branch summaries."
+        )
         return 0
 
     dead = [r for r in rows.values() if r.ratio == 1.0]
@@ -587,11 +704,14 @@ def main() -> int:
     print()
     print("PARTIALLY REACHED, most uncovered region starts first.")
     print("These are source regions, not LLVM true/false branch outcomes.")
-    for row in sorted(partial, key=lambda r: -len(r.uncovered_region_starts))[: args.limit]:
+    for row in sorted(partial, key=lambda r: -len(r.uncovered_region_starts))[
+        : args.limit
+    ]:
         if not row.uncovered_region_starts:
             continue
         where = ", ".join(
-            f"{line}:{column}" for line, column in sorted(row.uncovered_region_starts)[:4]
+            f"{line}:{column}"
+            for line, column in sorted(row.uncovered_region_starts)[:4]
         )
         print(
             f"  {len(row.uncovered_region_starts):4} region starts  {row.ratio:4.2f}  {row.path:40} "
@@ -610,9 +730,13 @@ def main() -> int:
                         "function_regions_uncovered": row.uncovered,
                         "uncovered_region_starts": sorted(row.uncovered_region_starts),
                         "explicit_inline_test_region_starts": (
-                            sorted((line, column) for line, column in row.uncovered_region_starts
-                                   if test_sources[row.file].contains(line, column))
-                            if test_sources is not None else None
+                            sorted(
+                                (line, column)
+                                for line, column in row.uncovered_region_starts
+                                if test_sources[row.file].contains(line, column)
+                            )
+                            if test_sources is not None
+                            else None
                         ),
                         "verdict": None,
                     }

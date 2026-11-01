@@ -1,0 +1,16 @@
+[package]
+name = "talkbank-repo"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Runtime checkout admission for Chatter's tests and development tools"
+publish = false
+
+[dependencies]
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

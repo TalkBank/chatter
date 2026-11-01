@@ -224,7 +224,9 @@ mod tests {
     fn missing_inputs_and_failed_output_are_errors() -> Result<(), Box<dyn std::error::Error>> {
         // An existing regular file cannot contain a child directory. No output
         // is created and no external corpus or temporary directory is needed.
-        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let manifest = talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("crates/talkbank-parser-re2c/Cargo.toml");
         assert!(collect_cha_files(&manifest).is_err());
         let impossible = manifest.join("unavailable.cha");
         assert!(collect_cha_files(&impossible).is_err());

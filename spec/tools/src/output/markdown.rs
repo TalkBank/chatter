@@ -464,7 +464,9 @@ mod tests {
     #[test]
     fn carriage_return_examples_render_as_readable_markdown() {
         let registry = crate::test_registry::declaring(&[("E747", Status::Implemented)]);
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../errors/E747.md");
+        let path = talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("spec/errors/E747.md");
         let source = std::fs::read_to_string(&path).expect("E747 spec exists");
         let spec = ErrorSpec::from_frontmatter(&path, &source, &registry).expect("E747 loads");
         assert!(

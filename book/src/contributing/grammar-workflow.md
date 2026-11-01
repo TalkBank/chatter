@@ -238,6 +238,11 @@ comment. A bare semver does not identify a build, which is why the generator
 stamps its source commit beside the version. When the question is which backend
 produced the module, read that header rather than trusting a green suite.
 
+Schema generation depends on this source-only conformance bootstrap: its Rust
+target compiles parser-tests and cannot consume a stale inventory after a
+generated API change. The dependency applies to standalone `just schema-gen`
+as well as the consolidated regeneration recipe.
+
 After traversal regeneration, run `just conformance-gen`. It derives the test
 inventory from the current traversal source. Its generator-only build omits
 the default `conformance` feature so an outdated generated consumer cannot

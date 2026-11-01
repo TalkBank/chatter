@@ -49,12 +49,11 @@ fn parse_chat(source: &str) -> tree_sitter::Tree {
     parser.parse(source, None).expect("parse CHAT source")
 }
 
-/// The repo root, two levels up from this crate's manifest dir.
+/// The admitted runtime checkout.
 fn repo_root() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("repo root is two levels up from the crate manifest dir")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
         .to_path_buf()
 }
 

@@ -57,38 +57,11 @@ fn transport_variants_preserve_content_and_empty_lines() {
     assert_eq!(LineEnding::Cr.apply("x\n"), "x\r");
 }
 
-/// Workspace root, located by walking up from `CARGO_MANIFEST_DIR` to the
-/// nearest ancestor whose `Cargo.toml` declares `[workspace]`.
-///
-/// This replaces the rename-fragile pattern callers used to hard-code:
-/// `env!("CARGO_MANIFEST_DIR").replace("/crates/<crate>", "")`, which
-/// silently produced a wrong path the moment a crate was renamed.
-///
-/// We check the `[workspace]` table explicitly rather than just
-/// `Cargo.lock` because stale orphan lockfiles inside sub-crates DO
-/// happen, `apps/dashboard-desktop/src-tauri/Cargo.lock` was observed as
-/// an orphan on 2026-04-30, and a `Cargo.lock`-only walk-up silently
-/// returned the wrong path. Reading the Cargo.toml content is slightly
-/// slower (one stat + one small read per ancestor) but rejects orphans
-/// by construction.
+/// Admitted runtime checkout, shared with the other test and audit crates.
 pub fn workspace_root() -> &'static Path {
-    static ROOT: OnceLock<PathBuf> = OnceLock::new();
-    ROOT.get_or_init(|| {
-        let start = Path::new(env!("CARGO_MANIFEST_DIR"));
-        for ancestor in start.ancestors() {
-            let toml = ancestor.join("Cargo.toml");
-            if let Ok(content) = std::fs::read_to_string(&toml)
-                && content.contains("[workspace]")
-            {
-                return ancestor.to_path_buf();
-            }
-        }
-        panic!(
-            "workspace_root(): no Cargo.toml with [workspace] found above \
-             {}, was the crate relocated outside its workspace?",
-            start.display()
-        );
-    })
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
 }
 
 /// Meta-repository root (the parent of [`workspace_root`]), where the
@@ -190,15 +163,18 @@ impl<'a> IntoIterator for &'a FixtureEntries {
 /// Load one checked-in fixture or fail the requesting test.
 /// This belongs to the integration target, never the production library API.
 pub fn load_fixture(name: &str) -> FixtureEntries {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
+    let path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-re2c/tests/fixtures")
         .join(format!("{name}.txt"));
     FixtureEntries::read(&path).unwrap_or_else(|error| panic!("{error}"))
 }
 
 #[test]
 fn empty_fixture_files_refuse_admission() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-re2c/tests/fixtures");
     for name in ["header_recording_quality", "tier_flo", "tier_xcod"] {
         let path = root.join(format!("{name}.txt"));
         assert!(
@@ -209,7 +185,9 @@ fn empty_fixture_files_refuse_admission() {
 
 #[test]
 fn missing_fixture_retains_its_io_failure() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/__absent_fixture__.txt");
+    let path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-re2c/tests/fixtures/__absent_fixture__.txt");
     assert!(
         matches!(FixtureEntries::read(&path), Err(FixtureLoadError::Read { path: rejected, source }) if rejected == path && source.kind() == std::io::ErrorKind::NotFound)
     );

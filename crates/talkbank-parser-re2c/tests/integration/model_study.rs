@@ -66,11 +66,9 @@ fn reference_replacement_words_are_structural_and_source_bound() {
 #[test]
 fn empty_replacement_spec_is_rejected_by_re2c_grammar() {
     use talkbank_model::{ChatParser, ErrorCollector};
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path();
     let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
     let spec = specs
         .iter()

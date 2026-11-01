@@ -103,7 +103,9 @@ def date_claim(path: str, text: str) -> DateClaim:
     if value == GIT_DERIVED_DATE:
         if path.startswith("book/src/") and path != "book/src/SUMMARY.md":
             return GitPublicationDate()
-        return InvalidDateHeader("a page date placeholder requires a rendered book chapter")
+        return InvalidDateHeader(
+            "a page date placeholder requires a rendered book chapter"
+        )
     history = HISTORY_URL + quote(path)
     if value == f'<a href="{history}">Git history</a>':
         return GitPublicationDate()
@@ -111,7 +113,9 @@ def date_claim(path: str, text: str) -> DateClaim:
         return GitPublicationDate()
     manual = MANUAL_DATE.match(value)
     if manual is None:
-        return InvalidDateHeader("expected a date or Git publication metadata bound to this document")
+        return InvalidDateHeader(
+            "expected a date or Git publication metadata bound to this document"
+        )
     try:
         return HandwrittenDate(datetime.date.fromisoformat(manual.group(1)))
     except ValueError:
@@ -159,8 +163,11 @@ class Snapshot(Enum):
     def read(self, path: str) -> str:
         if self is Snapshot.INDEX:
             return subprocess.run(
-                ["git", "show", f":{path}"], cwd=REPO_ROOT,
-                capture_output=True, text=True, check=True,
+                ["git", "show", f":{path}"],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
             ).stdout
         return (REPO_ROOT / path).read_text(encoding="utf-8")
 
@@ -179,7 +186,8 @@ def tracked_markdown(snapshot: Snapshot) -> list[str]:
     return [
         path
         for path in sorted(set(out))
-        if path and (snapshot is Snapshot.INDEX or (REPO_ROOT / path).is_file())
+        if path
+        and (snapshot is Snapshot.INDEX or (REPO_ROOT / path).is_file())
         and not path.startswith(EXCLUDED_PREFIXES)
         and not any(part in path for part in EXCLUDED_PARTS)
         and Path(path).name not in EXCLUDED_NAMES
@@ -232,26 +240,37 @@ def prospective_paths(snapshot: Snapshot) -> set[str]:
     if snapshot is Snapshot.WORKTREE:
         upstream = subprocess.run(
             ["git", "rev-parse", "--verify", "@{upstream}"],
-            cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if upstream.returncode == 0:
             base = upstream.stdout.strip()
     options = ["--cached"] if snapshot is Snapshot.INDEX else []
     changed = subprocess.run(
         ["git", "diff", *options, "--name-only", "-z", base, "--", "*.md"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     paths = set(changed.split("\0"))
     if snapshot is Snapshot.INDEX:
         return paths
     untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "-z", "*.md"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     return paths | set(untracked.split("\0"))
 
 
-def stale_reason(path: str, snapshot: Snapshot, prospective_date: str | None = None) -> str | None:
+def stale_reason(
+    path: str, snapshot: Snapshot, prospective_date: str | None = None
+) -> str | None:
     """Why `path` is stale, or None when its header is honest."""
     text = snapshot.read(path)
     match date_claim(path, text):
@@ -275,10 +294,16 @@ def stale_reason(path: str, snapshot: Snapshot, prospective_date: str | None = N
 def read_baseline(snapshot: Snapshot) -> set[str]:
     path = str(BASELINE.relative_to(REPO_ROOT))
     if snapshot is Snapshot.INDEX:
-        present = subprocess.run(
-            ["git", "ls-files", "--cached", "--", path], cwd=REPO_ROOT,
-            capture_output=True, text=True, check=True,
-        ).stdout.strip()
+        present = (
+            subprocess.run(
+                ["git", "ls-files", "--cached", "--", path],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            != ""
+        )
     else:
         present = BASELINE.is_file()
     if not present:
@@ -293,11 +318,13 @@ def read_baseline(snapshot: Snapshot) -> set[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--prospective", action="store_true",
+        "--prospective",
+        action="store_true",
         help="also check pending commit/squash changes against today's local date",
     )
     parser.add_argument(
-        "--snapshot", choices=[snapshot.value for snapshot in Snapshot],
+        "--snapshot",
+        choices=[snapshot.value for snapshot in Snapshot],
         default=Snapshot.WORKTREE.value,
         help="check worktree bytes for a gate or index bytes for a commit",
     )
@@ -314,7 +341,8 @@ def main() -> int:
     pending = prospective_paths(snapshot) if args.prospective else set()
     today = datetime.datetime.now().astimezone().date().isoformat()
     stale = {
-        path: reason for path in tracked_markdown(snapshot)
+        path: reason
+        for path in tracked_markdown(snapshot)
         if (reason := stale_reason(path, snapshot, today if path in pending else None))
     }
 
@@ -334,7 +362,11 @@ def main() -> int:
         return 0
 
     baseline = read_baseline(snapshot)
-    new = {path: reason for path, reason in stale.items() if path not in baseline or path in pending}
+    new = {
+        path: reason
+        for path, reason in stale.items()
+        if path not in baseline or path in pending
+    }
     fixed = sorted(baseline - set(stale))
 
     for path, reason in sorted(new.items()):

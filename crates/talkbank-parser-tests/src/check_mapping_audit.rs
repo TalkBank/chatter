@@ -8,7 +8,7 @@ use crate::test_error::TestError;
 use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use talkbank_model::errors::ErrorCode;
 
 #[derive(serde::Deserialize)]
@@ -85,11 +85,8 @@ pub fn report_json(reference: &str) -> Result<String, TestError> {
 /// # Errors
 /// Returns reference, repository-location, or output-write errors.
 pub fn regenerate() -> Result<(), TestError> {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest
-        .parent()
-        .and_then(Path::parent)
-        .ok_or_else(|| TestError::Failure("Cannot resolve repository root".to_owned()))?;
+    let root = talkbank_repo::RepoRoot::discover()?;
+    let manifest = root.join("crates/talkbank-parser-tests");
     let output = root.join("docs/audits/check-parity-audit.md");
     fs::write(
         &output,

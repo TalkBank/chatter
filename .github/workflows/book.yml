@@ -46,6 +46,7 @@ jobs:
           # last commit and refuses a shallow clone, where every file would
           # carry the checkout's date.
           fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Install just
         uses: taiki-e/install-action@v2
         with:

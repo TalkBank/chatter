@@ -83,10 +83,11 @@ fn content_tags(utt: &Utterance) -> Vec<String> {
 
 #[test]
 fn valid_overlap_contents_parse_to_interleaved_overlap_and_word_items() {
-    let input = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../corpus/reference/ca/overlaps.cha"
-    ))
+    let input = std::fs::read_to_string(
+        talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("corpus/reference/ca/overlaps.cha"),
+    )
     .expect("read corpus/reference/ca/overlaps.cha");
 
     let (utterances, diags) = parse_utterances_and_diags(&input);
@@ -117,10 +118,11 @@ fn valid_overlap_contents_parse_to_interleaved_overlap_and_word_items() {
 
 #[test]
 fn valid_intonation_contents_carry_trailing_separator_item() {
-    let input = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../corpus/reference/ca/intonation.cha"
-    ))
+    let input = std::fs::read_to_string(
+        talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("corpus/reference/ca/intonation.cha"),
+    )
     .expect("read corpus/reference/ca/intonation.cha");
 
     let (utterances, diags) = parse_utterances_and_diags(&input);

@@ -30,6 +30,7 @@ indexmap = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+talkbank-repo = { path = "../talkbank-repo" }
 # The spec format's vocabulary, shared with the spec workspace.
 talkbank-spec-vocabulary = { path = "../../spec/vocabulary", features = ["model-runtime"] }
 divan = { workspace = true }

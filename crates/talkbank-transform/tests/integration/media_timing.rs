@@ -13,10 +13,10 @@ use talkbank_transform::media_timing::{MediaTimingState, reconcile_media_timing}
 use talkbank_transform::{parse::TreeSitterParser, parse_and_validate};
 
 fn workspace_root() -> PathBuf {
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    dir.pop();
-    dir.pop();
-    dir
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned()
 }
 
 #[test]

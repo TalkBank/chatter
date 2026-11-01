@@ -169,8 +169,9 @@ mod tests {
     }
 
     fn start(pending: PendingValidation) -> Result<RunningValidation, ValidationStartError> {
-        let reference = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../corpus/reference/core/basic-conversation.cha");
+        let reference = talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("corpus/reference/core/basic-conversation.cha");
         pending.start(
             reference,
             &ValidationRun::uncached(ValidationConfig::default()),

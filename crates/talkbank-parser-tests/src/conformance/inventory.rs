@@ -254,7 +254,6 @@ impl_inspect_leaf!(
     LanguagesContentsNode,
     LanguagesHeaderNode,
     LanguagesPrefixNode,
-    LeafText,
     LeftBracketNode,
     LeftDoubleQuoteNode,
     LengtheningNode,
@@ -873,11 +872,11 @@ impl_inspect_choice!(NonvocalChoice {
 });
 impl_inspect_choice!(NonwordChoice { Event, Zero });
 impl_inspect_choice!(NumberOptionChoice {
-    _1,
-    _2,
-    _3,
-    _4,
-    _5,
+    n_1,
+    n_2,
+    n_3,
+    n_4,
+    n_5,
     More,
     Audience,
     GenericNumber
@@ -898,11 +897,11 @@ impl_inspect_choice!(PreBeginHeaderChoice {
     WindowHeader
 });
 impl_inspect_choice!(RecordingQualityOptionChoice {
-    _1,
-    _2,
-    _3,
-    _4,
-    _5,
+    n_1,
+    n_2,
+    n_3,
+    n_4,
+    n_5,
     GenericRecordingQuality
 });
 impl_inspect_choice!(SeparatorChoice {
@@ -1386,6 +1385,15 @@ impl_inspect_struct!(GHeaderChildren {
     child_1,
     child_2
 });
+impl_inspect_struct!(GenericDateChildren { content });
+impl_inspect_struct!(GenericIdSesChildren { content });
+impl_inspect_struct!(GenericIdSexChildren { content });
+impl_inspect_struct!(GenericMediaStatusChildren { content });
+impl_inspect_struct!(GenericMediaTypeChildren { content });
+impl_inspect_struct!(GenericNumberChildren { content });
+impl_inspect_struct!(GenericRecordingQualityChildren { content });
+impl_inspect_struct!(GenericTimeChildren { content });
+impl_inspect_struct!(GenericTranscriptionChildren { content });
 impl_inspect_struct!(GlsDependentTierChildren {
     child_0,
     child_1,
@@ -1406,6 +1414,8 @@ impl_inspect_struct!(GraDependentTierChildren {
     child_2,
     child_3
 });
+impl_inspect_struct!(GraHeadChildren { content });
+impl_inspect_struct!(GraIndexChildren { content });
 impl_inspect_struct!(GraRelationChildren {
     index,
     child_1,
@@ -1449,6 +1459,10 @@ impl_inspect_struct!(IdContentsChildren {
     child_18,
     child_19
 });
+impl_inspect_struct!(IdCorpusChildren { content });
+impl_inspect_struct!(IdCustomFieldChildren { content });
+impl_inspect_struct!(IdEducationChildren { content });
+impl_inspect_struct!(IdGroupChildren { content });
 impl_inspect_struct!(IdHeaderChildren {
     child_0,
     child_1,
@@ -1457,8 +1471,10 @@ impl_inspect_struct!(IdHeaderChildren {
 });
 impl_inspect_struct!(IdLanguageChildren { content });
 impl_inspect_struct!(IdLanguagesChildren { child_0, child_1 });
+impl_inspect_struct!(IdRoleChildren { content });
 impl_inspect_struct!(IdSesChildren { content });
 impl_inspect_struct!(IdSexChildren { content });
+impl_inspect_struct!(IdSpeakerChildren { content });
 impl_inspect_struct!(IntDependentTierChildren {
     child_0,
     child_1,
@@ -1657,6 +1673,7 @@ impl_inspect_struct!(PageHeaderChildren {
     child_2,
     child_3
 });
+impl_inspect_struct!(PageNumberChildren { content });
 impl_inspect_struct!(ParDependentTierChildren {
     child_0,
     child_1,
@@ -1763,6 +1780,7 @@ impl_inspect_struct!(ReplacementChildren {
     child_3,
     child_4
 });
+impl_inspect_struct!(RestOfLineChildren { content });
 impl_inspect_struct!(RoomLayoutHeaderChildren {
     child_0,
     child_1,
@@ -1889,6 +1907,9 @@ impl_inspect_struct!(TranscriptionHeaderChildren {
     child_3
 });
 impl_inspect_struct!(TranscriptionOptionChildren { content });
+impl_inspect_struct!(TypesActivityChildren { content });
+impl_inspect_struct!(TypesDesignChildren { content });
+impl_inspect_struct!(TypesGroupChildren { content });
 impl_inspect_struct!(TypesHeaderChild2Children {
     child_0,
     child_1,
@@ -2045,10 +2066,21 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "free_text" => extract_free_text(classify::<FreeTextNode>(node)).inspect("free_text", out),
         "full_document" => extract_full_document(classify::<FullDocumentNode>(node)).inspect("full_document", out),
         "g_header" => extract_g_header(classify::<GHeaderNode>(node)).inspect("g_header", out),
+        "generic_date" => extract_generic_date(classify::<GenericDateNode>(node)).inspect("generic_date", out),
+        "generic_id_ses" => extract_generic_id_ses(classify::<GenericIdSesNode>(node)).inspect("generic_id_ses", out),
+        "generic_id_sex" => extract_generic_id_sex(classify::<GenericIdSexNode>(node)).inspect("generic_id_sex", out),
+        "generic_media_status" => extract_generic_media_status(classify::<GenericMediaStatusNode>(node)).inspect("generic_media_status", out),
+        "generic_media_type" => extract_generic_media_type(classify::<GenericMediaTypeNode>(node)).inspect("generic_media_type", out),
+        "generic_number" => extract_generic_number(classify::<GenericNumberNode>(node)).inspect("generic_number", out),
+        "generic_recording_quality" => extract_generic_recording_quality(classify::<GenericRecordingQualityNode>(node)).inspect("generic_recording_quality", out),
+        "generic_time" => extract_generic_time(classify::<GenericTimeNode>(node)).inspect("generic_time", out),
+        "generic_transcription" => extract_generic_transcription(classify::<GenericTranscriptionNode>(node)).inspect("generic_transcription", out),
         "gls_dependent_tier" => extract_gls_dependent_tier(classify::<GlsDependentTierNode>(node)).inspect("gls_dependent_tier", out),
         "gpx_dependent_tier" => extract_gpx_dependent_tier(classify::<GpxDependentTierNode>(node)).inspect("gpx_dependent_tier", out),
         "gra_contents" => extract_gra_contents(classify::<GraContentsNode>(node)).inspect("gra_contents", out),
         "gra_dependent_tier" => extract_gra_dependent_tier(classify::<GraDependentTierNode>(node)).inspect("gra_dependent_tier", out),
+        "gra_head" => extract_gra_head(classify::<GraHeadNode>(node)).inspect("gra_head", out),
+        "gra_index" => extract_gra_index(classify::<GraIndexNode>(node)).inspect("gra_index", out),
         "gra_relation" => extract_gra_relation(classify::<GraRelationNode>(node)).inspect("gra_relation", out),
         "group_with_annotations" => extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node)).inspect("group_with_annotations", out),
         "header" => extract_header(node).inspect("header", out),
@@ -2056,11 +2088,17 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "header_sep" => extract_header_sep(classify::<HeaderSepNode>(node)).inspect("header_sep", out),
         "id_age" => extract_id_age(classify::<IdAgeNode>(node)).inspect("id_age", out),
         "id_contents" => extract_id_contents(classify::<IdContentsNode>(node)).inspect("id_contents", out),
+        "id_corpus" => extract_id_corpus(classify::<IdCorpusNode>(node)).inspect("id_corpus", out),
+        "id_custom_field" => extract_id_custom_field(classify::<IdCustomFieldNode>(node)).inspect("id_custom_field", out),
+        "id_education" => extract_id_education(classify::<IdEducationNode>(node)).inspect("id_education", out),
+        "id_group" => extract_id_group(classify::<IdGroupNode>(node)).inspect("id_group", out),
         "id_header" => extract_id_header(classify::<IdHeaderNode>(node)).inspect("id_header", out),
         "id_language" => extract_id_language(classify::<IdLanguageNode>(node)).inspect("id_language", out),
         "id_languages" => extract_id_languages(classify::<IdLanguagesNode>(node)).inspect("id_languages", out),
+        "id_role" => extract_id_role(classify::<IdRoleNode>(node)).inspect("id_role", out),
         "id_ses" => extract_id_ses(classify::<IdSesNode>(node)).inspect("id_ses", out),
         "id_sex" => extract_id_sex(classify::<IdSexNode>(node)).inspect("id_sex", out),
+        "id_speaker" => extract_id_speaker(classify::<IdSpeakerNode>(node)).inspect("id_speaker", out),
         "int_dependent_tier" => extract_int_dependent_tier(classify::<IntDependentTierNode>(node)).inspect("int_dependent_tier", out),
         "l1_of_header" => extract_l1_of_header(classify::<L1OfHeaderNode>(node)).inspect("l1_of_header", out),
         "langcode" => extract_langcode(classify::<LangcodeNode>(node)).inspect("langcode", out),
@@ -2105,6 +2143,7 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "ort_dependent_tier" => extract_ort_dependent_tier(classify::<OrtDependentTierNode>(node)).inspect("ort_dependent_tier", out),
         "other_spoken_event" => extract_other_spoken_event(classify::<OtherSpokenEventNode>(node)).inspect("other_spoken_event", out),
         "page_header" => extract_page_header(classify::<PageHeaderNode>(node)).inspect("page_header", out),
+        "page_number" => extract_page_number(classify::<PageNumberNode>(node)).inspect("page_number", out),
         "par_dependent_tier" => extract_par_dependent_tier(classify::<ParDependentTierNode>(node)).inspect("par_dependent_tier", out),
         "para_annotation" => extract_para_annotation(classify::<ParaAnnotationNode>(node)).inspect("para_annotation", out),
         "participant" => extract_participant(classify::<ParticipantNode>(node)).inspect("participant", out),
@@ -2128,6 +2167,7 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "recording_quality_header" => extract_recording_quality_header(classify::<RecordingQualityHeaderNode>(node)).inspect("recording_quality_header", out),
         "recording_quality_option" => extract_recording_quality_option(classify::<RecordingQualityOptionNode>(node)).inspect("recording_quality_option", out),
         "replacement" => extract_replacement(classify::<ReplacementNode>(node)).inspect("replacement", out),
+        "rest_of_line" => extract_rest_of_line(classify::<RestOfLineNode>(node)).inspect("rest_of_line", out),
         "room_layout_header" => extract_room_layout_header(classify::<RoomLayoutHeaderNode>(node)).inspect("room_layout_header", out),
         "separator" => extract_separator(classify::<SeparatorNode>(node)).inspect("separator", out),
         "shortening" => extract_shortening(classify::<ShorteningNode>(node)).inspect("shortening", out),
@@ -2156,6 +2196,9 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "transcriber_header" => extract_transcriber_header(classify::<TranscriberHeaderNode>(node)).inspect("transcriber_header", out),
         "transcription_header" => extract_transcription_header(classify::<TranscriptionHeaderNode>(node)).inspect("transcription_header", out),
         "transcription_option" => extract_transcription_option(classify::<TranscriptionOptionNode>(node)).inspect("transcription_option", out),
+        "types_activity" => extract_types_activity(classify::<TypesActivityNode>(node)).inspect("types_activity", out),
+        "types_design" => extract_types_design(classify::<TypesDesignNode>(node)).inspect("types_design", out),
+        "types_group" => extract_types_group(classify::<TypesGroupNode>(node)).inspect("types_group", out),
         "types_header" => extract_types_header(classify::<TypesHeaderNode>(node)).inspect("types_header", out),
         "unsupported_dependent_tier" => extract_unsupported_dependent_tier(classify::<UnsupportedDependentTierNode>(node)).inspect("unsupported_dependent_tier", out),
         "unsupported_header" => extract_unsupported_header(classify::<UnsupportedHeaderNode>(node)).inspect("unsupported_header", out),

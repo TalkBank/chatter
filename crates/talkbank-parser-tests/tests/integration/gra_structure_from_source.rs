@@ -137,10 +137,13 @@ fn gra_cycle_specs_preserve_all_edges_and_independent_index_findings() {
     let primary = talkbank_parser::TreeSitterParser::new().unwrap();
     let native = talkbank_parser_re2c::Re2cParser::new();
     for case in cases {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-            "tests/error_corpus/validation_errors/E724_{}.cha",
-            case.example
-        ));
+        let path = talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("crates/talkbank-parser-tests")
+            .join(format!(
+                "tests/error_corpus/validation_errors/E724_{}.cha",
+                case.example
+            ));
         let source = std::fs::read_to_string(path).unwrap();
         check(&primary, &source, &case);
         check(&native, &source, &case);

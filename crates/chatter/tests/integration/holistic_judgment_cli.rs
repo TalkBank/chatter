@@ -45,10 +45,7 @@ fn speaker_id_holistic_writes_llm_stamped_pending() {
     });
 
     // A real two-speaker donor fixture from the reference corpus (PAR0 + PAR1).
-    let donor = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../corpus/reference/languages/ell-conversation.cha"
-    );
+    let donor = crate::common::reference_fixture("corpus/reference/languages/ell-conversation.cha");
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let pending = tmp.path().join("pending.toml");
@@ -66,7 +63,7 @@ fn speaker_id_holistic_writes_llm_stamped_pending() {
             "deepseek-v4-flash",
             "--write-pending",
             pending.to_str().expect("utf8 path"),
-            donor,
+            donor.to_str().expect("fixture path"),
         ])
         .output()
         .expect("run chatter");
@@ -201,10 +198,7 @@ fn speaker_id_holistic_llm_cache_flag_avoids_second_request() {
             .json_body(body);
     });
 
-    let donor = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../corpus/reference/languages/ell-conversation.cha"
-    );
+    let donor = crate::common::reference_fixture("corpus/reference/languages/ell-conversation.cha");
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let cache_path = tmp.path().join("llm-cache.json");
@@ -226,7 +220,7 @@ fn speaker_id_holistic_llm_cache_flag_avoids_second_request() {
                 cache_path.to_str().expect("utf8 path"),
                 "--write-pending",
                 pending.to_str().expect("utf8 path"),
-                donor,
+                donor.to_str().expect("fixture path"),
             ])
             .output()
             .expect("run chatter");
@@ -258,10 +252,7 @@ fn speaker_id_holistic_llm_cache_env_fallback() {
             .json_body(body);
     });
 
-    let donor = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../corpus/reference/languages/ell-conversation.cha"
-    );
+    let donor = crate::common::reference_fixture("corpus/reference/languages/ell-conversation.cha");
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let cache_path = tmp.path().join("llm-cache.json");
@@ -282,7 +273,7 @@ fn speaker_id_holistic_llm_cache_env_fallback() {
                 "deepseek-v4-flash",
                 "--write-pending",
                 pending.to_str().expect("utf8 path"),
-                donor,
+                donor.to_str().expect("fixture path"),
             ])
             .output()
             .expect("run chatter");

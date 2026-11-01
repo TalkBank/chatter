@@ -4,11 +4,9 @@ use talkbank_model::{ChatParser, ErrorCode, ErrorCollector, ParseOutcome, Semant
 
 #[test]
 fn postcode_admission_matches_the_spec_at_file_and_fragment_boundaries() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path();
     let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
     let spec = specs
         .iter()

@@ -63,12 +63,11 @@ use talkbank_model::model::LinkerKind;
 use crate::common::parse_utterances_and_diags;
 
 fn read_fixture(relative: &str) -> String {
-    let path = format!(
-        "{}/../../corpus/reference/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        relative
-    );
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"))
+    let path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("corpus/reference")
+        .join(relative);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
 }
 
 #[test]

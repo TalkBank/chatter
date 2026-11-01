@@ -7,6 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+talkbank-repo = { path = "../../crates/talkbank-repo" }
 # The spec format's vocabulary, shared with the main workspace.
 talkbank-spec-vocabulary = { workspace = true }
 

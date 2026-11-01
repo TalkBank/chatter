@@ -9,6 +9,14 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Changed
+
+- Regenerate typed traversal from the producer's version 5 contract and preserve
+  absorbed text as checked fragments across real child extras. The unsupported
+  tier reader keeps observed emptiness distinct from source recovery.
+- Bootstrap the conformance inventory before schema compilation, including
+  standalone schema generation after a generated API change.
+
 ## [0.34.0] - 2026-11-01
 
 This pre-1.0 minor release makes a colon-bearing header with nothing after its

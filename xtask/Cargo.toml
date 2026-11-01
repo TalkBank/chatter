@@ -8,6 +8,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+talkbank-repo = { path = "../crates/talkbank-repo" }
 serde.workspace = true
 serde_json.workspace = true
 

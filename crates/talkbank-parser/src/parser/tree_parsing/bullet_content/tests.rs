@@ -6,7 +6,6 @@ use crate::TreeSitterParser;
 use crate::error::{ErrorCollector, ParseError};
 use crate::generated_traversal::{ActDependentTierNode, SourceSlotView};
 use std::fs;
-use std::path::PathBuf;
 use talkbank_model::model::{BulletContent, BulletContentSegment};
 
 /// Parse a real test file and extract the %act tier content
@@ -14,7 +13,9 @@ fn parse_test_file(filename: &str) -> Result<(BulletContent, Vec<ParseError>), S
     let parser = TreeSitterParser::new().map_err(|err| err.to_string())?;
 
     // Read test file from local reference corpus.
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser");
     path.pop(); // crates
     path.pop(); // repo root
     path.push("corpus/reference");

@@ -273,7 +273,9 @@ fn diagnostic_evidence_consumer_roundtrip_preserves_admission() {
 /// an elegant one that cannot.
 #[test]
 fn every_collection_newtype_is_listed_here() -> Result<(), TestError> {
-    let model_src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../talkbank-model/src");
+    let model_src = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-model/src");
     let mut defined: Vec<String> = Vec::new();
     let mut stack = vec![model_src.clone()];
     while let Some(dir) = stack.pop() {

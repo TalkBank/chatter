@@ -57,7 +57,5 @@ fn print_help() {
 }
 
 fn repo_root() -> Result<&'static Path> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or_else(|| -> DynError { "xtask crate must live under repo root".into() })
+    Ok(talkbank_repo::root()?.as_path())
 }

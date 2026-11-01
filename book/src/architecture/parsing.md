@@ -823,8 +823,9 @@ checked token slices instead of accepting independent nodes and text. The
 user-defined envelope excludes required Error/Absent prefix states; the
 unsupported-tier carrier retains its broader recovery policy. Lexical Missing,
 marker and nonempty-label policies remain. Unsupported bodies retain the generated
-`ReadableLeafSpan`: its parent, bounds and UTF-8 slice are checked together, and
-the body read is infallible. No failed slice becomes an empty tier. Parent source
+`ReadableLeafSpan`: its parent, ordered fragment bounds and UTF-8 slices are
+checked together. Fragment reads are infallible; observed emptiness and recovery
+remain separate states. No failed slice becomes an empty tier. Parent source
 admission alone is not this child-range proof, and readable recovery is not
 validity.
 

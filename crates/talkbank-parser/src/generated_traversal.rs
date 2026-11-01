@@ -1,12 +1,13 @@
-//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source b6783971cbef
-//! Source grammar digest (sha256): grammar-contract.json=92ed457cb557d604840f2c88e0fa0dcbd9be1e1575e1950c610a0c26fefd5b23
+//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 935c7bb5fb58
+//! Source grammar digest (sha256): grammar-contract.json=01e6a2cb7bcfb49294acd6b7d9ae2a5fa09bf3d8bf4a123f6f9796706a0aa03f
 //! Annotations: none
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
 //!
 //! Produced by the tree-sitter-grammar-utils Rust backend from a grammar's
-//! `grammar.json` + `node-types.json`. EVERY named rule lowers to a uniform,
+//! contract (`grammar-contract.json`, which the Tree-sitter build writes
+//! beside `parser.c`). EVERY named rule lowers to a uniform,
 //! recovery-aware `<Rule>Children` carrier struct, with a recovery `NodeSlot`
 //! at every position. A `Seq`-shaped rule's carrier has one field per member; a
 //! rule of any other shape (choice, supertype, single symbol/leaf, raw) has a
@@ -254,7 +255,7 @@ trait RangePhaseSeal {}
 /// | `KindMissing<T>` | [`KindMissing<T>`] | `T` |
 /// | `Node` | `tree_sitter::Node<'tree>` | [`SourceSlice<'tree, 'source>`](SourceSlice) |
 /// | `Extra` | [`Extra<'tree>`](Extra) | [`SourceSlice<'tree, 'source>`](SourceSlice) |
-/// | `LeafText` | [`LeafText<'tree>`](LeafText) | [`SourceSlice<'tree, 'source>`](SourceSlice) |
+/// | `LeafText` | [`LeafText<'tree>`](LeafText) | [`ReadableLeafSpan<'tree, 'source>`](ReadableLeafSpan) |
 /// | `LeafSpan` | [`LeafSpan<'tree>`](LeafSpan) | [`ReadableLeafSpan<'tree, 'source>`](ReadableLeafSpan) |
 /// | `Slot<T, M, U, A>` | [`NodeSlot`] | [`ReadableSlot`] |
 /// | `Positioned<S>` | [`Positioned`] | [`ReadablePositioned`] |
@@ -322,7 +323,7 @@ impl<'tree, 'source> RangePhase<'tree> for Ranged<'source> {
     type KindMissing<T> = T;
     type Node = SourceSlice<'tree, 'source>;
     type Extra = SourceSlice<'tree, 'source>;
-    type LeafText = SourceSlice<'tree, 'source>;
+    type LeafText = ReadableLeafSpan<'tree, 'source>;
     type LeafSpan = ReadableLeafSpan<'tree, 'source>;
     type Slot<T, M, E, U, A> = ReadableSlot<T, M, E, U, A>;
     type Positioned<S> = ReadablePositioned<'tree, 'source, S>;
@@ -1326,36 +1327,121 @@ impl<T, E, U, A> SlotValue<'_, T, E, U, A> {
 pub struct Extra<'tree>(pub tree_sitter::Node<'tree>);
 /// The value of an absorbed-anonymous LEAF choice alternative.
 ///
-/// A bare regex tree-sitter absorbs into the enclosing node, so when it
-/// matches the enclosing node is a CHILDLESS LEAF whose OWN text is the
-/// value. It carries that enclosing node (read `.0.utf8_text(..)` for the leaf
-/// text). Crucially it is NOT a child of the node: it surfaces no child
-/// placement, so no-silent-drop (P2) is preserved (a childless leaf has
-/// zero children to place). Distinct from [`Extra`] (a real skippable
-/// child) and from a raw diagnosed-partial `Node` (a real present child):
-/// this is the node's OWN span, fully typed, not a partial.
-#[derive(Debug, Clone, Copy)]
-pub struct LeafText<'tree>(pub tree_sitter::Node<'tree>);
+/// Its region covers the enclosing node minus every real child. Even a rule
+/// with only absorbed grammar steps can contain extras and recovery children;
+/// those children remain in the carrier's ordinary placement sinks.
+#[derive(Debug, Clone)]
+pub struct LeafText<'tree>(LeafSpan<'tree>);
 /// The value of an absorbed-anonymous SEQUENCE-MEMBER token.
 ///
-/// A bare regex tree-sitter absorbs while sitting between two materialized
-/// siblings, so it produces NO child of its own and its text is a SUB-SPAN
-/// of the enclosing node (between the previous sibling's end and the next
-/// sibling's start). It carries the enclosing `node` and that byte
-/// `range`; read `&source[leaf.range.clone()]` (with the same source bytes
-/// the tree was parsed from) for the absorbed text, or `leaf.node` for
-/// provenance. Crucially it is NOT a child of the node: it surfaces no
-/// child placement, so no-silent-drop (P2) is preserved (the absorbed text
-/// occupies no child slot to place). Distinct from [`LeafText`] (the WHOLE
-/// childless node's own span) and from [`Extra`] (a real skippable child):
-/// this is a fully-typed inter-sibling span, not a partial.
+/// The region between meaningful siblings may cross extras. Its ordered,
+/// nonempty fragments exclude every real child's bytes, retaining absorbed
+/// bytes on both sides of comments. This is an observed source region, not a
+/// lexer: unmaterialized whitespace can be included, and observed emptiness
+/// certifies no grammar token. Only the cursor constructs regions; consumers
+/// cannot combine an arbitrary node and range.
 #[derive(Debug, Clone)]
 pub struct LeafSpan<'tree> {
-    /// The enclosing node whose inter-sibling text this span covers.
-    pub node: tree_sitter::Node<'tree>,
-    /// The absorbed token's byte range within the source (a sub-range of
-    /// `node.byte_range()`), between the adjacent siblings.
-    pub range: std::ops::Range<usize>,
+    node: tree_sitter::Node<'tree>,
+    observation: ObservedText<std::ops::Range<usize>>,
+}
+/// What the complete CST layout actually exposes in an absorbed region.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ObservedText<T> {
+    /// At least one nonempty fragment, in source order.
+    Fragments {
+        /// The first nonempty fragment.
+        first: T,
+        /// Remaining nonempty fragments in source order.
+        rest: Vec<T>,
+    },
+    /// No bytes remain after child exclusion. This is not token presence.
+    Empty,
+    /// No bytes remain, and the enclosing node contains recovery.
+    Recovery,
+}
+impl<T> ObservedText<T> {
+    /// Borrow observed fragments; empty and recovery states yield none.
+    pub fn fragments(&self) -> impl Iterator<Item = &T> {
+        let (first, rest) = match self {
+            Self::Fragments { first, rest } => (Some(first), rest.as_slice()),
+            Self::Empty | Self::Recovery => (None, &[][..]),
+        };
+        first.into_iter().chain(rest)
+    }
+}
+impl<'tree> LeafSpan<'tree> {
+    /// Enclosing CST node; it supplies provenance, not a child placement.
+    #[must_use]
+    pub const fn parent(&self) -> tree_sitter::Node<'tree> {
+        self.node
+    }
+    /// Observed ranges, before consuming source admission.
+    #[must_use]
+    pub const fn observation(&self) -> &ObservedText<std::ops::Range<usize>> {
+        &self.observation
+    }
+    /// Construct from a complete child layout at a cursor frontier. Extras
+    /// never become text boundaries, including extras already swept by a slot.
+    #[allow(dead_code, reason = "called by the emitted reconstruction cursor")]
+    fn between(
+        node: tree_sitter::Node<'tree>,
+        frontier: usize,
+        children: &[tree_sitter::Node<'tree>],
+    ) -> Self {
+        let start = children
+            .iter()
+            .take(frontier)
+            .rev()
+            .find(|child| !child.is_extra() || child.is_error() || child.is_missing())
+            .map_or_else(|| node.start_byte(), tree_sitter::Node::end_byte);
+        let end = children
+            .iter()
+            .skip(frontier)
+            .find(|child| !child.is_extra() || child.is_error() || child.is_missing())
+            .map_or_else(|| node.end_byte(), tree_sitter::Node::start_byte);
+        Self::from_layout(node, start..end, children)
+    }
+    #[allow(dead_code, reason = "called by emitted whole-region construction")]
+    fn whole(node: tree_sitter::Node<'tree>) -> Self {
+        let mut cursor = node.walk();
+        let children: Vec<_> = node.children(&mut cursor).collect();
+        Self::from_layout(node, node.byte_range(), &children)
+    }
+    fn from_layout(
+        node: tree_sitter::Node<'tree>,
+        range: std::ops::Range<usize>,
+        children: &[tree_sitter::Node<'tree>],
+    ) -> Self {
+        let mut ranges = Vec::new();
+        let mut start = range.start;
+        for child in children
+            .iter()
+            .skip(children.partition_point(|child| child.end_byte() <= range.start))
+            .take_while(|child| child.start_byte() < range.end)
+        {
+            if child.end_byte() <= start || child.start_byte() >= range.end {
+                continue;
+            }
+            if start < child.start_byte() {
+                ranges.push(start..child.start_byte());
+            }
+            start = start.max(child.end_byte());
+        }
+        if start < range.end {
+            ranges.push(start..range.end);
+        }
+        let mut ranges = ranges.into_iter();
+        let observation = match ranges.next() {
+            Some(first) => ObservedText::Fragments {
+                first,
+                rest: ranges.collect(),
+            },
+            None if node.has_error() => ObservedText::Recovery,
+            None => ObservedText::Empty,
+        };
+        Self { node, observation }
+    }
 }
 /// A slot or collection (`S`), together with the run of leading extras that
 /// preceded it in the CST.
@@ -1678,24 +1764,40 @@ pub struct ReadablePositioned<'tree, 'source, S> {
 #[derive(Debug)]
 pub struct ReadableLeafSpan<'tree, 'source> {
     parent: SourceSlice<'tree, 'source>,
+    observation: ObservedText<ReadableFragment<'source>>,
+}
+/// One nonempty, UTF-8 aligned fragment admitted under its region's source.
+#[derive(Debug)]
+pub struct ReadableFragment<'source> {
     range: std::ops::Range<usize>,
     text: &'source str,
 }
-impl<'tree, 'source> ReadableLeafSpan<'tree, 'source> {
-    /// The checked sub-span's text, without slicing again.
+impl<'source> ReadableFragment<'source> {
+    /// Read without another range or source check.
     #[must_use]
     pub const fn text(&self) -> &'source str {
         self.text
+    }
+    /// Absolute source bytes.
+    #[must_use]
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.range.clone()
+    }
+}
+impl<'tree, 'source> ReadableLeafSpan<'tree, 'source> {
+    /// Explicit byte observation; empty/recovery is never an empty token.
+    #[must_use]
+    pub const fn observation(&self) -> &ObservedText<ReadableFragment<'source>> {
+        &self.observation
+    }
+    /// Ordered readable fragments, excluding every real child's bytes.
+    pub fn fragments(&self) -> impl Iterator<Item = &ReadableFragment<'source>> {
+        self.observation.fragments()
     }
     /// Canonical enclosing node.
     #[must_use]
     pub const fn parent(&self) -> SourceSlice<'tree, 'source> {
         self.parent
-    }
-    /// Byte range within the parent source.
-    #[must_use]
-    pub fn range(&self) -> std::ops::Range<usize> {
-        self.range.clone()
     }
 }
 impl RangeAdmissionSeal for tree_sitter::Node<'_> {}
@@ -1725,7 +1827,7 @@ impl<'tree, 'source> AdmitRanges<'tree, 'source> for LeafText<'tree> {
         self,
         context: &mut RangeAdmission<'tree, 'source>,
     ) -> Result<Self::Admitted, SourceBindingError> {
-        context.node(self.0)
+        self.0.admit_ranges_in(context)
     }
 }
 impl RangeAdmissionSeal for LeafSpan<'_> {}
@@ -1736,18 +1838,33 @@ impl<'tree, 'source> AdmitRanges<'tree, 'source> for LeafSpan<'tree> {
         context: &mut RangeAdmission<'tree, 'source>,
     ) -> Result<Self::Admitted, SourceBindingError> {
         let parent = context.node(self.node)?;
-        if self.range.start < self.node.start_byte() || self.range.end > self.node.end_byte() {
-            return Err(SourceBindingError::InvalidRange);
-        }
-        context.checked_ranges = context.checked_ranges.saturating_add(1);
-        let text = parent
-            .source()
-            .get(self.range.clone())
-            .ok_or(SourceBindingError::InvalidRange)?;
+        let mut previous = self.node.start_byte();
+        let mut admit = |range: std::ops::Range<usize>| {
+            if range.start < previous
+                || range.start >= range.end
+                || range.end > self.node.end_byte()
+            {
+                return Err(SourceBindingError::InvalidRange);
+            }
+            let text = parent
+                .source()
+                .get(range.clone())
+                .ok_or(SourceBindingError::InvalidRange)?;
+            previous = range.end;
+            context.checked_ranges = context.checked_ranges.saturating_add(1);
+            Ok(ReadableFragment { range, text })
+        };
+        let observation = match self.observation {
+            ObservedText::Fragments { first, rest } => ObservedText::Fragments {
+                first: admit(first)?,
+                rest: rest.into_iter().map(admit).collect::<Result<_, _>>()?,
+            },
+            ObservedText::Empty => ObservedText::Empty,
+            ObservedText::Recovery => ObservedText::Recovery,
+        };
         Ok(ReadableLeafSpan {
             parent,
-            range: self.range,
-            text,
+            observation,
         })
     }
 }
@@ -2825,10 +2942,6 @@ impl ChildIndex {
     fn next(self) -> Self {
         Self(self.0.saturating_add(1))
     }
-    /// The index just before this one, if there is one.
-    fn previous(self) -> Option<Self> {
-        self.0.checked_sub(1).map(Self)
-    }
     /// The children from this index up to, not including, `to`;
     /// empty when `to` is not past this index.
     fn up_to<'c, 'tree>(
@@ -2971,22 +3084,7 @@ impl<'children, 'tree> Cursor<'children, 'tree> {
     /// begins, and if that sibling is a comment the text genuinely ends
     /// before the comment.
     fn absorbed_leaf_span(&self, node: tree_sitter::Node<'tree>) -> LeafSpan<'tree> {
-        let start = match self
-            .next
-            .previous()
-            .and_then(|prev| prev.child(self.children))
-        {
-            Some(prev) => prev.end_byte(),
-            None => node.start_byte(),
-        };
-        let end = match self.next.child(self.children) {
-            Some(next) => next.start_byte(),
-            None => node.end_byte(),
-        };
-        LeafSpan {
-            node,
-            range: start..end,
-        }
+        LeafSpan::between(node, self.next.0, self.children)
     }
     /// The continuation of a rule-level position: its composed tail
     /// run, then the rule's outer anchor. An empty run IS the anchor.
@@ -4547,11 +4645,13 @@ impl RepeatSplit {
 /// then `a` on `[a, a]` leaves the final `a` to the tail, deterministically.
 ///
 /// Termination (two layers, fail-closed). PRIMARY, generator-side: a
-/// nullable repeat element is rejected at normalization (tree-sitter also
-/// forbids one). BELT-AND-BRACES, engine-side: [`RepeatElement::of`]
-/// re-checks nullability and, if a malformed `grammar.json` bypassed the
-/// generator gate, the split degrades fail-closed (zero elements)
-/// instead of recursing without bound.
+/// repeat element that cannot consume a child is refused when the shape
+/// is built (`ShapeLimit::ChildlessRepeatIteration` or
+/// `EmptyRepeatElement`; Tree-sitter also forbids an empty one).
+/// BELT-AND-BRACES, engine-side: [`RepeatElement::of`] re-checks
+/// nullability and, if a malformed shape bypassed the generator gate,
+/// the split degrades fail-closed (zero elements) instead of recursing
+/// without bound.
 fn repeat_split(
     element: &'static ReconShape,
     cont: &Cont,
@@ -18439,46 +18539,46 @@ static SHAPE_168: ReconShape = ReconShape::Positioned(&SHAPE_167);
 static SHAPE_169: ReconShape = ReconShape::Optional(&SHAPE_168);
 static SHAPE_170: ReconShape = ReconShape::Kind(KindIdentity::Named("g_prefix"));
 static SHAPE_171: ReconShape = ReconShape::Positioned(&SHAPE_170);
-static SHAPE_172: ReconShape = ReconShape::Kind(KindIdentity::Named("gls_tier_prefix"));
-static SHAPE_173: ReconShape = ReconShape::Positioned(&SHAPE_172);
-static SHAPE_174: ReconShape = ReconShape::Kind(KindIdentity::Named("gpx_tier_prefix"));
-static SHAPE_175: ReconShape = ReconShape::Positioned(&SHAPE_174);
-static SHAPE_176: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_relation"));
-static SHAPE_177: ReconShape = ReconShape::Positioned(&SHAPE_176);
-static SHAPE_178: ReconShape = ReconShape::Seq(&SHAPES_63);
-static SHAPE_179: ReconShape = ReconShape::Positioned(&SHAPE_178);
-static SHAPE_180: ReconShape = ReconShape::Repeat(&SHAPE_179);
-static SHAPE_181: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_contents"));
-static SHAPE_182: ReconShape = ReconShape::Positioned(&SHAPE_181);
-static SHAPE_183: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_tier_prefix"));
-static SHAPE_184: ReconShape = ReconShape::Positioned(&SHAPE_183);
-static SHAPE_185: ReconShape = ReconShape::Kind(KindIdentity::Named("pipe"));
-static SHAPE_186: ReconShape = ReconShape::Positioned(&SHAPE_185);
-static SHAPE_187: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_head"));
-static SHAPE_188: ReconShape = ReconShape::Positioned(&SHAPE_187);
-static SHAPE_189: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_relation_name"));
-static SHAPE_190: ReconShape = ReconShape::Positioned(&SHAPE_189);
-static SHAPE_191: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_index"));
-static SHAPE_192: ReconShape = ReconShape::Positioned(&SHAPE_191);
-static SHAPE_193: ReconShape = ReconShape::Kind(KindIdentity::Named("contents"));
-static SHAPE_194: ReconShape = ReconShape::Positioned(&SHAPE_193);
-static SHAPE_195: ReconShape = ReconShape::Kind(KindIdentity::Named("greater_than"));
-static SHAPE_196: ReconShape = ReconShape::Positioned(&SHAPE_195);
-static SHAPE_197: ReconShape = ReconShape::Kind(KindIdentity::Named("base_annotations"));
-static SHAPE_198: ReconShape = ReconShape::Positioned(&SHAPE_197);
-static SHAPE_199: ReconShape = ReconShape::Kind(KindIdentity::Named("less_than"));
-static SHAPE_200: ReconShape = ReconShape::Positioned(&SHAPE_199);
-static SHAPE_201: ReconShape = ReconShape::Kind(KindIdentity::Named("tab"));
-static SHAPE_202: ReconShape = ReconShape::Choice(&SHAPES_68, MissingHeads::Kinds(&KINDS_8));
-static SHAPE_203: ReconShape = ReconShape::Positioned(&SHAPE_202);
-static SHAPE_204: ReconShape = ReconShape::Repeat(&SHAPE_203);
-static SHAPE_205: ReconShape = ReconShape::Positioned(&SHAPE_201);
-static SHAPE_206: ReconShape = ReconShape::Kind(KindIdentity::Named("sep_trailing_space"));
-static SHAPE_207: ReconShape = ReconShape::Positioned(&SHAPE_206);
-static SHAPE_208: ReconShape = ReconShape::Optional(&SHAPE_207);
-static SHAPE_209: ReconShape = ReconShape::Kind(KindIdentity::Named("age_format"));
-static SHAPE_210: ReconShape = ReconShape::LeafText;
-static SHAPE_211: ReconShape = ReconShape::Choice(&SHAPES_72, MissingHeads::Kinds(&KINDS_9));
+static SHAPE_172: ReconShape = ReconShape::LeafText;
+static SHAPE_173: ReconShape = ReconShape::Kind(KindIdentity::Named("gls_tier_prefix"));
+static SHAPE_174: ReconShape = ReconShape::Positioned(&SHAPE_173);
+static SHAPE_175: ReconShape = ReconShape::Kind(KindIdentity::Named("gpx_tier_prefix"));
+static SHAPE_176: ReconShape = ReconShape::Positioned(&SHAPE_175);
+static SHAPE_177: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_relation"));
+static SHAPE_178: ReconShape = ReconShape::Positioned(&SHAPE_177);
+static SHAPE_179: ReconShape = ReconShape::Seq(&SHAPES_64);
+static SHAPE_180: ReconShape = ReconShape::Positioned(&SHAPE_179);
+static SHAPE_181: ReconShape = ReconShape::Repeat(&SHAPE_180);
+static SHAPE_182: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_contents"));
+static SHAPE_183: ReconShape = ReconShape::Positioned(&SHAPE_182);
+static SHAPE_184: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_tier_prefix"));
+static SHAPE_185: ReconShape = ReconShape::Positioned(&SHAPE_184);
+static SHAPE_186: ReconShape = ReconShape::Kind(KindIdentity::Named("pipe"));
+static SHAPE_187: ReconShape = ReconShape::Positioned(&SHAPE_186);
+static SHAPE_188: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_head"));
+static SHAPE_189: ReconShape = ReconShape::Positioned(&SHAPE_188);
+static SHAPE_190: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_relation_name"));
+static SHAPE_191: ReconShape = ReconShape::Positioned(&SHAPE_190);
+static SHAPE_192: ReconShape = ReconShape::Kind(KindIdentity::Named("gra_index"));
+static SHAPE_193: ReconShape = ReconShape::Positioned(&SHAPE_192);
+static SHAPE_194: ReconShape = ReconShape::Kind(KindIdentity::Named("contents"));
+static SHAPE_195: ReconShape = ReconShape::Positioned(&SHAPE_194);
+static SHAPE_196: ReconShape = ReconShape::Kind(KindIdentity::Named("greater_than"));
+static SHAPE_197: ReconShape = ReconShape::Positioned(&SHAPE_196);
+static SHAPE_198: ReconShape = ReconShape::Kind(KindIdentity::Named("base_annotations"));
+static SHAPE_199: ReconShape = ReconShape::Positioned(&SHAPE_198);
+static SHAPE_200: ReconShape = ReconShape::Kind(KindIdentity::Named("less_than"));
+static SHAPE_201: ReconShape = ReconShape::Positioned(&SHAPE_200);
+static SHAPE_202: ReconShape = ReconShape::Kind(KindIdentity::Named("tab"));
+static SHAPE_203: ReconShape = ReconShape::Choice(&SHAPES_69, MissingHeads::Kinds(&KINDS_8));
+static SHAPE_204: ReconShape = ReconShape::Positioned(&SHAPE_203);
+static SHAPE_205: ReconShape = ReconShape::Repeat(&SHAPE_204);
+static SHAPE_206: ReconShape = ReconShape::Positioned(&SHAPE_202);
+static SHAPE_207: ReconShape = ReconShape::Kind(KindIdentity::Named("sep_trailing_space"));
+static SHAPE_208: ReconShape = ReconShape::Positioned(&SHAPE_207);
+static SHAPE_209: ReconShape = ReconShape::Optional(&SHAPE_208);
+static SHAPE_210: ReconShape = ReconShape::Kind(KindIdentity::Named("age_format"));
+static SHAPE_211: ReconShape = ReconShape::Choice(&SHAPES_73, MissingHeads::Kinds(&KINDS_9));
 static SHAPE_212: ReconShape = ReconShape::Positioned(&SHAPE_211);
 static SHAPE_213: ReconShape = ReconShape::Supertype(&KINDS_10);
 static SHAPE_214: ReconShape = ReconShape::Positioned(&SHAPE_213);
@@ -18513,23 +18613,23 @@ static SHAPE_242: ReconShape = ReconShape::Positioned(&SHAPE_241);
 static SHAPE_243: ReconShape = ReconShape::Kind(KindIdentity::Named("id_prefix"));
 static SHAPE_244: ReconShape = ReconShape::Positioned(&SHAPE_243);
 static SHAPE_245: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_id_language"));
-static SHAPE_246: ReconShape = ReconShape::Choice(&SHAPES_84, MissingHeads::Kinds(&KINDS_17));
+static SHAPE_246: ReconShape = ReconShape::Choice(&SHAPES_85, MissingHeads::Kinds(&KINDS_17));
 static SHAPE_247: ReconShape = ReconShape::Positioned(&SHAPE_246);
 static SHAPE_248: ReconShape = ReconShape::Kind(KindIdentity::Named("id_language"));
 static SHAPE_249: ReconShape = ReconShape::Kind(KindIdentity::Named("comma"));
-static SHAPE_250: ReconShape = ReconShape::Choice(&SHAPES_86, MissingHeads::Kinds(&KINDS_18));
+static SHAPE_250: ReconShape = ReconShape::Choice(&SHAPES_87, MissingHeads::Kinds(&KINDS_18));
 static SHAPE_251: ReconShape = ReconShape::Positioned(&SHAPE_250);
 static SHAPE_252: ReconShape = ReconShape::Repeat(&SHAPE_251);
 static SHAPE_253: ReconShape = ReconShape::Kind(KindIdentity::Named("ses_combined"));
 static SHAPE_254: ReconShape = ReconShape::Kind(KindIdentity::Named("ses_code_value"));
 static SHAPE_255: ReconShape = ReconShape::Kind(KindIdentity::Named("ethnicity_value"));
 static SHAPE_256: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_id_ses"));
-static SHAPE_257: ReconShape = ReconShape::Choice(&SHAPES_89, MissingHeads::Kinds(&KINDS_19));
+static SHAPE_257: ReconShape = ReconShape::Choice(&SHAPES_90, MissingHeads::Kinds(&KINDS_19));
 static SHAPE_258: ReconShape = ReconShape::Positioned(&SHAPE_257);
 static SHAPE_259: ReconShape = ReconShape::Kind(KindIdentity::Named("male_value"));
 static SHAPE_260: ReconShape = ReconShape::Kind(KindIdentity::Named("female_value"));
 static SHAPE_261: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_id_sex"));
-static SHAPE_262: ReconShape = ReconShape::Choice(&SHAPES_91, MissingHeads::Kinds(&KINDS_20));
+static SHAPE_262: ReconShape = ReconShape::Choice(&SHAPES_92, MissingHeads::Kinds(&KINDS_20));
 static SHAPE_263: ReconShape = ReconShape::Positioned(&SHAPE_262);
 static SHAPE_264: ReconShape = ReconShape::Kind(KindIdentity::Named("int_tier_prefix"));
 static SHAPE_265: ReconShape = ReconShape::Positioned(&SHAPE_264);
@@ -18540,7 +18640,7 @@ static SHAPE_269: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("[-"));
 static SHAPE_270: ReconShape = ReconShape::Positioned(&SHAPE_269);
 static SHAPE_271: ReconShape = ReconShape::Optional(&SHAPE_29);
 static SHAPE_272: ReconShape = ReconShape::Positioned(&SHAPE_249);
-static SHAPE_273: ReconShape = ReconShape::Seq(&SHAPES_97);
+static SHAPE_273: ReconShape = ReconShape::Seq(&SHAPES_98);
 static SHAPE_274: ReconShape = ReconShape::Positioned(&SHAPE_273);
 static SHAPE_275: ReconShape = ReconShape::Repeat(&SHAPE_274);
 static SHAPE_276: ReconShape = ReconShape::Kind(KindIdentity::Named("languages_contents"));
@@ -18551,17 +18651,17 @@ static SHAPE_280: ReconShape = ReconShape::Supertype(&KINDS_21);
 static SHAPE_281: ReconShape = ReconShape::Kind(KindIdentity::Named("utterance"));
 static SHAPE_282: ReconShape = ReconShape::Kind(KindIdentity::Named("blank_line"));
 static SHAPE_283: ReconShape = ReconShape::Kind(KindIdentity::Named("unsupported_line"));
-static SHAPE_284: ReconShape = ReconShape::Choice(&SHAPES_100, MissingHeads::Kinds(&KINDS_22));
+static SHAPE_284: ReconShape = ReconShape::Choice(&SHAPES_101, MissingHeads::Kinds(&KINDS_22));
 static SHAPE_285: ReconShape = ReconShape::Positioned(&SHAPE_284);
 static SHAPE_286: ReconShape = ReconShape::Positioned(&SHAPE_108);
-static SHAPE_287: ReconShape = ReconShape::Seq(&SHAPES_102);
+static SHAPE_287: ReconShape = ReconShape::Seq(&SHAPES_103);
 static SHAPE_288: ReconShape = ReconShape::Positioned(&SHAPE_287);
 static SHAPE_289: ReconShape = ReconShape::Repeat(&SHAPE_288);
 static SHAPE_290: ReconShape = ReconShape::Kind(KindIdentity::Named("location_prefix"));
 static SHAPE_291: ReconShape = ReconShape::Positioned(&SHAPE_290);
 static SHAPE_292: ReconShape = ReconShape::Kind(KindIdentity::Named("long_feature_begin"));
 static SHAPE_293: ReconShape = ReconShape::Kind(KindIdentity::Named("long_feature_end"));
-static SHAPE_294: ReconShape = ReconShape::Choice(&SHAPES_106, MissingHeads::Kinds(&KINDS_23));
+static SHAPE_294: ReconShape = ReconShape::Choice(&SHAPES_107, MissingHeads::Kinds(&KINDS_23));
 static SHAPE_295: ReconShape = ReconShape::Positioned(&SHAPE_294);
 static SHAPE_296: ReconShape = ReconShape::Kind(KindIdentity::Named("long_feature_begin_marker"));
 static SHAPE_297: ReconShape = ReconShape::Positioned(&SHAPE_296);
@@ -18585,7 +18685,7 @@ static SHAPE_314: ReconShape = ReconShape::Kind(KindIdentity::Named("star"));
 static SHAPE_315: ReconShape = ReconShape::Positioned(&SHAPE_314);
 static SHAPE_316: ReconShape = ReconShape::Kind(KindIdentity::Named("media_status"));
 static SHAPE_317: ReconShape = ReconShape::Positioned(&SHAPE_316);
-static SHAPE_318: ReconShape = ReconShape::Seq(&SHAPES_114);
+static SHAPE_318: ReconShape = ReconShape::Seq(&SHAPES_115);
 static SHAPE_319: ReconShape = ReconShape::Kind(KindIdentity::Named("media_type"));
 static SHAPE_320: ReconShape = ReconShape::Positioned(&SHAPE_319);
 static SHAPE_321: ReconShape = ReconShape::Positioned(&SHAPE_318);
@@ -18594,8 +18694,8 @@ static SHAPE_323: ReconShape = ReconShape::Kind(KindIdentity::Named("media_filen
 static SHAPE_324: ReconShape = ReconShape::Positioned(&SHAPE_323);
 static SHAPE_325: ReconShape = ReconShape::Kind(KindIdentity::Named("double_quote"));
 static SHAPE_326: ReconShape = ReconShape::Positioned(&SHAPE_325);
-static SHAPE_327: ReconShape = ReconShape::Seq(&SHAPES_117);
-static SHAPE_328: ReconShape = ReconShape::Choice(&SHAPES_118, MissingHeads::Never);
+static SHAPE_327: ReconShape = ReconShape::Seq(&SHAPES_118);
+static SHAPE_328: ReconShape = ReconShape::Choice(&SHAPES_119, MissingHeads::Never);
 static SHAPE_329: ReconShape = ReconShape::Positioned(&SHAPE_328);
 static SHAPE_330: ReconShape = ReconShape::Kind(KindIdentity::Named("media_contents"));
 static SHAPE_331: ReconShape = ReconShape::Positioned(&SHAPE_330);
@@ -18606,12 +18706,12 @@ static SHAPE_335: ReconShape = ReconShape::Kind(KindIdentity::Named("missing_val
 static SHAPE_336: ReconShape = ReconShape::Kind(KindIdentity::Named("unlinked_value"));
 static SHAPE_337: ReconShape = ReconShape::Kind(KindIdentity::Named("notrans_value"));
 static SHAPE_338: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_media_status"));
-static SHAPE_339: ReconShape = ReconShape::Choice(&SHAPES_121, MissingHeads::Kinds(&KINDS_24));
+static SHAPE_339: ReconShape = ReconShape::Choice(&SHAPES_122, MissingHeads::Kinds(&KINDS_24));
 static SHAPE_340: ReconShape = ReconShape::Positioned(&SHAPE_339);
 static SHAPE_341: ReconShape = ReconShape::Kind(KindIdentity::Named("video_value"));
 static SHAPE_342: ReconShape = ReconShape::Kind(KindIdentity::Named("audio_value"));
 static SHAPE_343: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_media_type"));
-static SHAPE_344: ReconShape = ReconShape::Choice(&SHAPES_123, MissingHeads::Kinds(&KINDS_25));
+static SHAPE_344: ReconShape = ReconShape::Choice(&SHAPES_124, MissingHeads::Kinds(&KINDS_25));
 static SHAPE_345: ReconShape = ReconShape::Positioned(&SHAPE_344);
 static SHAPE_346: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_groups"));
 static SHAPE_347: ReconShape = ReconShape::Positioned(&SHAPE_346);
@@ -18626,16 +18726,16 @@ static SHAPE_355: ReconShape = ReconShape::Kind(KindIdentity::Named("mor_word"))
 static SHAPE_356: ReconShape = ReconShape::Positioned(&SHAPE_355);
 static SHAPE_357: ReconShape = ReconShape::Kind(KindIdentity::Named("mor_content"));
 static SHAPE_358: ReconShape = ReconShape::Positioned(&SHAPE_357);
-static SHAPE_359: ReconShape = ReconShape::Seq(&SHAPES_128);
+static SHAPE_359: ReconShape = ReconShape::Seq(&SHAPES_129);
 static SHAPE_360: ReconShape = ReconShape::Positioned(&SHAPE_359);
 static SHAPE_361: ReconShape = ReconShape::Repeat(&SHAPE_360);
 static SHAPE_362: ReconShape = ReconShape::Supertype(&KINDS_26);
 static SHAPE_363: ReconShape = ReconShape::Positioned(&SHAPE_362);
-static SHAPE_364: ReconShape = ReconShape::Seq(&SHAPES_129);
+static SHAPE_364: ReconShape = ReconShape::Seq(&SHAPES_130);
 static SHAPE_365: ReconShape = ReconShape::Positioned(&SHAPE_364);
 static SHAPE_366: ReconShape = ReconShape::Optional(&SHAPE_365);
-static SHAPE_367: ReconShape = ReconShape::Seq(&SHAPES_130);
-static SHAPE_368: ReconShape = ReconShape::Choice(&SHAPES_131, MissingHeads::Kinds(&KINDS_26));
+static SHAPE_367: ReconShape = ReconShape::Seq(&SHAPES_131);
+static SHAPE_368: ReconShape = ReconShape::Choice(&SHAPES_132, MissingHeads::Kinds(&KINDS_26));
 static SHAPE_369: ReconShape = ReconShape::Positioned(&SHAPE_368);
 static SHAPE_370: ReconShape = ReconShape::Kind(KindIdentity::Named("mor_contents"));
 static SHAPE_371: ReconShape = ReconShape::Positioned(&SHAPE_370);
@@ -18669,12 +18769,12 @@ static SHAPE_398: ReconShape = ReconShape::Kind(KindIdentity::Named("rising_to_m
 static SHAPE_399: ReconShape = ReconShape::Kind(KindIdentity::Named("level_pitch"));
 static SHAPE_400: ReconShape = ReconShape::Kind(KindIdentity::Named("falling_to_mid"));
 static SHAPE_401: ReconShape = ReconShape::Kind(KindIdentity::Named("falling_to_low"));
-static SHAPE_402: ReconShape = ReconShape::Choice(&SHAPES_139, MissingHeads::Kinds(&KINDS_27));
+static SHAPE_402: ReconShape = ReconShape::Choice(&SHAPES_140, MissingHeads::Kinds(&KINDS_27));
 static SHAPE_403: ReconShape = ReconShape::Positioned(&SHAPE_402);
 static SHAPE_404: ReconShape = ReconShape::Kind(KindIdentity::Named("nonvocal_begin"));
 static SHAPE_405: ReconShape = ReconShape::Kind(KindIdentity::Named("nonvocal_end"));
 static SHAPE_406: ReconShape = ReconShape::Kind(KindIdentity::Named("nonvocal_simple"));
-static SHAPE_407: ReconShape = ReconShape::Choice(&SHAPES_141, MissingHeads::Kinds(&KINDS_28));
+static SHAPE_407: ReconShape = ReconShape::Choice(&SHAPES_142, MissingHeads::Kinds(&KINDS_28));
 static SHAPE_408: ReconShape = ReconShape::Positioned(&SHAPE_407);
 static SHAPE_409: ReconShape = ReconShape::Kind(KindIdentity::Named("nonvocal_begin_marker"));
 static SHAPE_410: ReconShape = ReconShape::Positioned(&SHAPE_409);
@@ -18684,9 +18784,9 @@ static SHAPE_413: ReconShape = ReconShape::Kind(KindIdentity::Named("right_brace
 static SHAPE_414: ReconShape = ReconShape::Positioned(&SHAPE_413);
 static SHAPE_415: ReconShape = ReconShape::Kind(KindIdentity::Named("event"));
 static SHAPE_416: ReconShape = ReconShape::Kind(KindIdentity::Named("zero"));
-static SHAPE_417: ReconShape = ReconShape::Choice(&SHAPES_146, MissingHeads::Kinds(&KINDS_29));
+static SHAPE_417: ReconShape = ReconShape::Choice(&SHAPES_147, MissingHeads::Kinds(&KINDS_29));
 static SHAPE_418: ReconShape = ReconShape::Positioned(&SHAPE_417);
-static SHAPE_419: ReconShape = ReconShape::Optional(&SHAPE_198);
+static SHAPE_419: ReconShape = ReconShape::Optional(&SHAPE_199);
 static SHAPE_420: ReconShape = ReconShape::Kind(KindIdentity::Named("nonword"));
 static SHAPE_421: ReconShape = ReconShape::Positioned(&SHAPE_420);
 static SHAPE_422: ReconShape = ReconShape::Kind(KindIdentity::Named("number_option"));
@@ -18702,16 +18802,16 @@ static SHAPE_431: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("5"));
 static SHAPE_432: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("more"));
 static SHAPE_433: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("audience"));
 static SHAPE_434: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_number"));
-static SHAPE_435: ReconShape = ReconShape::Choice(&SHAPES_150, MissingHeads::Kinds(&KINDS_30));
+static SHAPE_435: ReconShape = ReconShape::Choice(&SHAPES_151, MissingHeads::Kinds(&KINDS_30));
 static SHAPE_436: ReconShape = ReconShape::Positioned(&SHAPE_435);
 static SHAPE_437: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("CA"));
 static SHAPE_438: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("NoAlign"));
 static SHAPE_439: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_option_name"));
-static SHAPE_440: ReconShape = ReconShape::Choice(&SHAPES_152, MissingHeads::Kinds(&KINDS_31));
+static SHAPE_440: ReconShape = ReconShape::Choice(&SHAPES_153, MissingHeads::Kinds(&KINDS_31));
 static SHAPE_441: ReconShape = ReconShape::Positioned(&SHAPE_440);
 static SHAPE_442: ReconShape = ReconShape::Kind(KindIdentity::Named("option_name"));
 static SHAPE_443: ReconShape = ReconShape::Positioned(&SHAPE_442);
-static SHAPE_444: ReconShape = ReconShape::Seq(&SHAPES_154);
+static SHAPE_444: ReconShape = ReconShape::Seq(&SHAPES_155);
 static SHAPE_445: ReconShape = ReconShape::Positioned(&SHAPE_444);
 static SHAPE_446: ReconShape = ReconShape::Repeat(&SHAPE_445);
 static SHAPE_447: ReconShape = ReconShape::Kind(KindIdentity::Named("options_contents"));
@@ -18734,12 +18834,12 @@ static SHAPE_463: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("[=!"));
 static SHAPE_464: ReconShape = ReconShape::Positioned(&SHAPE_463);
 static SHAPE_465: ReconShape = ReconShape::Kind(KindIdentity::Named("participant_word"));
 static SHAPE_466: ReconShape = ReconShape::Positioned(&SHAPE_465);
-static SHAPE_467: ReconShape = ReconShape::Seq(&SHAPES_162);
+static SHAPE_467: ReconShape = ReconShape::Seq(&SHAPES_163);
 static SHAPE_468: ReconShape = ReconShape::Positioned(&SHAPE_467);
 static SHAPE_469: ReconShape = ReconShape::Repeat(&SHAPE_468);
 static SHAPE_470: ReconShape = ReconShape::Kind(KindIdentity::Named("participant"));
 static SHAPE_471: ReconShape = ReconShape::Positioned(&SHAPE_470);
-static SHAPE_472: ReconShape = ReconShape::Seq(&SHAPES_164);
+static SHAPE_472: ReconShape = ReconShape::Seq(&SHAPES_165);
 static SHAPE_473: ReconShape = ReconShape::Positioned(&SHAPE_472);
 static SHAPE_474: ReconShape = ReconShape::Repeat(&SHAPE_473);
 static SHAPE_475: ReconShape = ReconShape::Kind(KindIdentity::Named("participants_contents"));
@@ -18752,24 +18852,24 @@ static SHAPE_481: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_tier_pr
 static SHAPE_482: ReconShape = ReconShape::Positioned(&SHAPE_481);
 static SHAPE_483: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_grouped_content"));
 static SHAPE_484: ReconShape = ReconShape::Positioned(&SHAPE_483);
-static SHAPE_485: ReconShape = ReconShape::Seq(&SHAPES_169);
+static SHAPE_485: ReconShape = ReconShape::Seq(&SHAPES_170);
 static SHAPE_486: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_words"));
-static SHAPE_487: ReconShape = ReconShape::Choice(&SHAPES_170, MissingHeads::Kinds(&KINDS_32));
+static SHAPE_487: ReconShape = ReconShape::Choice(&SHAPES_171, MissingHeads::Kinds(&KINDS_32));
 static SHAPE_488: ReconShape = ReconShape::Positioned(&SHAPE_487);
 static SHAPE_489: ReconShape = ReconShape::Positioned(&SHAPE_486);
-static SHAPE_490: ReconShape = ReconShape::Seq(&SHAPES_172);
+static SHAPE_490: ReconShape = ReconShape::Seq(&SHAPES_173);
 static SHAPE_491: ReconShape = ReconShape::Positioned(&SHAPE_490);
 static SHAPE_492: ReconShape = ReconShape::Repeat(&SHAPE_491);
 static SHAPE_493: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_group"));
 static SHAPE_494: ReconShape = ReconShape::Positioned(&SHAPE_493);
-static SHAPE_495: ReconShape = ReconShape::Seq(&SHAPES_174);
+static SHAPE_495: ReconShape = ReconShape::Seq(&SHAPES_175);
 static SHAPE_496: ReconShape = ReconShape::Positioned(&SHAPE_495);
 static SHAPE_497: ReconShape = ReconShape::Repeat(&SHAPE_496);
 static SHAPE_498: ReconShape = ReconShape::Kind(KindIdentity::Named("plus"));
 static SHAPE_499: ReconShape = ReconShape::Positioned(&SHAPE_498);
 static SHAPE_500: ReconShape = ReconShape::Kind(KindIdentity::Named("pho_word"));
 static SHAPE_501: ReconShape = ReconShape::Positioned(&SHAPE_500);
-static SHAPE_502: ReconShape = ReconShape::Seq(&SHAPES_176);
+static SHAPE_502: ReconShape = ReconShape::Seq(&SHAPES_177);
 static SHAPE_503: ReconShape = ReconShape::Positioned(&SHAPE_502);
 static SHAPE_504: ReconShape = ReconShape::Repeat(&SHAPE_503);
 static SHAPE_505: ReconShape = ReconShape::Kind(KindIdentity::Named("phoaln_tier_prefix"));
@@ -18796,9 +18896,9 @@ static SHAPE_525: ReconShape = ReconShape::Optional(&SHAPE_524);
 static SHAPE_526: ReconShape = ReconShape::Kind(KindIdentity::Named("recording_quality_prefix"));
 static SHAPE_527: ReconShape = ReconShape::Positioned(&SHAPE_526);
 static SHAPE_528: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_recording_quality"));
-static SHAPE_529: ReconShape = ReconShape::Choice(&SHAPES_187, MissingHeads::Kinds(&KINDS_33));
+static SHAPE_529: ReconShape = ReconShape::Choice(&SHAPES_188, MissingHeads::Kinds(&KINDS_33));
 static SHAPE_530: ReconShape = ReconShape::Positioned(&SHAPE_529);
-static SHAPE_531: ReconShape = ReconShape::Seq(&SHAPES_189);
+static SHAPE_531: ReconShape = ReconShape::Seq(&SHAPES_190);
 static SHAPE_532: ReconShape = ReconShape::Positioned(&SHAPE_531);
 static SHAPE_533: ReconShape = ReconShape::Repeat(&SHAPE_532);
 static SHAPE_534: ReconShape = ReconShape::Kind(KindIdentity::Named("left_bracket"));
@@ -18806,7 +18906,7 @@ static SHAPE_535: ReconShape = ReconShape::Positioned(&SHAPE_534);
 static SHAPE_536: ReconShape = ReconShape::Kind(KindIdentity::Named("room_layout_prefix"));
 static SHAPE_537: ReconShape = ReconShape::Positioned(&SHAPE_536);
 static SHAPE_538: ReconShape = ReconShape::Kind(KindIdentity::Named("non_colon_separator"));
-static SHAPE_539: ReconShape = ReconShape::Choice(&SHAPES_193, MissingHeads::Kinds(&KINDS_34));
+static SHAPE_539: ReconShape = ReconShape::Choice(&SHAPES_194, MissingHeads::Kinds(&KINDS_34));
 static SHAPE_540: ReconShape = ReconShape::Positioned(&SHAPE_539);
 static SHAPE_541: ReconShape = ReconShape::Kind(KindIdentity::Named("word_segment"));
 static SHAPE_542: ReconShape = ReconShape::Positioned(&SHAPE_541);
@@ -18820,20 +18920,20 @@ static SHAPE_549: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_tier_pr
 static SHAPE_550: ReconShape = ReconShape::Positioned(&SHAPE_549);
 static SHAPE_551: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_grouped_content"));
 static SHAPE_552: ReconShape = ReconShape::Positioned(&SHAPE_551);
-static SHAPE_553: ReconShape = ReconShape::Seq(&SHAPES_197);
+static SHAPE_553: ReconShape = ReconShape::Seq(&SHAPES_198);
 static SHAPE_554: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_word"));
-static SHAPE_555: ReconShape = ReconShape::Choice(&SHAPES_198, MissingHeads::Kinds(&KINDS_35));
+static SHAPE_555: ReconShape = ReconShape::Choice(&SHAPES_199, MissingHeads::Kinds(&KINDS_35));
 static SHAPE_556: ReconShape = ReconShape::Positioned(&SHAPE_555);
 static SHAPE_557: ReconShape = ReconShape::Positioned(&SHAPE_554);
-static SHAPE_558: ReconShape = ReconShape::Seq(&SHAPES_200);
+static SHAPE_558: ReconShape = ReconShape::Seq(&SHAPES_201);
 static SHAPE_559: ReconShape = ReconShape::Positioned(&SHAPE_558);
 static SHAPE_560: ReconShape = ReconShape::Repeat(&SHAPE_559);
 static SHAPE_561: ReconShape = ReconShape::Kind(KindIdentity::Named("sin_group"));
 static SHAPE_562: ReconShape = ReconShape::Positioned(&SHAPE_561);
-static SHAPE_563: ReconShape = ReconShape::Seq(&SHAPES_202);
+static SHAPE_563: ReconShape = ReconShape::Seq(&SHAPES_203);
 static SHAPE_564: ReconShape = ReconShape::Positioned(&SHAPE_563);
 static SHAPE_565: ReconShape = ReconShape::Repeat(&SHAPE_564);
-static SHAPE_566: ReconShape = ReconShape::Choice(&SHAPES_204, MissingHeads::Kinds(&KINDS_36));
+static SHAPE_566: ReconShape = ReconShape::Choice(&SHAPES_205, MissingHeads::Kinds(&KINDS_36));
 static SHAPE_567: ReconShape = ReconShape::Positioned(&SHAPE_566);
 static SHAPE_568: ReconShape = ReconShape::Kind(KindIdentity::Named("sit_tier_prefix"));
 static SHAPE_569: ReconShape = ReconShape::Positioned(&SHAPE_568);
@@ -18842,15 +18942,15 @@ static SHAPE_571: ReconShape = ReconShape::Positioned(&SHAPE_570);
 static SHAPE_572: ReconShape = ReconShape::Kind(KindIdentity::Named("full_document"));
 static SHAPE_573: ReconShape = ReconShape::Kind(KindIdentity::Named("main_tier"));
 static SHAPE_574: ReconShape = ReconShape::Supertype(&KINDS_37);
-static SHAPE_575: ReconShape = ReconShape::Choice(&SHAPES_208, MissingHeads::Kinds(&KINDS_38));
+static SHAPE_575: ReconShape = ReconShape::Choice(&SHAPES_209, MissingHeads::Kinds(&KINDS_38));
 static SHAPE_576: ReconShape = ReconShape::Positioned(&SHAPE_575);
 static SHAPE_577: ReconShape = ReconShape::Kind(KindIdentity::Named("spa_tier_prefix"));
 static SHAPE_578: ReconShape = ReconShape::Positioned(&SHAPE_577);
 static SHAPE_579: ReconShape = ReconShape::Kind(KindIdentity::Named("word_prefix"));
-static SHAPE_580: ReconShape = ReconShape::Choice(&SHAPES_211, MissingHeads::Kinds(&KINDS_39));
+static SHAPE_580: ReconShape = ReconShape::Choice(&SHAPES_212, MissingHeads::Kinds(&KINDS_39));
 static SHAPE_581: ReconShape = ReconShape::Kind(KindIdentity::Named("form_marker"));
 static SHAPE_582: ReconShape = ReconShape::Kind(KindIdentity::Named("repeated_form_marker"));
-static SHAPE_583: ReconShape = ReconShape::Choice(&SHAPES_212, MissingHeads::Kinds(&KINDS_40));
+static SHAPE_583: ReconShape = ReconShape::Choice(&SHAPES_213, MissingHeads::Kinds(&KINDS_40));
 static SHAPE_584: ReconShape = ReconShape::Kind(KindIdentity::Named("word_body"));
 static SHAPE_585: ReconShape = ReconShape::Positioned(&SHAPE_584);
 static SHAPE_586: ReconShape = ReconShape::Positioned(&SHAPE_583);
@@ -18869,22 +18969,22 @@ static SHAPE_598: ReconShape = ReconShape::Kind(KindIdentity::Named("tape_locati
 static SHAPE_599: ReconShape = ReconShape::Positioned(&SHAPE_598);
 static SHAPE_600: ReconShape = ReconShape::Positioned(&SHAPE_44);
 static SHAPE_601: ReconShape = ReconShape::Repeat(&SHAPE_19);
-static SHAPE_602: ReconShape = ReconShape::Seq(&SHAPES_219);
+static SHAPE_602: ReconShape = ReconShape::Seq(&SHAPES_220);
 static SHAPE_603: ReconShape = ReconShape::Kind(KindIdentity::Named("text_segment"));
-static SHAPE_604: ReconShape = ReconShape::Choice(&SHAPES_220, MissingHeads::Kinds(&KINDS_41));
+static SHAPE_604: ReconShape = ReconShape::Choice(&SHAPES_221, MissingHeads::Kinds(&KINDS_41));
 static SHAPE_605: ReconShape = ReconShape::Positioned(&SHAPE_604);
 static SHAPE_606: ReconShape = ReconShape::Repeat(&SHAPE_605);
 static SHAPE_607: ReconShape = ReconShape::Kind(KindIdentity::Named("inline_pic"));
 static SHAPE_608: ReconShape = ReconShape::Positioned(&SHAPE_607);
-static SHAPE_609: ReconShape = ReconShape::Seq(&SHAPES_223);
-static SHAPE_610: ReconShape = ReconShape::Choice(&SHAPES_224, MissingHeads::Kinds(&KINDS_41));
+static SHAPE_609: ReconShape = ReconShape::Seq(&SHAPES_224);
+static SHAPE_610: ReconShape = ReconShape::Choice(&SHAPES_225, MissingHeads::Kinds(&KINDS_41));
 static SHAPE_611: ReconShape = ReconShape::Positioned(&SHAPE_610);
 static SHAPE_612: ReconShape = ReconShape::Repeat(&SHAPE_611);
 static SHAPE_613: ReconShape = ReconShape::Kind(KindIdentity::Named("thumbnail_prefix"));
 static SHAPE_614: ReconShape = ReconShape::Positioned(&SHAPE_613);
 static SHAPE_615: ReconShape = ReconShape::Kind(KindIdentity::Named("langcode"));
 static SHAPE_616: ReconShape = ReconShape::Positioned(&SHAPE_615);
-static SHAPE_617: ReconShape = ReconShape::Seq(&SHAPES_228);
+static SHAPE_617: ReconShape = ReconShape::Seq(&SHAPES_229);
 static SHAPE_618: ReconShape = ReconShape::Positioned(&SHAPE_617);
 static SHAPE_619: ReconShape = ReconShape::Optional(&SHAPE_618);
 static SHAPE_620: ReconShape = ReconShape::Kind(KindIdentity::Named("utterance_end"));
@@ -18896,7 +18996,7 @@ static SHAPE_625: ReconShape = ReconShape::Kind(KindIdentity::Named("tim_tier_pr
 static SHAPE_626: ReconShape = ReconShape::Positioned(&SHAPE_625);
 static SHAPE_627: ReconShape = ReconShape::Kind(KindIdentity::Named("strict_time"));
 static SHAPE_628: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_time"));
-static SHAPE_629: ReconShape = ReconShape::Choice(&SHAPES_233, MissingHeads::Kinds(&KINDS_42));
+static SHAPE_629: ReconShape = ReconShape::Choice(&SHAPES_234, MissingHeads::Kinds(&KINDS_42));
 static SHAPE_630: ReconShape = ReconShape::Positioned(&SHAPE_629);
 static SHAPE_631: ReconShape = ReconShape::Kind(KindIdentity::Named("time_duration_contents"));
 static SHAPE_632: ReconShape = ReconShape::Positioned(&SHAPE_631);
@@ -18920,7 +19020,7 @@ static SHAPE_649: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("coarse"
 static SHAPE_650: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("checked"));
 static SHAPE_651: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("anonymized"));
 static SHAPE_652: ReconShape = ReconShape::Kind(KindIdentity::Named("generic_transcription"));
-static SHAPE_653: ReconShape = ReconShape::Choice(&SHAPES_239, MissingHeads::Kinds(&KINDS_43));
+static SHAPE_653: ReconShape = ReconShape::Choice(&SHAPES_240, MissingHeads::Kinds(&KINDS_43));
 static SHAPE_654: ReconShape = ReconShape::Positioned(&SHAPE_653);
 static SHAPE_655: ReconShape = ReconShape::Kind(KindIdentity::Named("types_design"));
 static SHAPE_656: ReconShape = ReconShape::Positioned(&SHAPE_655);
@@ -18928,7 +19028,7 @@ static SHAPE_657: ReconShape = ReconShape::Kind(KindIdentity::Named("types_activ
 static SHAPE_658: ReconShape = ReconShape::Positioned(&SHAPE_657);
 static SHAPE_659: ReconShape = ReconShape::Kind(KindIdentity::Named("types_group"));
 static SHAPE_660: ReconShape = ReconShape::Positioned(&SHAPE_659);
-static SHAPE_661: ReconShape = ReconShape::Seq(&SHAPES_241);
+static SHAPE_661: ReconShape = ReconShape::Seq(&SHAPES_242);
 static SHAPE_662: ReconShape = ReconShape::Positioned(&SHAPE_661);
 static SHAPE_663: ReconShape = ReconShape::Optional(&SHAPE_662);
 static SHAPE_664: ReconShape = ReconShape::Kind(KindIdentity::Named("types_prefix"));
@@ -18943,7 +19043,7 @@ static SHAPE_672: ReconShape = ReconShape::Positioned(&SHAPE_671);
 static SHAPE_673: ReconShape = ReconShape::Positioned(&SHAPE_574);
 static SHAPE_674: ReconShape = ReconShape::Repeat(&SHAPE_673);
 static SHAPE_675: ReconShape = ReconShape::Positioned(&SHAPE_573);
-static SHAPE_676: ReconShape = ReconShape::Seq(&SHAPES_248);
+static SHAPE_676: ReconShape = ReconShape::Seq(&SHAPES_249);
 static SHAPE_677: ReconShape = ReconShape::Kind(KindIdentity::Named("final_codes"));
 static SHAPE_678: ReconShape = ReconShape::Positioned(&SHAPE_677);
 static SHAPE_679: ReconShape = ReconShape::Optional(&SHAPE_678);
@@ -18961,37 +19061,37 @@ static SHAPE_690: ReconShape = ReconShape::Positioned(&SHAPE_689);
 static SHAPE_691: ReconShape = ReconShape::Kind(KindIdentity::Named("wor_tier_prefix"));
 static SHAPE_692: ReconShape = ReconShape::Positioned(&SHAPE_691);
 static SHAPE_693: ReconShape = ReconShape::Kind(KindIdentity::Named("wor_word_item"));
-static SHAPE_694: ReconShape = ReconShape::Choice(&SHAPES_257, MissingHeads::Kinds(&KINDS_44));
+static SHAPE_694: ReconShape = ReconShape::Choice(&SHAPES_258, MissingHeads::Kinds(&KINDS_44));
 static SHAPE_695: ReconShape = ReconShape::Positioned(&SHAPE_694);
-static SHAPE_696: ReconShape = ReconShape::Seq(&SHAPES_258);
+static SHAPE_696: ReconShape = ReconShape::Seq(&SHAPES_259);
 static SHAPE_697: ReconShape = ReconShape::Positioned(&SHAPE_696);
 static SHAPE_698: ReconShape = ReconShape::Repeat(&SHAPE_697);
 static SHAPE_699: ReconShape = ReconShape::Kind(KindIdentity::Named("shortening"));
 static SHAPE_700: ReconShape = ReconShape::Kind(KindIdentity::Named("stress_marker"));
-static SHAPE_701: ReconShape = ReconShape::Choice(&SHAPES_263, MissingHeads::Kinds(&KINDS_45));
+static SHAPE_701: ReconShape = ReconShape::Choice(&SHAPES_264, MissingHeads::Kinds(&KINDS_45));
 static SHAPE_702: ReconShape = ReconShape::Positioned(&SHAPE_701);
 static SHAPE_703: ReconShape = ReconShape::Kind(KindIdentity::Named("lengthening"));
 static SHAPE_704: ReconShape = ReconShape::Kind(KindIdentity::Named("ca_element"));
 static SHAPE_705: ReconShape = ReconShape::Kind(KindIdentity::Named("ca_delimiter"));
 static SHAPE_706: ReconShape = ReconShape::Kind(KindIdentity::Named("syllable_pause"));
-static SHAPE_707: ReconShape = ReconShape::Choice(&SHAPES_264, MissingHeads::Kinds(&KINDS_46));
+static SHAPE_707: ReconShape = ReconShape::Choice(&SHAPES_265, MissingHeads::Kinds(&KINDS_46));
 static SHAPE_708: ReconShape = ReconShape::Positioned(&SHAPE_707);
 static SHAPE_709: ReconShape = ReconShape::Repeat(&SHAPE_708);
-static SHAPE_710: ReconShape = ReconShape::Seq(&SHAPES_265);
-static SHAPE_711: ReconShape = ReconShape::Choice(&SHAPES_266, MissingHeads::Kinds(&KINDS_47));
+static SHAPE_710: ReconShape = ReconShape::Seq(&SHAPES_266);
+static SHAPE_711: ReconShape = ReconShape::Choice(&SHAPES_267, MissingHeads::Kinds(&KINDS_47));
 static SHAPE_712: ReconShape = ReconShape::Positioned(&SHAPE_711);
 static SHAPE_713: ReconShape = ReconShape::Repeat(&SHAPE_712);
-static SHAPE_714: ReconShape = ReconShape::Seq(&SHAPES_267);
-static SHAPE_715: ReconShape = ReconShape::Choice(&SHAPES_268, MissingHeads::Never);
+static SHAPE_714: ReconShape = ReconShape::Seq(&SHAPES_268);
+static SHAPE_715: ReconShape = ReconShape::Choice(&SHAPES_269, MissingHeads::Never);
 static SHAPE_716: ReconShape = ReconShape::Positioned(&SHAPE_715);
 static SHAPE_717: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("&-"));
 static SHAPE_718: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("&~"));
 static SHAPE_719: ReconShape = ReconShape::Kind(KindIdentity::Anonymous("&+"));
-static SHAPE_720: ReconShape = ReconShape::Choice(&SHAPES_270, MissingHeads::Kinds(&KINDS_48));
+static SHAPE_720: ReconShape = ReconShape::Choice(&SHAPES_271, MissingHeads::Kinds(&KINDS_48));
 static SHAPE_721: ReconShape = ReconShape::Positioned(&SHAPE_720);
 static SHAPE_722: ReconShape = ReconShape::Kind(KindIdentity::Named("replacement"));
 static SHAPE_723: ReconShape = ReconShape::Positioned(&SHAPE_722);
-static SHAPE_724: ReconShape = ReconShape::Seq(&SHAPES_272);
+static SHAPE_724: ReconShape = ReconShape::Seq(&SHAPES_273);
 static SHAPE_725: ReconShape = ReconShape::Positioned(&SHAPE_724);
 static SHAPE_726: ReconShape = ReconShape::Optional(&SHAPE_725);
 static SHAPE_727: ReconShape = ReconShape::Kind(KindIdentity::Named("x_tier_prefix"));
@@ -19068,268 +19168,269 @@ static SHAPES_57: [&ReconShape; 3] = [&SHAPE_161, &SHAPE_164, &SHAPE_166];
 static SHAPES_58: [&ReconShape; 1] = [&SHAPE_166];
 static SHAPES_59: [&ReconShape; 5] = [&SHAPE_169, &SHAPE_159, &SHAPE_161, &SHAPE_164, &SHAPE_166];
 static SHAPES_60: [&ReconShape; 3] = [&SHAPE_171, &SHAPE_53, &SHAPE_6];
-static SHAPES_61: [&ReconShape; 4] = [&SHAPE_173, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_62: [&ReconShape; 4] = [&SHAPE_175, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_63: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_177];
-static SHAPES_64: [&ReconShape; 2] = [&SHAPE_177, &SHAPE_180];
-static SHAPES_65: [&ReconShape; 4] = [&SHAPE_184, &SHAPE_1, &SHAPE_182, &SHAPE_6];
-static SHAPES_66: [&ReconShape; 5] = [&SHAPE_192, &SHAPE_186, &SHAPE_188, &SHAPE_186, &SHAPE_190];
-static SHAPES_67: [&ReconShape; 4] = [&SHAPE_200, &SHAPE_194, &SHAPE_196, &SHAPE_198];
-static SHAPES_68: [&ReconShape; 2] = [&SHAPE_18, &SHAPE_201];
-static SHAPES_69: [&ReconShape; 1] = [&SHAPE_204];
-static SHAPES_70: [&ReconShape; 2] = [&SHAPE_203, &SHAPE_204];
-static SHAPES_71: [&ReconShape; 3] = [&SHAPE_83, &SHAPE_205, &SHAPE_208];
-static SHAPES_72: [&ReconShape; 2] = [&SHAPE_209, &SHAPE_210];
-static SHAPES_73: [&ReconShape; 1] = [&SHAPE_212];
-static SHAPES_74: [&ReconShape; 19] = [
-    &SHAPE_186, &SHAPE_215, &SHAPE_186, &SHAPE_217, &SHAPE_186, &SHAPE_220, &SHAPE_186, &SHAPE_223,
-    &SHAPE_186, &SHAPE_226, &SHAPE_186, &SHAPE_229, &SHAPE_186, &SHAPE_231, &SHAPE_186, &SHAPE_234,
-    &SHAPE_186, &SHAPE_237, &SHAPE_186,
+static SHAPES_61: [&ReconShape; 1] = [&SHAPE_172];
+static SHAPES_62: [&ReconShape; 4] = [&SHAPE_174, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_63: [&ReconShape; 4] = [&SHAPE_176, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_64: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_178];
+static SHAPES_65: [&ReconShape; 2] = [&SHAPE_178, &SHAPE_181];
+static SHAPES_66: [&ReconShape; 4] = [&SHAPE_185, &SHAPE_1, &SHAPE_183, &SHAPE_6];
+static SHAPES_67: [&ReconShape; 5] = [&SHAPE_193, &SHAPE_187, &SHAPE_189, &SHAPE_187, &SHAPE_191];
+static SHAPES_68: [&ReconShape; 4] = [&SHAPE_201, &SHAPE_195, &SHAPE_197, &SHAPE_199];
+static SHAPES_69: [&ReconShape; 2] = [&SHAPE_18, &SHAPE_202];
+static SHAPES_70: [&ReconShape; 1] = [&SHAPE_205];
+static SHAPES_71: [&ReconShape; 2] = [&SHAPE_204, &SHAPE_205];
+static SHAPES_72: [&ReconShape; 3] = [&SHAPE_83, &SHAPE_206, &SHAPE_209];
+static SHAPES_73: [&ReconShape; 2] = [&SHAPE_210, &SHAPE_172];
+static SHAPES_74: [&ReconShape; 1] = [&SHAPE_212];
+static SHAPES_75: [&ReconShape; 19] = [
+    &SHAPE_187, &SHAPE_215, &SHAPE_187, &SHAPE_217, &SHAPE_187, &SHAPE_220, &SHAPE_187, &SHAPE_223,
+    &SHAPE_187, &SHAPE_226, &SHAPE_187, &SHAPE_229, &SHAPE_187, &SHAPE_231, &SHAPE_187, &SHAPE_234,
+    &SHAPE_187, &SHAPE_237, &SHAPE_187,
 ];
-static SHAPES_75: [&ReconShape; 17] = [
-    &SHAPE_186, &SHAPE_217, &SHAPE_186, &SHAPE_220, &SHAPE_186, &SHAPE_223, &SHAPE_186, &SHAPE_226,
-    &SHAPE_186, &SHAPE_229, &SHAPE_186, &SHAPE_231, &SHAPE_186, &SHAPE_234, &SHAPE_186, &SHAPE_237,
-    &SHAPE_186,
+static SHAPES_76: [&ReconShape; 17] = [
+    &SHAPE_187, &SHAPE_217, &SHAPE_187, &SHAPE_220, &SHAPE_187, &SHAPE_223, &SHAPE_187, &SHAPE_226,
+    &SHAPE_187, &SHAPE_229, &SHAPE_187, &SHAPE_231, &SHAPE_187, &SHAPE_234, &SHAPE_187, &SHAPE_237,
+    &SHAPE_187,
 ];
-static SHAPES_76: [&ReconShape; 13] = [
-    &SHAPE_186, &SHAPE_223, &SHAPE_186, &SHAPE_226, &SHAPE_186, &SHAPE_229, &SHAPE_186, &SHAPE_231,
-    &SHAPE_186, &SHAPE_234, &SHAPE_186, &SHAPE_237, &SHAPE_186,
+static SHAPES_77: [&ReconShape; 13] = [
+    &SHAPE_187, &SHAPE_223, &SHAPE_187, &SHAPE_226, &SHAPE_187, &SHAPE_229, &SHAPE_187, &SHAPE_231,
+    &SHAPE_187, &SHAPE_234, &SHAPE_187, &SHAPE_237, &SHAPE_187,
 ];
-static SHAPES_77: [&ReconShape; 11] = [
-    &SHAPE_186, &SHAPE_226, &SHAPE_186, &SHAPE_229, &SHAPE_186, &SHAPE_231, &SHAPE_186, &SHAPE_234,
-    &SHAPE_186, &SHAPE_237, &SHAPE_186,
+static SHAPES_78: [&ReconShape; 11] = [
+    &SHAPE_187, &SHAPE_226, &SHAPE_187, &SHAPE_229, &SHAPE_187, &SHAPE_231, &SHAPE_187, &SHAPE_234,
+    &SHAPE_187, &SHAPE_237, &SHAPE_187,
 ];
-static SHAPES_78: [&ReconShape; 9] = [
-    &SHAPE_186, &SHAPE_229, &SHAPE_186, &SHAPE_231, &SHAPE_186, &SHAPE_234, &SHAPE_186, &SHAPE_237,
-    &SHAPE_186,
+static SHAPES_79: [&ReconShape; 9] = [
+    &SHAPE_187, &SHAPE_229, &SHAPE_187, &SHAPE_231, &SHAPE_187, &SHAPE_234, &SHAPE_187, &SHAPE_237,
+    &SHAPE_187,
 ];
-static SHAPES_79: [&ReconShape; 7] = [
-    &SHAPE_186, &SHAPE_231, &SHAPE_186, &SHAPE_234, &SHAPE_186, &SHAPE_237, &SHAPE_186,
+static SHAPES_80: [&ReconShape; 7] = [
+    &SHAPE_187, &SHAPE_231, &SHAPE_187, &SHAPE_234, &SHAPE_187, &SHAPE_237, &SHAPE_187,
 ];
-static SHAPES_80: [&ReconShape; 3] = [&SHAPE_186, &SHAPE_237, &SHAPE_186];
-static SHAPES_81: [&ReconShape; 1] = [&SHAPE_186];
-static SHAPES_82: [&ReconShape; 20] = [
-    &SHAPE_240, &SHAPE_186, &SHAPE_215, &SHAPE_186, &SHAPE_217, &SHAPE_186, &SHAPE_220, &SHAPE_186,
-    &SHAPE_223, &SHAPE_186, &SHAPE_226, &SHAPE_186, &SHAPE_229, &SHAPE_186, &SHAPE_231, &SHAPE_186,
-    &SHAPE_234, &SHAPE_186, &SHAPE_237, &SHAPE_186,
+static SHAPES_81: [&ReconShape; 3] = [&SHAPE_187, &SHAPE_237, &SHAPE_187];
+static SHAPES_82: [&ReconShape; 1] = [&SHAPE_187];
+static SHAPES_83: [&ReconShape; 20] = [
+    &SHAPE_240, &SHAPE_187, &SHAPE_215, &SHAPE_187, &SHAPE_217, &SHAPE_187, &SHAPE_220, &SHAPE_187,
+    &SHAPE_223, &SHAPE_187, &SHAPE_226, &SHAPE_187, &SHAPE_229, &SHAPE_187, &SHAPE_231, &SHAPE_187,
+    &SHAPE_234, &SHAPE_187, &SHAPE_237, &SHAPE_187,
 ];
-static SHAPES_83: [&ReconShape; 4] = [&SHAPE_244, &SHAPE_10, &SHAPE_242, &SHAPE_6];
-static SHAPES_84: [&ReconShape; 2] = [&SHAPE_84, &SHAPE_245];
-static SHAPES_85: [&ReconShape; 1] = [&SHAPE_247];
-static SHAPES_86: [&ReconShape; 4] = [&SHAPE_248, &SHAPE_249, &SHAPE_18, &SHAPE_201];
-static SHAPES_87: [&ReconShape; 1] = [&SHAPE_252];
-static SHAPES_88: [&ReconShape; 2] = [&SHAPE_251, &SHAPE_252];
-static SHAPES_89: [&ReconShape; 4] = [&SHAPE_253, &SHAPE_254, &SHAPE_255, &SHAPE_256];
-static SHAPES_90: [&ReconShape; 1] = [&SHAPE_258];
-static SHAPES_91: [&ReconShape; 3] = [&SHAPE_259, &SHAPE_260, &SHAPE_261];
-static SHAPES_92: [&ReconShape; 1] = [&SHAPE_263];
-static SHAPES_93: [&ReconShape; 4] = [&SHAPE_265, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_94: [&ReconShape; 4] = [&SHAPE_60, &SHAPE_10, &SHAPE_266, &SHAPE_6];
-static SHAPES_95: [&ReconShape; 6] = [
+static SHAPES_84: [&ReconShape; 4] = [&SHAPE_244, &SHAPE_10, &SHAPE_242, &SHAPE_6];
+static SHAPES_85: [&ReconShape; 2] = [&SHAPE_84, &SHAPE_245];
+static SHAPES_86: [&ReconShape; 1] = [&SHAPE_247];
+static SHAPES_87: [&ReconShape; 4] = [&SHAPE_248, &SHAPE_249, &SHAPE_18, &SHAPE_202];
+static SHAPES_88: [&ReconShape; 1] = [&SHAPE_252];
+static SHAPES_89: [&ReconShape; 2] = [&SHAPE_251, &SHAPE_252];
+static SHAPES_90: [&ReconShape; 4] = [&SHAPE_253, &SHAPE_254, &SHAPE_255, &SHAPE_256];
+static SHAPES_91: [&ReconShape; 1] = [&SHAPE_258];
+static SHAPES_92: [&ReconShape; 3] = [&SHAPE_259, &SHAPE_260, &SHAPE_261];
+static SHAPES_93: [&ReconShape; 1] = [&SHAPE_263];
+static SHAPES_94: [&ReconShape; 4] = [&SHAPE_265, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_95: [&ReconShape; 4] = [&SHAPE_60, &SHAPE_10, &SHAPE_266, &SHAPE_6];
+static SHAPES_96: [&ReconShape; 6] = [
     &SHAPE_268, &SHAPE_58, &SHAPE_60, &SHAPE_10, &SHAPE_266, &SHAPE_6,
 ];
-static SHAPES_96: [&ReconShape; 4] = [&SHAPE_270, &SHAPE_19, &SHAPE_85, &SHAPE_23];
-static SHAPES_97: [&ReconShape; 4] = [&SHAPE_271, &SHAPE_272, &SHAPE_29, &SHAPE_85];
-static SHAPES_98: [&ReconShape; 2] = [&SHAPE_85, &SHAPE_275];
-static SHAPES_99: [&ReconShape; 4] = [&SHAPE_279, &SHAPE_10, &SHAPE_277, &SHAPE_6];
-static SHAPES_100: [&ReconShape; 4] = [&SHAPE_280, &SHAPE_281, &SHAPE_282, &SHAPE_283];
-static SHAPES_101: [&ReconShape; 1] = [&SHAPE_285];
-static SHAPES_102: [&ReconShape; 2] = [&SHAPE_286, &SHAPE_29];
-static SHAPES_103: [&ReconShape; 1] = [&SHAPE_289];
-static SHAPES_104: [&ReconShape; 2] = [&SHAPE_288, &SHAPE_289];
-static SHAPES_105: [&ReconShape; 4] = [&SHAPE_291, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_106: [&ReconShape; 2] = [&SHAPE_292, &SHAPE_293];
-static SHAPES_107: [&ReconShape; 1] = [&SHAPE_295];
-static SHAPES_108: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_297, &SHAPE_299];
-static SHAPES_109: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_303, &SHAPE_299];
-static SHAPES_110: [&ReconShape; 3] = [&SHAPE_307, &SHAPE_194, &SHAPE_305];
-static SHAPES_111: [&ReconShape; 3] = [&SHAPE_311, &SHAPE_194, &SHAPE_309];
-static SHAPES_112: [&ReconShape; 1] = [&SHAPE_313];
-static SHAPES_113: [&ReconShape; 6] = [
-    &SHAPE_315, &SHAPE_60, &SHAPE_83, &SHAPE_205, &SHAPE_208, &SHAPE_313,
+static SHAPES_97: [&ReconShape; 4] = [&SHAPE_270, &SHAPE_19, &SHAPE_85, &SHAPE_23];
+static SHAPES_98: [&ReconShape; 4] = [&SHAPE_271, &SHAPE_272, &SHAPE_29, &SHAPE_85];
+static SHAPES_99: [&ReconShape; 2] = [&SHAPE_85, &SHAPE_275];
+static SHAPES_100: [&ReconShape; 4] = [&SHAPE_279, &SHAPE_10, &SHAPE_277, &SHAPE_6];
+static SHAPES_101: [&ReconShape; 4] = [&SHAPE_280, &SHAPE_281, &SHAPE_282, &SHAPE_283];
+static SHAPES_102: [&ReconShape; 1] = [&SHAPE_285];
+static SHAPES_103: [&ReconShape; 2] = [&SHAPE_286, &SHAPE_29];
+static SHAPES_104: [&ReconShape; 1] = [&SHAPE_289];
+static SHAPES_105: [&ReconShape; 2] = [&SHAPE_288, &SHAPE_289];
+static SHAPES_106: [&ReconShape; 4] = [&SHAPE_291, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_107: [&ReconShape; 2] = [&SHAPE_292, &SHAPE_293];
+static SHAPES_108: [&ReconShape; 1] = [&SHAPE_295];
+static SHAPES_109: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_297, &SHAPE_299];
+static SHAPES_110: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_303, &SHAPE_299];
+static SHAPES_111: [&ReconShape; 3] = [&SHAPE_307, &SHAPE_195, &SHAPE_305];
+static SHAPES_112: [&ReconShape; 3] = [&SHAPE_311, &SHAPE_195, &SHAPE_309];
+static SHAPES_113: [&ReconShape; 1] = [&SHAPE_313];
+static SHAPES_114: [&ReconShape; 6] = [
+    &SHAPE_315, &SHAPE_60, &SHAPE_83, &SHAPE_206, &SHAPE_209, &SHAPE_313,
 ];
-static SHAPES_114: [&ReconShape; 3] = [&SHAPE_272, &SHAPE_29, &SHAPE_317];
-static SHAPES_115: [&ReconShape; 4] = [&SHAPE_272, &SHAPE_29, &SHAPE_320, &SHAPE_322];
-static SHAPES_116: [&ReconShape; 6] = [
+static SHAPES_115: [&ReconShape; 3] = [&SHAPE_272, &SHAPE_29, &SHAPE_317];
+static SHAPES_116: [&ReconShape; 4] = [&SHAPE_272, &SHAPE_29, &SHAPE_320, &SHAPE_322];
+static SHAPES_117: [&ReconShape; 6] = [
     &SHAPE_324, &SHAPE_271, &SHAPE_272, &SHAPE_29, &SHAPE_320, &SHAPE_322,
 ];
-static SHAPES_117: [&ReconShape; 3] = [&SHAPE_326, &SHAPE_210, &SHAPE_326];
-static SHAPES_118: [&ReconShape; 2] = [&SHAPE_327, &SHAPE_210];
-static SHAPES_119: [&ReconShape; 1] = [&SHAPE_329];
-static SHAPES_120: [&ReconShape; 4] = [&SHAPE_334, &SHAPE_10, &SHAPE_332, &SHAPE_6];
-static SHAPES_121: [&ReconShape; 4] = [&SHAPE_335, &SHAPE_336, &SHAPE_337, &SHAPE_338];
-static SHAPES_122: [&ReconShape; 1] = [&SHAPE_340];
-static SHAPES_123: [&ReconShape; 4] = [&SHAPE_341, &SHAPE_342, &SHAPE_335, &SHAPE_343];
-static SHAPES_124: [&ReconShape; 1] = [&SHAPE_345];
-static SHAPES_125: [&ReconShape; 4] = [&SHAPE_349, &SHAPE_1, &SHAPE_347, &SHAPE_6];
-static SHAPES_126: [&ReconShape; 4] = [&SHAPE_351, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_127: [&ReconShape; 2] = [&SHAPE_356, &SHAPE_354];
-static SHAPES_128: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_358];
-static SHAPES_129: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_363];
-static SHAPES_130: [&ReconShape; 3] = [&SHAPE_358, &SHAPE_361, &SHAPE_366];
-static SHAPES_131: [&ReconShape; 2] = [&SHAPE_367, &SHAPE_362];
-static SHAPES_132: [&ReconShape; 1] = [&SHAPE_271];
-static SHAPES_133: [&ReconShape; 2] = [&SHAPE_369, &SHAPE_271];
-static SHAPES_134: [&ReconShape; 4] = [&SHAPE_373, &SHAPE_1, &SHAPE_371, &SHAPE_6];
-static SHAPES_135: [&ReconShape; 2] = [&SHAPE_377, &SHAPE_375];
-static SHAPES_136: [&ReconShape; 2] = [&SHAPE_379, &SHAPE_356];
-static SHAPES_137: [&ReconShape; 4] = [&SHAPE_386, &SHAPE_186, &SHAPE_381, &SHAPE_384];
-static SHAPES_138: [&ReconShape; 2] = [&SHAPE_388, &SHAPE_6];
-static SHAPES_139: [&ReconShape; 14] = [
+static SHAPES_118: [&ReconShape; 3] = [&SHAPE_326, &SHAPE_172, &SHAPE_326];
+static SHAPES_119: [&ReconShape; 2] = [&SHAPE_327, &SHAPE_172];
+static SHAPES_120: [&ReconShape; 1] = [&SHAPE_329];
+static SHAPES_121: [&ReconShape; 4] = [&SHAPE_334, &SHAPE_10, &SHAPE_332, &SHAPE_6];
+static SHAPES_122: [&ReconShape; 4] = [&SHAPE_335, &SHAPE_336, &SHAPE_337, &SHAPE_338];
+static SHAPES_123: [&ReconShape; 1] = [&SHAPE_340];
+static SHAPES_124: [&ReconShape; 4] = [&SHAPE_341, &SHAPE_342, &SHAPE_335, &SHAPE_343];
+static SHAPES_125: [&ReconShape; 1] = [&SHAPE_345];
+static SHAPES_126: [&ReconShape; 4] = [&SHAPE_349, &SHAPE_1, &SHAPE_347, &SHAPE_6];
+static SHAPES_127: [&ReconShape; 4] = [&SHAPE_351, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_128: [&ReconShape; 2] = [&SHAPE_356, &SHAPE_354];
+static SHAPES_129: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_358];
+static SHAPES_130: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_363];
+static SHAPES_131: [&ReconShape; 3] = [&SHAPE_358, &SHAPE_361, &SHAPE_366];
+static SHAPES_132: [&ReconShape; 2] = [&SHAPE_367, &SHAPE_362];
+static SHAPES_133: [&ReconShape; 1] = [&SHAPE_271];
+static SHAPES_134: [&ReconShape; 2] = [&SHAPE_369, &SHAPE_271];
+static SHAPES_135: [&ReconShape; 4] = [&SHAPE_373, &SHAPE_1, &SHAPE_371, &SHAPE_6];
+static SHAPES_136: [&ReconShape; 2] = [&SHAPE_377, &SHAPE_375];
+static SHAPES_137: [&ReconShape; 2] = [&SHAPE_379, &SHAPE_356];
+static SHAPES_138: [&ReconShape; 4] = [&SHAPE_386, &SHAPE_187, &SHAPE_381, &SHAPE_384];
+static SHAPES_139: [&ReconShape; 2] = [&SHAPE_388, &SHAPE_6];
+static SHAPES_140: [&ReconShape; 14] = [
     &SHAPE_249, &SHAPE_389, &SHAPE_390, &SHAPE_391, &SHAPE_392, &SHAPE_393, &SHAPE_394, &SHAPE_395,
     &SHAPE_396, &SHAPE_397, &SHAPE_398, &SHAPE_399, &SHAPE_400, &SHAPE_401,
 ];
-static SHAPES_140: [&ReconShape; 1] = [&SHAPE_403];
-static SHAPES_141: [&ReconShape; 3] = [&SHAPE_404, &SHAPE_405, &SHAPE_406];
-static SHAPES_142: [&ReconShape; 1] = [&SHAPE_408];
-static SHAPES_143: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_410, &SHAPE_299];
-static SHAPES_144: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_412, &SHAPE_299];
-static SHAPES_145: [&ReconShape; 4] = [&SHAPE_301, &SHAPE_410, &SHAPE_299, &SHAPE_414];
-static SHAPES_146: [&ReconShape; 2] = [&SHAPE_415, &SHAPE_416];
-static SHAPES_147: [&ReconShape; 1] = [&SHAPE_418];
-static SHAPES_148: [&ReconShape; 2] = [&SHAPE_421, &SHAPE_419];
-static SHAPES_149: [&ReconShape; 4] = [&SHAPE_426, &SHAPE_10, &SHAPE_424, &SHAPE_6];
-static SHAPES_150: [&ReconShape; 8] = [
+static SHAPES_141: [&ReconShape; 1] = [&SHAPE_403];
+static SHAPES_142: [&ReconShape; 3] = [&SHAPE_404, &SHAPE_405, &SHAPE_406];
+static SHAPES_143: [&ReconShape; 1] = [&SHAPE_408];
+static SHAPES_144: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_410, &SHAPE_299];
+static SHAPES_145: [&ReconShape; 3] = [&SHAPE_301, &SHAPE_412, &SHAPE_299];
+static SHAPES_146: [&ReconShape; 4] = [&SHAPE_301, &SHAPE_410, &SHAPE_299, &SHAPE_414];
+static SHAPES_147: [&ReconShape; 2] = [&SHAPE_415, &SHAPE_416];
+static SHAPES_148: [&ReconShape; 1] = [&SHAPE_418];
+static SHAPES_149: [&ReconShape; 2] = [&SHAPE_421, &SHAPE_419];
+static SHAPES_150: [&ReconShape; 4] = [&SHAPE_426, &SHAPE_10, &SHAPE_424, &SHAPE_6];
+static SHAPES_151: [&ReconShape; 8] = [
     &SHAPE_427, &SHAPE_428, &SHAPE_429, &SHAPE_430, &SHAPE_431, &SHAPE_432, &SHAPE_433, &SHAPE_434,
 ];
-static SHAPES_151: [&ReconShape; 1] = [&SHAPE_436];
-static SHAPES_152: [&ReconShape; 3] = [&SHAPE_437, &SHAPE_438, &SHAPE_439];
-static SHAPES_153: [&ReconShape; 1] = [&SHAPE_441];
-static SHAPES_154: [&ReconShape; 3] = [&SHAPE_272, &SHAPE_29, &SHAPE_443];
-static SHAPES_155: [&ReconShape; 2] = [&SHAPE_443, &SHAPE_446];
-static SHAPES_156: [&ReconShape; 4] = [&SHAPE_451, &SHAPE_10, &SHAPE_449, &SHAPE_6];
-static SHAPES_157: [&ReconShape; 4] = [&SHAPE_453, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_158: [&ReconShape; 5] = [&SHAPE_301, &SHAPE_315, &SHAPE_60, &SHAPE_83, &SHAPE_455];
-static SHAPES_159: [&ReconShape; 4] = [&SHAPE_460, &SHAPE_10, &SHAPE_458, &SHAPE_6];
-static SHAPES_160: [&ReconShape; 4] = [&SHAPE_462, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_161: [&ReconShape; 4] = [&SHAPE_464, &SHAPE_19, &SHAPE_21, &SHAPE_23];
-static SHAPES_162: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_466];
-static SHAPES_163: [&ReconShape; 3] = [&SHAPE_60, &SHAPE_469, &SHAPE_271];
-static SHAPES_164: [&ReconShape; 3] = [&SHAPE_272, &SHAPE_29, &SHAPE_471];
-static SHAPES_165: [&ReconShape; 2] = [&SHAPE_471, &SHAPE_474];
-static SHAPES_166: [&ReconShape; 4] = [&SHAPE_478, &SHAPE_10, &SHAPE_476, &SHAPE_6];
-static SHAPES_167: [&ReconShape; 4] = [&SHAPE_480, &SHAPE_19, &SHAPE_21, &SHAPE_23];
-static SHAPES_168: [&ReconShape; 4] = [&SHAPE_482, &SHAPE_1, &SHAPE_347, &SHAPE_6];
-static SHAPES_169: [&ReconShape; 3] = [&SHAPE_307, &SHAPE_484, &SHAPE_305];
-static SHAPES_170: [&ReconShape; 2] = [&SHAPE_486, &SHAPE_485];
-static SHAPES_171: [&ReconShape; 1] = [&SHAPE_488];
-static SHAPES_172: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_489];
-static SHAPES_173: [&ReconShape; 2] = [&SHAPE_489, &SHAPE_492];
-static SHAPES_174: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_494];
-static SHAPES_175: [&ReconShape; 2] = [&SHAPE_494, &SHAPE_497];
-static SHAPES_176: [&ReconShape; 2] = [&SHAPE_499, &SHAPE_501];
-static SHAPES_177: [&ReconShape; 2] = [&SHAPE_501, &SHAPE_504];
-static SHAPES_178: [&ReconShape; 4] = [&SHAPE_506, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_179: [&ReconShape; 4] = [&SHAPE_508, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_180: [&ReconShape; 4] = [&SHAPE_510, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_181: [&ReconShape; 1] = [&SHAPE_512];
-static SHAPES_182: [&ReconShape; 2] = [&SHAPE_514, &SHAPE_210];
-static SHAPES_183: [&ReconShape; 4] = [&SHAPE_516, &SHAPE_19, &SHAPE_21, &SHAPE_23];
-static SHAPES_184: [&ReconShape; 3] = [&SHAPE_520, &SHAPE_194, &SHAPE_518];
-static SHAPES_185: [&ReconShape; 2] = [&SHAPE_522, &SHAPE_419];
-static SHAPES_186: [&ReconShape; 4] = [&SHAPE_527, &SHAPE_10, &SHAPE_525, &SHAPE_6];
-static SHAPES_187: [&ReconShape; 6] = [
+static SHAPES_152: [&ReconShape; 1] = [&SHAPE_436];
+static SHAPES_153: [&ReconShape; 3] = [&SHAPE_437, &SHAPE_438, &SHAPE_439];
+static SHAPES_154: [&ReconShape; 1] = [&SHAPE_441];
+static SHAPES_155: [&ReconShape; 3] = [&SHAPE_272, &SHAPE_29, &SHAPE_443];
+static SHAPES_156: [&ReconShape; 2] = [&SHAPE_443, &SHAPE_446];
+static SHAPES_157: [&ReconShape; 4] = [&SHAPE_451, &SHAPE_10, &SHAPE_449, &SHAPE_6];
+static SHAPES_158: [&ReconShape; 4] = [&SHAPE_453, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_159: [&ReconShape; 5] = [&SHAPE_301, &SHAPE_315, &SHAPE_60, &SHAPE_83, &SHAPE_455];
+static SHAPES_160: [&ReconShape; 4] = [&SHAPE_460, &SHAPE_10, &SHAPE_458, &SHAPE_6];
+static SHAPES_161: [&ReconShape; 4] = [&SHAPE_462, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_162: [&ReconShape; 4] = [&SHAPE_464, &SHAPE_19, &SHAPE_21, &SHAPE_23];
+static SHAPES_163: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_466];
+static SHAPES_164: [&ReconShape; 3] = [&SHAPE_60, &SHAPE_469, &SHAPE_271];
+static SHAPES_165: [&ReconShape; 3] = [&SHAPE_272, &SHAPE_29, &SHAPE_471];
+static SHAPES_166: [&ReconShape; 2] = [&SHAPE_471, &SHAPE_474];
+static SHAPES_167: [&ReconShape; 4] = [&SHAPE_478, &SHAPE_10, &SHAPE_476, &SHAPE_6];
+static SHAPES_168: [&ReconShape; 4] = [&SHAPE_480, &SHAPE_19, &SHAPE_21, &SHAPE_23];
+static SHAPES_169: [&ReconShape; 4] = [&SHAPE_482, &SHAPE_1, &SHAPE_347, &SHAPE_6];
+static SHAPES_170: [&ReconShape; 3] = [&SHAPE_307, &SHAPE_484, &SHAPE_305];
+static SHAPES_171: [&ReconShape; 2] = [&SHAPE_486, &SHAPE_485];
+static SHAPES_172: [&ReconShape; 1] = [&SHAPE_488];
+static SHAPES_173: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_489];
+static SHAPES_174: [&ReconShape; 2] = [&SHAPE_489, &SHAPE_492];
+static SHAPES_175: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_494];
+static SHAPES_176: [&ReconShape; 2] = [&SHAPE_494, &SHAPE_497];
+static SHAPES_177: [&ReconShape; 2] = [&SHAPE_499, &SHAPE_501];
+static SHAPES_178: [&ReconShape; 2] = [&SHAPE_501, &SHAPE_504];
+static SHAPES_179: [&ReconShape; 4] = [&SHAPE_506, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_180: [&ReconShape; 4] = [&SHAPE_508, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_181: [&ReconShape; 4] = [&SHAPE_510, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_182: [&ReconShape; 1] = [&SHAPE_512];
+static SHAPES_183: [&ReconShape; 2] = [&SHAPE_514, &SHAPE_172];
+static SHAPES_184: [&ReconShape; 4] = [&SHAPE_516, &SHAPE_19, &SHAPE_21, &SHAPE_23];
+static SHAPES_185: [&ReconShape; 3] = [&SHAPE_520, &SHAPE_195, &SHAPE_518];
+static SHAPES_186: [&ReconShape; 2] = [&SHAPE_522, &SHAPE_419];
+static SHAPES_187: [&ReconShape; 4] = [&SHAPE_527, &SHAPE_10, &SHAPE_525, &SHAPE_6];
+static SHAPES_188: [&ReconShape; 6] = [
     &SHAPE_427, &SHAPE_428, &SHAPE_429, &SHAPE_430, &SHAPE_431, &SHAPE_528,
 ];
-static SHAPES_188: [&ReconShape; 1] = [&SHAPE_530];
-static SHAPES_189: [&ReconShape; 2] = [&SHAPE_271, &SHAPE_455];
-static SHAPES_190: [&ReconShape; 2] = [&SHAPE_533, &SHAPE_23];
-static SHAPES_191: [&ReconShape; 5] = [&SHAPE_535, &SHAPE_83, &SHAPE_532, &SHAPE_533, &SHAPE_23];
-static SHAPES_192: [&ReconShape; 4] = [&SHAPE_537, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_193: [&ReconShape; 2] = [&SHAPE_538, &SHAPE_82];
-static SHAPES_194: [&ReconShape; 1] = [&SHAPE_540];
-static SHAPES_195: [&ReconShape; 3] = [&SHAPE_546, &SHAPE_542, &SHAPE_544];
-static SHAPES_196: [&ReconShape; 4] = [&SHAPE_550, &SHAPE_1, &SHAPE_548, &SHAPE_6];
-static SHAPES_197: [&ReconShape; 3] = [&SHAPE_311, &SHAPE_552, &SHAPE_309];
-static SHAPES_198: [&ReconShape; 2] = [&SHAPE_554, &SHAPE_553];
-static SHAPES_199: [&ReconShape; 1] = [&SHAPE_556];
-static SHAPES_200: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_557];
-static SHAPES_201: [&ReconShape; 2] = [&SHAPE_557, &SHAPE_560];
-static SHAPES_202: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_562];
-static SHAPES_203: [&ReconShape; 2] = [&SHAPE_562, &SHAPE_565];
-static SHAPES_204: [&ReconShape; 2] = [&SHAPE_416, &SHAPE_210];
-static SHAPES_205: [&ReconShape; 1] = [&SHAPE_567];
-static SHAPES_206: [&ReconShape; 4] = [&SHAPE_569, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_207: [&ReconShape; 4] = [&SHAPE_571, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_208: [&ReconShape; 7] = [
+static SHAPES_189: [&ReconShape; 1] = [&SHAPE_530];
+static SHAPES_190: [&ReconShape; 2] = [&SHAPE_271, &SHAPE_455];
+static SHAPES_191: [&ReconShape; 2] = [&SHAPE_533, &SHAPE_23];
+static SHAPES_192: [&ReconShape; 5] = [&SHAPE_535, &SHAPE_83, &SHAPE_532, &SHAPE_533, &SHAPE_23];
+static SHAPES_193: [&ReconShape; 4] = [&SHAPE_537, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_194: [&ReconShape; 2] = [&SHAPE_538, &SHAPE_82];
+static SHAPES_195: [&ReconShape; 1] = [&SHAPE_540];
+static SHAPES_196: [&ReconShape; 3] = [&SHAPE_546, &SHAPE_542, &SHAPE_544];
+static SHAPES_197: [&ReconShape; 4] = [&SHAPE_550, &SHAPE_1, &SHAPE_548, &SHAPE_6];
+static SHAPES_198: [&ReconShape; 3] = [&SHAPE_311, &SHAPE_552, &SHAPE_309];
+static SHAPES_199: [&ReconShape; 2] = [&SHAPE_554, &SHAPE_553];
+static SHAPES_200: [&ReconShape; 1] = [&SHAPE_556];
+static SHAPES_201: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_557];
+static SHAPES_202: [&ReconShape; 2] = [&SHAPE_557, &SHAPE_560];
+static SHAPES_203: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_562];
+static SHAPES_204: [&ReconShape; 2] = [&SHAPE_562, &SHAPE_565];
+static SHAPES_205: [&ReconShape; 2] = [&SHAPE_416, &SHAPE_172];
+static SHAPES_206: [&ReconShape; 1] = [&SHAPE_567];
+static SHAPES_207: [&ReconShape; 4] = [&SHAPE_569, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_208: [&ReconShape; 4] = [&SHAPE_571, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_209: [&ReconShape; 7] = [
     &SHAPE_572, &SHAPE_281, &SHAPE_573, &SHAPE_574, &SHAPE_280, &SHAPE_157, &SHAPE_454,
 ];
-static SHAPES_209: [&ReconShape; 1] = [&SHAPE_576];
-static SHAPES_210: [&ReconShape; 4] = [&SHAPE_578, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_211: [&ReconShape; 2] = [&SHAPE_579, &SHAPE_416];
-static SHAPES_212: [&ReconShape; 2] = [&SHAPE_581, &SHAPE_582];
-static SHAPES_213: [&ReconShape; 4] = [&SHAPE_585, &SHAPE_587, &SHAPE_590, &SHAPE_593];
-static SHAPES_214: [&ReconShape; 2] = [&SHAPE_590, &SHAPE_593];
-static SHAPES_215: [&ReconShape; 1] = [&SHAPE_593];
-static SHAPES_216: [&ReconShape; 5] = [&SHAPE_595, &SHAPE_585, &SHAPE_587, &SHAPE_590, &SHAPE_593];
-static SHAPES_217: [&ReconShape; 4] = [&SHAPE_597, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_218: [&ReconShape; 4] = [&SHAPE_599, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_219: [&ReconShape; 2] = [&SHAPE_600, &SHAPE_601];
-static SHAPES_220: [&ReconShape; 3] = [&SHAPE_603, &SHAPE_602, &SHAPE_153];
-static SHAPES_221: [&ReconShape; 1] = [&SHAPE_606];
-static SHAPES_222: [&ReconShape; 2] = [&SHAPE_605, &SHAPE_606];
-static SHAPES_223: [&ReconShape; 2] = [&SHAPE_608, &SHAPE_601];
-static SHAPES_224: [&ReconShape; 4] = [&SHAPE_603, &SHAPE_602, &SHAPE_609, &SHAPE_153];
-static SHAPES_225: [&ReconShape; 1] = [&SHAPE_612];
-static SHAPES_226: [&ReconShape; 2] = [&SHAPE_611, &SHAPE_612];
-static SHAPES_227: [&ReconShape; 4] = [&SHAPE_614, &SHAPE_10, &SHAPE_12, &SHAPE_6];
-static SHAPES_228: [&ReconShape; 2] = [&SHAPE_616, &SHAPE_29];
-static SHAPES_229: [&ReconShape; 3] = [&SHAPE_619, &SHAPE_194, &SHAPE_621];
-static SHAPES_230: [&ReconShape; 2] = [&SHAPE_194, &SHAPE_621];
-static SHAPES_231: [&ReconShape; 4] = [&SHAPE_624, &SHAPE_619, &SHAPE_194, &SHAPE_621];
-static SHAPES_232: [&ReconShape; 4] = [&SHAPE_626, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_233: [&ReconShape; 2] = [&SHAPE_627, &SHAPE_628];
-static SHAPES_234: [&ReconShape; 1] = [&SHAPE_630];
-static SHAPES_235: [&ReconShape; 4] = [&SHAPE_635, &SHAPE_10, &SHAPE_633, &SHAPE_6];
-static SHAPES_236: [&ReconShape; 4] = [&SHAPE_637, &SHAPE_10, &SHAPE_633, &SHAPE_6];
-static SHAPES_237: [&ReconShape; 4] = [&SHAPE_639, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_238: [&ReconShape; 4] = [&SHAPE_644, &SHAPE_10, &SHAPE_642, &SHAPE_6];
-static SHAPES_239: [&ReconShape; 8] = [
+static SHAPES_210: [&ReconShape; 1] = [&SHAPE_576];
+static SHAPES_211: [&ReconShape; 4] = [&SHAPE_578, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_212: [&ReconShape; 2] = [&SHAPE_579, &SHAPE_416];
+static SHAPES_213: [&ReconShape; 2] = [&SHAPE_581, &SHAPE_582];
+static SHAPES_214: [&ReconShape; 4] = [&SHAPE_585, &SHAPE_587, &SHAPE_590, &SHAPE_593];
+static SHAPES_215: [&ReconShape; 2] = [&SHAPE_590, &SHAPE_593];
+static SHAPES_216: [&ReconShape; 1] = [&SHAPE_593];
+static SHAPES_217: [&ReconShape; 5] = [&SHAPE_595, &SHAPE_585, &SHAPE_587, &SHAPE_590, &SHAPE_593];
+static SHAPES_218: [&ReconShape; 4] = [&SHAPE_597, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_219: [&ReconShape; 4] = [&SHAPE_599, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_220: [&ReconShape; 2] = [&SHAPE_600, &SHAPE_601];
+static SHAPES_221: [&ReconShape; 3] = [&SHAPE_603, &SHAPE_602, &SHAPE_153];
+static SHAPES_222: [&ReconShape; 1] = [&SHAPE_606];
+static SHAPES_223: [&ReconShape; 2] = [&SHAPE_605, &SHAPE_606];
+static SHAPES_224: [&ReconShape; 2] = [&SHAPE_608, &SHAPE_601];
+static SHAPES_225: [&ReconShape; 4] = [&SHAPE_603, &SHAPE_602, &SHAPE_609, &SHAPE_153];
+static SHAPES_226: [&ReconShape; 1] = [&SHAPE_612];
+static SHAPES_227: [&ReconShape; 2] = [&SHAPE_611, &SHAPE_612];
+static SHAPES_228: [&ReconShape; 4] = [&SHAPE_614, &SHAPE_10, &SHAPE_12, &SHAPE_6];
+static SHAPES_229: [&ReconShape; 2] = [&SHAPE_616, &SHAPE_29];
+static SHAPES_230: [&ReconShape; 3] = [&SHAPE_619, &SHAPE_195, &SHAPE_621];
+static SHAPES_231: [&ReconShape; 2] = [&SHAPE_195, &SHAPE_621];
+static SHAPES_232: [&ReconShape; 4] = [&SHAPE_624, &SHAPE_619, &SHAPE_195, &SHAPE_621];
+static SHAPES_233: [&ReconShape; 4] = [&SHAPE_626, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_234: [&ReconShape; 2] = [&SHAPE_627, &SHAPE_628];
+static SHAPES_235: [&ReconShape; 1] = [&SHAPE_630];
+static SHAPES_236: [&ReconShape; 4] = [&SHAPE_635, &SHAPE_10, &SHAPE_633, &SHAPE_6];
+static SHAPES_237: [&ReconShape; 4] = [&SHAPE_637, &SHAPE_10, &SHAPE_633, &SHAPE_6];
+static SHAPES_238: [&ReconShape; 4] = [&SHAPE_639, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_239: [&ReconShape; 4] = [&SHAPE_644, &SHAPE_10, &SHAPE_642, &SHAPE_6];
+static SHAPES_240: [&ReconShape; 8] = [
     &SHAPE_645, &SHAPE_646, &SHAPE_647, &SHAPE_648, &SHAPE_649, &SHAPE_650, &SHAPE_651, &SHAPE_652,
 ];
-static SHAPES_240: [&ReconShape; 1] = [&SHAPE_654];
-static SHAPES_241: [&ReconShape; 9] = [
+static SHAPES_241: [&ReconShape; 1] = [&SHAPE_654];
+static SHAPES_242: [&ReconShape; 9] = [
     &SHAPE_656, &SHAPE_271, &SHAPE_272, &SHAPE_271, &SHAPE_658, &SHAPE_271, &SHAPE_272, &SHAPE_271,
     &SHAPE_660,
 ];
-static SHAPES_242: [&ReconShape; 4] = [&SHAPE_665, &SHAPE_10, &SHAPE_663, &SHAPE_6];
-static SHAPES_243: [&ReconShape; 4] = [&SHAPE_667, &SHAPE_1, &SHAPE_210, &SHAPE_6];
-static SHAPES_244: [&ReconShape; 4] = [&SHAPE_670, &SHAPE_10, &SHAPE_668, &SHAPE_6];
-static SHAPES_245: [&ReconShape; 2] = [&SHAPE_210, &SHAPE_6];
-static SHAPES_246: [&ReconShape; 2] = [&SHAPE_672, &SHAPE_6];
-static SHAPES_247: [&ReconShape; 2] = [&SHAPE_675, &SHAPE_674];
-static SHAPES_248: [&ReconShape; 2] = [&SHAPE_271, &SHAPE_600];
-static SHAPES_249: [&ReconShape; 4] = [&SHAPE_679, &SHAPE_681, &SHAPE_271, &SHAPE_6];
-static SHAPES_250: [&ReconShape; 3] = [&SHAPE_681, &SHAPE_271, &SHAPE_6];
-static SHAPES_251: [&ReconShape; 2] = [&SHAPE_271, &SHAPE_6];
-static SHAPES_252: [&ReconShape; 5] = [&SHAPE_682, &SHAPE_679, &SHAPE_681, &SHAPE_271, &SHAPE_6];
-static SHAPES_253: [&ReconShape; 4] = [&SHAPE_684, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_254: [&ReconShape; 4] = [&SHAPE_686, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_255: [&ReconShape; 4] = [&SHAPE_688, &SHAPE_10, &SHAPE_13, &SHAPE_6];
-static SHAPES_256: [&ReconShape; 3] = [&SHAPE_692, &SHAPE_1, &SHAPE_690];
-static SHAPES_257: [&ReconShape; 5] = [&SHAPE_693, &SHAPE_44, &SHAPE_249, &SHAPE_390, &SHAPE_391];
-static SHAPES_258: [&ReconShape; 2] = [&SHAPE_695, &SHAPE_29];
-static SHAPES_259: [&ReconShape; 3] = [&SHAPE_698, &SHAPE_682, &SHAPE_6];
-static SHAPES_260: [&ReconShape; 2] = [&SHAPE_682, &SHAPE_6];
-static SHAPES_261: [&ReconShape; 4] = [&SHAPE_619, &SHAPE_698, &SHAPE_682, &SHAPE_6];
-static SHAPES_262: [&ReconShape; 1] = [&SHAPE_455];
-static SHAPES_263: [&ReconShape; 3] = [&SHAPE_541, &SHAPE_699, &SHAPE_700];
-static SHAPES_264: [&ReconShape; 12] = [
+static SHAPES_243: [&ReconShape; 4] = [&SHAPE_665, &SHAPE_10, &SHAPE_663, &SHAPE_6];
+static SHAPES_244: [&ReconShape; 4] = [&SHAPE_667, &SHAPE_1, &SHAPE_172, &SHAPE_6];
+static SHAPES_245: [&ReconShape; 4] = [&SHAPE_670, &SHAPE_10, &SHAPE_668, &SHAPE_6];
+static SHAPES_246: [&ReconShape; 2] = [&SHAPE_172, &SHAPE_6];
+static SHAPES_247: [&ReconShape; 2] = [&SHAPE_672, &SHAPE_6];
+static SHAPES_248: [&ReconShape; 2] = [&SHAPE_675, &SHAPE_674];
+static SHAPES_249: [&ReconShape; 2] = [&SHAPE_271, &SHAPE_600];
+static SHAPES_250: [&ReconShape; 4] = [&SHAPE_679, &SHAPE_681, &SHAPE_271, &SHAPE_6];
+static SHAPES_251: [&ReconShape; 3] = [&SHAPE_681, &SHAPE_271, &SHAPE_6];
+static SHAPES_252: [&ReconShape; 2] = [&SHAPE_271, &SHAPE_6];
+static SHAPES_253: [&ReconShape; 5] = [&SHAPE_682, &SHAPE_679, &SHAPE_681, &SHAPE_271, &SHAPE_6];
+static SHAPES_254: [&ReconShape; 4] = [&SHAPE_684, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_255: [&ReconShape; 4] = [&SHAPE_686, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_256: [&ReconShape; 4] = [&SHAPE_688, &SHAPE_10, &SHAPE_13, &SHAPE_6];
+static SHAPES_257: [&ReconShape; 3] = [&SHAPE_692, &SHAPE_1, &SHAPE_690];
+static SHAPES_258: [&ReconShape; 5] = [&SHAPE_693, &SHAPE_44, &SHAPE_249, &SHAPE_390, &SHAPE_391];
+static SHAPES_259: [&ReconShape; 2] = [&SHAPE_695, &SHAPE_29];
+static SHAPES_260: [&ReconShape; 3] = [&SHAPE_698, &SHAPE_682, &SHAPE_6];
+static SHAPES_261: [&ReconShape; 2] = [&SHAPE_682, &SHAPE_6];
+static SHAPES_262: [&ReconShape; 4] = [&SHAPE_619, &SHAPE_698, &SHAPE_682, &SHAPE_6];
+static SHAPES_263: [&ReconShape; 1] = [&SHAPE_455];
+static SHAPES_264: [&ReconShape; 3] = [&SHAPE_541, &SHAPE_699, &SHAPE_700];
+static SHAPES_265: [&ReconShape; 12] = [
     &SHAPE_541, &SHAPE_699, &SHAPE_700, &SHAPE_703, &SHAPE_113, &SHAPE_704, &SHAPE_705, &SHAPE_35,
     &SHAPE_36, &SHAPE_706, &SHAPE_378, &SHAPE_511,
 ];
-static SHAPES_265: [&ReconShape; 2] = [&SHAPE_702, &SHAPE_709];
-static SHAPES_266: [&ReconShape; 5] = [&SHAPE_113, &SHAPE_704, &SHAPE_705, &SHAPE_35, &SHAPE_706];
-static SHAPES_267: [&ReconShape; 4] = [&SHAPE_712, &SHAPE_713, &SHAPE_702, &SHAPE_709];
-static SHAPES_268: [&ReconShape; 2] = [&SHAPE_710, &SHAPE_714];
-static SHAPES_269: [&ReconShape; 1] = [&SHAPE_716];
-static SHAPES_270: [&ReconShape; 3] = [&SHAPE_717, &SHAPE_718, &SHAPE_719];
-static SHAPES_271: [&ReconShape; 1] = [&SHAPE_721];
-static SHAPES_272: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_723];
-static SHAPES_273: [&ReconShape; 1] = [&SHAPE_419];
-static SHAPES_274: [&ReconShape; 3] = [&SHAPE_455, &SHAPE_726, &SHAPE_419];
-static SHAPES_275: [&ReconShape; 4] = [&SHAPE_728, &SHAPE_1, &SHAPE_4, &SHAPE_6];
-static SHAPES_276: [&ReconShape; 4] = [&SHAPE_730, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_266: [&ReconShape; 2] = [&SHAPE_702, &SHAPE_709];
+static SHAPES_267: [&ReconShape; 5] = [&SHAPE_113, &SHAPE_704, &SHAPE_705, &SHAPE_35, &SHAPE_706];
+static SHAPES_268: [&ReconShape; 4] = [&SHAPE_712, &SHAPE_713, &SHAPE_702, &SHAPE_709];
+static SHAPES_269: [&ReconShape; 2] = [&SHAPE_710, &SHAPE_714];
+static SHAPES_270: [&ReconShape; 1] = [&SHAPE_716];
+static SHAPES_271: [&ReconShape; 3] = [&SHAPE_717, &SHAPE_718, &SHAPE_719];
+static SHAPES_272: [&ReconShape; 1] = [&SHAPE_721];
+static SHAPES_273: [&ReconShape; 2] = [&SHAPE_29, &SHAPE_723];
+static SHAPES_274: [&ReconShape; 1] = [&SHAPE_419];
+static SHAPES_275: [&ReconShape; 3] = [&SHAPE_455, &SHAPE_726, &SHAPE_419];
+static SHAPES_276: [&ReconShape; 4] = [&SHAPE_728, &SHAPE_1, &SHAPE_4, &SHAPE_6];
+static SHAPES_277: [&ReconShape; 4] = [&SHAPE_730, &SHAPE_1, &SHAPE_4, &SHAPE_6];
 static KINDS_0: [KindIdentity; 16] = [
     KindIdentity::Named("alt_annotation"),
     KindIdentity::Named("code_switch_annotation"),
@@ -21123,21 +21224,21 @@ fn choice_154<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
         probe,
     )
 }
-enum ChoicePick202<'tree> {
+enum ChoicePick203<'tree> {
     A0(tree_sitter::Node<'tree>),
     A1(tree_sitter::Node<'tree>),
 }
-fn choice_202<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick202<'tree>>> {
-    let alternatives: [Alternative<'tree, ChoicePick202<'tree>>; 2] = [
+fn choice_203<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, ChoicePick203<'tree>>> {
+    let alternatives: [Alternative<'tree, ChoicePick203<'tree>>; 2] = [
         |probe| {
             probe
                 .terminal(&SHAPE_18)
-                .map(|(head, ())| Tried::head(head, ChoicePick202::A0))
+                .map(|(head, ())| Tried::head(head, ChoicePick203::A0))
         },
         |probe| {
             probe
-                .terminal(&SHAPE_201)
-                .map(|(head, ())| Tried::head(head, ChoicePick202::A1))
+                .terminal(&SHAPE_202)
+                .map(|(head, ())| Tried::head(head, ChoicePick203::A1))
         },
     ];
     choice_split(
@@ -21154,12 +21255,12 @@ fn choice_211<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
     let alternatives: [Alternative<'tree, ChoicePick211<'tree>>; 2] = [
         |probe| {
             probe
-                .terminal(&SHAPE_209)
+                .terminal(&SHAPE_210)
                 .map(|(head, ())| Tried::head(head, ChoicePick211::A0))
         },
         |probe| {
             probe
-                .composite(&SHAPE_210)
+                .composite(&SHAPE_172)
                 .map(|end| Tried::Open(ChoicePick211::A1, end))
         },
     ];
@@ -21217,7 +21318,7 @@ fn choice_250<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
         },
         |probe| {
             probe
-                .terminal(&SHAPE_201)
+                .terminal(&SHAPE_202)
                 .map(|(head, ())| Tried::head(head, ChoicePick250::A3))
         },
     ];
@@ -21362,7 +21463,7 @@ fn choice_328<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
         },
         |probe| {
             probe
-                .composite(&SHAPE_210)
+                .composite(&SHAPE_172)
                 .map(|end| Tried::Open(ChoicePick328::A1, end))
         },
     ];
@@ -21827,7 +21928,7 @@ fn choice_566<'tree>(probe: &ChoiceProbe<'_, 'tree>) -> Option<Tried<'tree, Choi
         },
         |probe| {
             probe
-                .composite(&SHAPE_210)
+                .composite(&SHAPE_172)
                 .map(|end| Tried::Open(ChoicePick566::A1, end))
         },
     ];
@@ -22378,7 +22479,7 @@ fn terminal_sequence_145<'tree>(
         at,
     ))
 }
-fn terminal_sequence_178<'tree>(
+fn terminal_sequence_179<'tree>(
     probe: &ChoiceProbe<'_, 'tree>,
 ) -> Option<(SelectedTerminals<'tree, 2usize>, ChildIndex)> {
     let mut at = probe.start;
@@ -22389,7 +22490,7 @@ fn terminal_sequence_178<'tree>(
         probe.memo,
     )?;
     at = end;
-    let (__selected_1, end) = Terminal::of(&SHAPE_176).decide(
+    let (__selected_1, end) = Terminal::of(&SHAPE_177).decide(
         &Cont::NIL,
         probe.children,
         skip_extras(probe.children, at),
@@ -47306,6 +47407,1473 @@ pub fn extract_g_header_from_error_recovery<'tree>(
     node.is_error().then(|| extract_g_header(GHeaderNode(node)))
 }
 
+// Task 7 extract contract: pub fn extract_generic_date<'tree>(node: GenericDateNode<'tree>) -> GenericDateChildren<'tree>
+#[derive(Debug)]
+pub struct GenericDateChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericDateChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericDateChildrenRangeAdmitted<'tree, 'source> =
+    GenericDateChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericDateChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericDateChildren<'tree> {
+    type Admitted = GenericDateChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericDateChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericDateChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GenericDateChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_date<'tree>(node: GenericDateNode<'tree>) -> GenericDateChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericDateChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericDateNode<'tree> {
+    type Children<K: KindProof> = GenericDateChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericDateChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_date(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericDateChildren<'tree> {
+        extract_generic_date(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericDateChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_date_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericDateChildren<'tree>>> {
+        into_ok(self.recover_as::<GenericDateNode<'tree>, Broad>(GenericDateNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_date_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, GenericDateChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<GenericDateNode<'tree>, KindAdmitted>(GenericDateNode, grammar)
+    }
+}
+/// `generic_date`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_date_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericDateChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_date(GenericDateNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_id_ses<'tree>(node: GenericIdSesNode<'tree>) -> GenericIdSesChildren<'tree>
+#[derive(Debug)]
+pub struct GenericIdSesChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericIdSesChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericIdSesChildrenRangeAdmitted<'tree, 'source> =
+    GenericIdSesChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericIdSesChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericIdSesChildren<'tree> {
+    type Admitted = GenericIdSesChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericIdSesChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericIdSesChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GenericIdSesChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_id_ses<'tree>(node: GenericIdSesNode<'tree>) -> GenericIdSesChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericIdSesChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericIdSesNode<'tree> {
+    type Children<K: KindProof> = GenericIdSesChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericIdSesChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_id_ses(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericIdSesChildren<'tree> {
+        extract_generic_id_ses(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericIdSesChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_id_ses_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericIdSesChildren<'tree>>> {
+        into_ok(self.recover_as::<GenericIdSesNode<'tree>, Broad>(GenericIdSesNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_id_ses_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, GenericIdSesChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<GenericIdSesNode<'tree>, KindAdmitted>(GenericIdSesNode, grammar)
+    }
+}
+/// `generic_id_ses`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_id_ses_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericIdSesChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_id_ses(GenericIdSesNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_id_sex<'tree>(node: GenericIdSexNode<'tree>) -> GenericIdSexChildren<'tree>
+#[derive(Debug)]
+pub struct GenericIdSexChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericIdSexChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericIdSexChildrenRangeAdmitted<'tree, 'source> =
+    GenericIdSexChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericIdSexChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericIdSexChildren<'tree> {
+    type Admitted = GenericIdSexChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericIdSexChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericIdSexChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GenericIdSexChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_id_sex<'tree>(node: GenericIdSexNode<'tree>) -> GenericIdSexChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericIdSexChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericIdSexNode<'tree> {
+    type Children<K: KindProof> = GenericIdSexChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericIdSexChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_id_sex(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericIdSexChildren<'tree> {
+        extract_generic_id_sex(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericIdSexChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_id_sex_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericIdSexChildren<'tree>>> {
+        into_ok(self.recover_as::<GenericIdSexNode<'tree>, Broad>(GenericIdSexNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_id_sex_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, GenericIdSexChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<GenericIdSexNode<'tree>, KindAdmitted>(GenericIdSexNode, grammar)
+    }
+}
+/// `generic_id_sex`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_id_sex_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericIdSexChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_id_sex(GenericIdSexNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_media_status<'tree>(node: GenericMediaStatusNode<'tree>) -> GenericMediaStatusChildren<'tree>
+#[derive(Debug)]
+pub struct GenericMediaStatusChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericMediaStatusChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericMediaStatusChildrenRangeAdmitted<'tree, 'source> =
+    GenericMediaStatusChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericMediaStatusChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericMediaStatusChildren<'tree> {
+    type Admitted = GenericMediaStatusChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericMediaStatusChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericMediaStatusChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source>
+    SourceField<'value, 'tree, 'source, GenericMediaStatusChildren<'tree>>
+{
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_media_status<'tree>(
+    node: GenericMediaStatusNode<'tree>,
+) -> GenericMediaStatusChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericMediaStatusChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericMediaStatusNode<'tree> {
+    type Children<K: KindProof> = GenericMediaStatusChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericMediaStatusChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_media_status(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericMediaStatusChildren<'tree> {
+        extract_generic_media_status(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericMediaStatusChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_media_status_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericMediaStatusChildren<'tree>>> {
+        into_ok(
+            self.recover_as::<GenericMediaStatusNode<'tree>, Broad>(GenericMediaStatusNode, &()),
+        )
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_media_status_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<
+        Option<SourceChildren<'tree, 'source, GenericMediaStatusChildren<'tree>>>,
+        AdmittedRefusal,
+    > {
+        self.recover_as::<GenericMediaStatusNode<'tree>, KindAdmitted>(
+            GenericMediaStatusNode,
+            grammar,
+        )
+    }
+}
+/// `generic_media_status`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_media_status_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericMediaStatusChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_media_status(GenericMediaStatusNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_media_type<'tree>(node: GenericMediaTypeNode<'tree>) -> GenericMediaTypeChildren<'tree>
+#[derive(Debug)]
+pub struct GenericMediaTypeChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericMediaTypeChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericMediaTypeChildrenRangeAdmitted<'tree, 'source> =
+    GenericMediaTypeChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericMediaTypeChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericMediaTypeChildren<'tree> {
+    type Admitted = GenericMediaTypeChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericMediaTypeChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericMediaTypeChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GenericMediaTypeChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_media_type<'tree>(
+    node: GenericMediaTypeNode<'tree>,
+) -> GenericMediaTypeChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericMediaTypeChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericMediaTypeNode<'tree> {
+    type Children<K: KindProof> = GenericMediaTypeChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericMediaTypeChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_media_type(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericMediaTypeChildren<'tree> {
+        extract_generic_media_type(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericMediaTypeChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_media_type_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericMediaTypeChildren<'tree>>> {
+        into_ok(self.recover_as::<GenericMediaTypeNode<'tree>, Broad>(GenericMediaTypeNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_media_type_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<
+        Option<SourceChildren<'tree, 'source, GenericMediaTypeChildren<'tree>>>,
+        AdmittedRefusal,
+    > {
+        self.recover_as::<GenericMediaTypeNode<'tree>, KindAdmitted>(GenericMediaTypeNode, grammar)
+    }
+}
+/// `generic_media_type`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_media_type_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericMediaTypeChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_media_type(GenericMediaTypeNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_number<'tree>(node: GenericNumberNode<'tree>) -> GenericNumberChildren<'tree>
+#[derive(Debug)]
+pub struct GenericNumberChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericNumberChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericNumberChildrenRangeAdmitted<'tree, 'source> =
+    GenericNumberChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericNumberChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericNumberChildren<'tree> {
+    type Admitted = GenericNumberChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericNumberChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericNumberChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GenericNumberChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_number<'tree>(
+    node: GenericNumberNode<'tree>,
+) -> GenericNumberChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericNumberChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericNumberNode<'tree> {
+    type Children<K: KindProof> = GenericNumberChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericNumberChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_number(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericNumberChildren<'tree> {
+        extract_generic_number(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericNumberChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_number_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericNumberChildren<'tree>>> {
+        into_ok(self.recover_as::<GenericNumberNode<'tree>, Broad>(GenericNumberNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_number_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, GenericNumberChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<GenericNumberNode<'tree>, KindAdmitted>(GenericNumberNode, grammar)
+    }
+}
+/// `generic_number`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_number_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericNumberChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_number(GenericNumberNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_recording_quality<'tree>(node: GenericRecordingQualityNode<'tree>) -> GenericRecordingQualityChildren<'tree>
+#[derive(Debug)]
+pub struct GenericRecordingQualityChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericRecordingQualityChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericRecordingQualityChildrenRangeAdmitted<'tree, 'source> =
+    GenericRecordingQualityChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericRecordingQualityChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericRecordingQualityChildren<'tree> {
+    type Admitted = GenericRecordingQualityChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericRecordingQualityChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericRecordingQualityChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source>
+    SourceField<'value, 'tree, 'source, GenericRecordingQualityChildren<'tree>>
+{
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_recording_quality<'tree>(
+    node: GenericRecordingQualityNode<'tree>,
+) -> GenericRecordingQualityChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericRecordingQualityChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericRecordingQualityNode<'tree> {
+    type Children<K: KindProof> = GenericRecordingQualityChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericRecordingQualityChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_recording_quality(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericRecordingQualityChildren<'tree> {
+        extract_generic_recording_quality(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericRecordingQualityChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_recording_quality_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericRecordingQualityChildren<'tree>>> {
+        into_ok(
+            self.recover_as::<GenericRecordingQualityNode<'tree>, Broad>(
+                GenericRecordingQualityNode,
+                &(),
+            ),
+        )
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_recording_quality_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<
+        Option<SourceChildren<'tree, 'source, GenericRecordingQualityChildren<'tree>>>,
+        AdmittedRefusal,
+    > {
+        self.recover_as::<GenericRecordingQualityNode<'tree>, KindAdmitted>(
+            GenericRecordingQualityNode,
+            grammar,
+        )
+    }
+}
+/// `generic_recording_quality`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_recording_quality_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericRecordingQualityChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_recording_quality(GenericRecordingQualityNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_time<'tree>(node: GenericTimeNode<'tree>) -> GenericTimeChildren<'tree>
+#[derive(Debug)]
+pub struct GenericTimeChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericTimeChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericTimeChildrenRangeAdmitted<'tree, 'source> =
+    GenericTimeChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericTimeChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericTimeChildren<'tree> {
+    type Admitted = GenericTimeChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericTimeChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericTimeChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GenericTimeChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_time<'tree>(node: GenericTimeNode<'tree>) -> GenericTimeChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericTimeChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericTimeNode<'tree> {
+    type Children<K: KindProof> = GenericTimeChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericTimeChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_time(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericTimeChildren<'tree> {
+        extract_generic_time(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericTimeChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_time_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericTimeChildren<'tree>>> {
+        into_ok(self.recover_as::<GenericTimeNode<'tree>, Broad>(GenericTimeNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_time_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, GenericTimeChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<GenericTimeNode<'tree>, KindAdmitted>(GenericTimeNode, grammar)
+    }
+}
+/// `generic_time`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_time_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericTimeChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_time(GenericTimeNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_generic_transcription<'tree>(node: GenericTranscriptionNode<'tree>) -> GenericTranscriptionChildren<'tree>
+#[derive(Debug)]
+pub struct GenericTranscriptionChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GenericTranscriptionChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GenericTranscriptionChildrenRangeAdmitted<'tree, 'source> =
+    GenericTranscriptionChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GenericTranscriptionChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GenericTranscriptionChildren<'tree> {
+    type Admitted = GenericTranscriptionChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GenericTranscriptionChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GenericTranscriptionChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source>
+    SourceField<'value, 'tree, 'source, GenericTranscriptionChildren<'tree>>
+{
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_generic_transcription<'tree>(
+    node: GenericTranscriptionNode<'tree>,
+) -> GenericTranscriptionChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GenericTranscriptionChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GenericTranscriptionNode<'tree> {
+    type Children<K: KindProof> = GenericTranscriptionChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GenericTranscriptionChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_generic_transcription(Self(__raw)))
+    }
+    fn extract_broad(self) -> GenericTranscriptionChildren<'tree> {
+        extract_generic_transcription(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GenericTranscriptionChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_generic_transcription_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GenericTranscriptionChildren<'tree>>> {
+        into_ok(
+            self.recover_as::<GenericTranscriptionNode<'tree>, Broad>(
+                GenericTranscriptionNode,
+                &(),
+            ),
+        )
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_generic_transcription_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<
+        Option<SourceChildren<'tree, 'source, GenericTranscriptionChildren<'tree>>>,
+        AdmittedRefusal,
+    > {
+        self.recover_as::<GenericTranscriptionNode<'tree>, KindAdmitted>(
+            GenericTranscriptionNode,
+            grammar,
+        )
+    }
+}
+/// `generic_transcription`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_generic_transcription_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GenericTranscriptionChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_generic_transcription(GenericTranscriptionNode(node)))
+}
+
 // Task 7 extract contract: pub fn extract_gls_dependent_tier<'tree>(node: GlsDependentTierNode<'tree>) -> GlsDependentTierChildren<'tree>
 #[derive(Debug)]
 pub struct GlsDependentTierChildren<
@@ -47646,10 +49214,10 @@ fn __extract_gls_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_61);
+        let mut __cur = Cursor::new(&__children, &SHAPES_62);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_172), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_173), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -48132,10 +49700,10 @@ fn __extract_gpx_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_62);
+        let mut __cur = Cursor::new(&__children, &SHAPES_63);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_174), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_175), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -48603,11 +50171,11 @@ impl<'tree> Extract<'tree> for GraContentsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_64);
+            let mut __cur = Cursor::new(&__children, &SHAPES_65);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_176), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_177), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => {
@@ -48624,13 +50192,13 @@ impl<'tree> Extract<'tree> for GraContentsNode<'tree> {
                 };
                 let __f1 = {
                     let __c0 = __cur.tail(&SHAPES_8);
-                    let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_179, &__c0);
+                    let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_180, &__c0);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c1)) = __walk.next(
                         &mut __cur,
                         TerminalSequence {
-                            shape: &SHAPE_178,
-                            select: terminal_sequence_178,
+                            shape: &SHAPE_179,
+                            select: terminal_sequence_179,
                         },
                     ) {
                         __items.push(Positioned::new(
@@ -49118,10 +50686,10 @@ fn __extract_gra_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_65);
+        let mut __cur = Cursor::new(&__children, &SHAPES_66);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_183), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_184), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -49151,7 +50719,7 @@ fn __extract_gra_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
                 Positioned::new(leading_extras, slot)
             })?;
             let __f2 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_181), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_182), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -49261,6 +50829,319 @@ pub fn extract_gra_dependent_tier_from_error_recovery<'tree>(
 ) -> Option<GraDependentTierChildren<'tree>> {
     node.is_error()
         .then(|| extract_gra_dependent_tier(GraDependentTierNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_gra_head<'tree>(node: GraHeadNode<'tree>) -> GraHeadChildren<'tree>
+#[derive(Debug)]
+pub struct GraHeadChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GraHeadChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GraHeadChildrenRangeAdmitted<'tree, 'source> = GraHeadChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GraHeadChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GraHeadChildren<'tree> {
+    type Admitted = GraHeadChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GraHeadChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GraHeadChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GraHeadChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_gra_head<'tree>(node: GraHeadNode<'tree>) -> GraHeadChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GraHeadChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GraHeadNode<'tree> {
+    type Children<K: KindProof> = GraHeadChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GraHeadChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_gra_head(Self(__raw)))
+    }
+    fn extract_broad(self) -> GraHeadChildren<'tree> {
+        extract_gra_head(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GraHeadChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_gra_head_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GraHeadChildren<'tree>>> {
+        into_ok(self.recover_as::<GraHeadNode<'tree>, Broad>(GraHeadNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_gra_head_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, GraHeadChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<GraHeadNode<'tree>, KindAdmitted>(GraHeadNode, grammar)
+    }
+}
+/// `gra_head`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_gra_head_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GraHeadChildren<'tree>> {
+    node.is_error().then(|| extract_gra_head(GraHeadNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_gra_index<'tree>(node: GraIndexNode<'tree>) -> GraIndexChildren<'tree>
+#[derive(Debug)]
+pub struct GraIndexChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for GraIndexChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type GraIndexChildrenRangeAdmitted<'tree, 'source> = GraIndexChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for GraIndexChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for GraIndexChildren<'tree> {
+    type Admitted = GraIndexChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(GraIndexChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, GraIndexChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, GraIndexChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_gra_index<'tree>(node: GraIndexNode<'tree>) -> GraIndexChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    GraIndexChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for GraIndexNode<'tree> {
+    type Children<K: KindProof> = GraIndexChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<GraIndexChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_gra_index(Self(__raw)))
+    }
+    fn extract_broad(self) -> GraIndexChildren<'tree> {
+        extract_gra_index(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<GraIndexChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_gra_index_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, GraIndexChildren<'tree>>> {
+        into_ok(self.recover_as::<GraIndexNode<'tree>, Broad>(GraIndexNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_gra_index_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, GraIndexChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<GraIndexNode<'tree>, KindAdmitted>(GraIndexNode, grammar)
+    }
+}
+/// `gra_index`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_gra_index_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<GraIndexChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_gra_index(GraIndexNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationChildren<'tree>
@@ -49739,10 +51620,10 @@ fn __extract_gra_relation_presence<'tree, K: KindProof, P: PresenceAdmission<K>>
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_66);
+        let mut __cur = Cursor::new(&__children, &SHAPES_67);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_191), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_192), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(GraIndexNode(node)),
@@ -49756,7 +51637,7 @@ fn __extract_gra_relation_presence<'tree, K: KindProof, P: PresenceAdmission<K>>
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -49770,7 +51651,7 @@ fn __extract_gra_relation_presence<'tree, K: KindProof, P: PresenceAdmission<K>>
                 Positioned::new(leading_extras, slot)
             })?;
             let __f2 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_187), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_188), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(GraHeadNode(node)),
@@ -49784,7 +51665,7 @@ fn __extract_gra_relation_presence<'tree, K: KindProof, P: PresenceAdmission<K>>
                 Positioned::new(leading_extras, slot)
             })?;
             let __f3 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -49798,7 +51679,7 @@ fn __extract_gra_relation_presence<'tree, K: KindProof, P: PresenceAdmission<K>>
                 Positioned::new(leading_extras, slot)
             })?;
             let __f4 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_189), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_190), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -50307,10 +52188,10 @@ fn __extract_group_with_annotations_presence<'tree, K: KindProof, P: PresenceAdm
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_67);
+        let mut __cur = Cursor::new(&__children, &SHAPES_68);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_199), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_200), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(LessThanNode(node)),
@@ -50324,7 +52205,7 @@ fn __extract_group_with_annotations_presence<'tree, K: KindProof, P: PresenceAdm
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_193), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_194), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(ContentsNode(node)),
@@ -50338,7 +52219,7 @@ fn __extract_group_with_annotations_presence<'tree, K: KindProof, P: PresenceAdm
                 Positioned::new(leading_extras, slot)
             })?;
             let __f2 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_195), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_196), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -50354,7 +52235,7 @@ fn __extract_group_with_annotations_presence<'tree, K: KindProof, P: PresenceAdm
                 Positioned::new(leading_extras, slot)
             })?;
             let __f3 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_197), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_198), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -52095,14 +53976,14 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, HeaderGapChildr
 pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_70);
+    let mut __cur = Cursor::new(&__children, &SHAPES_71);
     {
         let __f0 = {
-            let __c0 = __cur.tail(&SHAPES_69);
+            let __c0 = __cur.tail(&SHAPES_70);
             let (leading_extras, __placed) = __cur.fixed(
                 ChoiceAt {
-                    shape: &SHAPE_202,
-                    select: choice_202,
+                    shape: &SHAPE_203,
+                    select: choice_203,
                     missing: &TAGS_8,
                 },
                 &__c0,
@@ -52110,8 +53991,8 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
             let slot = match __placed {
                 Some(__placed) => match __placed {
                     ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
-                        ChoicePick202::A0(node) => HeaderGapChild0Choice::Space(SpaceNode(node)),
-                        ChoicePick202::A1(node) => HeaderGapChild0Choice::Tab(TabNode(node)),
+                        ChoicePick203::A0(node) => HeaderGapChild0Choice::Space(SpaceNode(node)),
+                        ChoicePick203::A1(node) => HeaderGapChild0Choice::Tab(TabNode(node)),
                     }),
                     ChoicePlaced::Missing(node, tag) => NodeSlot::Missing(match tag {
                         KindTag8::SpaceNode => {
@@ -52129,13 +54010,13 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
         };
         let __f1 = {
             let __c1 = __cur.tail(&SHAPES_8);
-            let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_203, &__c1);
+            let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_204, &__c1);
             let mut __items = Vec::with_capacity(__walk.capacity());
             while let Some((leading_extras, __placed, __c2)) = __walk.next(
                 &mut __cur,
                 ChoiceAt {
-                    shape: &SHAPE_202,
-                    select: choice_202,
+                    shape: &SHAPE_203,
+                    select: choice_203,
                     missing: &TAGS_8,
                 },
             ) {
@@ -52143,10 +54024,10 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                     leading_extras,
                     match __placed {
                         ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
-                            ChoicePick202::A0(node) => {
+                            ChoicePick203::A0(node) => {
                                 HeaderGapChild1Choice::Space(SpaceNode(node))
                             }
-                            ChoicePick202::A1(node) => HeaderGapChild1Choice::Tab(TabNode(node)),
+                            ChoicePick203::A1(node) => HeaderGapChild1Choice::Tab(TabNode(node)),
                         }),
                         ChoicePlaced::Missing(node, tag) => NodeSlot::Missing(match tag {
                             KindTag8::SpaceNode => {
@@ -52475,7 +54356,7 @@ fn __extract_header_sep_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_71);
+        let mut __cur = Cursor::new(&__children, &SHAPES_72);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_82), &Cont::NIL);
@@ -52492,7 +54373,7 @@ fn __extract_header_sep_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_201), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_202), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(TabNode(node)),
@@ -52507,7 +54388,7 @@ fn __extract_header_sep_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
             })?;
             let __f2 = {
                 let __c0 = __cur.tail(&SHAPES_8);
-                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_206), &__c0);
+                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_207), &__c0);
                 let slot = match __placed {
                     Some(__placed) => Some(match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -52625,7 +54506,7 @@ impl<'tree> Clone for IdAgeChoice<'tree> {
     fn clone(&self) -> Self {
         match self {
             Self::AgeFormat(value) => Self::AgeFormat(*value),
-            Self::TRNRNTRN(value) => Self::TRNRNTRN(*value),
+            Self::TRNRNTRN(value) => Self::TRNRNTRN(::core::clone::Clone::clone(value)),
         }
     }
 }
@@ -52890,7 +54771,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdAgeChildren<'
 pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_73);
+    let mut __cur = Cursor::new(&__children, &SHAPES_74);
     let content = {
         let __c0 = __cur.tail(&SHAPES_8);
         let (leading_extras, __placed) = __cur.fixed(
@@ -52905,7 +54786,7 @@ pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
             Some(__placed) => match __placed {
                 ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
                     ChoicePick211::A0(node) => IdAgeChoice::AgeFormat(AgeFormatNode(node)),
-                    ChoicePick211::A1 => IdAgeChoice::TRNRNTRN(LeafText(__raw)),
+                    ChoicePick211::A1 => IdAgeChoice::TRNRNTRN(LeafText(LeafSpan::whole(__raw))),
                 }),
                 ChoicePlaced::Missing(node, tag) => NodeSlot::Missing(match tag {
                     KindTag9::AgeFormatNode => {
@@ -54607,10 +56488,10 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_82);
+            let mut __cur = Cursor::new(&__children, &SHAPES_83);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_74);
+                    let __c0 = __cur.tail(&SHAPES_75);
                     let (leading_extras, __placed) =
                         __cur.optional(Terminal::of(&SHAPE_238), &__c0);
                     let slot = match __placed {
@@ -54629,7 +56510,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f1 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54643,7 +56524,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f2 = {
-                    let __c1 = __cur.tail(&SHAPES_75);
+                    let __c1 = __cur.tail(&SHAPES_76);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_214, &__c1);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c2)) =
@@ -54673,7 +56554,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f3 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54705,7 +56586,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f5 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54719,7 +56600,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f6 = {
-                    let __c3 = __cur.tail(&SHAPES_76);
+                    let __c3 = __cur.tail(&SHAPES_77);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_219, &__c3);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c4)) =
@@ -54749,7 +56630,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f7 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54763,7 +56644,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f8 = {
-                    let __c5 = __cur.tail(&SHAPES_77);
+                    let __c5 = __cur.tail(&SHAPES_78);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_222, &__c5);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c6)) =
@@ -54793,7 +56674,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f9 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54807,7 +56688,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f10 = {
-                    let __c7 = __cur.tail(&SHAPES_78);
+                    let __c7 = __cur.tail(&SHAPES_79);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_225, &__c7);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c8)) =
@@ -54837,7 +56718,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f11 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54851,7 +56732,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f12 = {
-                    let __c9 = __cur.tail(&SHAPES_79);
+                    let __c9 = __cur.tail(&SHAPES_80);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_228, &__c9);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c10)) =
@@ -54881,7 +56762,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f13 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54913,7 +56794,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f15 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54927,7 +56808,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f16 = {
-                    let __c11 = __cur.tail(&SHAPES_80);
+                    let __c11 = __cur.tail(&SHAPES_81);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_233, &__c11);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c12)) =
@@ -54957,7 +56838,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f17 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -54971,7 +56852,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f18 = {
-                    let __c13 = __cur.tail(&SHAPES_81);
+                    let __c13 = __cur.tail(&SHAPES_82);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_236, &__c13);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c14)) =
@@ -55001,7 +56882,7 @@ impl<'tree> Extract<'tree> for IdContentsNode<'tree> {
                 };
                 let __f19 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -55084,6 +56965,637 @@ pub fn extract_id_contents_from_error_recovery<'tree>(
 ) -> Option<IdContentsChildren<'tree>> {
     node.is_error()
         .then(|| extract_id_contents(IdContentsNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_id_corpus<'tree>(node: IdCorpusNode<'tree>) -> IdCorpusChildren<'tree>
+#[derive(Debug)]
+pub struct IdCorpusChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for IdCorpusChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type IdCorpusChildrenRangeAdmitted<'tree, 'source> = IdCorpusChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for IdCorpusChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for IdCorpusChildren<'tree> {
+    type Admitted = IdCorpusChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(IdCorpusChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, IdCorpusChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdCorpusChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_id_corpus<'tree>(node: IdCorpusNode<'tree>) -> IdCorpusChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    IdCorpusChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for IdCorpusNode<'tree> {
+    type Children<K: KindProof> = IdCorpusChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<IdCorpusChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_id_corpus(Self(__raw)))
+    }
+    fn extract_broad(self) -> IdCorpusChildren<'tree> {
+        extract_id_corpus(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<IdCorpusChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_id_corpus_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, IdCorpusChildren<'tree>>> {
+        into_ok(self.recover_as::<IdCorpusNode<'tree>, Broad>(IdCorpusNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_id_corpus_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, IdCorpusChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<IdCorpusNode<'tree>, KindAdmitted>(IdCorpusNode, grammar)
+    }
+}
+/// `id_corpus`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_corpus_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdCorpusChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_id_corpus(IdCorpusNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_id_custom_field<'tree>(node: IdCustomFieldNode<'tree>) -> IdCustomFieldChildren<'tree>
+#[derive(Debug)]
+pub struct IdCustomFieldChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for IdCustomFieldChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type IdCustomFieldChildrenRangeAdmitted<'tree, 'source> =
+    IdCustomFieldChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for IdCustomFieldChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for IdCustomFieldChildren<'tree> {
+    type Admitted = IdCustomFieldChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(IdCustomFieldChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, IdCustomFieldChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdCustomFieldChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_id_custom_field<'tree>(
+    node: IdCustomFieldNode<'tree>,
+) -> IdCustomFieldChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    IdCustomFieldChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for IdCustomFieldNode<'tree> {
+    type Children<K: KindProof> = IdCustomFieldChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<IdCustomFieldChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_id_custom_field(Self(__raw)))
+    }
+    fn extract_broad(self) -> IdCustomFieldChildren<'tree> {
+        extract_id_custom_field(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<IdCustomFieldChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_id_custom_field_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, IdCustomFieldChildren<'tree>>> {
+        into_ok(self.recover_as::<IdCustomFieldNode<'tree>, Broad>(IdCustomFieldNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_id_custom_field_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, IdCustomFieldChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<IdCustomFieldNode<'tree>, KindAdmitted>(IdCustomFieldNode, grammar)
+    }
+}
+/// `id_custom_field`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_custom_field_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdCustomFieldChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_id_custom_field(IdCustomFieldNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_id_education<'tree>(node: IdEducationNode<'tree>) -> IdEducationChildren<'tree>
+#[derive(Debug)]
+pub struct IdEducationChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for IdEducationChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type IdEducationChildrenRangeAdmitted<'tree, 'source> =
+    IdEducationChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for IdEducationChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for IdEducationChildren<'tree> {
+    type Admitted = IdEducationChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(IdEducationChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, IdEducationChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdEducationChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_id_education<'tree>(node: IdEducationNode<'tree>) -> IdEducationChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    IdEducationChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for IdEducationNode<'tree> {
+    type Children<K: KindProof> = IdEducationChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<IdEducationChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_id_education(Self(__raw)))
+    }
+    fn extract_broad(self) -> IdEducationChildren<'tree> {
+        extract_id_education(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<IdEducationChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_id_education_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, IdEducationChildren<'tree>>> {
+        into_ok(self.recover_as::<IdEducationNode<'tree>, Broad>(IdEducationNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_id_education_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, IdEducationChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<IdEducationNode<'tree>, KindAdmitted>(IdEducationNode, grammar)
+    }
+}
+/// `id_education`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_education_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdEducationChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_id_education(IdEducationNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_id_group<'tree>(node: IdGroupNode<'tree>) -> IdGroupChildren<'tree>
+#[derive(Debug)]
+pub struct IdGroupChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for IdGroupChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type IdGroupChildrenRangeAdmitted<'tree, 'source> = IdGroupChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for IdGroupChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for IdGroupChildren<'tree> {
+    type Admitted = IdGroupChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(IdGroupChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, IdGroupChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdGroupChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_id_group<'tree>(node: IdGroupNode<'tree>) -> IdGroupChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    IdGroupChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for IdGroupNode<'tree> {
+    type Children<K: KindProof> = IdGroupChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<IdGroupChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_id_group(Self(__raw)))
+    }
+    fn extract_broad(self) -> IdGroupChildren<'tree> {
+        extract_id_group(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<IdGroupChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_id_group_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, IdGroupChildren<'tree>>> {
+        into_ok(self.recover_as::<IdGroupNode<'tree>, Broad>(IdGroupNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_id_group_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, IdGroupChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<IdGroupNode<'tree>, KindAdmitted>(IdGroupNode, grammar)
+    }
+}
+/// `id_group`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_group_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdGroupChildren<'tree>> {
+    node.is_error().then(|| extract_id_group(IdGroupNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'tree>
@@ -55446,7 +57958,7 @@ fn __extract_id_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_83);
+        let mut __cur = Cursor::new(&__children, &SHAPES_84);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_243), &Cont::NIL);
@@ -55972,7 +58484,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdLanguageChild
 pub fn extract_id_language<'tree>(node: IdLanguageNode<'tree>) -> IdLanguageChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_85);
+    let mut __cur = Cursor::new(&__children, &SHAPES_86);
     let content = {
         let __c0 = __cur.tail(&SHAPES_8);
         let (leading_extras, __placed) = __cur.fixed(
@@ -57082,10 +59594,10 @@ impl<'tree> Extract<'tree> for IdLanguagesNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_88);
+            let mut __cur = Cursor::new(&__children, &SHAPES_89);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_87);
+                    let __c0 = __cur.tail(&SHAPES_88);
                     let (leading_extras, __placed) = __cur.fixed(
                         ChoiceAt {
                             shape: &SHAPE_250,
@@ -57233,6 +59745,162 @@ pub fn extract_id_languages_from_error_recovery<'tree>(
 ) -> Option<IdLanguagesChildren<'tree>> {
     node.is_error()
         .then(|| extract_id_languages(IdLanguagesNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_id_role<'tree>(node: IdRoleNode<'tree>) -> IdRoleChildren<'tree>
+#[derive(Debug)]
+pub struct IdRoleChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for IdRoleChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type IdRoleChildrenRangeAdmitted<'tree, 'source> = IdRoleChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for IdRoleChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for IdRoleChildren<'tree> {
+    type Admitted = IdRoleChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(IdRoleChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, IdRoleChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdRoleChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_id_role<'tree>(node: IdRoleNode<'tree>) -> IdRoleChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    IdRoleChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for IdRoleNode<'tree> {
+    type Children<K: KindProof> = IdRoleChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<IdRoleChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_id_role(Self(__raw)))
+    }
+    fn extract_broad(self) -> IdRoleChildren<'tree> {
+        extract_id_role(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<IdRoleChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_id_role_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, IdRoleChildren<'tree>>> {
+        into_ok(self.recover_as::<IdRoleNode<'tree>, Broad>(IdRoleNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_id_role_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, IdRoleChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<IdRoleNode<'tree>, KindAdmitted>(IdRoleNode, grammar)
+    }
+}
+/// `id_role`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_role_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdRoleChildren<'tree>> {
+    node.is_error().then(|| extract_id_role(IdRoleNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree>
@@ -57743,7 +60411,7 @@ impl<'tree> Extract<'tree> for IdSesNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_90);
+            let mut __cur = Cursor::new(&__children, &SHAPES_91);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -58304,7 +60972,7 @@ impl<'tree> Extract<'tree> for IdSexNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_92);
+            let mut __cur = Cursor::new(&__children, &SHAPES_93);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -58392,6 +61060,163 @@ pub fn extract_id_sex_from_error_recovery<'tree>(
     node: tree_sitter::Node<'tree>,
 ) -> Option<IdSexChildren<'tree>> {
     node.is_error().then(|| extract_id_sex(IdSexNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_id_speaker<'tree>(node: IdSpeakerNode<'tree>) -> IdSpeakerChildren<'tree>
+#[derive(Debug)]
+pub struct IdSpeakerChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for IdSpeakerChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type IdSpeakerChildrenRangeAdmitted<'tree, 'source> = IdSpeakerChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for IdSpeakerChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for IdSpeakerChildren<'tree> {
+    type Admitted = IdSpeakerChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(IdSpeakerChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, IdSpeakerChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, IdSpeakerChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_id_speaker<'tree>(node: IdSpeakerNode<'tree>) -> IdSpeakerChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    IdSpeakerChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for IdSpeakerNode<'tree> {
+    type Children<K: KindProof> = IdSpeakerChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<IdSpeakerChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_id_speaker(Self(__raw)))
+    }
+    fn extract_broad(self) -> IdSpeakerChildren<'tree> {
+        extract_id_speaker(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<IdSpeakerChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_id_speaker_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, IdSpeakerChildren<'tree>>> {
+        into_ok(self.recover_as::<IdSpeakerNode<'tree>, Broad>(IdSpeakerNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_id_speaker_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, IdSpeakerChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<IdSpeakerNode<'tree>, KindAdmitted>(IdSpeakerNode, grammar)
+    }
+}
+/// `id_speaker`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_id_speaker_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<IdSpeakerChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_id_speaker(IdSpeakerNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_int_dependent_tier<'tree>(node: IntDependentTierNode<'tree>) -> IntDependentTierChildren<'tree>
@@ -58734,7 +61559,7 @@ fn __extract_int_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_93);
+        let mut __cur = Cursor::new(&__children, &SHAPES_94);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_264), &Cont::NIL);
@@ -59161,7 +61986,7 @@ impl<'tree> Extract<'tree> for L1OfHeaderNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_95);
+            let mut __cur = Cursor::new(&__children, &SHAPES_96);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -59181,7 +62006,7 @@ impl<'tree> Extract<'tree> for L1OfHeaderNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f1 = {
-                    let __c0 = __cur.tail(&SHAPES_94);
+                    let __c0 = __cur.tail(&SHAPES_95);
                     let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_56), &__c0);
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
@@ -59518,7 +62343,7 @@ impl<'tree, R: RangePhase<'tree>> LangcodeChildren<'tree, R> {
 pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_96);
+    let mut __cur = Cursor::new(&__children, &SHAPES_97);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_269), &Cont::NIL);
@@ -59983,7 +62808,7 @@ pub fn extract_languages_contents<'tree>(
 ) -> LanguagesContentsChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_98);
+    let mut __cur = Cursor::new(&__children, &SHAPES_99);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_84), &Cont::NIL);
@@ -60010,7 +62835,7 @@ pub fn extract_languages_contents<'tree>(
                     leading_extras,
                     match __placed {
                         SequencePlaced::Value => NodeSlot::Present({
-                            let [__c2, _, _, _] = __cur.member_conts(&SHAPES_97, &__c1);
+                            let [__c2, _, _, _] = __cur.member_conts(&SHAPES_98, &__c1);
                             let __f0 = {
                                 let (leading_extras, __placed) =
                                     __cur.optional(Terminal::of(&SHAPE_28), &__c2);
@@ -60525,7 +63350,7 @@ fn __extract_languages_header_presence<'tree, K: KindProof, P: PresenceAdmission
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_99);
+        let mut __cur = Cursor::new(&__children, &SHAPES_100);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_278), &Cont::NIL);
@@ -63565,7 +66390,7 @@ impl<'tree> Extract<'tree> for LineNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_101);
+            let mut __cur = Cursor::new(&__children, &SHAPES_102);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -65299,10 +68124,10 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, LinkersChildren
 pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_104);
+    let mut __cur = Cursor::new(&__children, &SHAPES_105);
     {
         let __f0 = {
-            let __c0 = __cur.tail(&SHAPES_103);
+            let __c0 = __cur.tail(&SHAPES_104);
             let (leading_extras, __placed) = __cur.fixed(Sequence(&SHAPE_287), &__c0);
             let slot = match __placed {
                 Some(__placed) => match __placed {
@@ -65882,7 +68707,7 @@ fn __extract_location_header_presence<'tree, K: KindProof, P: PresenceAdmission<
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_105);
+        let mut __cur = Cursor::new(&__children, &SHAPES_106);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_290), &Cont::NIL);
@@ -66506,7 +69331,7 @@ impl<'tree> Extract<'tree> for LongFeatureNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_107);
+            let mut __cur = Cursor::new(&__children, &SHAPES_108);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -66879,7 +69704,7 @@ fn __extract_long_feature_begin_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_108);
+        let mut __cur = Cursor::new(&__children, &SHAPES_109);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_300), &Cont::NIL);
@@ -67292,7 +70117,7 @@ fn __extract_long_feature_end_presence<'tree, K: KindProof, P: PresenceAdmission
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_109);
+        let mut __cur = Cursor::new(&__children, &SHAPES_110);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_300), &Cont::NIL);
@@ -67721,7 +70546,7 @@ fn __extract_main_pho_group_presence<'tree, K: KindProof, P: PresenceAdmission<K
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_110);
+        let mut __cur = Cursor::new(&__children, &SHAPES_111);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_306), &Cont::NIL);
@@ -67740,7 +70565,7 @@ fn __extract_main_pho_group_presence<'tree, K: KindProof, P: PresenceAdmission<K
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_193), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_194), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(ContentsNode(node)),
@@ -68149,7 +70974,7 @@ fn __extract_main_sin_group_presence<'tree, K: KindProof, P: PresenceAdmission<K
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_111);
+        let mut __cur = Cursor::new(&__children, &SHAPES_112);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_310), &Cont::NIL);
@@ -68168,7 +70993,7 @@ fn __extract_main_sin_group_presence<'tree, K: KindProof, P: PresenceAdmission<K
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_193), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_194), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(ContentsNode(node)),
@@ -68751,7 +71576,7 @@ fn __extract_main_tier_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_113);
+        let mut __cur = Cursor::new(&__children, &SHAPES_114);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_314), &Cont::NIL);
@@ -68796,7 +71621,7 @@ fn __extract_main_tier_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
                 Positioned::new(leading_extras, slot)
             })?;
             let __f3 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_201), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_202), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(TabNode(node)),
@@ -68810,8 +71635,8 @@ fn __extract_main_tier_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
                 Positioned::new(leading_extras, slot)
             })?;
             let __f4 = {
-                let __c0 = __cur.tail(&SHAPES_112);
-                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_206), &__c0);
+                let __c0 = __cur.tail(&SHAPES_113);
+                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_207), &__c0);
                 let slot = match __placed {
                     Some(__placed) => Some(match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -69400,7 +72225,7 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_116);
+            let mut __cur = Cursor::new(&__children, &SHAPES_117);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -69420,7 +72245,7 @@ impl<'tree> Extract<'tree> for MediaContentsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f1 = {
-                    let __c0 = __cur.tail(&SHAPES_115);
+                    let __c0 = __cur.tail(&SHAPES_116);
                     let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_28), &__c0);
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
@@ -69809,7 +72634,7 @@ impl<'tree> Clone for MediaFilenameChoice<'tree> {
     fn clone(&self) -> Self {
         match self {
             Self::DoubleQuote(value) => Self::DoubleQuote(::core::clone::Clone::clone(value)),
-            Self::RNTRNRNT(value) => Self::RNTRNRNT(*value),
+            Self::RNTRNRNT(value) => Self::RNTRNRNT(::core::clone::Clone::clone(value)),
         }
     }
 }
@@ -69973,7 +72798,7 @@ pub fn extract_media_filename<'tree>(
 ) -> MediaFilenameChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_119);
+    let mut __cur = Cursor::new(&__children, &SHAPES_120);
     let content = {
         let __c0 = __cur.tail(&SHAPES_8);
         let (leading_extras, __placed) = __cur.fixed(
@@ -70031,7 +72856,9 @@ pub fn extract_media_filename<'tree>(
                             unexpected: Vec::new(),
                         }
                     }),
-                    ChoicePick328::A1 => MediaFilenameChoice::RNTRNRNT(LeafText(__raw)),
+                    ChoicePick328::A1 => {
+                        MediaFilenameChoice::RNTRNRNT(LeafText(LeafSpan::whole(__raw)))
+                    }
                 }),
                 ChoicePlaced::Missing(_, never) => match never {},
                 ChoicePlaced::Error(node) => NodeSlot::Error(node),
@@ -70436,7 +73263,7 @@ fn __extract_media_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>>
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_120);
+        let mut __cur = Cursor::new(&__children, &SHAPES_121);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_333), &Cont::NIL);
@@ -71142,7 +73969,7 @@ impl<'tree> Extract<'tree> for MediaStatusNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_122);
+            let mut __cur = Cursor::new(&__children, &SHAPES_123);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -71775,7 +74602,7 @@ impl<'tree> Extract<'tree> for MediaTypeNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_124);
+            let mut __cur = Cursor::new(&__children, &SHAPES_125);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -72235,7 +75062,7 @@ fn __extract_mod_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_125);
+        let mut __cur = Cursor::new(&__children, &SHAPES_126);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_348), &Cont::NIL);
@@ -72720,7 +75547,7 @@ fn __extract_modsyl_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_126);
+        let mut __cur = Cursor::new(&__children, &SHAPES_127);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_350), &Cont::NIL);
@@ -73142,7 +75969,7 @@ fn __extract_mor_content_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_127);
+        let mut __cur = Cursor::new(&__children, &SHAPES_128);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_355), &Cont::NIL);
@@ -75430,10 +78257,10 @@ impl<'tree> Extract<'tree> for MorContentsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_133);
+            let mut __cur = Cursor::new(&__children, &SHAPES_134);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_132);
+                    let __c0 = __cur.tail(&SHAPES_133);
                     let (leading_extras, __placed) = __cur.fixed(
                         ChoiceAt {
                             shape: &SHAPE_368,
@@ -75451,7 +78278,7 @@ impl<'tree> Extract<'tree> for MorContentsNode<'tree> {
                                             ChoicePick368::A0 => {
                                                 MorContentsChild0Choice::MorContent({
                                                     let [_, __c1, __c3] = __cur
-                                                        .member_conts(&SHAPES_130, &__c0);
+                                                        .member_conts(&SHAPES_131, &__c0);
                                                     let __f0 = {
                                                         let (leading_extras, __placed) = __cur
                                                             .fixed(Terminal::of(&SHAPE_357), &Cont::NIL);
@@ -76274,7 +79101,7 @@ fn __extract_mor_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_134);
+        let mut __cur = Cursor::new(&__children, &SHAPES_135);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_372), &Cont::NIL);
@@ -76638,7 +79465,7 @@ fn __extract_mor_feature_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_135);
+        let mut __cur = Cursor::new(&__children, &SHAPES_136);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_376), &Cont::NIL);
@@ -76985,7 +79812,7 @@ fn __extract_mor_post_clitic_presence<'tree, K: KindProof, P: PresenceAdmission<
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_136);
+        let mut __cur = Cursor::new(&__children, &SHAPES_137);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_378), &Cont::NIL);
@@ -77436,7 +80263,7 @@ fn __extract_mor_word_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_137);
+        let mut __cur = Cursor::new(&__children, &SHAPES_138);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_385), &Cont::NIL);
@@ -77453,7 +80280,7 @@ fn __extract_mor_word_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_185), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_186), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(PipeNode(node)),
@@ -77807,7 +80634,7 @@ fn __extract_new_episode_header_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_138);
+        let mut __cur = Cursor::new(&__children, &SHAPES_139);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_387), &Cont::NIL);
@@ -78904,7 +81731,7 @@ pub fn extract_non_colon_separator<'tree>(
 ) -> NonColonSeparatorChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_140);
+    let mut __cur = Cursor::new(&__children, &SHAPES_141);
     let content = {
         let __c0 = __cur.tail(&SHAPES_8);
         let (leading_extras, __placed) = __cur.fixed(
@@ -79581,7 +82408,7 @@ impl<'tree> Extract<'tree> for NonvocalNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_142);
+            let mut __cur = Cursor::new(&__children, &SHAPES_143);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -79958,7 +82785,7 @@ fn __extract_nonvocal_begin_presence<'tree, K: KindProof, P: PresenceAdmission<K
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_143);
+        let mut __cur = Cursor::new(&__children, &SHAPES_144);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_300), &Cont::NIL);
@@ -80369,7 +83196,7 @@ fn __extract_nonvocal_end_presence<'tree, K: KindProof, P: PresenceAdmission<K>>
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_144);
+        let mut __cur = Cursor::new(&__children, &SHAPES_145);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_300), &Cont::NIL);
@@ -80842,7 +83669,7 @@ fn __extract_nonvocal_simple_presence<'tree, K: KindProof, P: PresenceAdmission<
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_145);
+        let mut __cur = Cursor::new(&__children, &SHAPES_146);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_300), &Cont::NIL);
@@ -81408,7 +84235,7 @@ impl<'tree> Extract<'tree> for NonwordNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_147);
+            let mut __cur = Cursor::new(&__children, &SHAPES_148);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -81745,7 +84572,7 @@ fn __extract_nonword_with_optional_annotations_presence<
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_148);
+        let mut __cur = Cursor::new(&__children, &SHAPES_149);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_420), &Cont::NIL);
@@ -81763,7 +84590,7 @@ fn __extract_nonword_with_optional_annotations_presence<
             })?;
             let __f1 = {
                 let __c0 = __cur.tail(&SHAPES_8);
-                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_197), &__c0);
+                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_198), &__c0);
                 let slot = match __placed {
                     Some(__placed) => Some(match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -82217,7 +85044,7 @@ fn __extract_number_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_149);
+        let mut __cur = Cursor::new(&__children, &SHAPES_150);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_425), &Cont::NIL);
@@ -82367,15 +85194,15 @@ pub fn extract_number_header_from_error_recovery<'tree>(
 // Task 7 extract contract: pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOptionChildren<'tree>
 pub enum NumberOptionChoice<'tree, R: RangePhase<'tree> = Raw> {
     /// Alternative `1`.
-    _1(R::Wrapper<K1Node<'tree>>),
+    n_1(R::Wrapper<K1Node<'tree>>),
     /// Alternative `2`.
-    _2(R::Wrapper<K2Node<'tree>>),
+    n_2(R::Wrapper<K2Node<'tree>>),
     /// Alternative `3`.
-    _3(R::Wrapper<K3Node<'tree>>),
+    n_3(R::Wrapper<K3Node<'tree>>),
     /// Alternative `4`.
-    _4(R::Wrapper<K4Node<'tree>>),
+    n_4(R::Wrapper<K4Node<'tree>>),
     /// Alternative `5`.
-    _5(R::Wrapper<K5Node<'tree>>),
+    n_5(R::Wrapper<K5Node<'tree>>),
     /// Alternative `More`.
     More(R::Wrapper<MoreNode<'tree>>),
     /// Alternative `Audience`.
@@ -82396,11 +85223,11 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::_1(value) => f.debug_tuple("_1").field(value).finish(),
-            Self::_2(value) => f.debug_tuple("_2").field(value).finish(),
-            Self::_3(value) => f.debug_tuple("_3").field(value).finish(),
-            Self::_4(value) => f.debug_tuple("_4").field(value).finish(),
-            Self::_5(value) => f.debug_tuple("_5").field(value).finish(),
+            Self::n_1(value) => f.debug_tuple("n_1").field(value).finish(),
+            Self::n_2(value) => f.debug_tuple("n_2").field(value).finish(),
+            Self::n_3(value) => f.debug_tuple("n_3").field(value).finish(),
+            Self::n_4(value) => f.debug_tuple("n_4").field(value).finish(),
+            Self::n_5(value) => f.debug_tuple("n_5").field(value).finish(),
             Self::More(value) => f.debug_tuple("More").field(value).finish(),
             Self::Audience(value) => f.debug_tuple("Audience").field(value).finish(),
             Self::GenericNumber(value) => f.debug_tuple("GenericNumber").field(value).finish(),
@@ -82424,20 +85251,20 @@ impl<'tree, 'source> AdmitRanges<'tree, 'source> for NumberOptionChoice<'tree> {
         context: &mut RangeAdmission<'tree, 'source>,
     ) -> Result<Self::Admitted, SourceBindingError> {
         Ok(match self {
-            Self::_1(value) => {
-                NumberOptionChoice::_1(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_1(value) => {
+                NumberOptionChoice::n_1(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_2(value) => {
-                NumberOptionChoice::_2(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_2(value) => {
+                NumberOptionChoice::n_2(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_3(value) => {
-                NumberOptionChoice::_3(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_3(value) => {
+                NumberOptionChoice::n_3(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_4(value) => {
-                NumberOptionChoice::_4(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_4(value) => {
+                NumberOptionChoice::n_4(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_5(value) => {
-                NumberOptionChoice::_5(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_5(value) => {
+                NumberOptionChoice::n_5(AdmitRanges::admit_ranges_in(value, context)?)
             }
             Self::More(value) => {
                 NumberOptionChoice::More(AdmitRanges::admit_ranges_in(value, context)?)
@@ -82456,11 +85283,11 @@ impl<'tree> SourceBoundKind<'tree> for NumberOptionChoice<'tree> {}
 /// Concrete alternatives of an already range-admitted single-node choice.
 #[derive(Debug, Clone, Copy)]
 pub enum NumberOptionChoiceBoundView<'tree, 'source> {
-    _1(SourceBound<'tree, 'source, K1Node<'tree>>),
-    _2(SourceBound<'tree, 'source, K2Node<'tree>>),
-    _3(SourceBound<'tree, 'source, K3Node<'tree>>),
-    _4(SourceBound<'tree, 'source, K4Node<'tree>>),
-    _5(SourceBound<'tree, 'source, K5Node<'tree>>),
+    n_1(SourceBound<'tree, 'source, K1Node<'tree>>),
+    n_2(SourceBound<'tree, 'source, K2Node<'tree>>),
+    n_3(SourceBound<'tree, 'source, K3Node<'tree>>),
+    n_4(SourceBound<'tree, 'source, K4Node<'tree>>),
+    n_5(SourceBound<'tree, 'source, K5Node<'tree>>),
     More(SourceBound<'tree, 'source, MoreNode<'tree>>),
     Audience(SourceBound<'tree, 'source, AudienceNode<'tree>>),
     GenericNumber(SourceBound<'tree, 'source, GenericNumberNode<'tree>>),
@@ -82470,20 +85297,20 @@ impl<'tree, 'source> SourceBound<'tree, 'source, NumberOptionChoice<'tree>> {
     #[must_use]
     pub fn view(self) -> NumberOptionChoiceBoundView<'tree, 'source> {
         match self.node {
-            NumberOptionChoice::_1(node) => {
-                NumberOptionChoiceBoundView::_1(SourceBound::from_slice(node, self.source_slice()))
+            NumberOptionChoice::n_1(node) => {
+                NumberOptionChoiceBoundView::n_1(SourceBound::from_slice(node, self.source_slice()))
             }
-            NumberOptionChoice::_2(node) => {
-                NumberOptionChoiceBoundView::_2(SourceBound::from_slice(node, self.source_slice()))
+            NumberOptionChoice::n_2(node) => {
+                NumberOptionChoiceBoundView::n_2(SourceBound::from_slice(node, self.source_slice()))
             }
-            NumberOptionChoice::_3(node) => {
-                NumberOptionChoiceBoundView::_3(SourceBound::from_slice(node, self.source_slice()))
+            NumberOptionChoice::n_3(node) => {
+                NumberOptionChoiceBoundView::n_3(SourceBound::from_slice(node, self.source_slice()))
             }
-            NumberOptionChoice::_4(node) => {
-                NumberOptionChoiceBoundView::_4(SourceBound::from_slice(node, self.source_slice()))
+            NumberOptionChoice::n_4(node) => {
+                NumberOptionChoiceBoundView::n_4(SourceBound::from_slice(node, self.source_slice()))
             }
-            NumberOptionChoice::_5(node) => {
-                NumberOptionChoiceBoundView::_5(SourceBound::from_slice(node, self.source_slice()))
+            NumberOptionChoice::n_5(node) => {
+                NumberOptionChoiceBoundView::n_5(SourceBound::from_slice(node, self.source_slice()))
             }
             NumberOptionChoice::More(node) => NumberOptionChoiceBoundView::More(
                 SourceBound::from_slice(node, self.source_slice()),
@@ -82500,11 +85327,11 @@ impl<'tree, 'source> SourceBound<'tree, 'source, NumberOptionChoice<'tree>> {
 /// A generated choice whose payload retains canonical source identity.
 #[derive(Debug)]
 pub enum NumberOptionChoiceSourceView<'value, 'tree, 'source> {
-    _1(SourceField<'value, 'tree, 'source, K1Node<'tree>>),
-    _2(SourceField<'value, 'tree, 'source, K2Node<'tree>>),
-    _3(SourceField<'value, 'tree, 'source, K3Node<'tree>>),
-    _4(SourceField<'value, 'tree, 'source, K4Node<'tree>>),
-    _5(SourceField<'value, 'tree, 'source, K5Node<'tree>>),
+    n_1(SourceField<'value, 'tree, 'source, K1Node<'tree>>),
+    n_2(SourceField<'value, 'tree, 'source, K2Node<'tree>>),
+    n_3(SourceField<'value, 'tree, 'source, K3Node<'tree>>),
+    n_4(SourceField<'value, 'tree, 'source, K4Node<'tree>>),
+    n_5(SourceField<'value, 'tree, 'source, K5Node<'tree>>),
     More(SourceField<'value, 'tree, 'source, MoreNode<'tree>>),
     Audience(SourceField<'value, 'tree, 'source, AudienceNode<'tree>>),
     GenericNumber(SourceField<'value, 'tree, 'source, GenericNumberNode<'tree>>),
@@ -82520,23 +85347,23 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, NumberOptionCho
     #[must_use]
     pub fn view(self) -> NumberOptionChoiceSourceView<'value, 'tree, 'source> {
         match self.value {
-            NumberOptionChoice::_1(value) => NumberOptionChoiceSourceView::_1(SourceField {
+            NumberOptionChoice::n_1(value) => NumberOptionChoiceSourceView::n_1(SourceField {
                 value,
                 parent: self.parent,
             }),
-            NumberOptionChoice::_2(value) => NumberOptionChoiceSourceView::_2(SourceField {
+            NumberOptionChoice::n_2(value) => NumberOptionChoiceSourceView::n_2(SourceField {
                 value,
                 parent: self.parent,
             }),
-            NumberOptionChoice::_3(value) => NumberOptionChoiceSourceView::_3(SourceField {
+            NumberOptionChoice::n_3(value) => NumberOptionChoiceSourceView::n_3(SourceField {
                 value,
                 parent: self.parent,
             }),
-            NumberOptionChoice::_4(value) => NumberOptionChoiceSourceView::_4(SourceField {
+            NumberOptionChoice::n_4(value) => NumberOptionChoiceSourceView::n_4(SourceField {
                 value,
                 parent: self.parent,
             }),
-            NumberOptionChoice::_5(value) => NumberOptionChoiceSourceView::_5(SourceField {
+            NumberOptionChoice::n_5(value) => NumberOptionChoiceSourceView::n_5(SourceField {
                 value,
                 parent: self.parent,
             }),
@@ -82562,11 +85389,11 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, NumberOptionCho
 impl<'tree> AsRawNode<'tree> for NumberOptionChoice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
-            NumberOptionChoice::_1(inner) => AsRawNode::raw_node(inner),
-            NumberOptionChoice::_2(inner) => AsRawNode::raw_node(inner),
-            NumberOptionChoice::_3(inner) => AsRawNode::raw_node(inner),
-            NumberOptionChoice::_4(inner) => AsRawNode::raw_node(inner),
-            NumberOptionChoice::_5(inner) => AsRawNode::raw_node(inner),
+            NumberOptionChoice::n_1(inner) => AsRawNode::raw_node(inner),
+            NumberOptionChoice::n_2(inner) => AsRawNode::raw_node(inner),
+            NumberOptionChoice::n_3(inner) => AsRawNode::raw_node(inner),
+            NumberOptionChoice::n_4(inner) => AsRawNode::raw_node(inner),
+            NumberOptionChoice::n_5(inner) => AsRawNode::raw_node(inner),
             NumberOptionChoice::More(inner) => AsRawNode::raw_node(inner),
             NumberOptionChoice::Audience(inner) => AsRawNode::raw_node(inner),
             NumberOptionChoice::GenericNumber(inner) => AsRawNode::raw_node(inner),
@@ -82581,11 +85408,11 @@ impl<'tree> FromNodeKind<'tree> for NumberOptionChoice<'tree> {
     /// describe, and saying so is the only true answer available.
     fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
         match (node.is_named(), node.kind()) {
-            (false, "1") => Some(NumberOptionChoice::_1(K1Node(node))),
-            (false, "2") => Some(NumberOptionChoice::_2(K2Node(node))),
-            (false, "3") => Some(NumberOptionChoice::_3(K3Node(node))),
-            (false, "4") => Some(NumberOptionChoice::_4(K4Node(node))),
-            (false, "5") => Some(NumberOptionChoice::_5(K5Node(node))),
+            (false, "1") => Some(NumberOptionChoice::n_1(K1Node(node))),
+            (false, "2") => Some(NumberOptionChoice::n_2(K2Node(node))),
+            (false, "3") => Some(NumberOptionChoice::n_3(K3Node(node))),
+            (false, "4") => Some(NumberOptionChoice::n_4(K4Node(node))),
+            (false, "5") => Some(NumberOptionChoice::n_5(K5Node(node))),
             (false, "more") => Some(NumberOptionChoice::More(MoreNode(node))),
             (false, "audience") => Some(NumberOptionChoice::Audience(AudienceNode(node))),
             (true, "generic_number") => {
@@ -83058,7 +85885,7 @@ impl<'tree> Extract<'tree> for NumberOptionNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_151);
+            let mut __cur = Cursor::new(&__children, &SHAPES_152);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -83072,11 +85899,11 @@ impl<'tree> Extract<'tree> for NumberOptionNode<'tree> {
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
-                            ChoicePick435::A0(node) => NumberOptionChoice::_1(K1Node(node)),
-                            ChoicePick435::A1(node) => NumberOptionChoice::_2(K2Node(node)),
-                            ChoicePick435::A2(node) => NumberOptionChoice::_3(K3Node(node)),
-                            ChoicePick435::A3(node) => NumberOptionChoice::_4(K4Node(node)),
-                            ChoicePick435::A4(node) => NumberOptionChoice::_5(K5Node(node)),
+                            ChoicePick435::A0(node) => NumberOptionChoice::n_1(K1Node(node)),
+                            ChoicePick435::A1(node) => NumberOptionChoice::n_2(K2Node(node)),
+                            ChoicePick435::A2(node) => NumberOptionChoice::n_3(K3Node(node)),
+                            ChoicePick435::A3(node) => NumberOptionChoice::n_4(K4Node(node)),
+                            ChoicePick435::A4(node) => NumberOptionChoice::n_5(K5Node(node)),
                             ChoicePick435::A5(node) => NumberOptionChoice::More(MoreNode(node)),
                             ChoicePick435::A6(node) => {
                                 NumberOptionChoice::Audience(AudienceNode(node))
@@ -83574,7 +86401,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, OptionNameChild
 pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_153);
+    let mut __cur = Cursor::new(&__children, &SHAPES_154);
     let content = {
         let __c0 = __cur.tail(&SHAPES_8);
         let (leading_extras, __placed) = __cur.fixed(
@@ -84026,7 +86853,7 @@ impl<'tree> Extract<'tree> for OptionsContentsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_155);
+            let mut __cur = Cursor::new(&__children, &SHAPES_156);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -84545,7 +87372,7 @@ fn __extract_options_header_presence<'tree, K: KindProof, P: PresenceAdmission<K
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_156);
+        let mut __cur = Cursor::new(&__children, &SHAPES_157);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_450), &Cont::NIL);
@@ -85034,7 +87861,7 @@ fn __extract_ort_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_157);
+        let mut __cur = Cursor::new(&__children, &SHAPES_158);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_452), &Cont::NIL);
@@ -85605,7 +88432,7 @@ fn __extract_other_spoken_event_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_158);
+        let mut __cur = Cursor::new(&__children, &SHAPES_159);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_300), &Cont::NIL);
@@ -86096,7 +88923,7 @@ fn __extract_page_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_159);
+        let mut __cur = Cursor::new(&__children, &SHAPES_160);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_459), &Cont::NIL);
@@ -86241,6 +89068,164 @@ pub fn extract_page_header_from_error_recovery<'tree>(
 ) -> Option<PageHeaderChildren<'tree>> {
     node.is_error()
         .then(|| extract_page_header(PageHeaderNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_page_number<'tree>(node: PageNumberNode<'tree>) -> PageNumberChildren<'tree>
+#[derive(Debug)]
+pub struct PageNumberChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for PageNumberChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type PageNumberChildrenRangeAdmitted<'tree, 'source> =
+    PageNumberChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for PageNumberChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for PageNumberChildren<'tree> {
+    type Admitted = PageNumberChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(PageNumberChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, PageNumberChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, PageNumberChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_page_number<'tree>(node: PageNumberNode<'tree>) -> PageNumberChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    PageNumberChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for PageNumberNode<'tree> {
+    type Children<K: KindProof> = PageNumberChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<PageNumberChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_page_number(Self(__raw)))
+    }
+    fn extract_broad(self) -> PageNumberChildren<'tree> {
+        extract_page_number(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<PageNumberChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_page_number_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, PageNumberChildren<'tree>>> {
+        into_ok(self.recover_as::<PageNumberNode<'tree>, Broad>(PageNumberNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_page_number_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, PageNumberChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<PageNumberNode<'tree>, KindAdmitted>(PageNumberNode, grammar)
+    }
+}
+/// `page_number`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_page_number_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<PageNumberChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_page_number(PageNumberNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_par_dependent_tier<'tree>(node: ParDependentTierNode<'tree>) -> ParDependentTierChildren<'tree>
@@ -86583,7 +89568,7 @@ fn __extract_par_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_160);
+        let mut __cur = Cursor::new(&__children, &SHAPES_161);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_461), &Cont::NIL);
@@ -86937,7 +89922,7 @@ pub fn extract_para_annotation<'tree>(
 ) -> ParaAnnotationChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_161);
+    let mut __cur = Cursor::new(&__children, &SHAPES_162);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_463), &Cont::NIL);
@@ -87388,7 +90373,7 @@ impl<'tree, R: RangePhase<'tree>> ParticipantChildren<'tree, R> {
 pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_163);
+    let mut __cur = Cursor::new(&__children, &SHAPES_164);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_59), &Cont::NIL);
@@ -87405,7 +90390,7 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
             Positioned::new(leading_extras, slot)
         };
         let __f1 = {
-            let __c0 = __cur.tail(&SHAPES_132);
+            let __c0 = __cur.tail(&SHAPES_133);
             let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_468, &__c0);
             let mut __items = Vec::with_capacity(__walk.capacity());
             while let Some((leading_extras, __placed, __c1)) = __walk.next(
@@ -87928,7 +90913,7 @@ impl<'tree> Extract<'tree> for ParticipantsContentsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_165);
+            let mut __cur = Cursor::new(&__children, &SHAPES_166);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -88482,7 +91467,7 @@ fn __extract_participants_header_presence<'tree, K: KindProof, P: PresenceAdmiss
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_166);
+        let mut __cur = Cursor::new(&__children, &SHAPES_167);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_477), &Cont::NIL);
@@ -88845,7 +91830,7 @@ pub fn extract_percent_annotation<'tree>(
 ) -> PercentAnnotationChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_167);
+    let mut __cur = Cursor::new(&__children, &SHAPES_168);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_479), &Cont::NIL);
@@ -89332,7 +92317,7 @@ fn __extract_pho_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_168);
+        let mut __cur = Cursor::new(&__children, &SHAPES_169);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_481), &Cont::NIL);
@@ -90026,7 +93011,7 @@ impl<'tree> Extract<'tree> for PhoGroupNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_171);
+            let mut __cur = Cursor::new(&__children, &SHAPES_172);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -90520,7 +93505,7 @@ impl<'tree> Extract<'tree> for PhoGroupedContentNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_173);
+            let mut __cur = Cursor::new(&__children, &SHAPES_174);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -91000,7 +93985,7 @@ impl<'tree> Extract<'tree> for PhoGroupsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_175);
+            let mut __cur = Cursor::new(&__children, &SHAPES_176);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -91469,7 +94454,7 @@ impl<'tree> Extract<'tree> for PhoWordsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_177);
+            let mut __cur = Cursor::new(&__children, &SHAPES_178);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -91965,7 +94950,7 @@ fn __extract_phoaln_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_178);
+        let mut __cur = Cursor::new(&__children, &SHAPES_179);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_505), &Cont::NIL);
@@ -92466,7 +95451,7 @@ fn __extract_phosyl_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_179);
+        let mut __cur = Cursor::new(&__children, &SHAPES_180);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_507), &Cont::NIL);
@@ -92958,7 +95943,7 @@ fn __extract_pid_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_180);
+        let mut __cur = Cursor::new(&__children, &SHAPES_181);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_509), &Cont::NIL);
@@ -93204,7 +96189,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, Plus_2Children<
 pub fn extract_plus<'tree>(node: Plus_2Node<'tree>) -> Plus_2Children<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_181);
+    let mut __cur = Cursor::new(&__children, &SHAPES_182);
     let content = {
         let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_511), &Cont::NIL);
         let slot = match __placed {
@@ -93396,7 +96381,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, PosTagChildren<
 pub fn extract_pos_tag<'tree>(node: PosTagNode<'tree>) -> PosTagChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_182);
+    let mut __cur = Cursor::new(&__children, &SHAPES_183);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_513), &Cont::NIL);
@@ -93676,7 +96661,7 @@ impl<'tree, R: RangePhase<'tree>> PostcodeChildren<'tree, R> {
 pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_183);
+    let mut __cur = Cursor::new(&__children, &SHAPES_184);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_515), &Cont::NIL);
@@ -94407,7 +97392,7 @@ fn __extract_quotation_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_184);
+        let mut __cur = Cursor::new(&__children, &SHAPES_185);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_519), &Cont::NIL);
@@ -94426,7 +97411,7 @@ fn __extract_quotation_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_193), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_194), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(ContentsNode(node)),
@@ -94793,7 +97778,7 @@ fn __extract_quotation_with_optional_annotations_presence<
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_185);
+        let mut __cur = Cursor::new(&__children, &SHAPES_186);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_521), &Cont::NIL);
@@ -94811,7 +97796,7 @@ fn __extract_quotation_with_optional_annotations_presence<
             })?;
             let __f1 = {
                 let __c0 = __cur.tail(&SHAPES_8);
-                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_197), &__c0);
+                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_198), &__c0);
                 let slot = match __placed {
                     Some(__placed) => Some(match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -95277,7 +98262,7 @@ fn __extract_recording_quality_header_presence<'tree, K: KindProof, P: PresenceA
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_186);
+        let mut __cur = Cursor::new(&__children, &SHAPES_187);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_526), &Cont::NIL);
@@ -95441,15 +98426,15 @@ pub fn extract_recording_quality_header_from_error_recovery<'tree>(
 // Task 7 extract contract: pub fn extract_recording_quality_option<'tree>(node: RecordingQualityOptionNode<'tree>) -> RecordingQualityOptionChildren<'tree>
 pub enum RecordingQualityOptionChoice<'tree, R: RangePhase<'tree> = Raw> {
     /// Alternative `1`.
-    _1(R::Wrapper<K1Node<'tree>>),
+    n_1(R::Wrapper<K1Node<'tree>>),
     /// Alternative `2`.
-    _2(R::Wrapper<K2Node<'tree>>),
+    n_2(R::Wrapper<K2Node<'tree>>),
     /// Alternative `3`.
-    _3(R::Wrapper<K3Node<'tree>>),
+    n_3(R::Wrapper<K3Node<'tree>>),
     /// Alternative `4`.
-    _4(R::Wrapper<K4Node<'tree>>),
+    n_4(R::Wrapper<K4Node<'tree>>),
     /// Alternative `5`.
-    _5(R::Wrapper<K5Node<'tree>>),
+    n_5(R::Wrapper<K5Node<'tree>>),
     /// Alternative `GenericRecordingQuality`.
     GenericRecordingQuality(R::Wrapper<GenericRecordingQualityNode<'tree>>),
 }
@@ -95464,11 +98449,11 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::_1(value) => f.debug_tuple("_1").field(value).finish(),
-            Self::_2(value) => f.debug_tuple("_2").field(value).finish(),
-            Self::_3(value) => f.debug_tuple("_3").field(value).finish(),
-            Self::_4(value) => f.debug_tuple("_4").field(value).finish(),
-            Self::_5(value) => f.debug_tuple("_5").field(value).finish(),
+            Self::n_1(value) => f.debug_tuple("n_1").field(value).finish(),
+            Self::n_2(value) => f.debug_tuple("n_2").field(value).finish(),
+            Self::n_3(value) => f.debug_tuple("n_3").field(value).finish(),
+            Self::n_4(value) => f.debug_tuple("n_4").field(value).finish(),
+            Self::n_5(value) => f.debug_tuple("n_5").field(value).finish(),
             Self::GenericRecordingQuality(value) => f
                 .debug_tuple("GenericRecordingQuality")
                 .field(value)
@@ -95493,20 +98478,20 @@ impl<'tree, 'source> AdmitRanges<'tree, 'source> for RecordingQualityOptionChoic
         context: &mut RangeAdmission<'tree, 'source>,
     ) -> Result<Self::Admitted, SourceBindingError> {
         Ok(match self {
-            Self::_1(value) => {
-                RecordingQualityOptionChoice::_1(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_1(value) => {
+                RecordingQualityOptionChoice::n_1(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_2(value) => {
-                RecordingQualityOptionChoice::_2(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_2(value) => {
+                RecordingQualityOptionChoice::n_2(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_3(value) => {
-                RecordingQualityOptionChoice::_3(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_3(value) => {
+                RecordingQualityOptionChoice::n_3(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_4(value) => {
-                RecordingQualityOptionChoice::_4(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_4(value) => {
+                RecordingQualityOptionChoice::n_4(AdmitRanges::admit_ranges_in(value, context)?)
             }
-            Self::_5(value) => {
-                RecordingQualityOptionChoice::_5(AdmitRanges::admit_ranges_in(value, context)?)
+            Self::n_5(value) => {
+                RecordingQualityOptionChoice::n_5(AdmitRanges::admit_ranges_in(value, context)?)
             }
             Self::GenericRecordingQuality(value) => {
                 RecordingQualityOptionChoice::GenericRecordingQuality(AdmitRanges::admit_ranges_in(
@@ -95521,11 +98506,11 @@ impl<'tree> SourceBoundKind<'tree> for RecordingQualityOptionChoice<'tree> {}
 /// Concrete alternatives of an already range-admitted single-node choice.
 #[derive(Debug, Clone, Copy)]
 pub enum RecordingQualityOptionChoiceBoundView<'tree, 'source> {
-    _1(SourceBound<'tree, 'source, K1Node<'tree>>),
-    _2(SourceBound<'tree, 'source, K2Node<'tree>>),
-    _3(SourceBound<'tree, 'source, K3Node<'tree>>),
-    _4(SourceBound<'tree, 'source, K4Node<'tree>>),
-    _5(SourceBound<'tree, 'source, K5Node<'tree>>),
+    n_1(SourceBound<'tree, 'source, K1Node<'tree>>),
+    n_2(SourceBound<'tree, 'source, K2Node<'tree>>),
+    n_3(SourceBound<'tree, 'source, K3Node<'tree>>),
+    n_4(SourceBound<'tree, 'source, K4Node<'tree>>),
+    n_5(SourceBound<'tree, 'source, K5Node<'tree>>),
     GenericRecordingQuality(SourceBound<'tree, 'source, GenericRecordingQualityNode<'tree>>),
 }
 impl<'tree, 'source> SourceBound<'tree, 'source, RecordingQualityOptionChoice<'tree>> {
@@ -95533,19 +98518,19 @@ impl<'tree, 'source> SourceBound<'tree, 'source, RecordingQualityOptionChoice<'t
     #[must_use]
     pub fn view(self) -> RecordingQualityOptionChoiceBoundView<'tree, 'source> {
         match self.node {
-            RecordingQualityOptionChoice::_1(node) => RecordingQualityOptionChoiceBoundView::_1(
+            RecordingQualityOptionChoice::n_1(node) => RecordingQualityOptionChoiceBoundView::n_1(
                 SourceBound::from_slice(node, self.source_slice()),
             ),
-            RecordingQualityOptionChoice::_2(node) => RecordingQualityOptionChoiceBoundView::_2(
+            RecordingQualityOptionChoice::n_2(node) => RecordingQualityOptionChoiceBoundView::n_2(
                 SourceBound::from_slice(node, self.source_slice()),
             ),
-            RecordingQualityOptionChoice::_3(node) => RecordingQualityOptionChoiceBoundView::_3(
+            RecordingQualityOptionChoice::n_3(node) => RecordingQualityOptionChoiceBoundView::n_3(
                 SourceBound::from_slice(node, self.source_slice()),
             ),
-            RecordingQualityOptionChoice::_4(node) => RecordingQualityOptionChoiceBoundView::_4(
+            RecordingQualityOptionChoice::n_4(node) => RecordingQualityOptionChoiceBoundView::n_4(
                 SourceBound::from_slice(node, self.source_slice()),
             ),
-            RecordingQualityOptionChoice::_5(node) => RecordingQualityOptionChoiceBoundView::_5(
+            RecordingQualityOptionChoice::n_5(node) => RecordingQualityOptionChoiceBoundView::n_5(
                 SourceBound::from_slice(node, self.source_slice()),
             ),
             RecordingQualityOptionChoice::GenericRecordingQuality(node) => {
@@ -95559,11 +98544,11 @@ impl<'tree, 'source> SourceBound<'tree, 'source, RecordingQualityOptionChoice<'t
 /// A generated choice whose payload retains canonical source identity.
 #[derive(Debug)]
 pub enum RecordingQualityOptionChoiceSourceView<'value, 'tree, 'source> {
-    _1(SourceField<'value, 'tree, 'source, K1Node<'tree>>),
-    _2(SourceField<'value, 'tree, 'source, K2Node<'tree>>),
-    _3(SourceField<'value, 'tree, 'source, K3Node<'tree>>),
-    _4(SourceField<'value, 'tree, 'source, K4Node<'tree>>),
-    _5(SourceField<'value, 'tree, 'source, K5Node<'tree>>),
+    n_1(SourceField<'value, 'tree, 'source, K1Node<'tree>>),
+    n_2(SourceField<'value, 'tree, 'source, K2Node<'tree>>),
+    n_3(SourceField<'value, 'tree, 'source, K3Node<'tree>>),
+    n_4(SourceField<'value, 'tree, 'source, K4Node<'tree>>),
+    n_5(SourceField<'value, 'tree, 'source, K5Node<'tree>>),
     GenericRecordingQuality(
         SourceField<'value, 'tree, 'source, GenericRecordingQualityNode<'tree>>,
     ),
@@ -95581,32 +98566,32 @@ impl<'value, 'tree, 'source>
     #[must_use]
     pub fn view(self) -> RecordingQualityOptionChoiceSourceView<'value, 'tree, 'source> {
         match self.value {
-            RecordingQualityOptionChoice::_1(value) => {
-                RecordingQualityOptionChoiceSourceView::_1(SourceField {
+            RecordingQualityOptionChoice::n_1(value) => {
+                RecordingQualityOptionChoiceSourceView::n_1(SourceField {
                     value,
                     parent: self.parent,
                 })
             }
-            RecordingQualityOptionChoice::_2(value) => {
-                RecordingQualityOptionChoiceSourceView::_2(SourceField {
+            RecordingQualityOptionChoice::n_2(value) => {
+                RecordingQualityOptionChoiceSourceView::n_2(SourceField {
                     value,
                     parent: self.parent,
                 })
             }
-            RecordingQualityOptionChoice::_3(value) => {
-                RecordingQualityOptionChoiceSourceView::_3(SourceField {
+            RecordingQualityOptionChoice::n_3(value) => {
+                RecordingQualityOptionChoiceSourceView::n_3(SourceField {
                     value,
                     parent: self.parent,
                 })
             }
-            RecordingQualityOptionChoice::_4(value) => {
-                RecordingQualityOptionChoiceSourceView::_4(SourceField {
+            RecordingQualityOptionChoice::n_4(value) => {
+                RecordingQualityOptionChoiceSourceView::n_4(SourceField {
                     value,
                     parent: self.parent,
                 })
             }
-            RecordingQualityOptionChoice::_5(value) => {
-                RecordingQualityOptionChoiceSourceView::_5(SourceField {
+            RecordingQualityOptionChoice::n_5(value) => {
+                RecordingQualityOptionChoiceSourceView::n_5(SourceField {
                     value,
                     parent: self.parent,
                 })
@@ -95623,11 +98608,11 @@ impl<'value, 'tree, 'source>
 impl<'tree> AsRawNode<'tree> for RecordingQualityOptionChoice<'tree> {
     fn raw_node(&self) -> tree_sitter::Node<'tree> {
         match self {
-            RecordingQualityOptionChoice::_1(inner) => AsRawNode::raw_node(inner),
-            RecordingQualityOptionChoice::_2(inner) => AsRawNode::raw_node(inner),
-            RecordingQualityOptionChoice::_3(inner) => AsRawNode::raw_node(inner),
-            RecordingQualityOptionChoice::_4(inner) => AsRawNode::raw_node(inner),
-            RecordingQualityOptionChoice::_5(inner) => AsRawNode::raw_node(inner),
+            RecordingQualityOptionChoice::n_1(inner) => AsRawNode::raw_node(inner),
+            RecordingQualityOptionChoice::n_2(inner) => AsRawNode::raw_node(inner),
+            RecordingQualityOptionChoice::n_3(inner) => AsRawNode::raw_node(inner),
+            RecordingQualityOptionChoice::n_4(inner) => AsRawNode::raw_node(inner),
+            RecordingQualityOptionChoice::n_5(inner) => AsRawNode::raw_node(inner),
             RecordingQualityOptionChoice::GenericRecordingQuality(inner) => {
                 AsRawNode::raw_node(inner)
             }
@@ -95642,11 +98627,11 @@ impl<'tree> FromNodeKind<'tree> for RecordingQualityOptionChoice<'tree> {
     /// describe, and saying so is the only true answer available.
     fn from_node(node: tree_sitter::Node<'tree>) -> Option<Self> {
         match (node.is_named(), node.kind()) {
-            (false, "1") => Some(RecordingQualityOptionChoice::_1(K1Node(node))),
-            (false, "2") => Some(RecordingQualityOptionChoice::_2(K2Node(node))),
-            (false, "3") => Some(RecordingQualityOptionChoice::_3(K3Node(node))),
-            (false, "4") => Some(RecordingQualityOptionChoice::_4(K4Node(node))),
-            (false, "5") => Some(RecordingQualityOptionChoice::_5(K5Node(node))),
+            (false, "1") => Some(RecordingQualityOptionChoice::n_1(K1Node(node))),
+            (false, "2") => Some(RecordingQualityOptionChoice::n_2(K2Node(node))),
+            (false, "3") => Some(RecordingQualityOptionChoice::n_3(K3Node(node))),
+            (false, "4") => Some(RecordingQualityOptionChoice::n_4(K4Node(node))),
+            (false, "5") => Some(RecordingQualityOptionChoice::n_5(K5Node(node))),
             (true, "generic_recording_quality") => {
                 Some(RecordingQualityOptionChoice::GenericRecordingQuality(
                     GenericRecordingQualityNode(node),
@@ -96119,7 +99104,7 @@ impl<'tree> Extract<'tree> for RecordingQualityOptionNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_188);
+            let mut __cur = Cursor::new(&__children, &SHAPES_189);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -96134,19 +99119,19 @@ impl<'tree> Extract<'tree> for RecordingQualityOptionNode<'tree> {
                     Some(__placed) => match __placed {
                         ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
                             ChoicePick529::A0(node) => {
-                                RecordingQualityOptionChoice::_1(K1Node(node))
+                                RecordingQualityOptionChoice::n_1(K1Node(node))
                             }
                             ChoicePick529::A1(node) => {
-                                RecordingQualityOptionChoice::_2(K2Node(node))
+                                RecordingQualityOptionChoice::n_2(K2Node(node))
                             }
                             ChoicePick529::A2(node) => {
-                                RecordingQualityOptionChoice::_3(K3Node(node))
+                                RecordingQualityOptionChoice::n_3(K3Node(node))
                             }
                             ChoicePick529::A3(node) => {
-                                RecordingQualityOptionChoice::_4(K4Node(node))
+                                RecordingQualityOptionChoice::n_4(K4Node(node))
                             }
                             ChoicePick529::A4(node) => {
-                                RecordingQualityOptionChoice::_5(K5Node(node))
+                                RecordingQualityOptionChoice::n_5(K5Node(node))
                             }
                             ChoicePick529::A5(node) => {
                                 RecordingQualityOptionChoice::GenericRecordingQuality(
@@ -96805,7 +99790,7 @@ impl<'tree> Extract<'tree> for ReplacementNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_191);
+            let mut __cur = Cursor::new(&__children, &SHAPES_192);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -96840,12 +99825,12 @@ impl<'tree> Extract<'tree> for ReplacementNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f2 = {
-                    let __c0 = __cur.tail(&SHAPES_190);
+                    let __c0 = __cur.tail(&SHAPES_191);
                     let (leading_extras, __placed) = __cur.fixed(Sequence(&SHAPE_531), &__c0);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             SequencePlaced::Value => NodeSlot::Present({
-                                let [__c1, _] = __cur.member_conts(&SHAPES_189, &__c0);
+                                let [__c1, _] = __cur.member_conts(&SHAPES_190, &__c0);
                                 let __f0 = {
                                     let (leading_extras, __placed) =
                                         __cur.optional(Terminal::of(&SHAPE_28), &__c1);
@@ -96904,7 +99889,7 @@ impl<'tree> Extract<'tree> for ReplacementNode<'tree> {
                             leading_extras,
                             match __placed {
                                 SequencePlaced::Value => NodeSlot::Present({
-                                    let [__c4, _] = __cur.member_conts(&SHAPES_189, &__c3);
+                                    let [__c4, _] = __cur.member_conts(&SHAPES_190, &__c3);
                                     let __f0 = {
                                         let (leading_extras, __placed) =
                                             __cur.optional(Terminal::of(&SHAPE_28), &__c4);
@@ -97032,6 +100017,164 @@ pub fn extract_replacement_from_error_recovery<'tree>(
 ) -> Option<ReplacementChildren<'tree>> {
     node.is_error()
         .then(|| extract_replacement(ReplacementNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_rest_of_line<'tree>(node: RestOfLineNode<'tree>) -> RestOfLineChildren<'tree>
+#[derive(Debug)]
+pub struct RestOfLineChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for RestOfLineChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type RestOfLineChildrenRangeAdmitted<'tree, 'source> =
+    RestOfLineChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for RestOfLineChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for RestOfLineChildren<'tree> {
+    type Admitted = RestOfLineChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(RestOfLineChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, RestOfLineChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, RestOfLineChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_rest_of_line<'tree>(node: RestOfLineNode<'tree>) -> RestOfLineChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    RestOfLineChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for RestOfLineNode<'tree> {
+    type Children<K: KindProof> = RestOfLineChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<RestOfLineChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_rest_of_line(Self(__raw)))
+    }
+    fn extract_broad(self) -> RestOfLineChildren<'tree> {
+        extract_rest_of_line(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<RestOfLineChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_rest_of_line_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, RestOfLineChildren<'tree>>> {
+        into_ok(self.recover_as::<RestOfLineNode<'tree>, Broad>(RestOfLineNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_rest_of_line_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, RestOfLineChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<RestOfLineNode<'tree>, KindAdmitted>(RestOfLineNode, grammar)
+    }
+}
+/// `rest_of_line`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_rest_of_line_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<RestOfLineChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_rest_of_line(RestOfLineNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_room_layout_header<'tree>(node: RoomLayoutHeaderNode<'tree>) -> RoomLayoutHeaderChildren<'tree>
@@ -97368,7 +100511,7 @@ fn __extract_room_layout_header_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_192);
+        let mut __cur = Cursor::new(&__children, &SHAPES_193);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_536), &Cont::NIL);
@@ -97961,7 +101104,7 @@ impl<'tree> Extract<'tree> for SeparatorNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_194);
+            let mut __cur = Cursor::new(&__children, &SHAPES_195);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -98208,7 +101351,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, ShorteningChild
 pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_195);
+    let mut __cur = Cursor::new(&__children, &SHAPES_196);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_545), &Cont::NIL);
@@ -98673,7 +101816,7 @@ fn __extract_sin_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_196);
+        let mut __cur = Cursor::new(&__children, &SHAPES_197);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_549), &Cont::NIL);
@@ -99367,7 +102510,7 @@ impl<'tree> Extract<'tree> for SinGroupNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_199);
+            let mut __cur = Cursor::new(&__children, &SHAPES_200);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -99861,7 +103004,7 @@ impl<'tree> Extract<'tree> for SinGroupedContentNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_201);
+            let mut __cur = Cursor::new(&__children, &SHAPES_202);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -100341,7 +103484,7 @@ impl<'tree> Extract<'tree> for SinGroupsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_203);
+            let mut __cur = Cursor::new(&__children, &SHAPES_204);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -100518,7 +103661,7 @@ impl<'tree> Clone for SinWordChoice<'tree> {
     fn clone(&self) -> Self {
         match self {
             Self::Zero(value) => Self::Zero(*value),
-            Self::AZAZ09(value) => Self::AZAZ09(*value),
+            Self::AZAZ09(value) => Self::AZAZ09(::core::clone::Clone::clone(value)),
         }
     }
 }
@@ -100782,7 +103925,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, SinWordChildren
 pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_205);
+    let mut __cur = Cursor::new(&__children, &SHAPES_206);
     let content = {
         let __c0 = __cur.tail(&SHAPES_8);
         let (leading_extras, __placed) = __cur.fixed(
@@ -100797,7 +103940,7 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
             Some(__placed) => match __placed {
                 ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
                     ChoicePick566::A0(node) => SinWordChoice::Zero(ZeroNode(node)),
-                    ChoicePick566::A1 => SinWordChoice::AZAZ09(LeafText(__raw)),
+                    ChoicePick566::A1 => SinWordChoice::AZAZ09(LeafText(LeafSpan::whole(__raw))),
                 }),
                 ChoicePlaced::Missing(node, tag) => NodeSlot::Missing(match tag {
                     KindTag36::ZeroNode => SinWordMissing::Zero(KindMissing(ZeroNode(node))),
@@ -101204,7 +104347,7 @@ fn __extract_sit_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_206);
+        let mut __cur = Cursor::new(&__children, &SHAPES_207);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_568), &Cont::NIL);
@@ -101684,7 +104827,7 @@ fn __extract_situation_header_presence<'tree, K: KindProof, P: PresenceAdmission
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_207);
+        let mut __cur = Cursor::new(&__children, &SHAPES_208);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_570), &Cont::NIL);
@@ -107774,7 +110917,7 @@ impl<'tree> Extract<'tree> for SourceFileNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_209);
+            let mut __cur = Cursor::new(&__children, &SHAPES_210);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -108807,7 +111950,7 @@ fn __extract_spa_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_210);
+        let mut __cur = Cursor::new(&__children, &SHAPES_211);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_577), &Cont::NIL);
@@ -109878,10 +113021,10 @@ impl<'tree> Extract<'tree> for StandaloneWordNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_216);
+            let mut __cur = Cursor::new(&__children, &SHAPES_217);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_213);
+                    let __c0 = __cur.tail(&SHAPES_214);
                     let (leading_extras, __placed) = __cur.optional(
                         ChoiceAt {
                             shape: &SHAPE_580,
@@ -109934,7 +113077,7 @@ impl<'tree> Extract<'tree> for StandaloneWordNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f2 = {
-                    let __c1 = __cur.tail(&SHAPES_214);
+                    let __c1 = __cur.tail(&SHAPES_215);
                     let (leading_extras, __placed) = __cur.optional(
                         ChoiceAt {
                             shape: &SHAPE_583,
@@ -109974,7 +113117,7 @@ impl<'tree> Extract<'tree> for StandaloneWordNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f3 = {
-                    let __c2 = __cur.tail(&SHAPES_215);
+                    let __c2 = __cur.tail(&SHAPES_216);
                     let (leading_extras, __placed) =
                         __cur.optional(Terminal::of(&SHAPE_588), &__c2);
                     let slot = match __placed {
@@ -110399,7 +113542,7 @@ fn __extract_t_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_217);
+        let mut __cur = Cursor::new(&__children, &SHAPES_218);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_596), &Cont::NIL);
@@ -110874,7 +114017,7 @@ fn __extract_tape_location_header_presence<'tree, K: KindProof, P: PresenceAdmis
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_218);
+        let mut __cur = Cursor::new(&__children, &SHAPES_219);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_598), &Cont::NIL);
@@ -112567,10 +115710,10 @@ impl<'tree> Extract<'tree> for TextWithBulletsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_222);
+            let mut __cur = Cursor::new(&__children, &SHAPES_223);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_221);
+                    let __c0 = __cur.tail(&SHAPES_222);
                     let (leading_extras, __placed) = __cur.fixed(
                         ChoiceAt {
                             shape: &SHAPE_604,
@@ -112586,7 +115729,7 @@ impl<'tree> Extract<'tree> for TextWithBulletsNode<'tree> {
                                     TextWithBulletsChild0Choice::TextSegment(TextSegmentNode(node))
                                 }
                                 ChoicePick604::A1 => TextWithBulletsChild0Choice::Bullet({
-                                    let [_, __c1] = __cur.member_conts(&SHAPES_219, &__c0);
+                                    let [_, __c1] = __cur.member_conts(&SHAPES_220, &__c0);
                                     let __f0 = {
                                         let (leading_extras, __placed) =
                                             __cur.fixed(Terminal::of(&SHAPE_44), &Cont::NIL);
@@ -112687,7 +115830,7 @@ impl<'tree> Extract<'tree> for TextWithBulletsNode<'tree> {
                                         ))
                                     }
                                     ChoicePick604::A1 => TextWithBulletsChild1Choice::Bullet({
-                                        let [_, __c5] = __cur.member_conts(&SHAPES_219, &__c4);
+                                        let [_, __c5] = __cur.member_conts(&SHAPES_220, &__c4);
                                         let __f0 = {
                                             let (leading_extras, __placed) =
                                                 __cur.fixed(Terminal::of(&SHAPE_44), &Cont::NIL);
@@ -114189,10 +117332,10 @@ impl<'tree> Extract<'tree> for TextWithBulletsAndPicsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_226);
+            let mut __cur = Cursor::new(&__children, &SHAPES_227);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_225);
+                    let __c0 = __cur.tail(&SHAPES_226);
                     let (leading_extras, __placed) = __cur.fixed(
                         ChoiceAt {
                             shape: &SHAPE_610,
@@ -114210,7 +117353,7 @@ impl<'tree> Extract<'tree> for TextWithBulletsAndPicsNode<'tree> {
                                     )
                                 }
                                 ChoicePick610::A1 => TextWithBulletsAndPicsChild0Choice::Bullet({
-                                    let [_, __c1] = __cur.member_conts(&SHAPES_219, &__c0);
+                                    let [_, __c1] = __cur.member_conts(&SHAPES_220, &__c0);
                                     let __f0 = {
                                         let (leading_extras, __placed) =
                                             __cur.fixed(Terminal::of(&SHAPE_44), &Cont::NIL);
@@ -114267,7 +117410,7 @@ impl<'tree> Extract<'tree> for TextWithBulletsAndPicsNode<'tree> {
                                 }),
                                 ChoicePick610::A2 => {
                                     TextWithBulletsAndPicsChild0Choice::InlinePic({
-                                        let [_, __c3] = __cur.member_conts(&SHAPES_223, &__c0);
+                                        let [_, __c3] = __cur.member_conts(&SHAPES_224, &__c0);
                                         let __f0 = {
                                             let (leading_extras, __placed) =
                                                 __cur.fixed(Terminal::of(&SHAPE_607), &Cont::NIL);
@@ -114370,7 +117513,7 @@ impl<'tree> Extract<'tree> for TextWithBulletsAndPicsNode<'tree> {
                                     }
                                     ChoicePick610::A1 => {
                                         TextWithBulletsAndPicsChild1Choice::Bullet({
-                                            let [_, __c7] = __cur.member_conts(&SHAPES_219, &__c6);
+                                            let [_, __c7] = __cur.member_conts(&SHAPES_220, &__c6);
                                             let __f0 = {
                                                 let (leading_extras, __placed) = __cur
                                                     .fixed(Terminal::of(&SHAPE_44), &Cont::NIL);
@@ -114429,7 +117572,7 @@ impl<'tree> Extract<'tree> for TextWithBulletsAndPicsNode<'tree> {
                                     }
                                     ChoicePick610::A2 => {
                                         TextWithBulletsAndPicsChild1Choice::InlinePic({
-                                            let [_, __c9] = __cur.member_conts(&SHAPES_223, &__c6);
+                                            let [_, __c9] = __cur.member_conts(&SHAPES_224, &__c6);
                                             let __f0 = {
                                                 let (leading_extras, __placed) = __cur
                                                     .fixed(Terminal::of(&SHAPE_607), &Cont::NIL);
@@ -114931,7 +118074,7 @@ fn __extract_thumbnail_header_presence<'tree, K: KindProof, P: PresenceAdmission
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_227);
+        let mut __cur = Cursor::new(&__children, &SHAPES_228);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_613), &Cont::NIL);
@@ -115495,10 +118638,10 @@ impl<'tree> Extract<'tree> for TierBodyNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_231);
+            let mut __cur = Cursor::new(&__children, &SHAPES_232);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_229);
+                    let __c0 = __cur.tail(&SHAPES_230);
                     let (leading_extras, __placed) =
                         __cur.optional(Terminal::of(&SHAPE_622), &__c0);
                     let slot = match __placed {
@@ -115516,7 +118659,7 @@ impl<'tree> Extract<'tree> for TierBodyNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f1 = {
-                    let __c1 = __cur.tail(&SHAPES_230);
+                    let __c1 = __cur.tail(&SHAPES_231);
                     let (leading_extras, __placed) = __cur.optional(
                         TerminalSequence {
                             shape: &SHAPE_617,
@@ -115585,7 +118728,7 @@ impl<'tree> Extract<'tree> for TierBodyNode<'tree> {
                 };
                 let __f2 = {
                     let (leading_extras, __placed) =
-                        __cur.fixed(Terminal::of(&SHAPE_193), &Cont::NIL);
+                        __cur.fixed(Terminal::of(&SHAPE_194), &Cont::NIL);
                     let slot = match __placed {
                         Some(__placed) => match __placed {
                             TerminalPlaced::Present(node, ()) => {
@@ -115927,7 +119070,7 @@ fn __extract_tier_sep_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_71);
+        let mut __cur = Cursor::new(&__children, &SHAPES_72);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_82), &Cont::NIL);
@@ -115944,7 +119087,7 @@ fn __extract_tier_sep_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
                 Positioned::new(leading_extras, slot)
             })?;
             let __f1 = BroadPresence::place::<K, P, _, _, _>({
-                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_201), &Cont::NIL);
+                let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_202), &Cont::NIL);
                 let slot = match __placed {
                     Some(__placed) => match __placed {
                         TerminalPlaced::Present(node, ()) => NodeSlot::Present(TabNode(node)),
@@ -115959,7 +119102,7 @@ fn __extract_tier_sep_presence<'tree, K: KindProof, P: PresenceAdmission<K>>(
             })?;
             let __f2 = {
                 let __c0 = __cur.tail(&SHAPES_8);
-                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_206), &__c0);
+                let (leading_extras, __placed) = __cur.optional(Terminal::of(&SHAPE_207), &__c0);
                 let slot = match __placed {
                     Some(__placed) => Some(match __placed {
                         TerminalPlaced::Present(node, ()) => {
@@ -116393,7 +119536,7 @@ fn __extract_tim_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_232);
+        let mut __cur = Cursor::new(&__children, &SHAPES_233);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_625), &Cont::NIL);
@@ -117018,7 +120161,7 @@ impl<'tree> Extract<'tree> for TimeDurationContentsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_234);
+            let mut __cur = Cursor::new(&__children, &SHAPES_235);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -117453,7 +120596,7 @@ fn __extract_time_duration_header_presence<'tree, K: KindProof, P: PresenceAdmis
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_235);
+        let mut __cur = Cursor::new(&__children, &SHAPES_236);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_634), &Cont::NIL);
@@ -117952,7 +121095,7 @@ fn __extract_time_start_header_presence<'tree, K: KindProof, P: PresenceAdmissio
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_236);
+        let mut __cur = Cursor::new(&__children, &SHAPES_237);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_636), &Cont::NIL);
@@ -118432,7 +121575,7 @@ fn __extract_transcriber_header_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_237);
+        let mut __cur = Cursor::new(&__children, &SHAPES_238);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_638), &Cont::NIL);
@@ -118923,7 +122066,7 @@ fn __extract_transcription_header_presence<'tree, K: KindProof, P: PresenceAdmis
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_238);
+        let mut __cur = Cursor::new(&__children, &SHAPES_239);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_643), &Cont::NIL);
@@ -119857,7 +123000,7 @@ impl<'tree> Extract<'tree> for TranscriptionOptionNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_240);
+            let mut __cur = Cursor::new(&__children, &SHAPES_241);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -119987,6 +123130,482 @@ pub fn extract_transcription_option_from_error_recovery<'tree>(
 ) -> Option<TranscriptionOptionChildren<'tree>> {
     node.is_error()
         .then(|| extract_transcription_option(TranscriptionOptionNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_types_activity<'tree>(node: TypesActivityNode<'tree>) -> TypesActivityChildren<'tree>
+#[derive(Debug)]
+pub struct TypesActivityChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for TypesActivityChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type TypesActivityChildrenRangeAdmitted<'tree, 'source> =
+    TypesActivityChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for TypesActivityChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for TypesActivityChildren<'tree> {
+    type Admitted = TypesActivityChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(TypesActivityChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, TypesActivityChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, TypesActivityChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_types_activity<'tree>(
+    node: TypesActivityNode<'tree>,
+) -> TypesActivityChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    TypesActivityChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for TypesActivityNode<'tree> {
+    type Children<K: KindProof> = TypesActivityChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<TypesActivityChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_types_activity(Self(__raw)))
+    }
+    fn extract_broad(self) -> TypesActivityChildren<'tree> {
+        extract_types_activity(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<TypesActivityChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_types_activity_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, TypesActivityChildren<'tree>>> {
+        into_ok(self.recover_as::<TypesActivityNode<'tree>, Broad>(TypesActivityNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_types_activity_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, TypesActivityChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<TypesActivityNode<'tree>, KindAdmitted>(TypesActivityNode, grammar)
+    }
+}
+/// `types_activity`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_types_activity_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TypesActivityChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_types_activity(TypesActivityNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_types_design<'tree>(node: TypesDesignNode<'tree>) -> TypesDesignChildren<'tree>
+#[derive(Debug)]
+pub struct TypesDesignChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for TypesDesignChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type TypesDesignChildrenRangeAdmitted<'tree, 'source> =
+    TypesDesignChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for TypesDesignChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for TypesDesignChildren<'tree> {
+    type Admitted = TypesDesignChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(TypesDesignChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, TypesDesignChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, TypesDesignChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_types_design<'tree>(node: TypesDesignNode<'tree>) -> TypesDesignChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    TypesDesignChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for TypesDesignNode<'tree> {
+    type Children<K: KindProof> = TypesDesignChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<TypesDesignChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_types_design(Self(__raw)))
+    }
+    fn extract_broad(self) -> TypesDesignChildren<'tree> {
+        extract_types_design(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<TypesDesignChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_types_design_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, TypesDesignChildren<'tree>>> {
+        into_ok(self.recover_as::<TypesDesignNode<'tree>, Broad>(TypesDesignNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_types_design_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, TypesDesignChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<TypesDesignNode<'tree>, KindAdmitted>(TypesDesignNode, grammar)
+    }
+}
+/// `types_design`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_types_design_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TypesDesignChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_types_design(TypesDesignNode(node)))
+}
+
+// Task 7 extract contract: pub fn extract_types_group<'tree>(node: TypesGroupNode<'tree>) -> TypesGroupChildren<'tree>
+#[derive(Debug)]
+pub struct TypesGroupChildren<'tree, R: RangePhase<'tree> = Raw> {
+    /// The rule's whole content, as a single position: the carrier
+    /// convention (spec Section 5) mirroring `fold::slot_of`.
+    pub content: R::LeafText,
+    /// Extras that trail the last child of this node (spec Section 5).
+    pub trailing_extras: Vec<R::Extra>,
+    /// Children that filled no grammar position: the Unexpected sink
+    /// (spec Section 7). Never dropped.
+    pub unexpected: Vec<R::Node>,
+}
+impl<'tree> Clone for TypesGroupChildren<'tree> {
+    fn clone(&self) -> Self {
+        Self {
+            content: ::core::clone::Clone::clone(&self.content),
+            trailing_extras: ::core::clone::Clone::clone(&self.trailing_extras),
+            unexpected: ::core::clone::Clone::clone(&self.unexpected),
+        }
+    }
+}
+/// This carrier in the `Ranged` phase: every selected leaf range checked.
+pub type TypesGroupChildrenRangeAdmitted<'tree, 'source> =
+    TypesGroupChildren<'tree, Ranged<'source>>;
+impl<'tree> RangeAdmissionSeal for TypesGroupChildren<'tree> {}
+impl<'tree, 'source> AdmitRanges<'tree, 'source> for TypesGroupChildren<'tree> {
+    type Admitted = TypesGroupChildren<'tree, Ranged<'source>>;
+    fn admit_ranges_in(
+        self,
+        context: &mut RangeAdmission<'tree, 'source>,
+    ) -> Result<Self::Admitted, SourceBindingError> {
+        Ok(TypesGroupChildren {
+            content: AdmitRanges::admit_ranges_in(self.content, context)?,
+            trailing_extras: AdmitRanges::admit_ranges_in(self.trailing_extras, context)?,
+            unexpected: AdmitRanges::admit_ranges_in(self.unexpected, context)?,
+        })
+    }
+}
+impl<'tree, 'source> SourceChildren<'tree, 'source, TypesGroupChildren<'tree>> {
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_content(&self) -> SourceField<'_, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.children.content,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_trailing_extras(&self) -> SourceField<'_, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.children.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Borrow this generated field with its canonical source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        &self,
+    ) -> SourceField<'_, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.children.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, TypesGroupChildren<'tree>> {
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_content(self) -> SourceField<'value, 'tree, 'source, LeafText<'tree>> {
+        SourceField {
+            value: &self.value.content,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_trailing_extras(self) -> SourceField<'value, 'tree, 'source, Vec<Extra<'tree>>> {
+        SourceField {
+            value: &self.value.trailing_extras,
+            parent: self.parent,
+        }
+    }
+    /// Project a nested generated field without losing source identity.
+    #[must_use]
+    pub fn field_unexpected(
+        self,
+    ) -> SourceField<'value, 'tree, 'source, Vec<tree_sitter::Node<'tree>>> {
+        SourceField {
+            value: &self.value.unexpected,
+            parent: self.parent,
+        }
+    }
+}
+/// Reconstruct the typed children of this node (spec Section 7).
+#[must_use]
+pub fn extract_types_group<'tree>(node: TypesGroupNode<'tree>) -> TypesGroupChildren<'tree> {
+    let __raw = node.0;
+    let __children = collect_children(__raw);
+    let mut __cur = Cursor::new(&__children, &SHAPES_61);
+    let content = LeafText(LeafSpan::whole(__raw));
+    let Leftovers {
+        trailing_extras,
+        unexpected,
+    } = __cur.finish();
+    TypesGroupChildren {
+        content,
+        trailing_extras,
+        unexpected,
+    }
+}
+impl<'tree> Extract<'tree> for TypesGroupNode<'tree> {
+    type Children<K: KindProof> = TypesGroupChildren<'tree>;
+    fn extract_as<K: KindProof>(
+        self,
+        evidence: &K::Evidence,
+    ) -> Result<TypesGroupChildren<'tree>, K::Refusal> {
+        K::admit(evidence, self.0).map(|__raw| extract_types_group(Self(__raw)))
+    }
+    fn extract_broad(self) -> TypesGroupChildren<'tree> {
+        extract_types_group(self)
+    }
+    fn extract_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<TypesGroupChildren<'tree>, AdmittedRefusal> {
+        <Self as Extract<'tree>>::extract_as::<KindAdmitted>(self, grammar)
+    }
+}
+impl<'tree, 'source> SourceSlice<'tree, 'source> {
+    /// Reconstruct an ERROR in this rule's position without losing
+    /// source identity; a non-ERROR input returns `None`.
+    #[must_use]
+    pub fn extract_types_group_from_error_recovery(
+        self,
+    ) -> Option<SourceChildren<'tree, 'source, TypesGroupChildren<'tree>>> {
+        into_ok(self.recover_as::<TypesGroupNode<'tree>, Broad>(TypesGroupNode, &()))
+    }
+    /// The same reconstruction under the admitted kind proof.
+    /// # Errors
+    /// The admitted proof's refusal; a non-ERROR input returns `Ok(None)`.
+    pub fn extract_types_group_from_error_recovery_admitted(
+        self,
+        grammar: &CanonicalLanguage,
+    ) -> Result<Option<SourceChildren<'tree, 'source, TypesGroupChildren<'tree>>>, AdmittedRefusal>
+    {
+        self.recover_as::<TypesGroupNode<'tree>, KindAdmitted>(TypesGroupNode, grammar)
+    }
+}
+/// `types_group`'s children from the ERROR standing in for one; see the module header.
+#[must_use]
+pub fn extract_types_group_from_error_recovery<'tree>(
+    node: tree_sitter::Node<'tree>,
+) -> Option<TypesGroupChildren<'tree>> {
+    node.is_error()
+        .then(|| extract_types_group(TypesGroupNode(node)))
 }
 
 // Task 7 extract contract: pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderChildren<'tree>
@@ -120586,7 +124205,7 @@ impl<'tree> Extract<'tree> for TypesHeaderNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_242);
+            let mut __cur = Cursor::new(&__children, &SHAPES_243);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -120629,7 +124248,7 @@ impl<'tree> Extract<'tree> for TypesHeaderNode<'tree> {
                         Some(__placed) => Some(match __placed {
                             SequencePlaced::Value => NodeSlot::Present({
                                 let [_, __c1, _, __c2, _, __c3, _, __c4, _] =
-                                    __cur.member_conts(&SHAPES_241, &__c0);
+                                    __cur.member_conts(&SHAPES_242, &__c0);
                                 let __f0 = {
                                     let (leading_extras, __placed) =
                                         __cur.fixed(Terminal::of(&SHAPE_655), &Cont::NIL);
@@ -121092,7 +124711,7 @@ impl<'tree> Extract<'tree> for UnsupportedDependentTierNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_243);
+            let mut __cur = Cursor::new(&__children, &SHAPES_244);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -121573,7 +125192,7 @@ fn __extract_unsupported_header_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_244);
+        let mut __cur = Cursor::new(&__children, &SHAPES_245);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_669), &Cont::NIL);
@@ -121849,7 +125468,7 @@ pub fn extract_unsupported_line<'tree>(
 ) -> UnsupportedLineChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_245);
+    let mut __cur = Cursor::new(&__children, &SHAPES_246);
     {
         let __f0 = __cur.absorbed_leaf_span(__raw);
         let __f1 = {
@@ -122057,7 +125676,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, Utf8HeaderChild
 pub fn extract_utf8_header<'tree>(node: Utf8HeaderNode<'tree>) -> Utf8HeaderChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_246);
+    let mut __cur = Cursor::new(&__children, &SHAPES_247);
     {
         let __f0 = {
             let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_671), &Cont::NIL);
@@ -123273,7 +126892,7 @@ impl<'tree> Extract<'tree> for UtteranceNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_247);
+            let mut __cur = Cursor::new(&__children, &SHAPES_248);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -124359,10 +127978,10 @@ impl<'tree> Extract<'tree> for UtteranceEndNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_252);
+            let mut __cur = Cursor::new(&__children, &SHAPES_253);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_249);
+                    let __c0 = __cur.tail(&SHAPES_250);
                     let (leading_extras, __placed) =
                         __cur.optional(Terminal::tagged(&SHAPE_362, &TAGS_26), &__c0);
                     let slot = match __placed {
@@ -124437,7 +128056,7 @@ impl<'tree> Extract<'tree> for UtteranceEndNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f1 = {
-                    let __c1 = __cur.tail(&SHAPES_250);
+                    let __c1 = __cur.tail(&SHAPES_251);
                     let (leading_extras, __placed) =
                         __cur.optional(Terminal::of(&SHAPE_677), &__c1);
                     let slot = match __placed {
@@ -124455,12 +128074,12 @@ impl<'tree> Extract<'tree> for UtteranceEndNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f2 = {
-                    let __c2 = __cur.tail(&SHAPES_251);
+                    let __c2 = __cur.tail(&SHAPES_252);
                     let (leading_extras, __placed) = __cur.optional(Sequence(&SHAPE_676), &__c2);
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
                             SequencePlaced::Value => NodeSlot::Present({
-                                let [__c3, _] = __cur.member_conts(&SHAPES_248, &__c2);
+                                let [__c3, _] = __cur.member_conts(&SHAPES_249, &__c2);
                                 let __f0 = {
                                     let (leading_extras, __placed) =
                                         __cur.optional(Terminal::of(&SHAPE_28), &__c3);
@@ -124933,7 +128552,7 @@ fn __extract_videos_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_253);
+        let mut __cur = Cursor::new(&__children, &SHAPES_254);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_683), &Cont::NIL);
@@ -125412,7 +129031,7 @@ fn __extract_warning_header_presence<'tree, K: KindProof, P: PresenceAdmission<K
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_254);
+        let mut __cur = Cursor::new(&__children, &SHAPES_255);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_685), &Cont::NIL);
@@ -125893,7 +129512,7 @@ fn __extract_window_header_presence<'tree, K: KindProof, P: PresenceAdmission<K>
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_255);
+        let mut __cur = Cursor::new(&__children, &SHAPES_256);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_687), &Cont::NIL);
@@ -126338,7 +129957,7 @@ fn __extract_wor_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmissi
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_256);
+        let mut __cur = Cursor::new(&__children, &SHAPES_257);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_691), &Cont::NIL);
@@ -127937,10 +131556,10 @@ impl<'tree> Extract<'tree> for WorTierBodyNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_261);
+            let mut __cur = Cursor::new(&__children, &SHAPES_262);
             {
                 let __f0 = {
-                    let __c0 = __cur.tail(&SHAPES_259);
+                    let __c0 = __cur.tail(&SHAPES_260);
                     let (leading_extras, __placed) = __cur.optional(
                         TerminalSequence {
                             shape: &SHAPE_617,
@@ -128008,7 +131627,7 @@ impl<'tree> Extract<'tree> for WorTierBodyNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f1 = {
-                    let __c1 = __cur.tail(&SHAPES_260);
+                    let __c1 = __cur.tail(&SHAPES_261);
                     let (leading_extras, mut __walk) = __cur.repeat(&SHAPE_697, &__c1);
                     let mut __items = Vec::with_capacity(__walk.capacity());
                     while let Some((leading_extras, __placed, __c2)) =
@@ -128021,7 +131640,7 @@ impl<'tree> Extract<'tree> for WorTierBodyNode<'tree> {
                                     match __placed {
                                         SequencePlaced::Value => {
                                             NodeSlot::Present({
-                                                let [__c3, _] = __cur.member_conts(&SHAPES_258, &__c2);
+                                                let [__c3, _] = __cur.member_conts(&SHAPES_259, &__c2);
                                                 let __f0 = {
                                                     let (leading_extras, __placed) = __cur
                                                         .fixed(
@@ -128414,7 +132033,7 @@ impl<'tree> Extract<'tree> for WorWordItemNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_262);
+            let mut __cur = Cursor::new(&__children, &SHAPES_263);
             let content = {
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_454), &Cont::NIL);
                 let slot = match __placed {
@@ -132548,7 +136167,7 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_269);
+            let mut __cur = Cursor::new(&__children, &SHAPES_270);
             let content = {
                 let __c0 = __cur.tail(&SHAPES_8);
                 let (leading_extras, __placed) = __cur.fixed(
@@ -132563,7 +136182,7 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                     Some(__placed) => match __placed {
                         ChoicePlaced::Value(__pick) => NodeSlot::Present(match __pick {
                             ChoicePick715::A0 => WordBodyChoice::WordSegment({
-                                let [__c1, __c2] = __cur.member_conts(&SHAPES_265, &__c0);
+                                let [__c1, __c2] = __cur.member_conts(&SHAPES_266, &__c0);
                                 let __f0 = {
                                     let (leading_extras, __placed) = __cur.fixed(
                                         ChoiceAt {
@@ -132786,7 +136405,7 @@ impl<'tree> Extract<'tree> for WordBodyNode<'tree> {
                             }),
                             ChoicePick715::A1 => WordBodyChoice::OverlapPoint({
                                 let [__c4, __c5, __c7, __c8] =
-                                    __cur.member_conts(&SHAPES_267, &__c0);
+                                    __cur.member_conts(&SHAPES_268, &__c0);
                                 let __f0 = {
                                     let (leading_extras, __placed) = __cur.fixed(
                                         ChoiceAt {
@@ -133645,7 +137264,7 @@ impl<'value, 'tree, 'source> SourceField<'value, 'tree, 'source, WordPrefixChild
 pub fn extract_word_prefix<'tree>(node: WordPrefixNode<'tree>) -> WordPrefixChildren<'tree> {
     let __raw = node.0;
     let __children = collect_children(__raw);
-    let mut __cur = Cursor::new(&__children, &SHAPES_271);
+    let mut __cur = Cursor::new(&__children, &SHAPES_272);
     let content = {
         let __c0 = __cur.tail(&SHAPES_8);
         let (leading_extras, __placed) = __cur.fixed(
@@ -134150,7 +137769,7 @@ impl<'tree> Extract<'tree> for WordWithOptionalAnnotationsNode<'tree> {
         let __raw = K::admit(evidence, self.0)?;
         Ok({
             let __children = collect_children(__raw);
-            let mut __cur = Cursor::new(&__children, &SHAPES_274);
+            let mut __cur = Cursor::new(&__children, &SHAPES_275);
             {
                 let __f0 = {
                     let (leading_extras, __placed) =
@@ -134170,7 +137789,7 @@ impl<'tree> Extract<'tree> for WordWithOptionalAnnotationsNode<'tree> {
                     Positioned::new(leading_extras, slot)
                 };
                 let __f1 = {
-                    let __c0 = __cur.tail(&SHAPES_273);
+                    let __c0 = __cur.tail(&SHAPES_274);
                     let (leading_extras, __placed) = __cur.optional(
                         TerminalSequence {
                             shape: &SHAPE_724,
@@ -134240,7 +137859,7 @@ impl<'tree> Extract<'tree> for WordWithOptionalAnnotationsNode<'tree> {
                 let __f2 = {
                     let __c1 = __cur.tail(&SHAPES_8);
                     let (leading_extras, __placed) =
-                        __cur.optional(Terminal::of(&SHAPE_197), &__c1);
+                        __cur.optional(Terminal::of(&SHAPE_198), &__c1);
                     let slot = match __placed {
                         Some(__placed) => Some(match __placed {
                             TerminalPlaced::Present(node, ()) => {
@@ -134664,7 +138283,7 @@ fn __extract_x_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdmission
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_275);
+        let mut __cur = Cursor::new(&__children, &SHAPES_276);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_727), &Cont::NIL);
@@ -135155,7 +138774,7 @@ fn __extract_xphoint_dependent_tier_presence<'tree, K: KindProof, P: PresenceAdm
     let __raw = K::admit(evidence, node.0)?;
     Ok({
         let __children = collect_children(__raw);
-        let mut __cur = Cursor::new(&__children, &SHAPES_276);
+        let mut __cur = Cursor::new(&__children, &SHAPES_277);
         {
             let __f0 = BroadPresence::place::<K, P, _, _, _>({
                 let (leading_extras, __placed) = __cur.fixed(Terminal::of(&SHAPE_729), &Cont::NIL);

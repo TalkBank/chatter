@@ -71,11 +71,9 @@ fn parse_chat(source: &str) -> tree_sitter::Tree {
 
 /// Resolve `corpus/reference` relative to this crate's manifest directory.
 fn reference_file(rel: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("crates/ dir")
-        .parent()
-        .expect("repo root")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
         .join("corpus/reference")
         .join(rel)
 }

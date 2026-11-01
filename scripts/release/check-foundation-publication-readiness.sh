@@ -33,7 +33,7 @@ first_wave=(
 )
 
 echo "==> Checking first-wave crates.io publication metadata"
-python3 - "$repo_root" "$(IFS=,; echo "${first_wave[*]}")" <<'PY'
+uv run --locked --project "$repo_root/scripts" python - "$repo_root" "$(IFS=,; echo "${first_wave[*]}")" <<'PY'
 import json
 import pathlib
 import subprocess

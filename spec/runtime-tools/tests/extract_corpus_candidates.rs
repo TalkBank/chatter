@@ -29,7 +29,10 @@ impl Drop for TestDirectory {
 }
 
 fn extract(input: &Path, output: Option<&Path>, cap: Option<usize>) -> std::io::Result<Output> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned();
     let mut command = Command::new(env!("CARGO_BIN_EXE_extract_corpus_candidates"));
     command
         .arg("--data-dir")

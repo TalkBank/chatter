@@ -49,7 +49,9 @@ use talkbank_spec_vocabulary::observations::ExampleId;
 /// The validation corpus dir this crate's fixtures live under (shared with
 /// `validation_error_corpus.rs`).
 fn corpus_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/error_corpus/validation_errors")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors")
 }
 
 /// Parse `content` and run `ChatFile::validate_with_config` (the path that

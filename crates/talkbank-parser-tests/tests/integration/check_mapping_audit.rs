@@ -1,9 +1,10 @@
-use std::path::Path;
 use talkbank_parser_tests::{check_mapping_audit::report, test_error::TestError};
 
 #[test]
 fn assessment_book_is_current() -> Result<(), TestError> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests");
     let actual = talkbank_parser_tests::check_mapping_audit::assessment_report(
         &root.join("tests/check_parity/manifest.json"),
     )?;
@@ -20,7 +21,9 @@ fn assessment_book_is_current() -> Result<(), TestError> {
 fn assessment_completion_is_derived_and_invalid_inventories_are_refused() -> Result<(), TestError> {
     use talkbank_parser_tests::check_mapping_audit::assessment_report_json;
     let source = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/check_parity/manifest.json"),
+        talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("crates/talkbank-parser-tests/tests/check_parity/manifest.json"),
     )?;
     let mut value: serde_json::Value = serde_json::from_str(&source)?;
     value["entries"][0]["status"] = "gap".into();
@@ -36,7 +39,9 @@ fn assessment_completion_is_derived_and_invalid_inventories_are_refused() -> Res
 
 #[test]
 fn mapping_inventory_is_current_and_does_not_claim_runtime_parity() -> Result<(), TestError> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests");
     let actual = report(&manifest.join("clan-check-reference/check-error-codes.json"))?;
     let committed =
         std::fs::read_to_string(manifest.join("../../docs/audits/check-parity-audit.md"))?;

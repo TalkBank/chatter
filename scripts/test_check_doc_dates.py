@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.test_mdbook_git_dates import git
+from test_mdbook_git_dates import git
 
 
 class ProspectiveDates(unittest.TestCase):
@@ -35,10 +35,15 @@ class ProspectiveDates(unittest.TestCase):
     def check(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(self.script), *args],
-            cwd=self.root, capture_output=True, text=True, check=False,
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
-    def test_pending_files_are_checked_before_commit_and_deleted_files_are_skipped(self) -> None:
+    def test_pending_files_are_checked_before_commit_and_deleted_files_are_skipped(
+        self,
+    ) -> None:
         self.assertEqual(self.check("--prospective").returncode, 0)
         self.page.write_text(self.page.read_text() + "\nEdited.\n")
         new = self.root / "new page.md"
@@ -68,11 +73,15 @@ class ProspectiveDates(unittest.TestCase):
         git(["add", "."], self.root)
         git(["commit", "-qm", "unpublished"], self.root, date="2020-01-01")
         hook = self.root / ".git" / "hooks" / "pre-commit"
-        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook)
+        shutil.copyfile(
+            Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook
+        )
         hook.chmod(0o755)
         (self.root / "code.txt").write_text("unrelated change\n")
         git(["add", "code.txt"], self.root)
-        self.assertEqual(self.check("--prospective", "--snapshot", "index").returncode, 0)
+        self.assertEqual(
+            self.check("--prospective", "--snapshot", "index").returncode, 0
+        )
         git(["commit", "-qm", "ordinary checkpoint"], self.root)
         self.assertNotEqual(self.check("--prospective").returncode, 0)
 
@@ -82,15 +91,21 @@ class ProspectiveDates(unittest.TestCase):
 
     def test_commit_hook_does_not_run_a_date_gate(self) -> None:
         hook = self.root / ".git" / "hooks" / "pre-commit"
-        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook)
+        shutil.copyfile(
+            Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook
+        )
         hook.chmod(0o755)
-        self.page.write_text(self.page.read_text() + "\nChanged after the earlier check.\n")
+        self.page.write_text(
+            self.page.read_text() + "\nChanged after the earlier check.\n"
+        )
         git(["add", "."], self.root)
         git(["commit", "-qm", "explicit review checkpoint"], self.root)
 
     def test_commit_msg_hook_has_no_builtin_gates(self) -> None:
         hook = self.root / ".git" / "hooks" / "commit-msg"
-        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/commit-msg", hook)
+        shutil.copyfile(
+            Path(__file__).resolve().parents[1] / ".githooks/commit-msg", hook
+        )
         hook.chmod(0o755)
         (self.root / "sample.rs").write_text("fn main() {}\n")
         git(["add", "sample.rs"], self.root)
@@ -102,13 +117,15 @@ class ProspectiveDates(unittest.TestCase):
         hooks = self.root / ".git" / "hooks"
         for name in ("pre-commit", "commit-msg"):
             hook = hooks / name
-            shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks" / name, hook)
+            shutil.copyfile(
+                Path(__file__).resolve().parents[1] / ".githooks" / name, hook
+            )
             hook.chmod(0o755)
             local = hooks / f"{name}.local"
             local.write_text(
                 f'#!/bin/sh\nprintf "%s\\n" "$#" > .git/{name}-argc\n'
                 f'printf "%s\\n" "$@" > .git/{name}-args\n'
-                'exit 0\n'
+                "exit 0\n"
             )
             local.chmod(0o755)
         self.page.write_text(self.page.read_text() + "\nExplicitly reviewed edit.\n")
@@ -116,7 +133,9 @@ class ProspectiveDates(unittest.TestCase):
         git(["commit", "-qm", "local protocol"], self.root)
         self.assertEqual((self.root / ".git/pre-commit-argc").read_text(), "0\n")
         self.assertEqual((self.root / ".git/commit-msg-argc").read_text(), "1\n")
-        self.assertEqual((self.root / ".git/commit-msg-args").read_text(), ".git/COMMIT_EDITMSG\n")
+        self.assertEqual(
+            (self.root / ".git/commit-msg-args").read_text(), ".git/COMMIT_EDITMSG\n"
+        )
         # A contributor-owned hook's refusal must still reach Git unchanged.
         local = hooks / "pre-commit.local"
         local.write_text("#!/bin/sh\nexit 23\n")
@@ -149,7 +168,9 @@ class ProspectiveDates(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("STALE: a page.md", result.stderr)
 
-    def test_git_history_metadata_survives_a_real_squash_without_restamping(self) -> None:
+    def test_git_history_metadata_survives_a_real_squash_without_restamping(
+        self,
+    ) -> None:
         self.page.write_text(
             "# Page\n\n**Last modified:** [Git history]"
             "(https://github.com/TalkBank/chatter/commits/main/a%20page.md)\n"
@@ -157,7 +178,9 @@ class ProspectiveDates(unittest.TestCase):
         git(["add", "."], self.root)
         git(["commit", "-qm", "metadata owner"], self.root, date="2020-01-01")
         hook = self.root / ".git" / "hooks" / "pre-commit"
-        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook)
+        shutil.copyfile(
+            Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook
+        )
         hook.chmod(0o755)
         self.assertEqual(self.check("--prospective").returncode, 0)
         git(["reset", "--soft", "published"], self.root)

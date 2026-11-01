@@ -1560,12 +1560,14 @@ fn lex_never_panics_on_arbitrary_input() {
 #[test]
 fn lex_corpus_main_tiers_no_panic() {
     // Resolve at runtime to whatever the developer's chatter checkout
-    // happens to be. CARGO_MANIFEST_DIR is the talkbank-parser-re2c
+    // happens to be. The runtime member directory is the talkbank-parser-re2c
     // crate dir; the reference corpus lives two levels up at the repo
     // root. On CI and in fresh clones the path always resolves; if it
     // doesn't, skip (covers exotic setups that build the crate
     // out-of-tree).
-    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/reference");
+    let base = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("corpus/reference");
 
     if !base.exists() {
         return;

@@ -18,7 +18,7 @@ command = "mdbook-mermaid"
 # Needs full git history (refuses a shallow clone). `just book` verifies the
 # rendered front page carries the same dates git reports.
 [preprocessor.git-dates]
-command = "python3 ../scripts/mdbook_git_dates.py"
+command = "uv run --locked --project ../scripts python ../scripts/mdbook_git_dates.py"
 
 
 [output.html]

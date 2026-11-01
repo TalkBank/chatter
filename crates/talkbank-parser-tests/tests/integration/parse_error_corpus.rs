@@ -39,12 +39,7 @@ fn file_name_str(path: &Path) -> Result<&str, TestError> {
 
 /// Finds parse error files.
 fn find_parse_error_files() -> Result<Vec<(String, PathBuf)>, TestError> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let corpus_root = PathBuf::from(manifest_dir)
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| TestError::Failure("manifest dir missing expected grandparent".to_string()))?
-        .join("tests/error_corpus/parse_errors");
+    let corpus_root = talkbank_repo::RepoRoot::discover()?.join("tests/error_corpus/parse_errors");
 
     let mut files = Vec::new();
     for entry in walkdir::WalkDir::new(&corpus_root).into_iter() {

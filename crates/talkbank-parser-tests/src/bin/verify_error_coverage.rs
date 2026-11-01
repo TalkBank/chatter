@@ -20,7 +20,6 @@
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
 use std::sync::LazyLock;
 use talkbank_parser_tests::test_error::TestError;
 
@@ -238,11 +237,8 @@ fn categorize_error_codes(codes: &HashSet<String>) -> Result<ErrorCategories, Te
 
 /// Extracts error codes.
 fn extract_error_codes() -> Result<HashSet<String>, TestError> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let error_code_path = PathBuf::from(manifest_dir)
-        .parent()
-        .ok_or_else(|| TestError::Failure("manifest dir missing parent".to_string()))?
-        .join("talkbank-model/src/errors/codes/error_code.rs");
+    let error_code_path = talkbank_repo::RepoRoot::discover()?
+        .join("crates/talkbank-model/src/errors/codes/error_code.rs");
 
     let content = fs::read_to_string(error_code_path)?;
 
@@ -261,15 +257,7 @@ fn extract_error_codes() -> Result<HashSet<String>, TestError> {
 
 /// Finds all test files.
 fn find_all_test_files() -> Result<HashMap<String, String>, TestError> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let corpus_root = PathBuf::from(manifest_dir)
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.parent())
-        .ok_or_else(|| {
-            TestError::Failure("manifest dir missing expected great-grandparent".to_string())
-        })?
-        .join("tests/error_corpus");
+    let corpus_root = talkbank_repo::RepoRoot::discover()?.join("tests/error_corpus");
 
     let mut files = HashMap::new();
 

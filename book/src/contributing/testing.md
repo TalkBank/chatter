@@ -22,6 +22,31 @@ successful model, while error-severity findings and unbuildable products reject.
 Rejection retains every diagnostic. This is test-instrument admission, not model
 validation or a proof that a production parser emits the injected fault cases.
 
+## Runtime checkout and fixture paths
+
+Tests and checkout-based development tools use `talkbank-repo` to admit a
+`RepoRoot` at runtime. By default it searches upward from the current directory,
+checking for `spec/errors`, `crates`, and the root `Cargo.toml`. Cargo starts tests
+in their package directory; a nested spec workspace does not stop this search.
+A directly launched test binary can instead select an exact checkout:
+
+```sh
+CHATTER_REPO_ROOT=/path/to/chatter /path/to/test-binary <filter>
+```
+
+An invalid explicit root fails admission; it never falls back to another tree.
+The shared admission is cached for the process, so select the root before
+launching it. Reusing a binary against another checkout selects that checkout's
+runtime inputs, not its original build location. It does not prove that the
+binary matches those inputs or that cached test results remain valid.
+
+Do not construct runtime paths from `env!("CARGO_MANIFEST_DIR")`: that compiles
+the build checkout into the executable. Small immutable fixtures can use
+`include_str!` or `include_bytes!`, which embed contents. Build scripts may read
+Cargo's runtime `CARGO_MANIFEST_DIR` to locate their compilation inputs. Cargo's
+executable locations, debug information and other toolchain paths are separate
+portability concerns; this source-root contract does not qualify a build cache.
+
 ## Canonical output boundary contracts
 
 The authored `E370_split_retrace` specimens pair complete repetitions and

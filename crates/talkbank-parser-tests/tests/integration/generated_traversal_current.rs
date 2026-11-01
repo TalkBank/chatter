@@ -49,9 +49,10 @@ fn sha256_hex(bytes: &[u8]) -> String {
 /// Repo root, derived from this crate's manifest dir
 /// (`<repo>/crates/talkbank-parser-tests`).
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned()
 }
 
 /// The contract digest embedded in the generated file's provenance header.
@@ -81,8 +82,9 @@ fn generated_traversal_is_current() {
         .expect("grammar/src/grammar-contract.json is readable");
 
     let generated = std::fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../talkbank-parser/src/generated_traversal.rs"),
+        talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("crates/talkbank-parser/src/generated_traversal.rs"),
     )
     .expect("generated_traversal.rs is readable");
 

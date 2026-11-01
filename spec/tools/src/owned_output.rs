@@ -270,7 +270,10 @@ mod tests {
     /// nothing in the type system can require a file to exist on disk.
     #[test]
     fn the_source_of_truth_directories_are_claimed() {
-        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let repo = talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .as_path()
+            .to_owned();
         for relative in HUMAN_AUTHORED_DIRS {
             let dir = repo.join(relative);
             assert!(

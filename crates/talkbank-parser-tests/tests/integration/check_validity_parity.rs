@@ -49,12 +49,16 @@ use talkbank_spec_vocabulary::check_assessment::{
 
 /// `tests/check_parity/` under this crate.
 fn parity_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/check_parity")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests/tests/check_parity")
 }
 
 /// `clan-check-reference/` under this crate: the generated view of `check.cpp`.
 fn clan_reference_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("clan-check-reference")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests/clan-check-reference")
 }
 
 /// One CHECK code as the generator sees it in `check.cpp`.

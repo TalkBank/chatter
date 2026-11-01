@@ -73,13 +73,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Assert app versions are in sync (and match the tag on a tag push)
         run: |
           set -euo pipefail
           if [[ -n "$RELEASE_TAG" ]]; then
-            python3 scripts/sync-app-version.py --release-tag "$RELEASE_TAG"
+            uv run --locked --project scripts python scripts/sync-app-version.py --release-tag "$RELEASE_TAG"
           else
-            python3 scripts/sync-app-version.py --check
+            uv run --locked --project scripts python scripts/sync-app-version.py --check
           fi
 
       - name: Create unpublished candidate for this exact tag

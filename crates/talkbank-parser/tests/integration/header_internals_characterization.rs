@@ -52,7 +52,7 @@
 //! defect, and `participants_missing_role` DOES reach the intended internal
 //! (`parse_participant_entry`'s "role cannot be empty" rejection).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::model::Line;
@@ -63,8 +63,9 @@ type Diag = (String, usize, usize, String);
 
 /// Read a fixture verbatim from `corpus/reference/<relative>`.
 fn read_corpus_fixture(relative: &str) -> String {
-    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../corpus/reference")
+    let path: PathBuf = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("corpus/reference")
         .join(relative);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read corpus fixture {}: {}", path.display(), e))

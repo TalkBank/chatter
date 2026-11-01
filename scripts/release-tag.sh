@@ -37,7 +37,7 @@ if [ "$head" != "$(git rev-parse origin/main)" ]; then
     exit 1
 fi
 
-python3 scripts/sync-app-version.py --check --release-tag "$tag"
+uv run --locked --project scripts python scripts/sync-app-version.py --check --release-tag "$tag"
 
 # Both required workflows must have a completed+successful run for THIS
 # commit. gh returns runs newest-first; one line per workflow is enough.

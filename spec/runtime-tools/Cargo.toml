@@ -22,6 +22,7 @@ talkbank-model = { workspace = true }
 talkbank-parser = { workspace = true }
 
 [dev-dependencies]
+talkbank-repo = { path = "../../crates/talkbank-repo" }
 tempfile = "3.27"
 talkbank-parser-re2c = { path = "../../crates/talkbank-parser-re2c" }
 

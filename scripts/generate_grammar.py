@@ -48,7 +48,13 @@ def stage_and_publish(executable: Path, mode: Mode) -> int:
     with tempfile.TemporaryDirectory(dir=GRAMMAR, prefix=".generated-") as directory:
         staged = Path(directory)
         result = subprocess.run(
-            [str(executable), "generate", "--grammar-contract", "--output", str(staged)],
+            [
+                str(executable),
+                "generate",
+                "--grammar-contract",
+                "--output",
+                str(staged),
+            ],
             cwd=GRAMMAR,
             check=False,
         )
@@ -64,8 +70,13 @@ def stage_and_publish(executable: Path, mode: Mode) -> int:
             target = GRAMMAR / "src" / relative
             match mode:
                 case Mode.CHECK:
-                    if not target.is_file() or not filecmp.cmp(source, target, shallow=False):
-                        print(f"stale grammar/src/{relative}; run just regen", file=sys.stderr)
+                    if not target.is_file() or not filecmp.cmp(
+                        source, target, shallow=False
+                    ):
+                        print(
+                            f"stale grammar/src/{relative}; run just regen",
+                            file=sys.stderr,
+                        )
                         stale = True
                 case Mode.PUBLISH:
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -77,12 +88,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate grammar artifacts in staging, then check or publish changed files."
     )
-    parser.add_argument("--check", action="store_true", help="report staleness without writing")
+    parser.add_argument(
+        "--check", action="store_true", help="report staleness without writing"
+    )
     args = parser.parse_args()
     mode = Mode.CHECK if args.check else Mode.PUBLISH
     try:
         checkout = TREE_SITTER.checkout(ROOT)
-        executable = checkout.build_executable(["-p", "tree-sitter-cli"], "tree-sitter", "bin")
+        executable = checkout.build_executable(
+            ["-p", "tree-sitter-cli"], "tree-sitter", "bin"
+        )
         print(f"producer source {checkout.revision.commit}: {executable}")
         status = stage_and_publish(executable, mode)
         checkout.revalidate()

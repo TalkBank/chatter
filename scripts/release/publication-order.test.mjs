@@ -22,7 +22,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 print(json.dumps([textwrap.dedent(body) for _, body in module.workflow_run_steps(Path(sys.argv[2]))]))
 `;
-  const bodies = JSON.parse(execFileSync('python3', ['-c', reader,
+  const bodies = JSON.parse(execFileSync('uv', ['run', '--locked', '--project', join(root, 'scripts'), 'python', '-c', reader,
     join(root, 'scripts/check_ci_gate_sync.py'), join(root, workflow)], { encoding: 'utf8' }));
   const matches = bodies.filter(body => body.includes(marker));
   assert.equal(matches.length, 1, `expected one executable boundary containing ${marker}`);

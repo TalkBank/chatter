@@ -174,8 +174,9 @@ fn every_top_level_command_is_published_or_declared_unpublished() {
 /// be asserting a policy nobody has adopted.
 #[test]
 fn published_commands_appear_in_the_cli_reference() {
-    let page_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../book/src/chatter/user-guide/cli-reference.md");
+    let page_path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("book/src/chatter/user-guide/cli-reference.md");
     let page = std::fs::read_to_string(&page_path)
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", page_path.display()));
 

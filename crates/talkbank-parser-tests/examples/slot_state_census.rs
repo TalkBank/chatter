@@ -35,7 +35,10 @@ use talkbank_parser_tests::conformance::{
 type Census = BTreeMap<(&'static str, Position, Container), BTreeMap<Observed, (usize, String)>>;
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned()
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

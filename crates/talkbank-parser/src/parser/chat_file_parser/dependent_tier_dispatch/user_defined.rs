@@ -16,8 +16,8 @@
 
 use crate::error::{DiagnosticLocation, ErrorCode, ErrorContext, ErrorSink, ParseError, Severity};
 use crate::generated_traversal::{
-    AsRawNode, Never, NoChild, ReadableRecovery, ReadableSlot, SlotView, SourceBound, SourceSlice,
-    UnsupportedDependentTierNode, UnsupportedTierPrefixNode, XDependentTierNode,
+    AsRawNode, Never, NoChild, ObservedText, ReadableRecovery, ReadableSlot, SlotView, SourceBound,
+    SourceSlice, UnsupportedDependentTierNode, UnsupportedTierPrefixNode, XDependentTierNode,
 };
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::model::{RecoveryText, Utterance};
@@ -378,20 +378,6 @@ pub(super) fn apply_unsupported_tier<'tree>(
         return;
     };
 
-    // The unsupported-tier body is the anonymous seq-member regex `/[^\n\r]*/`
-    // sitting between `tier_sep` (child_1) and `newline` (child_3). The generator
-    // now models such an absorbed anonymous seq-token as a typed `LeafSpan`
-    // (child_2): a fully-typed inter-sibling byte range, NOT a text-hack. Read the
-    // body directly from that span. This closed the pre-migration generator gap
-    // where the anonymous token surfaced no child (child_2 was always `Absent`)
-    // and the body had to be recovered by string-splitting the tier's source text;
-    // the fix is sibling to the sometimes-leaf-choice (`LeafText`) fix. The prefix
-    // `child_0`, a real named node, is likewise visitor-driven above. Source
-    // identity and readable UTF-8 boundaries are retained by `ReadableLeafSpan`.
-    // The consuming transition above refuses the owner with E001 if any selected
-    // range is unreadable. This read is infallible, never an empty-body fallback.
-    let body = children.child_2.text();
-
     // An empty tier is KEPT, carrying `None`, rather than dropped with a
     // generic parse error. It used to be dropped because the model could not
     // represent the empty case; now that it can, the tier survives with the
@@ -399,7 +385,28 @@ pub(super) fn apply_unsupported_tier<'tree>(
     // "this line declares nothing" rule belongs. Dropping it also lost the
     // label, and left this parser disagreeing with the re2c one, which kept a
     // fabricated tier instead.
-    let content = RecoveryText::new(body.trim()).ok();
+    // The generated region preserves absorbed bytes across real child extras.
+    // Single-fragment bodies borrow their checked source; split bodies concatenate
+    // only those fragments. Observed emptiness is distinct from recovery, whose
+    // nodes remain reported by the carrier sinks and whole-tree backstop.
+    let content = match children.child_2.observation() {
+        ObservedText::Fragments { first, rest } => {
+            let body = if rest.is_empty() {
+                std::borrow::Cow::Borrowed(first.text())
+            } else {
+                std::borrow::Cow::Owned(
+                    children
+                        .child_2
+                        .fragments()
+                        .map(|f| f.text())
+                        .collect::<String>(),
+                )
+            };
+            RecoveryText::new(body.trim()).ok()
+        }
+        ObservedText::Empty => None,
+        ObservedText::Recovery => return,
+    };
     let span = span_of(tier_node);
     let tier = DependentTier::Unsupported(crate::model::UnsupportedDependentTier {
         label,

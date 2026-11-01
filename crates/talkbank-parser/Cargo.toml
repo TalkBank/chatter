@@ -22,6 +22,7 @@ tree-sitter = { workspace = true }
 tree-sitter-talkbank = { workspace = true }
 
 [dev-dependencies]
+talkbank-repo = { path = "../talkbank-repo" }
 # Path-only (no version) ON PURPOSE: talkbank-parser-tests is never
 # published, so a versioned dev-dep would block `cargo publish`; cargo
 # strips version-less dev-deps from the published manifest. Gated by

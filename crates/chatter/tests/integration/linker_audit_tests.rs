@@ -3,8 +3,9 @@
 use std::path::{Path, PathBuf};
 
 fn fixture() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../corpus/reference/edge-cases/linker-patterns.cha")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("corpus/reference/edge-cases/linker-patterns.cha")
 }
 
 fn audit(input: &Path, report: &Path) -> std::process::Output {

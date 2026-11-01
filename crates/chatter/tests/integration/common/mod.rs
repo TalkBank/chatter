@@ -195,14 +195,66 @@ impl CliHarness {
 /// Resolve a workspace-relative path (such as a `corpus/reference/...`
 /// fixture) to an absolute path.
 ///
-/// Integration tests run with the crate directory as the working directory,
-/// so workspace paths resolve relative to the workspace root, two levels up
-/// from `CARGO_MANIFEST_DIR`. Shared here so individual test files do not each
-/// re-roll the same `CARGO_MANIFEST_DIR/../..` boilerplate.
+/// The shared root is admitted at runtime, so a reused test binary reads the
+/// selected checkout rather than the checkout where it was compiled.
 pub fn reference_fixture(relative: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
         .join(relative)
+}
+
+#[cfg(test)]
+mod fixture_root_tests {
+    use super::*;
+
+    #[test]
+    fn reused_test_binary_reads_the_runtime_checkout() -> std::io::Result<()> {
+        let relocated = tempdir()?;
+        for directory in ["spec/errors", "crates", "corpus/reference/core"] {
+            fs::create_dir_all(relocated.path().join(directory))?;
+        }
+        fs::write(relocated.path().join("Cargo.toml"), "[workspace]\n")?;
+        let fixture = "corpus/reference/core/basic-conversation.cha";
+        fs::copy(reference_fixture(fixture), relocated.path().join(fixture))?;
+        let mut probe = std::process::Command::new(std::env::current_exe()?);
+        probe
+            .args([
+                "--exact",
+                "common::fixture_root_tests::runtime_fixture_probe",
+                "--ignored",
+                "--nocapture",
+            ])
+            .current_dir(relocated.path());
+        assert_success(
+            &probe.env("CHATTER_REPO_ROOT", relocated.path()).output()?,
+            "explicit runtime fixture root",
+        );
+        assert_success(
+            &probe.env_remove("CHATTER_REPO_ROOT").output()?,
+            "runtime fixture root discovered from working directory",
+        );
+        let invalid = tempdir()?;
+        let rejected = probe.env("CHATTER_REPO_ROOT", invalid.path()).output()?;
+        assert!(
+            !rejected.status.success(),
+            "invalid explicit checkout was accepted"
+        );
+        assert!(stderr_string(&rejected).contains("NotAChatterCheckout"));
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "subprocess probe selected by reused_test_binary_reads_the_runtime_checkout"]
+    fn runtime_fixture_probe() -> std::io::Result<()> {
+        let root = std::env::current_dir()?;
+        let fixture = "corpus/reference/core/basic-conversation.cha";
+        assert_eq!(
+            reference_fixture(fixture).canonicalize()?,
+            root.join(fixture).canonicalize()?,
+        );
+        assert!(!fs::read_to_string(reference_fixture(fixture))?.is_empty());
+        Ok(())
+    }
 }
 
 /// Write one test fixture relative to a temp root, creating parent dirs first.

@@ -1,0 +1,27 @@
+[project]
+name = "chatter-development-tools"
+version = "0.1.0"
+description = "Reproducible Chatter generation, release and documentation helpers"
+requires-python = ">=3.15"
+dependencies = ["pydantic>=2"]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = ["mypy>=1.14", "pytest>=8", "ruff>=0.6"]
+
+[tool.mypy]
+strict = true
+python_version = "3.15"
+files = ["."]
+exclude = ["^\\.venv/"]
+
+[tool.ruff]
+target-version = "py315"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]

@@ -14,7 +14,9 @@ fn audit(input: &Path, report: &Path) -> Output {
 }
 
 fn fixture() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/reference/ca/overlap-siblings.cha")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("corpus/reference/ca/overlap-siblings.cha")
 }
 
 #[test]

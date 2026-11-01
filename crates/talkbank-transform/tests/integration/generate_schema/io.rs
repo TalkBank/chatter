@@ -1,7 +1,8 @@
 //! File output for the generated schema.
 //!
 //! The model generates both the workspace publication artifact and the crate's
-//! embedded artifact. Paths are anchored at CARGO_MANIFEST_DIR, never the CWD.
+//! embedded artifact. Paths use the admitted runtime checkout, including when
+//! a test binary is reused.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,7 +24,9 @@ pub enum IoError {
 
 /// Both distribution locations of the same model-generated schema.
 pub fn schema_paths() -> [PathBuf; 2] {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-transform");
     [
         root.join("../../schema/chat-file.schema.json"),
         root.join("schema/chat-file.schema.json"),

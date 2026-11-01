@@ -64,6 +64,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 libc = "0.2"
 
 [dev-dependencies]
+talkbank-repo = { path = "../talkbank-repo" }
 # TEST-ONLY. It was a regular dependency until 2026-08-19, because `new-file`
 # used a template that lived here, so this test-support crate compiled into the
 # release binary.

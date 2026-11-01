@@ -77,7 +77,12 @@ class AppVersion:
     value: str
 
     def __post_init__(self) -> None:
-        if re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", self.value) is None:
+        if (
+            re.fullmatch(
+                r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", self.value
+            )
+            is None
+        ):
             raise VersionIdentityError(
                 f"expected X.Y.Z with ASCII digits and no leading zeros, got {self.value!r}"
             )
@@ -116,11 +121,16 @@ class VersionFieldCandidate:
 
 def table_body(source: str, name: str) -> tuple[int, str]:
     """Locate the supported explicit table spelling without crossing a table."""
-    headers = list(re.finditer(
-        rf"(?m)^[ \t]*\[{re.escape(name)}\][ \t]*(?:#[^\r\n]*)?\r?$", source,
-    ))
+    headers = list(
+        re.finditer(
+            rf"(?m)^[ \t]*\[{re.escape(name)}\][ \t]*(?:#[^\r\n]*)?\r?$",
+            source,
+        )
+    )
     if len(headers) != 1:
-        raise VersionIdentityError(f"expected one explicit [{name}] table in Cargo.toml")
+        raise VersionIdentityError(
+            f"expected one explicit [{name}] table in Cargo.toml"
+        )
     start = headers[0].end()
     following = re.search(r"(?m)^[ \t]*\[", source[start:])
     end = start + following.start() if following is not None else len(source)
@@ -128,14 +138,22 @@ def table_body(source: str, name: str) -> tuple[int, str]:
 
 
 def literal_field(
-    key: tuple[str, ...], offset: int, text: str, pattern: str, value: str,
+    key: tuple[str, ...],
+    offset: int,
+    text: str,
+    pattern: str,
+    value: str,
 ) -> VersionFieldCandidate:
     """Require one source literal agreeing with the parsed field's value."""
     matches = list(re.finditer(pattern, text, re.MULTILINE))
     if len(matches) != 1 or matches[0].group("value") != value:
-        raise VersionIdentityError(f"unsupported or ambiguous literal layout for {'.'.join(key)}")
+        raise VersionIdentityError(
+            f"unsupported or ambiguous literal layout for {'.'.join(key)}"
+        )
     match = matches[0]
-    return VersionFieldCandidate(key, offset + match.start("value"), offset + match.end("value"))
+    return VersionFieldCandidate(
+        key, offset + match.start("value"), offset + match.end("value")
+    )
 
 
 @dataclass(frozen=True)
@@ -152,7 +170,9 @@ class CargoVersionDocument:
         try:
             source = path.read_bytes().decode("utf-8")
         except (OSError, UnicodeError) as error:
-            raise VersionIdentityError(f"cannot read canonical Cargo.toml: {error}") from error
+            raise VersionIdentityError(
+                f"cannot read canonical Cargo.toml: {error}"
+            ) from error
         return cls(source)
 
     def __post_init__(self) -> None:
@@ -160,16 +180,22 @@ class CargoVersionDocument:
             document = tomllib.loads(self.source)
             version = document["workspace"]["package"]["version"]
         except (tomllib.TOMLDecodeError, KeyError, TypeError) as error:
-            raise VersionIdentityError(f"invalid canonical Cargo.toml: {error}") from error
+            raise VersionIdentityError(
+                f"invalid canonical Cargo.toml: {error}"
+            ) from error
         if not isinstance(version, str):
             raise VersionIdentityError("workspace.package.version must be a string")
         object.__setattr__(self, "version", AppVersion(version))
         offset, body = table_body(self.source, "workspace.package")
-        fields = [literal_field(
-            ("workspace", "package", "version"), offset, body,
-            r'''^[ \t]*version[ \t]*=[ \t]*(?P<quote>["'])(?P<value>[^"'\r\n]*)(?P=quote)[ \t]*(?:#[^\r\n]*)?\r?$''',
-            version,
-        )]
+        fields = [
+            literal_field(
+                ("workspace", "package", "version"),
+                offset,
+                body,
+                r"""^[ \t]*version[ \t]*=[ \t]*(?P<quote>["'])(?P<value>[^"'\r\n]*)(?P=quote)[ \t]*(?:#[^\r\n]*)?\r?$""",
+                version,
+            )
+        ]
         dependencies = document["workspace"].get("dependencies")
         if dependencies is not None:
             if not isinstance(dependencies, dict):
@@ -181,25 +207,37 @@ class CargoVersionDocument:
                 if path is None:
                     continue
                 if not isinstance(path, str):
-                    raise VersionIdentityError(f"dependency {name} has a non-string path")
+                    raise VersionIdentityError(
+                        f"dependency {name} has a non-string path"
+                    )
                 if not path.startswith("crates/"):
                     continue
                 pin = dependency.get("version")
                 if not isinstance(pin, str):
-                    raise VersionIdentityError(f"internal dependency {name} needs a literal version")
+                    raise VersionIdentityError(
+                        f"internal dependency {name} needs a literal version"
+                    )
                 offset, body = table_body(self.source, "workspace.dependencies")
-                entries = list(re.finditer(
-                    rf"(?m)^[ \t]*{re.escape(name)}[ \t]*=[ \t]*(?P<entry>\{{[^\r\n]*\}})[ \t]*(?:#[^\r\n]*)?\r?$", body,
-                ))
+                entries = list(
+                    re.finditer(
+                        rf"(?m)^[ \t]*{re.escape(name)}[ \t]*=[ \t]*(?P<entry>\{{[^\r\n]*\}})[ \t]*(?:#[^\r\n]*)?\r?$",
+                        body,
+                    )
+                )
                 if len(entries) != 1:
-                    raise VersionIdentityError(f"unsupported inline dependency layout for {name}")
+                    raise VersionIdentityError(
+                        f"unsupported inline dependency layout for {name}"
+                    )
                 entry = entries[0]
-                fields.append(literal_field(
-                    ("workspace", "dependencies", name, "version"),
-                    offset + entry.start("entry"), entry.group("entry"),
-                    r'''(?:\{|,)[ \t]*version[ \t]*=[ \t]*(?P<quote>["'])(?P<value>[^"'\r\n]*)(?P=quote)''',
-                    pin,
-                ))
+                fields.append(
+                    literal_field(
+                        ("workspace", "dependencies", name, "version"),
+                        offset + entry.start("entry"),
+                        entry.group("entry"),
+                        r"""(?:\{|,)[ \t]*version[ \t]*=[ \t]*(?P<quote>["'])(?P<value>[^"'\r\n]*)(?P=quote)""",
+                        pin,
+                    )
+                )
         object.__setattr__(self, "fields", tuple(fields))
 
 
@@ -214,8 +252,14 @@ class CargoVersionUpdate:
     def __post_init__(self) -> None:
         expected = tomllib.loads(self.original.source)
         updated = self.original.source
-        for location in sorted(self.original.fields, key=lambda item: item.start, reverse=True):
-            updated = updated[:location.start] + self.identity.version.value + updated[location.end:]
+        for location in sorted(
+            self.original.fields, key=lambda item: item.start, reverse=True
+        ):
+            updated = (
+                updated[: location.start]
+                + self.identity.version.value
+                + updated[location.end :]
+            )
             parent = expected
             for key in location.key[:-1]:
                 parent = parent[key]
@@ -223,9 +267,13 @@ class CargoVersionUpdate:
         try:
             actual = tomllib.loads(updated)
         except tomllib.TOMLDecodeError as error:
-            raise VersionIdentityError(f"version edit would invalidate Cargo.toml: {error}") from error
+            raise VersionIdentityError(
+                f"version edit would invalidate Cargo.toml: {error}"
+            ) from error
         if actual != expected:
-            raise VersionIdentityError("version edit would change unrelated Cargo.toml fields")
+            raise VersionIdentityError(
+                "version edit would change unrelated Cargo.toml fields"
+            )
         object.__setattr__(self, "text", updated)
 
 
@@ -288,31 +336,53 @@ class JsonVersionUpdate:
     def __post_init__(self) -> None:
         try:
             document = json.loads(
-                self.path.read_text(), object_pairs_hook=unique_json_object,
+                self.path.read_text(),
+                object_pairs_hook=unique_json_object,
                 parse_constant=reject_json_constant,
             )
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise VersionIdentityError(f"cannot read {self.path.name}: {error}") from error
+            raise VersionIdentityError(
+                f"cannot read {self.path.name}: {error}"
+            ) from error
         drift: list[Drift] = []
         for location in self.locations:
             parent = document
             for key in location[:-1]:
                 if not isinstance(parent, dict) or key not in parent:
-                    raise VersionIdentityError(f"{self.path.name}: missing object at {location!r}")
+                    raise VersionIdentityError(
+                        f"{self.path.name}: missing object at {location!r}"
+                    )
                 parent = parent[key]
             key = location[-1]
-            if not isinstance(parent, dict) or key not in parent or not isinstance(parent[key], str):
-                raise VersionIdentityError(f"{self.path.name}: expected version string at {location!r}")
+            if (
+                not isinstance(parent, dict)
+                or key not in parent
+                or not isinstance(parent[key], str)
+            ):
+                raise VersionIdentityError(
+                    f"{self.path.name}: expected version string at {location!r}"
+                )
             have = AppVersion(parent[key])
             if have != self.version:
-                drift.append(Drift(
-                    f"{self.path.relative_to(REPO)} {location!r}  {have.value} -> {self.version.value}",
-                    Fixability.AUTO,
-                ))
+                drift.append(
+                    Drift(
+                        f"{self.path.relative_to(REPO)} {location!r}  {have.value} -> {self.version.value}",
+                        Fixability.AUTO,
+                    )
+                )
                 parent[key] = self.version.value
-        writes = (PreparedFileWrite(
-            self.path, (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
-        ),) if drift else ()
+        writes = (
+            (
+                PreparedFileWrite(
+                    self.path,
+                    (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode(
+                        "utf-8"
+                    ),
+                ),
+            )
+            if drift
+            else ()
+        )
         object.__setattr__(self, "writes", writes)
         object.__setattr__(self, "drift", tuple(drift))
 
@@ -342,7 +412,9 @@ def changelog_gaps(version: AppVersion) -> list[str]:
     """
     text = CHANGELOG.read_text()
     headings = set(re.findall(r"^## \[([^\]]+)\]", text, re.MULTILINE)) - {"Unreleased"}
-    definitions = set(re.findall(r"^\[([^\]]+)\]: \S", text, re.MULTILINE)) - {"Unreleased"}
+    definitions = set(re.findall(r"^\[([^\]]+)\]: \S", text, re.MULTILINE)) - {
+        "Unreleased"
+    }
     required = headings | definitions | {version.value}
 
     gaps: list[str] = []
@@ -368,18 +440,28 @@ class PreparedVersionSync:
         drift: list[Drift] = []
         document = tomllib.loads(self.original.source)
         for location in self.original.fields:
-            have = document
+            have: object = document
             for key in location.key:
+                if not isinstance(have, dict):
+                    raise VersionIdentityError(
+                        "version field parent is not a TOML table"
+                    )
                 have = have[key]
             if have != self.identity.version.value:
-                drift.append(Drift(
-                    f"Cargo.toml {'.'.join(location.key)}  {have} -> {self.identity.version.value}",
-                    Fixability.AUTO,
-                ))
+                drift.append(
+                    Drift(
+                        f"Cargo.toml {'.'.join(location.key)}  {have} -> {self.identity.version.value}",
+                        Fixability.AUTO,
+                    )
+                )
         writes = [PreparedFileWrite(CARGO, cargo.text.encode("utf-8"))] if drift else []
         for update in (
             JsonVersionUpdate(PACKAGE_JSON, (("version",),), self.identity.version),
-            JsonVersionUpdate(PACKAGE_LOCK, (("version",), ("packages", "", "version")), self.identity.version),
+            JsonVersionUpdate(
+                PACKAGE_LOCK,
+                (("version",), ("packages", "", "version")),
+                self.identity.version,
+            ),
         ):
             writes.extend(update.writes)
             drift.extend(update.drift)
@@ -414,16 +496,23 @@ class StagedVersionSync:
             try:
                 metadata = write.path.lstat()
                 if not stat.S_ISREG(metadata.st_mode):
-                    raise VersionWriteError(f"cannot stage {write.path}: expected a regular file")
-                directory = owner.enter_context(tempfile.TemporaryDirectory(
-                    prefix=".version-sync-", dir=write.path.parent,
-                ))
+                    raise VersionWriteError(
+                        f"cannot stage {write.path}: expected a regular file"
+                    )
+                directory = owner.enter_context(
+                    tempfile.TemporaryDirectory(
+                        prefix=".version-sync-",
+                        dir=write.path.parent,
+                    )
+                )
                 replacement = Path(directory) / write.path.name
                 # Closing the file must succeed before it enters the staged state.
                 replacement.write_bytes(write.contents)
                 replacement.chmod(stat.S_IMODE(metadata.st_mode))
             except OSError as error:
-                raise VersionWriteError(f"cannot stage {write.path}: {error}") from error
+                raise VersionWriteError(
+                    f"cannot stage {write.path}: {error}"
+                ) from error
             staged.append(StagedFileWrite(write.path, replacement))
         object.__setattr__(self, "writes", tuple(staged))
 
@@ -457,7 +546,11 @@ def process(prepared: PreparedVersionSync, mode: SyncMode) -> int:
                 drift.append(Drift(f"CHANGELOG.md  missing {gap}", Fixability.MANUAL))
 
     if not drift:
-        scope = f", tag {identity.release_tag} ok" if identity.release_tag is not None else ""
+        scope = (
+            f", tag {identity.release_tag} ok"
+            if identity.release_tag is not None
+            else ""
+        )
         print(f"app version in sync: {want.value}{scope}")
         return 0
 
@@ -472,10 +565,10 @@ def process(prepared: PreparedVersionSync, mode: SyncMode) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--check", action="store_true", help="fail on drift (CI mode)")
-    mode.add_argument("--fix", action="store_true", help="rewrite the version files")
-    mode.add_argument(
+    options = ap.add_mutually_exclusive_group()
+    options.add_argument("--check", action="store_true", help="fail on drift (CI mode)")
+    options.add_argument("--fix", action="store_true", help="rewrite the version files")
+    options.add_argument(
         "--bump",
         metavar="X.Y.Z",
         help="set the canonical version and rewrite every literal copy",

@@ -20,7 +20,10 @@ use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_parser::TreeSitterParser;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned();
     let mut files: Vec<PathBuf> = walkdir::WalkDir::new(&root)
         .into_iter()
         .filter_entry(|e| {

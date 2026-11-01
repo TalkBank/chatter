@@ -70,10 +70,11 @@ const MALFORMED_GRA: &str = "@UTF8\n@Begin\n*CHI:\thello .\n%gra:\t0|0|ROOT\n@En
 fn valid_utterances_with_dependent_tiers_parse_to_expected_model() {
     // Read the real reference fixture (no ad-hoc `.cha`): two valid utterances,
     // each with a `%mor` and a `%gra` dependent tier.
-    let input = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../corpus/reference/tiers/mor-gra.cha"
-    ))
+    let input = std::fs::read_to_string(
+        talkbank_repo::root()
+            .expect("runtime chatter checkout")
+            .join("corpus/reference/tiers/mor-gra.cha"),
+    )
     .expect("read corpus/reference/tiers/mor-gra.cha");
 
     let (utterances, diags) = parse_utterances_and_diags(&input);

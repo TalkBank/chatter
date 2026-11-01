@@ -18,13 +18,17 @@ use talkbank_parser_tests::test_error::TestError;
 use super::parser_impl::parser_suite;
 
 fn reference_root() -> PathBuf {
-    let mut full = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut full = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests");
     full.push("../../corpus/reference");
     full
 }
 
 fn reference_file(path: &str) -> PathBuf {
-    let mut full = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut full = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests");
     full.push(path);
     full
 }

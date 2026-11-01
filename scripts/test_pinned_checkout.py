@@ -13,7 +13,7 @@ PIN = Pin(file="generator-revision", variable="GENERATOR_DIR")
 
 
 class CheckoutAdmissionTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         root = Path(self.temporary.name)
@@ -27,7 +27,7 @@ class CheckoutAdmissionTests(unittest.TestCase):
         self.commit("fixture")
         self.pin_head()
 
-    def git(self, *args):
+    def git(self, *args: str) -> str:
         return subprocess.run(
             ["git", "-C", str(self.generator), *args],
             check=True,
@@ -35,7 +35,7 @@ class CheckoutAdmissionTests(unittest.TestCase):
             text=True,
         ).stdout.strip()
 
-    def commit(self, message):
+    def commit(self, message: str) -> None:
         self.git(
             "-c",
             "user.name=Test",
@@ -47,25 +47,25 @@ class CheckoutAdmissionTests(unittest.TestCase):
             message,
         )
 
-    def pin_head(self):
+    def pin_head(self) -> None:
         (self.consumer / PIN.file).write_text(self.git("rev-parse", "HEAD") + "\n")
 
-    def admit(self, directory=None):
+    def admit(self, directory: Path | None = None) -> PinnedCheckout:
         return PinnedCheckout(directory or self.generator, PIN.revision(self.consumer))
 
-    def test_clean_pinned_root_and_revalidation(self):
+    def test_clean_pinned_root_and_revalidation(self) -> None:
         checkout = self.admit()
         checkout.revalidate()
         (self.generator / "Cargo.lock").write_text("changed\n")
         with self.assertRaisesRegex(PinError, "uncommitted"):
             checkout.revalidate()
 
-    def test_wrong_full_revision_is_refused(self):
+    def test_wrong_full_revision_is_refused(self) -> None:
         (self.consumer / PIN.file).write_text("0" * 40 + "\n")
         with self.assertRaisesRegex(PinError, "differs"):
             self.admit()
 
-    def test_malformed_pin_is_refused_before_git(self):
+    def test_malformed_pin_is_refused_before_git(self) -> None:
         head = self.git("rev-parse", "HEAD")
         for value in [head[:12], "stable", "", head.upper()]:
             with self.subTest(pin=value):
@@ -73,37 +73,39 @@ class CheckoutAdmissionTests(unittest.TestCase):
                 with self.assertRaisesRegex(PinError, "full lowercase"):
                     PIN.revision(self.consumer)
 
-    def test_untracked_dirt_is_refused(self):
+    def test_untracked_dirt_is_refused(self) -> None:
         (self.generator / "untracked").write_text("dirt\n")
         with self.assertRaisesRegex(PinError, "uncommitted"):
             self.admit()
 
-    def test_nested_directory_is_not_the_repository_root(self):
+    def test_nested_directory_is_not_the_repository_root(self) -> None:
         nested = self.generator / "nested"
         nested.mkdir()
         with self.assertRaisesRegex(PinError, "repository root"):
             self.admit(nested)
 
-    def test_missing_checkout_reports_git_failure(self):
+    def test_missing_checkout_reports_git_failure(self) -> None:
         with self.assertRaises(subprocess.CalledProcessError):
             self.admit(self.generator / "missing")
 
-    def test_clean_source_without_lockfile_is_refused(self):
+    def test_clean_source_without_lockfile_is_refused(self) -> None:
         self.git("rm", "--quiet", "Cargo.lock")
         self.commit("remove lock fixture")
         self.pin_head()
         with self.assertRaisesRegex(PinError, "Cargo.lock"):
             self.admit()
 
-    def test_the_selection_variable_has_no_default(self):
+    def test_the_selection_variable_has_no_default(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop(PIN.variable, None)
             with self.assertRaisesRegex(PinError, "GENERATOR_DIR must name"):
                 PIN.checkout(self.consumer)
         with patch.dict(os.environ, {PIN.variable: str(self.generator)}):
-            self.assertEqual(PIN.checkout(self.consumer).directory, self.generator.resolve())
+            self.assertEqual(
+                PIN.checkout(self.consumer).directory, self.generator.resolve()
+            )
 
-    def test_a_revision_is_made_only_by_its_pin(self):
+    def test_a_revision_is_made_only_by_its_pin(self) -> None:
         with self.assertRaises(TypeError):
             PinnedRevision(PIN, "0" * 40, object())
 

@@ -44,12 +44,7 @@ fn file_name_str(path: &Path) -> Result<&str, TestError> {
 
 /// Finds warning files.
 fn find_warning_files() -> Result<Vec<(String, PathBuf)>, TestError> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let corpus_root = PathBuf::from(manifest_dir)
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| TestError::Failure("manifest dir missing expected grandparent".to_string()))?
-        .join("tests/error_corpus/warnings");
+    let corpus_root = talkbank_repo::RepoRoot::discover()?.join("tests/error_corpus/warnings");
 
     let mut files = Vec::new();
     let not_implemented = corpus_root.join("not_implemented");

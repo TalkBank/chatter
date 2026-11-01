@@ -32,7 +32,7 @@
 //! payload kinds it is; `Inspect` is what varies per generated type,
 //! mechanically, in [`inventory`].
 
-use crate::generated_traversal::{Absence, LeafSpan, NodeSlot, Positioned, RecoveryNode};
+use crate::generated_traversal::{Absence, LeafSpan, LeafText, NodeSlot, Positioned, RecoveryNode};
 
 pub mod inventory;
 
@@ -255,6 +255,19 @@ where
 impl InspectField for LeafSpan<'_> {
     fn inspect_field(&self, _rule: &'static str, _position: Position, _out: &mut Vec<Observation>) {
     }
+}
+
+/// Whole-node absorbed text also owns source bytes rather than a CST child.
+/// The carrier's extra/recovery sinks retain every actual child separately.
+impl InspectField for LeafText<'_> {
+    fn inspect_field(&self, _rule: &'static str, _position: Position, _out: &mut Vec<Observation>) {
+    }
+}
+
+/// A choice can contain whole-node text directly. It has no child position;
+/// the surrounding generated carrier owns the extra and recovery children.
+impl Inspect for LeafText<'_> {
+    fn inspect(&self, _rule: &'static str, _out: &mut Vec<Observation>) {}
 }
 
 /// Walk a tree-sitter tree, calling `callback` on every node.

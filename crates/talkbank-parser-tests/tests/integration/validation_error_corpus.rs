@@ -76,7 +76,9 @@ mod interposed_word_contracts;
 
 /// The validation corpus dir under this crate (where the generator writes).
 fn corpus_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/error_corpus/validation_errors")
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors")
 }
 
 /// Recovery carrier choice is a native producer observation. The policy

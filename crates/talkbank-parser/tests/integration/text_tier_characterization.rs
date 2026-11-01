@@ -135,10 +135,9 @@ fn parse_text_tiers_and_diags(input: &str) -> (Vec<(&'static str, Vec<String>)>,
 /// path that valid CHAT always takes.
 #[test]
 fn valid_reference_text_tiers_parse_byte_identical_with_zero_diagnostics() {
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../corpus/reference/edge-cases/multi-tier-alignment.cha"
-    );
+    let path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("corpus/reference/edge-cases/multi-tier-alignment.cha");
     let input = std::fs::read_to_string(path).expect("read multi-tier-alignment.cha fixture");
 
     let (tiers, diags) = parse_text_tiers_and_diags(&input);

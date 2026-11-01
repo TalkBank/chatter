@@ -65,9 +65,8 @@ pub enum BugAnnotationError {
 impl GoldenBugs {
     /// Load bug annotations from golden_bugs.toml in the crate root
     pub fn load() -> Result<Self, BugAnnotationError> {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/golden_bugs.toml");
-        let contents = std::fs::read_to_string(path)?;
-        Ok(toml::from_str(&contents)?)
+        let contents = include_str!("../golden_bugs.toml");
+        Ok(toml::from_str(contents)?)
     }
 
     /// Check if a word should be skipped in tests

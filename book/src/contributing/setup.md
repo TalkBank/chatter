@@ -37,13 +37,19 @@ tools for their selected target.
 
 | You are changing | You also need |
 |---|---|
-| the grammar (`grammar/grammar.js`) | Node.js at `grammar/.nvmrc`, then `cd grammar && npm ci` for the locked Tree-sitter CLI; make that `grammar/node_modules/.bin` directory available to recipes that invoke `tree-sitter`. To regenerate the generated grammar files, also Python 3.11 or later and a clean maintainer-provided checkout of the Tree-sitter build that writes `grammar-contract.json`, at `tree-sitter-revision`, named by `TREE_SITTER_DIR` (see [Grammar Workflow](grammar-workflow.md)) |
-| the grammar, so the typed traversal must be regenerated | Python 3.11 or later and a clean maintainer-provided `tree-sitter-grammar-utils` checkout at `tsgu-revision`; its source is not yet publicly available (see [Grammar Workflow](grammar-workflow.md)) |
+| the grammar (`grammar/grammar.js`) | Node.js at `grammar/.nvmrc`, then `cd grammar && npm ci` for the locked Tree-sitter CLI; make that `grammar/node_modules/.bin` directory available to recipes that invoke `tree-sitter`. To regenerate the generated grammar files, also uv for the locked scripts project and a clean maintainer-provided checkout of the Tree-sitter build that writes `grammar-contract.json`, at `tree-sitter-revision`, named by `TREE_SITTER_DIR` (see [Grammar Workflow](grammar-workflow.md)) |
+| the grammar, so the typed traversal must be regenerated | uv for the locked scripts project and a clean maintainer-provided `tree-sitter-grammar-utils` checkout at `tsgu-revision`; its source is not yet publicly available (see [Grammar Workflow](grammar-workflow.md)) |
 | a spec, a registry or anything else `just regen` rebuilds | Both pinned producer checkouts above, named by `TREE_SITTER_DIR` and `TSGU_DIR`: `just regen` always regenerates the grammar files and the typed traversal, and fails at those steps when either variable is unset |
 | the re2c lexer (`crates/talkbank-parser-re2c/src/lexer.re`) | `re2c` at the exact version in `re2c-version.toml`, which provides the `re2rust` binary; `just verify-vendored-lexer` rejects drift |
-| the book | Python 3.11+ and `just book-install-tools` (installs pinned mdBook, mdbook-mermaid and lychee into `.tooling/`) |
+| the book | uv for the locked scripts project and `just book-install-tools` (installs pinned mdBook, mdbook-mermaid and lychee into `.tooling/`) |
 | the desktop app, or the whole root workspace that includes it | The desktop's native system dependencies and frontend tools; see [Desktop App](../chatter/user-guide/desktop-app.md#build-from-source). The [Linux CI action's package list](../../../.github/actions/tauri-linux-deps/packages.txt) owns the Linux dependency list. |
-| final publication checks | Python 3.11+, Node.js/npm with the grammar CLI available, the pinned Tree-sitter build checkout named by `TREE_SITTER_DIR` (for `just grammar-generate-check`), the pinned re2c tool, book tools, actionlint, shellcheck, cargo-insta and cargo-deny, plus the native dependencies above; inspect `just gate` and [Developer Verification Checks](dev-checks.md) before running it |
+| final publication checks | uv for the locked scripts project, Node.js/npm with the grammar CLI available, the pinned Tree-sitter build checkout named by `TREE_SITTER_DIR` (for `just grammar-generate-check`), the pinned re2c tool, book tools, actionlint, shellcheck, cargo-insta and cargo-deny, plus the native dependencies above; inspect `just gate` and [Developer Verification Checks](dev-checks.md) before running it |
+
+The developer recipes select Python through `scripts/.python-version` and
+`scripts/uv.lock`. Install that environment with
+`uv sync --locked --project scripts --all-groups`; use `just python-tools-check`
+for its own Ruff, strict mypy and Python tests. The grammar binding's independent
+library compatibility floor does not select this developer-tools interpreter.
 
 Ordinary core parsing and validation do not require a restricted TalkBank corpus
 or an inference service. Fetching toolchains, Cargo/npm dependencies and book

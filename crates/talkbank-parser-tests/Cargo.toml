@@ -15,6 +15,7 @@ default = ["conformance"]
 conformance = []
 
 [dependencies]
+talkbank-repo = { path = "../talkbank-repo" }
 clap = { workspace = true }
 # The spec format's vocabulary, owned in the OTHER cargo workspace. A path
 # dependency across the two, deliberately dependency-light (serde + thiserror)

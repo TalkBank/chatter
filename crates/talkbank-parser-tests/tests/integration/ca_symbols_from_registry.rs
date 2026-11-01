@@ -27,7 +27,6 @@
 //! is generated from. The tables cannot drift any more; the grammar's
 //! token sets still can.
 
-use std::path::Path;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::content::word::WordContent;
 use talkbank_model::model::{CADelimiterType, CAElementType};
@@ -50,8 +49,9 @@ struct Registry {
 
 /// The registry's symbols, read from the spec tree beside this crate.
 fn registry() -> Result<Vec<Symbol>, TestError> {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/symbols/symbol_registry.json");
+    let path = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("spec/symbols/symbol_registry.json");
     let text = std::fs::read_to_string(&path)
         .map_err(|err| TestError::Failure(format!("reading {}: {err}", path.display())))?;
     let registry: Registry = serde_json::from_str(&text)

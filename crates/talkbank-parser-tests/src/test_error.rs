@@ -31,6 +31,9 @@ impl ParseProductTestExt for talkbank_model::ParseProduct {
 /// Shared failure modes for parser-test binaries and integration suites.
 #[derive(Debug, Error)]
 pub enum TestError {
+    /// The runtime source checkout could not be admitted.
+    #[error(transparent)]
+    Checkout(#[from] talkbank_repo::NotARepoRoot),
     /// File system operation failed.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

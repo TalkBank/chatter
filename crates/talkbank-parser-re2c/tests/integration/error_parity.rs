@@ -196,11 +196,9 @@ fn participants_recovery_preserves_entries_and_fragment_locations() {
         };
         assert_eq!(entries.len(), 3);
     }
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path();
     let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
     let spec = specs
         .iter()
@@ -238,11 +236,9 @@ fn participants_recovery_preserves_entries_and_fragment_locations() {
 fn blank_line_recovery_matches_for_each_spec_line_ending() {
     use talkbank_model::{ChatParser, ErrorCode};
     use talkbank_spec_vocabulary::frontmatter::Claim;
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path();
     let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
     let spec = specs
         .iter()
@@ -280,11 +276,9 @@ fn blank_line_recovery_matches_for_each_spec_line_ending() {
 fn malformed_tier_prefixes_report_the_complete_source_line() {
     use talkbank_model::{ChatParser, ErrorCode, ParseOutcome, Span};
     use talkbank_spec_vocabulary::frontmatter::Claim;
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path();
     let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
     let spec = specs
         .iter()
@@ -322,11 +316,9 @@ fn malformed_tier_prefixes_report_the_complete_source_line() {
 fn glued_replacement_reports_its_own_opening_token() {
     use talkbank_model::{ChatParser, ErrorCode, Span};
     use talkbank_spec_vocabulary::frontmatter::Claim;
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path();
     let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
     let spec = specs
         .iter()

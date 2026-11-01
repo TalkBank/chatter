@@ -131,11 +131,7 @@ fn parse_error_spec(path: &Path) -> Result<Option<ErrorExample>, TestError> {
 fn main() -> Result<(), TestError> {
     println!("=== Generating Error Words Corpus ===\n");
 
-    // Find all error spec files (path from repo root)
-    // CARGO_MANIFEST_DIR is crates/talkbank-parser-tests
-    // We need to go up to repo root
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
-    let spec_dir = Path::new(&manifest_dir).join("../../spec/errors"); // crates/talkbank-parser-tests -> crates -> repo root
+    let spec_dir = talkbank_repo::RepoRoot::discover()?.join("spec/errors");
 
     if !spec_dir.exists() {
         return Err(TestError::Failure(format!(

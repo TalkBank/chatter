@@ -26,13 +26,8 @@ use talkbank_parser_tests::test_error::TestError;
 
 /// Entry point for this binary target.
 fn main() -> Result<(), TestError> {
-    // Resolve spec/constructs relative to the workspace root
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let workspace_root = Path::new(manifest_dir)
-        .parent() // crates/
-        .and_then(|p| p.parent()) // repo root
-        .expect("cannot resolve workspace root");
-    let spec_path = workspace_root.join("spec").join("constructs");
+    let workspace_root = talkbank_repo::RepoRoot::discover()?;
+    let spec_path = workspace_root.join("spec/constructs");
 
     if !spec_path.exists() {
         return Err(TestError::Failure(format!(

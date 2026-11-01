@@ -242,7 +242,9 @@ def parse_messages(lines: list[str]) -> dict[int, list[str]]:
 
 def _split_args(text: str) -> list[str]:
     """Split a call's argument text on top-level commas."""
-    args, depth, current = [], 0, []
+    args: list[str] = []
+    depth = 0
+    current: list[str] = []
     for ch in text:
         if ch in "([":
             depth += 1

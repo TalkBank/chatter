@@ -763,7 +763,7 @@ fn render_path_segments(
         .join("::")
 }
 
-/// Path helpers, resolved from this crate's manifest directory
+/// Path helpers, resolved from the admitted runtime checkout
 /// (`<repo>/crates/talkbank-parser-tests`). Shared by the example and the guard
 /// so neither hard-codes the layout.
 ///
@@ -797,12 +797,12 @@ pub fn inventory_path() -> PathBuf {
 
 /// This crate's manifest directory.
 fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    crate::repo_paths::workspace_root().join("crates/talkbank-parser-tests")
 }
 
 /// The repository root (two levels up from this crate).
 fn repo_root() -> PathBuf {
-    crate_dir().join("..").join("..")
+    crate::repo_paths::workspace_root().to_owned()
 }
 
 #[cfg(test)]

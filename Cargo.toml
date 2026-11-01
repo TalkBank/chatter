@@ -5,6 +5,7 @@ members = [
     "crates/send2clan",
     "crates/talkbank-cache",
     "crates/talkbank-build",
+    "crates/talkbank-repo",
     "crates/chatter",
     "crates/talkbank-derive",
     "crates/talkbank-llm",

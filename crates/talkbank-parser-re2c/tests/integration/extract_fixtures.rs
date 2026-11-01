@@ -27,12 +27,7 @@ use crate::chat_lines::ChatLines;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-/// Set `TALKBANK_DATA` to the path containing `*-data` corpus
-/// directories before running this binary. The fallback path is
-/// `$HOME/talkbank/data`, a conventional local layout, but
-/// generally not present elsewhere; without `TALKBANK_DATA`
-/// the test will simply find nothing and exit cleanly.
-const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+/// Maximum unique entries emitted per fixture kind.
 const SAMPLES_PER_TYPE: usize = 200;
 
 /// Extract fixtures from corpus. Only runs when explicitly requested via --ignored.
@@ -137,11 +132,14 @@ fn extract_all_fixtures() {
         }
     }
 
-    // Write fixture files
-    std::fs::create_dir_all(FIXTURES_DIR).unwrap();
+    // Write fixture files in the admitted runtime checkout.
+    let fixtures_dir = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .join("crates/talkbank-parser-re2c/tests/fixtures");
+    std::fs::create_dir_all(&fixtures_dir).unwrap();
 
     for (name, samples) in &by_prefix {
-        let path = format!("{FIXTURES_DIR}/{name}.txt");
+        let path = fixtures_dir.join(format!("{name}.txt"));
         let mut f = std::fs::File::create(&path).unwrap();
         writeln!(
             f,
@@ -166,8 +164,8 @@ fn extract_all_fixtures() {
             // Blank line separator between samples
             writeln!(f).unwrap();
         }
-        eprintln!("  {name}: {} samples → {path}", samples.len());
+        eprintln!("  {name}: {} samples → {}", samples.len(), path.display());
     }
 
-    eprintln!("Fixtures written to {FIXTURES_DIR}/");
+    eprintln!("Fixtures written to {}/", fixtures_dir.display());
 }

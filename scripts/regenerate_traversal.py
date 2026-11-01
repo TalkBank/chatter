@@ -53,7 +53,12 @@ class BuiltGenerator:
             self,
             "executable",
             checkout.build_executable(
-                ["--example", "generate_typed_traversal", "-p", "tree-sitter-node-types"],
+                [
+                    "--example",
+                    "generate_typed_traversal",
+                    "-p",
+                    "tree-sitter-node-types",
+                ],
                 "generate_typed_traversal",
                 "example",
             ),
@@ -114,14 +119,24 @@ def main() -> int:
     try:
         inputs = ConsumerInputs(Path(__file__).resolve().parent.parent)
         generator = BuiltGenerator(TSGU.checkout(inputs.root))
-        print(f"generator source {generator.checkout.revision.commit}: {generator.executable}")
+        print(
+            f"generator source {generator.checkout.revision.commit}: {generator.executable}"
+        )
         generator.regenerate(inputs)
     except subprocess.CalledProcessError as error:
         if error.stderr:
             print(error.stderr, file=sys.stderr, end="")
         print(f"traversal regeneration failed: {error}", file=sys.stderr)
         return exit_status(error.returncode)
-    except (OSError, ValueError, KeyError, TypeError, PinError, BuildError, RegenerationError) as error:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        PinError,
+        BuildError,
+        RegenerationError,
+    ) as error:
         print(f"traversal regeneration failed: {error}", file=sys.stderr)
         return 1
     return 0

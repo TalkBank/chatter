@@ -486,6 +486,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "talkbank-repo",
  "talkbank-spec-vocabulary",
  "tempfile",
  "tera",
@@ -1174,6 +1175,7 @@ dependencies = [
  "talkbank-model",
  "talkbank-parser",
  "talkbank-parser-re2c",
+ "talkbank-repo",
  "talkbank-spec-vocabulary",
  "tempfile",
  "thiserror",
@@ -1336,6 +1338,13 @@ dependencies = [
  "talkbank-model",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "talkbank-repo"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]

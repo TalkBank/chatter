@@ -809,6 +809,7 @@ dependencies = [
  "serde_json",
  "talkbank-model",
  "talkbank-parser-tests",
+ "talkbank-repo",
  "talkbank-transform",
  "tauri",
  "tauri-build",
@@ -6436,6 +6437,7 @@ dependencies = [
  "talkbank-model",
  "talkbank-parser",
  "talkbank-parser-tests",
+ "talkbank-repo",
  "talkbank-spec-vocabulary",
  "talkbank-transform",
  "tempfile",
@@ -6541,6 +6543,7 @@ dependencies = [
  "talkbank-build",
  "talkbank-model",
  "talkbank-parser-tests",
+ "talkbank-repo",
  "thiserror 2.0.21",
  "tracing",
  "tree-sitter",
@@ -6565,6 +6568,7 @@ dependencies = [
  "talkbank-model",
  "talkbank-parser",
  "talkbank-parser-tests",
+ "talkbank-repo",
  "talkbank-spec-vocabulary",
  "tempfile",
  "thiserror 2.0.21",
@@ -6596,6 +6600,7 @@ dependencies = [
  "talkbank-model",
  "talkbank-parser",
  "talkbank-parser-re2c",
+ "talkbank-repo",
  "talkbank-spec-vocabulary",
  "talkbank-transform",
  "tempfile",
@@ -6605,6 +6610,14 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-talkbank",
  "walkdir",
+]
+
+[[package]]
+name = "talkbank-repo"
+version = "0.0.0"
+dependencies = [
+ "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -6640,6 +6653,7 @@ dependencies = [
  "talkbank-parser",
  "talkbank-parser-re2c",
  "talkbank-parser-tests",
+ "talkbank-repo",
  "tempfile",
  "thiserror 2.0.21",
  "toml 1.1.8+spec-1.1.0",
@@ -8824,6 +8838,7 @@ version = "0.34.0"
 dependencies = [
  "serde",
  "serde_json",
+ "talkbank-repo",
 ]
 
 [[package]]

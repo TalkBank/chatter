@@ -11,7 +11,7 @@ class GateRecipesTests(unittest.TestCase):
         with patch("pathlib.Path.read_text", return_value=source):
             return check_ci_gate_sync.gate_recipes()
 
-    def test_follows_body_calls_and_dependencies(self):
+    def test_follows_body_calls_and_dependencies(self) -> None:
         recipes = self.recipes(
             "gate:\n    just suite\n\n"
             "suite: workspace\n    just docs\n\n"
@@ -21,7 +21,7 @@ class GateRecipesTests(unittest.TestCase):
         )
         self.assertEqual(recipes, {"suite", "workspace", "docs", "links"})
 
-    def test_cycles_terminate_without_admitting_unreachable_recipes(self):
+    def test_cycles_terminate_without_admitting_unreachable_recipes(self) -> None:
         recipes = self.recipes(
             "gate:\n    just suite\n\n"
             "suite:\n    just gate\n\n"
@@ -29,22 +29,24 @@ class GateRecipesTests(unittest.TestCase):
         )
         self.assertEqual(recipes, {"suite", "gate"})
 
-    def test_missing_gate_is_refused(self):
+    def test_missing_gate_is_refused(self) -> None:
         with self.assertRaises(SystemExit):
             self.recipes("suite:\n    cargo test\n")
 
 
-
 class ListedPackagesTests(unittest.TestCase):
-    def test_reads_package_lines_and_skips_comments_and_blanks(self):
+    def test_reads_package_lines_and_skips_comments_and_blanks(self) -> None:
         listed = check_ci_gate_sync.listed_packages(
             "# owner of the list\nlibwebkit2gtk-4.1-dev\n\npkg-config\n"
         )
         self.assertEqual(listed, ["libwebkit2gtk-4.1-dev", "pkg-config"])
 
-    def test_a_commented_out_package_is_not_listed(self):
-        listed = check_ci_gate_sync.listed_packages("# libwebkit2gtk-4.1-dev\npkg-config\n")
+    def test_a_commented_out_package_is_not_listed(self) -> None:
+        listed = check_ci_gate_sync.listed_packages(
+            "# libwebkit2gtk-4.1-dev\npkg-config\n"
+        )
         self.assertEqual(listed, ["pkg-config"])
+
 
 if __name__ == "__main__":
     unittest.main()

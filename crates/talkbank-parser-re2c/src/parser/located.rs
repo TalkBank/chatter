@@ -188,8 +188,9 @@ mod tests {
 
     fn reference_source() -> String {
         std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../corpus/reference/annotation/retrace.cha"),
+            talkbank_repo::root()
+                .expect("runtime chatter checkout")
+                .join("corpus/reference/annotation/retrace.cha"),
         )
         .expect("existing public reference")
     }
@@ -248,8 +249,9 @@ mod tests {
             "annotation/long-features.cha",
         ] {
             let input = std::fs::read_to_string(
-                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../corpus/reference")
+                talkbank_repo::root()
+                    .expect("runtime chatter checkout")
+                    .join("corpus/reference")
                     .join(file),
             )
             .expect("existing public reference");

@@ -14,7 +14,7 @@
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::LazyLock;
 use talkbank_parser_tests::test_error::TestError;
 use walkdir::WalkDir;
@@ -66,14 +66,7 @@ struct CodeRefs {
 
 /// Entry point for this binary target.
 fn main() -> Result<(), TestError> {
-    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let repo_root = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| {
-            TestError::Failure("Cannot resolve repo root from CARGO_MANIFEST_DIR".to_string())
-        })?
-        .to_path_buf();
+    let repo_root = talkbank_repo::RepoRoot::discover()?;
 
     let enum_path = repo_root.join("crates/talkbank-model/src/errors/codes/error_code.rs");
     let codes = extract_codes(&enum_path)?;
@@ -83,7 +76,7 @@ fn main() -> Result<(), TestError> {
         .collect();
     let code_set: BTreeSet<String> = codes.iter().map(|c| c.code.clone()).collect();
 
-    let refs = scan_refs(&repo_root, &variant_to_code, &code_set)?;
+    let refs = scan_refs(repo_root.as_path(), &variant_to_code, &code_set)?;
 
     let report = render_report(&codes, &refs);
     let out_path = repo_root.join("docs/audits/error-code-audit.md");

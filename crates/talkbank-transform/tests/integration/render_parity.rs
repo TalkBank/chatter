@@ -36,12 +36,12 @@ use talkbank_transform::{
     render_error_with_miette_with_source, render_error_with_miette_with_source_colored,
 };
 
-/// Repo root: this crate is `<root>/crates/talkbank-transform`, so pop twice.
+/// The admitted runtime checkout.
 fn workspace_root() -> PathBuf {
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    dir.pop(); // talkbank-transform -> crates
-    dir.pop(); // crates -> repo root
-    dir
+    talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned()
 }
 
 /// Read a committed error fixture and return its source plus the RAW (un-enhanced)

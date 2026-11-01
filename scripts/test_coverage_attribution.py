@@ -17,16 +17,27 @@ from unittest.mock import patch
 import coverage_attribution as attribution
 
 
-def export(functions, files):
+def export(
+    functions: list[attribution.CoverageFunction], files: list[attribution.CoverageFile]
+) -> attribution.CoverageExport:
     """One llvm-cov export, in the shape the real one has."""
     return {"data": [{"functions": functions, "files": files}]}
 
 
-def function(name, filenames, regions):
+def function(
+    name: str, filenames: list[str], regions: list[list[int]]
+) -> attribution.CoverageFunction:
     return {"name": name, "filenames": filenames, "regions": regions}
 
 
-def region(line_start, col_start, line_end, col_end, count, file_id=0):
+def region(
+    line_start: int,
+    col_start: int,
+    line_end: int,
+    col_end: int,
+    count: int,
+    file_id: int = 0,
+) -> list[int]:
     """A region in llvm-cov's own field order.
 
     `[line_start, col_start, line_end, col_end, execution_count, file_id,
@@ -36,7 +47,7 @@ def region(line_start, col_start, line_end, col_end, count, file_id=0):
     return [line_start, col_start, line_end, col_end, count, file_id, 0, 0]
 
 
-def file_summary(name, covered, count):
+def file_summary(name: str, covered: int, count: int) -> attribution.CoverageFile:
     return {
         "filename": f"/x/chatter/{name}",
         "summary": {"regions": {"covered": covered, "count": count}},
@@ -53,7 +64,7 @@ class MergesInstantiations(unittest.TestCase):
     reported a function llvm-cov says is 160/161 covered as entirely unreached.
     """
 
-    def test_a_region_covered_by_any_instantiation_is_covered(self):
+    def test_a_region_covered_by_any_instantiation_is_covered(self) -> None:
         regions = [region(10, 1, 10, 20, 0)]
         covered = [region(10, 1, 10, 20, 7)]
         rows, disagreements = attribution.build_rows(
@@ -70,12 +81,16 @@ class MergesInstantiations(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(rows, {}, "one instantiation ran it, so it ran")
 
-    def test_complementary_instantiations_do_not_match_summary_union(self):
+    def test_complementary_instantiations_do_not_match_summary_union(self) -> None:
         path = "/x/chatter/crates/c/src/a.rs"
         data = export(
             [
-                function("first", [path], [region(10, 1, 20, 1, 1), region(12, 1, 12, 8, 0)]),
-                function("second", [path], [region(10, 1, 20, 1, 0), region(12, 1, 12, 8, 1)]),
+                function(
+                    "first", [path], [region(10, 1, 20, 1, 1), region(12, 1, 12, 8, 0)]
+                ),
+                function(
+                    "second", [path], [region(10, 1, 20, 1, 0), region(12, 1, 12, 8, 1)]
+                ),
             ],
             [file_summary("crates/c/src/a.rs", 1, 2)],
         )
@@ -86,11 +101,17 @@ class MergesInstantiations(unittest.TestCase):
         self.assertEqual(len(every), 2)
         self.assertEqual(every, covered)
 
-    def test_non_code_regions_are_not_code_coverage(self):
+    def test_non_code_regions_are_not_code_coverage(self) -> None:
         skipped = region(11, 1, 11, 9, 0)
         skipped[7] = 2
         data = export(
-            [function("first", ["/x/chatter/crates/c/src/a.rs"], [region(10, 1, 20, 1, 1), skipped])],
+            [
+                function(
+                    "first",
+                    ["/x/chatter/crates/c/src/a.rs"],
+                    [region(10, 1, 20, 1, 1), skipped],
+                )
+            ],
             [file_summary("crates/c/src/a.rs", 1, 1)],
         )
         rows, disagreements = attribution.build_rows(data, REPO, "crates/c")
@@ -105,7 +126,7 @@ class DistinguishesRegionsSharingAStart(unittest.TestCase):
     to five regions, which the self-check caught and nothing else would have.
     """
 
-    def test_two_regions_at_one_start_are_two_regions(self):
+    def test_two_regions_at_one_start_are_two_regions(self) -> None:
         rows, disagreements = attribution.build_rows(
             export(
                 [
@@ -132,7 +153,7 @@ class AttributesARegionToItsOwnFile(unittest.TestCase):
     reported 474/506 where llvm-cov said 451/506.
     """
 
-    def test_a_region_in_another_file_is_not_counted_here(self):
+    def test_a_region_in_another_file_is_not_counted_here(self) -> None:
         rows, disagreements = attribution.build_rows(
             export(
                 [
@@ -160,7 +181,7 @@ class ReportsItsOwnDisagreement(unittest.TestCase):
     It must fire, or the tool is a confident wrong number generator.
     """
 
-    def test_a_count_llvm_cov_contradicts_is_reported(self):
+    def test_a_count_llvm_cov_contradicts_is_reported(self) -> None:
         _rows, disagreements = attribution.build_rows(
             export(
                 [
@@ -180,11 +201,21 @@ class ReportsItsOwnDisagreement(unittest.TestCase):
         self.assertIn("this tool says 1/1", disagreements[0])
         self.assertIn("llvm-cov says 1/2", disagreements[0])
 
-    def test_excluding_all_rows_cannot_claim_complete_coverage(self):
+    def test_excluding_all_rows_cannot_claim_complete_coverage(self) -> None:
         data = export([], [file_summary("crates/c/src/a.rs", 1, 2)])
         output = io.StringIO()
         with (
-            patch("sys.argv", ["coverage_attribution", "unused.json", "--scope", "crates/c", "--produced-by", "recorded command"]),
+            patch(
+                "sys.argv",
+                [
+                    "coverage_attribution",
+                    "unused.json",
+                    "--scope",
+                    "crates/c",
+                    "--produced-by",
+                    "recorded command",
+                ],
+            ),
             patch.object(Path, "read_text", return_value=json.dumps(data)),
             patch("sys.stdout", output),
         ):
@@ -193,10 +224,22 @@ class ReportsItsOwnDisagreement(unittest.TestCase):
         self.assertIn("excluded files prevent a completeness claim", output.getvalue())
         self.assertIn("recorded command", output.getvalue())
 
-    def test_empty_residual_still_writes_requested_region_artifact(self):
+    def test_empty_residual_still_writes_requested_region_artifact(self) -> None:
         data = export([], [file_summary("crates/c/src/a.rs", 0, 0)])
         with (
-            patch("sys.argv", ["coverage_attribution", "unused.json", "--scope", "crates/c", "--produced-by", "recorded command", "--json", "regions.json"]),
+            patch(
+                "sys.argv",
+                [
+                    "coverage_attribution",
+                    "unused.json",
+                    "--scope",
+                    "crates/c",
+                    "--produced-by",
+                    "recorded command",
+                    "--json",
+                    "regions.json",
+                ],
+            ),
             patch.object(Path, "read_text", return_value=json.dumps(data)),
             patch.object(Path, "write_text") as write,
             patch("sys.stdout", io.StringIO()),
@@ -204,7 +247,7 @@ class ReportsItsOwnDisagreement(unittest.TestCase):
             self.assertEqual(attribution.main(), 0)
         write.assert_called_once_with("[]\n")
 
-    def test_summary_without_functions_is_not_silently_accepted(self):
+    def test_summary_without_functions_is_not_silently_accepted(self) -> None:
         _, disagreements = attribution.build_rows(
             export([], [file_summary("crates/c/src/a.rs", 1, 2)]), REPO, "crates/c"
         )
@@ -219,7 +262,7 @@ class ReadsAFunctionPathOutOfAMangledName(unittest.TestCase):
     worklist at the sink types rather than at the functions.
     """
 
-    def test_the_generic_arguments_are_not_the_name(self):
+    def test_the_generic_arguments_are_not_the_name(self) -> None:
         mangled = (
             "_RINvNtNtNtCs44iRkvQ0EKp_14talkbank_model10validation6header"
             "8checkers15check_id_headerINtNtB6_5state13RecordingSinkE"
@@ -229,39 +272,81 @@ class ReadsAFunctionPathOutOfAMangledName(unittest.TestCase):
 
 
 class BranchOutcomes(unittest.TestCase):
-    def test_branch_counters_and_file_index_are_independent(self):
-        data = export([
-            {"filenames": ["/x/chatter/crates/out.rs", "/x/chatter/crates/c/a.rs"],
-             "branches": [[1, 2, 1, 9, 0, 4, 1, 0, 4]]},
-            {"filenames": ["/x/chatter/crates/c/a.rs"],
-             "branches": [[1, 2, 1, 9, 3, 0, 0, 0, 4], [2, 2, 2, 9, 0, 5, 0, 0, 4]]},
-        ], [file_summary("crates/c/a.rs", 0, 0)])
-        self.assertEqual(attribution.branch_outcomes(data, REPO, "crates/c"), {
-            ("crates/c/a.rs", 1, 2, 1, 9): (True, True),
-            ("crates/c/a.rs", 2, 2, 2, 9): (False, True),
-        })
+    def test_branch_counters_and_file_index_are_independent(self) -> None:
+        data = export(
+            [
+                {
+                    "name": "outside",
+                    "filenames": [
+                        "/x/chatter/crates/out.rs",
+                        "/x/chatter/crates/c/a.rs",
+                    ],
+                    "branches": [[1, 2, 1, 9, 0, 4, 1, 0, 4]],
+                },
+                {
+                    "name": "inside",
+                    "filenames": ["/x/chatter/crates/c/a.rs"],
+                    "branches": [
+                        [1, 2, 1, 9, 3, 0, 0, 0, 4],
+                        [2, 2, 2, 9, 0, 5, 0, 0, 4],
+                    ],
+                },
+            ],
+            [file_summary("crates/c/a.rs", 0, 0)],
+        )
+        self.assertEqual(
+            attribution.branch_outcomes(data, REPO, "crates/c"),
+            {
+                ("crates/c/a.rs", 1, 2, 1, 9): (True, True),
+                ("crates/c/a.rs", 2, 2, 2, 9): (False, True),
+            },
+        )
 
-    def test_filtered_file_functions_are_not_reported_as_measured(self):
-        data = export([{
-            "name": "filtered_test", "filenames": ["/x/chatter/crates/c/tests.rs"],
-            "regions": [region(1, 1, 2, 1, 0)],
-            "branches": [[1, 2, 1, 9, 0, 0, 0, 0, 4]],
-        }], [])
+    def test_filtered_file_functions_are_not_reported_as_measured(self) -> None:
+        data = export(
+            [
+                {
+                    "name": "filtered_test",
+                    "filenames": ["/x/chatter/crates/c/tests.rs"],
+                    "regions": [region(1, 1, 2, 1, 0)],
+                    "branches": [[1, 2, 1, 9, 0, 0, 0, 0, 4]],
+                }
+            ],
+            [],
+        )
         self.assertEqual(attribution.branch_outcomes(data, REPO, "crates/c"), {})
         self.assertEqual(attribution.build_rows(data, REPO, "crates/c"), ({}, []))
 
 
 class SourceIdentity(unittest.TestCase):
-    def test_test_ranges_use_byte_columns_and_reject_stale_source(self):
+    def test_test_ranges_use_byte_columns_and_reject_stale_source(self) -> None:
         source = "λ\ntest".encode()
-        evidence = {"source_sha256": hashlib.sha256(source).hexdigest(),
-                    "test_byte_ranges": [{"start": 3, "end": 7}]}
+        evidence: attribution.RangeEvidence = {
+            "source_sha256": hashlib.sha256(source).hexdigest(),
+            "test_byte_ranges": [{"start": 3, "end": 7}],
+        }
         admitted = attribution.TestSource(source, evidence)
         self.assertFalse(admitted.contains(1, 1))
         self.assertTrue(admitted.contains(2, 1))
         self.assertFalse(admitted.contains(2, 5))
         with self.assertRaisesRegex(ValueError, "stale"):
             attribution.TestSource(source + b" ", evidence)
+
+
+class ExportAdmission(unittest.TestCase):
+    def test_missing_function_identity_and_short_regions_are_refused(self) -> None:
+        from pydantic import ValidationError
+
+        for function in (
+            {"regions": [[1, 1, 2, 1, 0, 0, 0, 0]]},
+            {"name": "truncated", "regions": [[1, 1, 2]]},
+        ):
+            with self.subTest(function=function), self.assertRaises(ValidationError):
+                attribution.EXPORT.validate_json(
+                    json.dumps({"data": [{"functions": [function]}]})
+                )
+        with self.assertRaises(ValidationError):
+            attribution.EXPORT.validate_json('{"data": []}')
 
 
 if __name__ == "__main__":

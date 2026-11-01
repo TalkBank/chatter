@@ -53,7 +53,12 @@ WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
 #: Workflows whose steps must be `just` recipes. Others (release automation,
 #: scheduled drift probes) are not part of the "must pass to push" contract.
-GATED_WORKFLOWS = ("ci.yml", "book.yml", "crates-io-foundation.yml", "cross-platform.yml")
+GATED_WORKFLOWS = (
+    "ci.yml",
+    "book.yml",
+    "crates-io-foundation.yml",
+    "cross-platform.yml",
+)
 
 #: Workflow steps that still run a raw command, recorded so they cannot grow.
 #:
@@ -97,6 +102,7 @@ def listed_packages(text: str) -> list[str]:
     line that is neither empty nor a `#` comment. A commented-out package is
     not listed, so it cannot satisfy the owner check."""
     return [line for line in text.splitlines() if line and not line.startswith("#")]
+
 
 #: Recipes CI runs that `gate` deliberately does not, each with its reason.
 EXEMPT_FROM_GATE: dict[str, str] = {
@@ -329,9 +335,7 @@ def main() -> int:
             f"it too."
         )
     for entry in sorted(accepted - raw):
-        failures.append(
-            f"baseline entry no longer applies, delete it: {entry[:80]}"
-        )
+        failures.append(f"baseline entry no longer applies, delete it: {entry[:80]}")
 
     if failures:
         print("CI and `just gate` have drifted:\n", file=sys.stderr)

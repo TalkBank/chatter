@@ -221,7 +221,10 @@ fn timed_seed_keeps_bullets_pictures_and_dependent_tiers_intact() -> anyhow::Res
 
 #[test]
 fn cli_retains_seed_provenance_and_refuses_invalid_input_without_output() -> anyhow::Result<()> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = talkbank_repo::root()
+        .expect("runtime chatter checkout")
+        .as_path()
+        .to_owned();
     let input = root.join("corpus/reference/content/terminators-standard.cha");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_mutation_candidates"))
         .arg(&input)

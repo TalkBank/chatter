@@ -90,6 +90,12 @@ blank text.
 
 ## Source identity and coordinates
 
+Absorbed anonymous text is read through the generated source-region capability.
+After consuming range admission, its ordered fragments retain source identity
+and checked UTF-8 boundaries while excluding real child bytes. The unsupported
+tier reader borrows a single fragment or combines split fragments; observed
+emptiness keeps an empty tier, while recovery is not fabricated as empty content.
+
 Keep the original UTF-8 source with the diagnostics that refer to it. Do not
 normalize line endings, trim whitespace or rebuild source from a model before
 using source byte offsets. Transformed text is a different coordinate space.

@@ -69,19 +69,7 @@ pub fn spec_word_test(input: &str) -> Result<(), TestError> {
 /// }
 /// ```
 pub fn reference_file_test(path: &str) -> Result<(), TestError> {
-    // Resolve path relative to repo root if it doesn't exist as-is
-    let full_path = if std::path::Path::new(path).exists() {
-        path.to_string()
-    } else {
-        // CARGO_MANIFEST_DIR is crates/talkbank-parser-tests
-        // corpus is at repo root, so go up two levels (../.. from crate dir)
-        let crate_dir = match std::env::var("CARGO_MANIFEST_DIR") {
-            Ok(dir) => dir,
-            Err(_err) => ".".to_string(),
-        };
-        let repo_root = std::path::Path::new(&crate_dir).join("../..").join(path);
-        repo_root.to_string_lossy().to_string()
-    };
+    let full_path = talkbank_repo::RepoRoot::discover()?.join(path);
 
     let content = std::fs::read_to_string(&full_path)?;
 
