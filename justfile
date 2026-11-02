@@ -254,7 +254,8 @@ release-tag VERSION:
 # errors WITHOUT pushing). Config in .github/actionlint.yaml. The default run
 # is clean; if it reports something, fix it (do not suppress).
 actionlint:
-    actionlint
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python -m unittest discover -s scripts -p actionlint_compat_integration.py
+    uv run --locked --project "{{ justfile_directory() }}/scripts" python scripts/actionlint_compat.py
 
 # Generate in staging and report stale grammar artifacts without rewriting them.
 #

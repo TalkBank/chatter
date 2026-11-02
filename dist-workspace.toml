@@ -6,8 +6,8 @@ members = ["cargo:."]
 [dist]
 # Pin so CI builds are reproducible. Bump deliberately together with
 # any per-crate config that depends on newer dist features.
-cargo-dist-version = "0.33.0"
-# dist 0.33.0 still templates actions/checkout@v6; pin the generated workflow to
+cargo-dist-version = "0.34.0"
+# dist 0.34.0 still templates actions/checkout@v6; pin the generated workflow to
 # the verified v7.0.1 commit (the floating v7 tag resolves to the same commit).
 github-action-commits = { "actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1" }
 
