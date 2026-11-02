@@ -34,7 +34,9 @@ class RegenerationBootstrapTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertEqual(commands.count("--bin model_sources_gen"), 1)
 
-    def test_standalone_schema_generation_bootstraps_its_compiled_consumer(self) -> None:
+    def test_standalone_schema_generation_bootstraps_its_compiled_consumer(
+        self,
+    ) -> None:
         result = subprocess.run(
             ["just", "--dry-run", "schema-gen"],
             cwd=ROOT,
@@ -46,7 +48,9 @@ class RegenerationBootstrapTests(unittest.TestCase):
             result.stderr.index("gen_conformance_inventory"),
             result.stderr.index("generate_chat_file_schema"),
         )
-        self.assertIn("--no-default-features --example gen_conformance_inventory", result.stderr)
+        self.assertIn(
+            "--no-default-features --example gen_conformance_inventory", result.stderr
+        )
         self.assertEqual(result.stderr.count("gen_conformance_inventory"), 1)
 
     def test_standalone_spec_generation_bootstraps_before_runtime_build(self) -> None:
@@ -79,7 +83,9 @@ class RegenerationBootstrapTests(unittest.TestCase):
             ],
             cwd=ROOT,
             text=True,
-            capture_output=True,
+            # Keep dependency-resolution diagnostics in the test runner's
+            # captured stderr; CalledProcessError alone omits that evidence.
+            stdout=subprocess.PIPE,
             check=True,
         )
         packages = {line.split()[0] for line in result.stdout.splitlines() if line}

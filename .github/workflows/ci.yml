@@ -395,7 +395,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The configured book-command control reads real commit dates.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.3.3
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install just
         uses: taiki-e/install-action@v2
         with:

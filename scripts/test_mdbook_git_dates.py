@@ -12,10 +12,10 @@ it: the wire format between two processes, the git history the dates are read
 from, the rendered footer wording that `verify` searches for, and (in
 `BookTomlWiring` below) the actual `book.toml` command string against the two
 cwd behaviors real mdBook releases use. They are stdlib `unittest` so the book
-build in CI can run them with no test framework installed; `python3 -m pytest`
-collects them too.
+build in CI can run them with no test framework installed; pytest collects them
+too.
 
-Run: `python3 -m unittest scripts/test_mdbook_git_dates.py`
+Run: `uv run --locked --project scripts python -m unittest scripts/test_mdbook_git_dates.py`
 """
 
 from __future__ import annotations
@@ -28,7 +28,9 @@ import sys
 import tempfile
 import tomllib
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
+from typing import assert_never
 
 SCRIPT = Path(__file__).resolve().with_name("mdbook_git_dates.py")
 REPO_ROOT = SCRIPT.resolve().parents[1]
@@ -289,70 +291,99 @@ class Verify(unittest.TestCase):
         self.assertIn("book: expected", result.stderr)
 
 
-class BookTomlWiring(unittest.TestCase):
-    """Pins the root cause of the 2026-09-01 book.yml CI failure.
+@dataclass(frozen=True)
+class BookCommandOutput:
+    """Only successful execution supplies preprocessor output to inspect."""
 
-    mdBook 0.5.x always runs a preprocessor subprocess with the book
-    directory as its cwd. mdBook 0.4.x (what `book.yml` pins, for
-    mdbook-mermaid compatibility) sets NO cwd of its own for that subprocess
-    at all: it just inherits whatever directory the `mdbook` PROCESS ITSELF
-    was started from (verified directly against the `cmd.rs` source of both
-    releases, and against real 0.4.52 and 0.5.4 binaries). Since book.toml's
-    git-dates command is the relative path `../scripts/mdbook_git_dates.py`,
-    it resolves under 0.5.x no matter where `mdbook` was invoked from, but
-    under 0.4.x it resolves only when `mdbook` itself was started with the
-    book directory as its cwd. `Makefile` and `book.yml` are the wiring that
-    now guarantees that (`cd book && mdbook build` / `working-directory:
-    book`, never `mdbook build book` from the repo root); this drives the
-    ACTUAL `book.toml` command string, the way mdBook itself would run it,
-    against both cwd shapes and proves the previously-broken one stays
-    broken so nobody "fixes" the wiring back to it.
+    stdout: str
+
+
+@dataclass(frozen=True)
+class BookCommandRefusal:
+    """Retain an observed process refusal without classifying its English text."""
+
+    status: int
+    stderr: str
+
+
+@dataclass(frozen=True)
+class BookInvocation:
+    """Bind the configured command and working directory in one test operation.
+
+    This is an invocation proposal, not proof that its relative paths resolve.
+    The subprocess edge alone classifies its result into output or refusal.
     """
 
-    def command_words(self) -> list[str]:
+    words: tuple[str, ...]
+    directory: Path
+
+    def execute(self, payload: str) -> BookCommandOutput | BookCommandRefusal:
+        result = subprocess.run(
+            self.words,
+            cwd=self.directory,
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return BookCommandOutput(result.stdout)
+        return BookCommandRefusal(result.returncode, result.stderr)
+
+
+class BookTomlWiring(unittest.TestCase):
+    """Exercise book.toml's relative command at the actual subprocess boundary.
+
+    Current mdBook 0.5 runs it from the book directory, as does `just book`.
+    The historical 0.4 failure inherited the caller's directory instead.
+    Pair successful book-context execution with an isolated wrong-context
+    refusal. A real repository parent can contain an unrelated scripts project;
+    it is not a controlled negative fixture. uv may refuse at either project or
+    script discovery, with different wording across layouts and platforms.
+    """
+
+    def invocation(self, directory: Path) -> BookInvocation:
         config = tomllib.loads(BOOK_TOML.read_text(encoding="utf-8"))
         command = config["preprocessor"]["git-dates"]["command"]
-        return shlex.split(command)
+        return BookInvocation(tuple(shlex.split(command)), directory)
 
     def payload(self) -> str:
         intro = (BOOK_ROOT / "src" / "introduction.md").read_text(encoding="utf-8")
         items = [chapter("Intro", "introduction.md", intro)]
         return wire("0.4", BOOK_ROOT, items)
 
-    def test_resolves_when_mdbook_itself_is_started_from_the_book_directory(
+    def test_configured_command_produces_output_from_the_book_directory(
         self,
     ) -> None:
-        result = subprocess.run(
-            self.command_words(),
-            cwd=BOOK_ROOT,
-            input=self.payload(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        content = str(chapters_of(result.stdout)[0]["content"])
-        self.assertIn("This page last changed: ", content)
-        self.assertNotIn("{{git-dates:", content)
+        result = self.invocation(BOOK_ROOT).execute(self.payload())
+        match result:
+            case BookCommandOutput(stdout):
+                content = str(chapters_of(stdout)[0]["content"])
+                self.assertIn("This page last changed: ", content)
+                self.assertNotIn("{{git-dates:", content)
+            case BookCommandRefusal(status, stderr):
+                self.fail(f"Book-context command refused ({status}): {stderr}")
+            case _:
+                assert_never(result)
 
-    def test_does_not_resolve_when_mdbook_itself_is_started_from_the_repo_root(
+    def test_configured_command_refuses_an_isolated_wrong_directory(
         self,
     ) -> None:
-        # The exact 2026-09-01 CI shape: `mdbook build book` run from the
-        # repo root, under mdBook 0.4.x, which never overrides the cwd it
-        # inherited. If this test ever starts PASSING, the fix has been
-        # silently undone and the `cd book &&` / `working-directory: book`
-        # wiring in Makefile / book.yml needs restoring.
-        result = subprocess.run(
-            self.command_words(),
-            cwd=REPO_ROOT,
-            input=self.payload(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("No such file or directory", result.stderr)
+        with tempfile.TemporaryDirectory() as temporary:
+            isolated_root = Path(temporary) / "checkout"
+            isolated_root.mkdir()
+            result = self.invocation(isolated_root).execute(self.payload())
+        match result:
+            case BookCommandRefusal(_, stderr):
+                self.assertTrue(
+                    stderr.strip(), "The refused command must explain its failure"
+                )
+            case BookCommandOutput(stdout):
+                self.fail(
+                    f"A wrong-context command unexpectedly produced output: {stdout}"
+                )
+            case _:
+                assert_never(result)
 
 
 if __name__ == "__main__":

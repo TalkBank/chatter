@@ -19,6 +19,12 @@ using `sys.executable` inherit it. CI installs uv and runs the same Ruff,
 strict mypy and pytest checks. These checks do not generate parser artifacts,
 publish a release or replace the release gate.
 
+The checks include the actual book command and an offline Cargo dependency
+boundary. Use a full-history checkout for Git-derived book dates. The recipe
+fetches the spec workspace's locked Cargo metadata before the offline control;
+it does not build the Rust targets. CI provisions the declared Rust toolchain
+and full history rather than relying on another job's cache.
+
 Coverage exports and source-range inventories are admitted through typed wire
 schemas. A missing function identity or truncated region is rejected before
 coverage attribution; source-bound byte ranges retain their digest checks.

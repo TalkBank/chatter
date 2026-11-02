@@ -728,6 +728,9 @@ gate-receipts-test:
 
 # Explicit acceptance checks for the owned uv development-tools project.
 python-tools-check:
+    # The source-generator dependency control consumes offline Cargo metadata.
+    # Provision its locked graph first, including on a fresh CI runner.
+    cargo fetch --manifest-path spec/Cargo.toml --locked
     uv sync --locked --project "{{ justfile_directory() }}/scripts" --all-groups
     cd scripts && uv run --locked ruff check .
     cd scripts && uv run --locked mypy
