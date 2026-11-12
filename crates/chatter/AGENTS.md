@@ -48,6 +48,10 @@ the book's CLI reference, [error diagnostics UX](../../book/src/architecture/err
 - The validation cache is the user's; isolate it in tests through
   `CliHarness`, never `HOME` tricks, and never delete it without an explicit
   request.
+- A test that needs a closed standard output gets it from
+  `tests/integration/common/closed_stdout.rs::attach`, which makes the pipe
+  inside the child. A pipe made in the test process can leak its reader into
+  a concurrent test's child, so `clippy.toml` refuses `std::io::pipe`.
 - Parser selection (`--parser re2c`) and validation options map onto
   `ValidationConfig`; both backends go through the same runner.
 

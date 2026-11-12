@@ -6,29 +6,19 @@
 
 use std::process::{Output, Stdio};
 
-/// A write endpoint whose sole reader was closed before any child can start.
-struct ClosedStdout(std::io::PipeWriter);
-
-impl ClosedStdout {
-    fn new() -> Self {
-        let (reader, writer) = std::io::pipe().expect("stdout pipe");
-        drop(reader);
-        Self(writer)
-    }
-
-    /// Consume the closed-reader endpoint when launching the command.
-    fn run(self, args: &[&str]) -> Output {
-        let harness = crate::common::CliHarness::new().expect("isolated CLI");
-        harness
-            .streaming_command()
-            .args(args)
-            .current_dir(crate::common::reference_fixture(""))
-            .stdin(Stdio::null())
-            .stdout(self.0)
-            .stderr(Stdio::piped())
-            .output()
-            .expect("chatter ends")
-    }
+/// Run chatter in the reference fixture with a standard output whose only
+/// reader is closed before the program starts (see `common::closed_stdout`).
+fn run_with_closed_stdout(args: &[&str]) -> Output {
+    let harness = crate::common::CliHarness::new().expect("isolated CLI");
+    let mut command = harness.streaming_command();
+    command
+        .args(args)
+        .current_dir(crate::common::reference_fixture(""))
+        .stdin(Stdio::null())
+        .stderr(Stdio::piped());
+    crate::common::closed_stdout::attach(&mut command)
+        .output()
+        .expect("chatter ends")
 }
 
 #[test]
@@ -50,7 +40,7 @@ fn a_closed_stdout_ends_every_text_writer_with_status_one() {
         ],
         &["validate", "corpus/reference/core", "--format", "json"],
     ] {
-        let output = ClosedStdout::new().run(args);
+        let output = run_with_closed_stdout(args);
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert_eq!(output.status.code(), Some(1), "{args:?}: {stderr}");
         assert!(!stderr.contains("panicked"), "{args:?}: {stderr}");
@@ -65,7 +55,7 @@ fn closed_stdout_discards_the_unpublished_audit_stage() {
     let scratch = tempfile::tempdir().unwrap();
     let report = scratch.path().join("audit.jsonl");
     std::fs::write(&report, "retained report\n").unwrap();
-    let output = ClosedStdout::new().run(&[
+    let output = run_with_closed_stdout(&[
         "validate",
         "corpus/reference/core/basic-conversation.cha",
         "--audit",
@@ -96,7 +86,7 @@ fn closed_stdout_prevents_later_rediarization_sidecar_writes() {
     )
     .unwrap();
     std::fs::write(&summary, "retained summary\n").unwrap();
-    let output = ClosedStdout::new().run(&[
+    let output = run_with_closed_stdout(&[
         "experimental",
         "speakers",
         "rediarize",

@@ -726,17 +726,16 @@ fn json_mode_with_a_closed_stdout_fails_without_a_panic() -> Result<(), TestErro
         fs::write(dir.path().join(format!("{name}.cha")), VALID_CHAT)?;
     }
     let cache = tempdir()?;
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_chatter"))
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chatter"));
+    command
         .env("TALKBANK_CHAT_CACHE_DIR", cache.path())
         .arg("validate")
         .arg(dir.path())
         .args(["--format", "json", "--refresh-cache"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()?;
-    // The reading end goes before the run can write its summary.
-    drop(child.stdout.take());
-    let output = child.wait_with_output()?;
+        .stderr(std::process::Stdio::piped());
+    // The reader is closed before the program starts, not raced against its
+    // first record (see `common::closed_stdout`).
+    let output = crate::common::closed_stdout::attach(&mut command).output()?;
     assert_eq!(output.status.code(), Some(1));
     assert!(
         output.stderr.is_empty(),

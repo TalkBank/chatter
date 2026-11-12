@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
-use std::process::{Child, ExitStatus, Stdio};
+use std::process::{Child, ExitStatus};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
@@ -67,9 +67,7 @@ impl Pty {
                 command.stdout(self.slave.try_clone().unwrap());
             }
             TerminalOutput::Closed => {
-                let (reader, writer) = std::io::pipe().unwrap();
-                drop(reader);
-                command.stdout(Stdio::from(writer));
+                super::closed_stdout::attach(&mut command);
             }
         }
         // SAFETY: only async-signal-safe system calls run between fork and exec.

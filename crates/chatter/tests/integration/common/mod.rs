@@ -2,6 +2,7 @@
 
 //! Shared CLI integration-test harness for `chatter`.
 
+pub mod closed_stdout;
 pub mod command_surface;
 #[cfg(unix)]
 pub mod terminal;

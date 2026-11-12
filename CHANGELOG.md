@@ -53,6 +53,20 @@ extracted, their order and their values) are unchanged.
 - Bootstrap the conformance inventory before schema compilation, including
   standalone schema generation after a generated API change.
 
+### Fixed
+
+- The closed-standard-output tests no longer fail intermittently on macOS.
+  Chatter's behavior is unchanged: it was already correct, and a command whose
+  standard output has no reader still ends with exit status 1. The tests made
+  their "closed" pipe in the multi-threaded test process, where its reader
+  could leak into a child started by a concurrent test (macOS marks a new pipe
+  close-on-exec only after creating it, and a forked child holds every
+  descriptor until it starts its program). While that copy was open the pipe
+  had a reader, so chatter's writes succeeded and it rightly exited 0. The pipe
+  is now created inside the child before chatter starts, so no other process
+  can hold its reader, and a Clippy rule refuses a raw `std::io::pipe` in the
+  `chatter` crate's code and tests.
+
 ## [0.34.0] - 2026-11-01
 
 This pre-1.0 minor release makes a colon-bearing header with nothing after its

@@ -1,0 +1,9 @@
+# A pipe made in a test process that spawns from many threads can leak its
+# reader into a concurrent child (macOS sets close-on-exec after `pipe(2)`;
+# a forked sibling holds every descriptor until `exec`), so a "closed" stdout
+# silently gains a reader and the closed-pipe contract appears to break.
+# `tests/integration/common/closed_stdout.rs` builds the pipe inside the child
+# instead; it is the one sanctioned route.
+disallowed-methods = [
+    { path = "std::io::pipe", reason = "use tests/integration/common/closed_stdout.rs::attach; a reader made here can leak into a concurrent child" },
+]
