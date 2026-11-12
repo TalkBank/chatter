@@ -18,7 +18,10 @@ use crate::alignment::helpers::domain::TierDomain;
 use crate::model::BracketedItem;
 
 use super::super::descent::{descend, descend_mut, excluded_by_annotations};
-use super::{ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut};
+use super::{
+    BoundedWordStep, ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut,
+    annotated_word_steps, container_steps, replaced_word_steps,
+};
 
 pub(super) fn walk_bracketed_content<'a>(
     items: &'a [BracketedItem],
@@ -212,32 +215,29 @@ pub(super) fn walk_bracketed_words<'a>(
     items: &'a [BracketedItem],
     domain: Option<TierDomain>,
     scope: LanguageScope<'a>,
-    f: &mut impl FnMut(WordItem<'a>, LanguageScope<'a>),
+    f: &mut impl FnMut(BoundedWordStep<'a>),
 ) {
     for item in items {
         match item {
             BracketedItem::Word(word) => {
-                f(WordItem::Word(word), scope);
+                f(BoundedWordStep::Leaf(WordItem::Word(word), scope));
             }
             BracketedItem::AnnotatedWord(annotated) => {
-                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
-                    // A scoped annotation may attach to ONE content item without
-                    // angle brackets, so `hallo [@s]` governs its own word just
-                    // as `<a b> [@s]` governs the words it encloses.
-                    f(
-                        WordItem::Word(&annotated.inner),
-                        scope.inside(&annotated.scoped_annotations),
-                    );
-                }
+                annotated_word_steps(
+                    &annotated.inner,
+                    &annotated.scoped_annotations,
+                    domain,
+                    scope,
+                    f,
+                );
             }
             BracketedItem::ReplacedWord(replaced) => {
-                f(WordItem::ReplacedWord(replaced), scope);
+                replaced_word_steps(replaced, scope, f);
             }
             BracketedItem::Separator(sep) => {
-                f(WordItem::Separator(sep), scope);
+                f(BoundedWordStep::Leaf(WordItem::Separator(sep), scope));
             }
-            // Containers: ONE arm. `descend` decides whether to enter and
-            // `scope_in` carries the code-switch rule; `descent` owns both.
+            // Containers: ONE arm, through the helper the top level uses.
             BracketedItem::Group(_)
             | BracketedItem::AnnotatedGroup(_)
             | BracketedItem::PhoGroup(_)
@@ -246,12 +246,9 @@ pub(super) fn walk_bracketed_words<'a>(
             | BracketedItem::AnnotatedQuotation(_)
             | BracketedItem::Retrace(_)
             | BracketedItem::AnnotatedRetrace(_) => {
-                if let Some(into) = descend(item.structure(), domain).entered() {
-                    let inner = into.scope_in(scope);
-                    walk_bracketed_words(&into.content().content, domain, inner, f);
-                }
+                container_steps(item.structure(), domain, scope, f);
             }
-            // Non-word bracketed items.
+            // Non-word bracketed items: each stands between leaves.
             BracketedItem::Event(_)
             | BracketedItem::AnnotatedEvent(_)
             | BracketedItem::Pause(_)
@@ -268,7 +265,7 @@ pub(super) fn walk_bracketed_words<'a>(
             | BracketedItem::NonvocalBegin(_)
             | BracketedItem::NonvocalEnd(_)
             | BracketedItem::NonvocalSimple(_)
-            | BracketedItem::OtherSpokenEvent(_) => {}
+            | BracketedItem::OtherSpokenEvent(_) => f(BoundedWordStep::Boundary),
         }
     }
 }

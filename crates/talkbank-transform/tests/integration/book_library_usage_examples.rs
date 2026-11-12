@@ -242,3 +242,39 @@ fn book_source_admission_and_refusal() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 // ANCHOR_END: book_source_admission
+
+/// Book example: "Extracting `%mor` words in runs".
+// ANCHOR: book_mor_runs
+#[test]
+fn book_extracting_mor_words_in_runs() -> Result<(), PipelineError> {
+    use talkbank_model::alignment::helpers::PositionalDomain;
+    use talkbank_transform::extract::{extract_mor_runs, extract_words};
+
+    let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\tI want <the big> [!] cookie [: cookies] (.) now please .\n@End\n";
+    let chat_file = parse_and_validate(source, ParseValidateOptions::default().with_validation())?;
+
+    let utterances = extract_mor_runs(&chat_file);
+    let runs = utterances[0].runs();
+    let texts: Vec<Vec<&str>> = runs
+        .runs()
+        .iter()
+        .map(|run| run.words().iter().map(|word| word.text.as_str()).collect())
+        .collect();
+    // `I want` runs together; the annotated group is its own scope; each
+    // replacement word stands alone; the pause ends a run.
+    assert_eq!(
+        texts,
+        [
+            vec!["I", "want"],
+            vec!["the", "big"],
+            vec!["cookies"],
+            vec!["now", "please"]
+        ]
+    );
+
+    // Flattened, the runs are exactly the flat `%mor` extraction.
+    let flat = extract_words(&chat_file, PositionalDomain::Mor);
+    assert!(runs.words().eq(flat[0].words.iter()));
+    Ok(())
+}
+// ANCHOR_END: book_mor_runs

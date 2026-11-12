@@ -406,6 +406,28 @@ parses, performs the checks selected by `ParseValidateOptions` and serializes
 in one call. It takes a `JsonLayout` (`Pretty` or `Compact`) rather than a
 bare `bool`. It does not implicitly upgrade a parse-only option to validation.
 
+## Extracting `%mor` words in runs
+
+`talkbank_transform::extract::extract_words(&file, PositionalDomain::Mor)`
+returns each utterance's `%mor` words as one flat list.
+`extract_mor_runs(&file)` (or `collect_mor_runs(content)` for one
+utterance's content) returns the same words partitioned into runs: maximal
+stretches of plain words with nothing else between them, which a tokenizer
+may re-split as one piece of text. An annotated word, each word of a
+replacement and a tag-marker separator each form a run of their own;
+retraces, untranscribed material, pauses, events, markers and container
+edges end a run. The words inside an annotated group such as `<the big> [!]`
+form one run, because a run never crosses a scope edge.
+
+Flattening the runs gives exactly the flat extraction, so a consumer that
+needs both reads them from one call instead of running a second walk.
+`MorRuns::words()` iterates the flattened words and `run_lengths()` gives each
+run's length.
+
+```rust,ignore
+{{#include ../../../../crates/talkbank-transform/tests/integration/book_library_usage_examples.rs:book_mor_runs}}
+```
+
 ## Custom Error Handling
 
 Lower-level parser entry points stream diagnostics through the
@@ -453,6 +475,7 @@ surface is usually:
 | Parse/validate contracts and typed model access | `talkbank-model` |
 | Alignment-aware downstream consumers (`align`, `compare`, `benchmark`) | `talkbank-model` alignment helpers plus the model AST |
 | Checked source/model admission with either backend | `talkbank-transform` |
+| `%mor` words for tagging, flat or partitioned into runs | `talkbank_transform::extract::{extract_words, extract_mor_runs}` |
 
 For batch workflows, keep parser instances reusable and keep alignment
 logic separate from parse semantics.

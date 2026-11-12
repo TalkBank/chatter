@@ -11,6 +11,10 @@
 //!
 //! - [`walk_content`] / [`walk_content_mut`], emit ALL non-container items
 //! - [`walk_words`] / [`walk_words_mut`], convenience filter for word-like items only
+//! - [`walk_words_scoped`], the same leaves with their code-switch scope
+//! - [`walk_words_bounded`], the descent `walk_words_scoped` runs, which also
+//!   reports a [`BoundedWordStep::Boundary`] at every scope edge and wherever a
+//!   non-leaf item or excluded content stood
 //!
 //! # Deprecated aliases
 //!
@@ -451,6 +455,69 @@ pub fn walk_words_scoped<'a>(
     domain: Option<TierDomain>,
     f: &mut impl FnMut(WordItem<'a>, LanguageScope<'a>),
 ) {
+    // The bounded walk with its boundaries forgotten: one descent, one leaf
+    // set, so a consumer of either sees exactly the same leaves in the same
+    // order.
+    walk_words_bounded(content, domain, &mut |step| match step {
+        BoundedWordStep::Leaf(item, scope) => f(item, scope),
+        BoundedWordStep::Boundary => {}
+    });
+}
+
+/// One step of [`walk_words_bounded`]: a word-like leaf, or a boundary.
+///
+/// The leaves are exactly the leaves of [`walk_words_scoped`], in the same
+/// order and with the same scopes. A [`BoundedWordStep::Boundary`] says that
+/// between the leaf before it and the leaf after it the walk passed something
+/// that is not a word-like leaf of this walk, or the edge of a scope. A
+/// consumer that groups ADJACENT words (for example into runs that a
+/// tokenizer may re-split) needs exactly this fact, and cannot recover it from
+/// the leaves alone: `a b` and `a (.) b` hand over the same two leaves.
+///
+/// Boundaries carry no reason on purpose. Every reason means the same thing to
+/// the one consumer that needs them (the two neighbours are not adjacent), and
+/// a reason enum would be a second classification of content items beside the
+/// match that already classifies them here.
+pub enum BoundedWordStep<'a> {
+    /// A word-like leaf, exactly as [`walk_words_scoped`] hands it over.
+    Leaf(WordItem<'a>, LanguageScope<'a>),
+    /// The walk passed a scope edge or a non-leaf item here.
+    ///
+    /// Emitted:
+    ///
+    /// - at the opening and the closing edge of every container (groups,
+    ///   phonological and sign groups, quotations, retraces, and their
+    ///   annotated forms), whether or not `domain` enters it: a retrace
+    ///   under `%mor`, a scope its annotations exclude and an atomic group
+    ///   have their two edges and no leaves between them;
+    /// - at both edges of an annotated word and of a replaced word, because a
+    ///   scoped annotation attached to ONE item opens a scope of that one
+    ///   item: the walk already treats `hallo [@s]` exactly as
+    ///   `<hallo> [@s]` for its language scope, and the edges follow the
+    ///   same reading (an annotated word the domain excludes keeps its
+    ///   edges and loses its leaf);
+    /// - once for every non-word item: events, pauses, actions, freecodes,
+    ///   overlap points, internal bullets, long-feature, underline and
+    ///   nonvocal markers, other-speaker events and orphan annotations.
+    ///
+    /// Consecutive boundaries are not merged; two in a row mean the same as
+    /// one.
+    Boundary,
+}
+
+/// Walk utterance content and call `f` for each word-like leaf item AND for
+/// each boundary between leaves; see [`BoundedWordStep`] for where boundaries
+/// fall.
+///
+/// This is the descent [`walk_words_scoped`] runs, not a second one: that
+/// function is this one with its boundaries dropped. Which containers
+/// `domain` enters is still `descent`'s to state, and which annotated words it
+/// excludes is still `excluded_by_annotations`'s.
+pub fn walk_words_bounded<'a>(
+    content: &'a [UtteranceContent],
+    domain: Option<TierDomain>,
+    f: &mut impl FnMut(BoundedWordStep<'a>),
+) {
     walk_words_in_scope(content, domain, LanguageScope::Utterance, f);
 }
 
@@ -610,29 +677,27 @@ fn walk_words_in_scope<'a>(
     content: &'a [UtteranceContent],
     domain: Option<TierDomain>,
     scope: LanguageScope<'a>,
-    f: &mut impl FnMut(WordItem<'a>, LanguageScope<'a>),
+    f: &mut impl FnMut(BoundedWordStep<'a>),
 ) {
     for item in content {
         match item {
             UtteranceContent::Word(word) => {
-                f(WordItem::Word(word), scope);
+                f(BoundedWordStep::Leaf(WordItem::Word(word), scope));
             }
             UtteranceContent::AnnotatedWord(annotated) => {
-                if !excluded_by_annotations(&annotated.scoped_annotations, domain) {
-                    // A scoped annotation may attach to ONE content item without
-                    // angle brackets, so `hallo [@s]` governs its own word just
-                    // as `<a b> [@s]` governs the words it encloses.
-                    f(
-                        WordItem::Word(&annotated.inner),
-                        scope.inside(&annotated.scoped_annotations),
-                    );
-                }
+                annotated_word_steps(
+                    &annotated.inner,
+                    &annotated.scoped_annotations,
+                    domain,
+                    scope,
+                    f,
+                );
             }
             UtteranceContent::ReplacedWord(replaced) => {
-                f(WordItem::ReplacedWord(replaced), scope);
+                replaced_word_steps(replaced, scope, f);
             }
             UtteranceContent::Separator(sep) => {
-                f(WordItem::Separator(sep), scope);
+                f(BoundedWordStep::Leaf(WordItem::Separator(sep), scope));
             }
             // Containers: ONE arm. `descend` decides whether to enter and
             // `scope_in` carries the code-switch rule; `descent` owns both.
@@ -644,14 +709,11 @@ fn walk_words_in_scope<'a>(
             | UtteranceContent::SinGroup(_)
             | UtteranceContent::Retrace(_)
             | UtteranceContent::AnnotatedRetrace(_) => {
-                if let Some(into) = descend(item.structure(), domain).entered() {
-                    let inner = into.scope_in(scope);
-                    walk_bracketed_words(&into.content().content, domain, inner, f);
-                }
+                container_steps(item.structure(), domain, scope, f);
             }
             // Non-word items: events, pauses, actions, overlap markers, bullets,
             // freecodes, long features, underline markers, nonvocal markers,
-            // other spoken events, none produce alignable leaf items.
+            // other spoken events. None is a leaf; each stands between leaves.
             UtteranceContent::Event(_)
             | UtteranceContent::AnnotatedEvent(_)
             | UtteranceContent::Pause(_)
@@ -668,9 +730,74 @@ fn walk_words_in_scope<'a>(
             | UtteranceContent::NonvocalBegin(_)
             | UtteranceContent::NonvocalEnd(_)
             | UtteranceContent::NonvocalSimple(_)
-            | UtteranceContent::OtherSpokenEvent(_) => {}
+            | UtteranceContent::OtherSpokenEvent(_) => f(BoundedWordStep::Boundary),
         }
     }
+}
+
+// The three fenced shapes below are shared by the top-level and bracketed
+// walks, so the two cannot differ on where a boundary falls. Each has the
+// same form: a boundary, the item's leaves (if any), a boundary.
+
+/// The steps of one annotated word.
+///
+/// A scoped annotation may attach to ONE content item without angle brackets,
+/// so `hallo [@s]` governs its own word just as `<a b> [@s]` governs the words
+/// it encloses. The word is therefore a scope of one: a boundary on each side,
+/// exactly as an annotated group has. When the annotations exclude it from the
+/// domain it contributes no leaf, and its two boundaries mean one.
+fn annotated_word_steps<'a>(
+    inner: &'a Word,
+    annotations: &'a [ContentAnnotation],
+    domain: Option<TierDomain>,
+    scope: LanguageScope<'a>,
+    f: &mut impl FnMut(BoundedWordStep<'a>),
+) {
+    f(BoundedWordStep::Boundary);
+    if !excluded_by_annotations(annotations, domain) {
+        f(BoundedWordStep::Leaf(
+            WordItem::Word(inner),
+            scope.inside(annotations),
+        ));
+    }
+    f(BoundedWordStep::Boundary);
+}
+
+/// The steps of one replaced word.
+///
+/// A replacement is written on one word, so for boundaries the replaced word
+/// is a scope of one, like an annotated word. Unlike an annotated word, the
+/// walk applies no exclusion or language rule to it here: the leaf goes to
+/// the consumer whole, as it always has, and the consumer decides which of
+/// its words count.
+fn replaced_word_steps<'a>(
+    replaced: &'a ReplacedWord,
+    scope: LanguageScope<'a>,
+    f: &mut impl FnMut(BoundedWordStep<'a>),
+) {
+    f(BoundedWordStep::Boundary);
+    f(BoundedWordStep::Leaf(
+        WordItem::ReplacedWord(replaced),
+        scope,
+    ));
+    f(BoundedWordStep::Boundary);
+}
+
+/// The steps of one container: its opening edge, its leaves when `domain`
+/// enters it, and its closing edge. `descend` decides whether to enter and
+/// `scope_in` carries the code-switch rule; `descent` owns both.
+fn container_steps<'a>(
+    structure: ContentStructure<'a>,
+    domain: Option<TierDomain>,
+    scope: LanguageScope<'a>,
+    f: &mut impl FnMut(BoundedWordStep<'a>),
+) {
+    f(BoundedWordStep::Boundary);
+    if let Some(into) = descend(structure, domain).entered() {
+        let inner = into.scope_in(scope);
+        walk_bracketed_words(&into.content().content, domain, inner, f);
+    }
+    f(BoundedWordStep::Boundary);
 }
 
 /// Walk utterance content mutably and call `f` for each word-like leaf item.

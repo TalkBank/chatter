@@ -315,6 +315,42 @@ alias for `count_tier_positions`: extraction emits eligible words and Mor
 tag separators, not atomic groups, pauses or actions. Sharing the
 `PositionalDomain` selector does not make these output index spaces identical.
 
+### Run-partitioned `%mor` extraction
+
+`collect_mor_runs(content)` and `extract_mor_runs(chat_file)` return the same
+`%mor` words partitioned into runs (`MorRuns`, a sequence of non-empty
+`MorRun`s). A run is a maximal stretch of plain counting `%mor` words in one
+container with nothing else between them, which a tokenizer may re-split as
+one piece of text. Each annotated counting word, each counting replacement
+word and each tag-marker separator is a run of its own. Retraces, words
+`%mor` does not count (`xxx`, fragments, fillers), pauses, events, actions,
+markers, excluded scopes and container edges end a run.
+
+The rule that reconciles groups with single words is that a run never crosses
+a scope edge, and a scoped annotation on one word opens a scope of that one
+word. So `a <b c> [!] d .` has runs `a`, `b c`, `d`, while `a b [!] c .` has
+`a`, `b`, `c`.
+
+There is no second classification of items. The model's
+`walk_words_bounded` is the descent `walk_words_scoped` runs, with a
+`BoundedWordStep::Boundary` at every scope edge and wherever a non-leaf item
+or excluded content stood; `walk_words_scoped` is that walk with the
+boundaries dropped. Extraction's `visit_extractable` turns it into one stream
+of steps (a word that joins, an item that stands alone, a break), and the
+flat collector, the run builder and the counter are three sinks on that
+stream. Every word is built by the one `push_extracted`, so flattening the
+runs gives the flat `%mor` extraction exactly, `utterance_word_index`
+included. A reference-corpus test checks that equality utterance by
+utterance.
+
+```mermaid
+flowchart LR
+    W["walk_words_bounded<br/>(leaves + boundaries)"] --> V["visit_extractable<br/>(Joining / Alone / Break)"]
+    V --> F["collect_utterance_content<br/>(flat; run ends ignored)"]
+    V --> R["collect_mor_runs<br/>(runs)"]
+    V --> C["count_utterance_content<br/>(count only)"]
+```
+
 ## Overlap Marker Iteration
 
 CA overlap markers (⌈⌉⌊⌋) appear at three content levels,

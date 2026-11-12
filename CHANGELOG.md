@@ -9,6 +9,42 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-11-11
+
+This patch release adds run-partitioned `%mor` word extraction. It changes no
+existing public signature, and existing extraction results (which words are
+extracted, their order and their values) are unchanged.
+
+### Added
+
+- `talkbank_transform::extract::extract_mor_runs(&ChatFile) ->
+  Vec<ExtractedMorUtterance>` and `collect_mor_runs(&[UtteranceContent]) ->
+  MorRuns` return each utterance's `%mor` words partitioned into runs, decided
+  by the same walk that decides which items are `%mor` words. A run
+  (`MorRun`) is a non-empty, maximal stretch of plain counting words in one
+  container with nothing else between them; an annotated counting word, each
+  counting replacement word and each tag-marker separator is a run of its own;
+  retraces, untranscribed material, pauses, events, markers, excluded scopes
+  and container edges end a run. Flattening the runs (`MorRuns::words`) gives
+  exactly the flat `%mor` extraction, so a
+  consumer no longer needs a second walk or a count check to pair them.
+  `MorRuns::run_lengths` gives each run's length.
+- `talkbank_model::alignment::helpers::walk_words_bounded` and
+  `BoundedWordStep`: the descent `walk_words_scoped` runs, which also reports
+  a boundary at every scope edge and wherever a non-word item or excluded
+  content stood. `walk_words_scoped` is now this walk with the boundaries
+  dropped, and its output is unchanged.
+- `ExtractedWord` implements `PartialEq` and `Eq`.
+
+### Security
+
+- RUSTSEC-2026-0459 (bundled SQLite before 3.54.0, through `sqlx` 0.9.0 in
+  `talkbank-cache`) is recorded as a documented exception in `deny.toml`: no
+  `sqlx` release yet takes the fixed `libsqlite3-sys`, and the advisory needs a
+  database file with its `-wal` written by a less trusted party, while
+  `talkbank-cache` opens only the validation cache it created in the user's own
+  cache directory. The exception is removed when a fixed `sqlx` is released.
+
 ### Changed
 
 - Regenerate typed traversal from the producer's version 5 contract and preserve
@@ -6242,7 +6278,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.34.1...HEAD
+[0.34.1]: https://github.com/TalkBank/chatter/compare/v0.34.0...v0.34.1
 [0.34.0]: https://github.com/TalkBank/chatter/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/TalkBank/chatter/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/TalkBank/chatter/compare/v0.32.0...v0.32.1

@@ -43,6 +43,7 @@ pub(crate) use rules::admit_text_for_tier;
 pub use rules::should_align_replaced_word_in_pho_sin;
 pub use rules::{annotations_have_alignment_ignore, counts_for_tier, is_tag_marker_separator};
 pub use walk::{
-    ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut, walk_code_switch_spans,
-    walk_content, walk_content_mut, walk_words, walk_words_mut, walk_words_scoped,
+    BoundedWordStep, ContentItem, ContentItemMut, LanguageScope, WordItem, WordItemMut,
+    walk_code_switch_spans, walk_content, walk_content_mut, walk_words, walk_words_bounded,
+    walk_words_mut, walk_words_scoped,
 };

@@ -687,6 +687,7 @@ Choose the owner for the question:
 | Inspect content-level leaves | `walk_content` |
 | Inspect or edit word-bearing leaves | `walk_words` / `walk_words_mut` |
 | Inspect words with their governing code-switch scope | `walk_words_scoped` |
+| The same words plus a boundary wherever something else stood (scope edges, non-word items, excluded content) | `walk_words_bounded` |
 | Collect or count structural alignment positions | `collect_tier_items` / `count_tier_positions`, with `PositionalDomain` |
 | Determine `%wor` membership and timing bindings | `WorMainTierProjection` |
 

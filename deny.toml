@@ -52,7 +52,22 @@ unmaintained = "workspace"
 # tree, so the exception was granting a standing waiver for a risk we do not
 # carry. A stale ignore is worse than no ignore, because it silently pre-approves
 # the advisory should a future dependency reintroduce the crate.
-ignore = []
+#
+# ONE ENTRY as of 2026-11-10 (ruled by the maintainer that day):
+#
+# RUSTSEC-2026-0459, libsqlite3-sys 0.37.0 (bundled SQLite before 3.54.0),
+# reached through sqlx-sqlite 0.9.0 -> sqlx 0.9.0 -> talkbank-cache.
+#   No fix available: the fix is libsqlite3-sys >= 0.39.0, and sqlx 0.9.0, the
+#   newest sqlx release, still requires 0.37; `cargo update -p libsqlite3-sys`
+#   moves nothing.
+#   Safe for us: the advisory needs a database file, with its `-wal`, written
+#   by a less trusted party. talkbank-cache opens only the validation cache it
+#   created itself in the user's own cache directory.
+#   Remove when: a sqlx release takes libsqlite3-sys >= 0.39. cargo-deny then
+#   reports `advisory-not-detected` for this entry; treat that as the signal.
+ignore = [
+    { id = "RUSTSEC-2026-0459", reason = "bundled SQLite via sqlx 0.9.0, no sqlx release on libsqlite3-sys >= 0.39 yet; talkbank-cache opens only its own cache database" },
+]
 
 [bans]
 # The dependency tree legitimately carries multiple major versions of some
