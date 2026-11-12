@@ -22,7 +22,7 @@
 
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use sha2::{Digest, Sha256};
 use talkbank_parser_tests::chat_corpus::ChatCorpus;
@@ -34,15 +34,14 @@ use talkbank_parser_tests::conformance::{
 /// showed it.
 type Census = BTreeMap<(&'static str, Position, Container), BTreeMap<Observed, (usize, String)>>;
 
-fn repo_root() -> PathBuf {
-    talkbank_repo::root()
-        .expect("runtime chatter checkout")
-        .as_path()
-        .to_owned()
+/// The checkout this census runs in; a missing or unreadable checkout is an
+/// error the census reports, not a panic.
+fn repo_root() -> Result<PathBuf, Box<dyn Error>> {
+    Ok(talkbank_repo::root()?.as_path().to_owned())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let root = repo_root();
+    let root = repo_root()?;
     let args: Vec<PathBuf> = std::env::args().skip(1).map(PathBuf::from).collect();
     let dirs = if args.is_empty() {
         vec![

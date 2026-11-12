@@ -13,17 +13,15 @@
 //! ```
 
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_parser::TreeSitterParser;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let root = talkbank_repo::root()
-        .expect("runtime chatter checkout")
-        .as_path()
-        .to_owned();
+    // A missing or unreadable checkout is reported as an error, not a panic.
+    let root = talkbank_repo::root()?.as_path().to_owned();
     let mut files: Vec<PathBuf> = walkdir::WalkDir::new(&root)
         .into_iter()
         .filter_entry(|e| {

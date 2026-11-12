@@ -9,11 +9,15 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
-## [0.34.1] - 2026-11-11
+## [0.34.2] - 2026-11-11
 
 This patch release adds run-partitioned `%mor` word extraction. It changes no
 existing public signature, and existing extraction results (which words are
 extracted, their order and their values) are unchanged.
+
+This is the first release of these changes: the `v0.34.1` tag exists, but
+its release stopped at the release-time lint, which two development
+examples failed (fixed below), so 0.34.1 was never published.
 
 ### Added
 
@@ -55,6 +59,11 @@ extracted, their order and their values) are unchanged.
 
 ### Fixed
 
+- The `slot_state_census` and `empty_cleaned_text_probe` examples in
+  `talkbank-parser-tests` report a missing or unreadable checkout as an
+  error instead of panicking, and no longer import an unused name, so the
+  release-time lint passes.
+
 - The closed-standard-output tests no longer fail intermittently on macOS.
   Chatter's behavior is unchanged: it was already correct, and a command whose
   standard output has no reader still ends with exit status 1. The tests made
@@ -66,6 +75,10 @@ extracted, their order and their values) are unchanged.
   is now created inside the child before chatter starts, so no other process
   can hold its reader, and a Clippy rule refuses a raw `std::io::pipe` in the
   `chatter` crate's code and tests.
+
+## [0.34.1] - 2026-11-11 (tagged, not released)
+
+Tagged but not released; its contents ship in 0.34.2.
 
 ## [0.34.0] - 2026-11-01
 
@@ -6292,7 +6305,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.34.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.34.2...HEAD
+[0.34.2]: https://github.com/TalkBank/chatter/compare/v0.34.1...v0.34.2
 [0.34.1]: https://github.com/TalkBank/chatter/compare/v0.34.0...v0.34.1
 [0.34.0]: https://github.com/TalkBank/chatter/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/TalkBank/chatter/compare/v0.32.1...v0.33.0
